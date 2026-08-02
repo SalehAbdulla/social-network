@@ -3,7 +3,7 @@ package middleware
 import (
 	"context"
 	"net/http"
-	"real-time-forum/pkg/app/service"
+	"social-network/backend/pkg/app/service"
 )
 
 type contextKey string

@@ -2,7 +2,7 @@ package user
 
 import (
 	"net/http"
-	realtimeforum "real-time-forum"
+	realtimeforum "social-network/backend"
 	"net/mail"
 	"strconv"
 	"strings"

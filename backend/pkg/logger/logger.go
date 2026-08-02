@@ -7,7 +7,7 @@ import (
 	"os"
 	"runtime"
 
-	"real-time-forum/pkg/config"
+	"social-network/backend/pkg/config"
 )
 
 type stackTraceHandler struct {
