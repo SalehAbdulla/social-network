@@ -1,0 +1,14 @@
+services:
+  - type: web
+    name: real-time-forum
+    runtime: docker
+    repo: https://github.com/SalehAbdulla/real-time-forum
+    plan: free
+    region: frankfurt
+    dockerfilePath: ./Dockerfile
+    dockerCommand: ""
+    envVars:
+      - key: LOG_LEVEL
+        value: info
+    healthCheckPath: /
+    autoDeploy: true

@@ -1,0 +1,583 @@
+{
+  "info": {
+    "_postman_id": "d9d360f6-6cf4-4da8-b68a-d618debd70a6",
+    "name": "Real Time Forum API",
+    "description": "This collection contains the main endpoints for a real-time forum application running locally. It covers core features such as user authentication, post and comment management, categories, reactions, messaging, and WebSocket-based real-time communication.\n\nThe requests are organized by feature area to make it easier to test the API workflow end to end, from registering and logging in users to creating posts, fetching comments, reacting to content, retrieving chat users and messages, and working with realtime connections. It also includes a simple echo endpoint for quick testing.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "_exporter_id": "37789239"
+  },
+  "item": [
+    {
+      "name": "auths",
+      "item": [
+        {
+          "name": "register",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "nickName",
+                  "value": "saleh",
+                  "type": "text",
+                  "uuid": "5186db43-3937-4644-aaa6-7a914f576c98"
+                },
+                {
+                  "key": "email",
+                  "value": "salehabdullssaict@gmail.com",
+                  "type": "text",
+                  "uuid": "e64de964-4242-40c4-8642-f7487ca5bb3d"
+                },
+                {
+                  "key": "firstName",
+                  "value": "saleh",
+                  "type": "text",
+                  "uuid": "1ad9a2cc-ac77-4088-b29a-ba260655d21b"
+                },
+                {
+                  "key": "lastName",
+                  "value": "abdulla",
+                  "type": "text",
+                  "uuid": "dd329e03-9579-4782-8a28-af37e48fb834"
+                },
+                {
+                  "key": "password",
+                  "value": "p1@1§21231313",
+                  "type": "text",
+                  "uuid": "c0daaa52-7e2b-42c0-8270-ce771ee12d31"
+                },
+                {
+                  "key": "confirmPassword",
+                  "value": "p1@1§21231313",
+                  "type": "text",
+                  "uuid": "96e72a7c-c1e2-4da5-af3d-dfda0bbef47d"
+                },
+                {
+                  "key": "age",
+                  "value": "27",
+                  "type": "text",
+                  "uuid": "46012f2e-327d-4006-bf04-141dcdc521d0"
+                },
+                {
+                  "key": "gender",
+                  "value": "male",
+                  "type": "text",
+                  "uuid": "37e63867-efc4-4b73-ad1e-348fc3e86f6f"
+                }
+              ]
+            },
+            "url": {
+              "raw": "http://localhost:3000/api/v1/auth/register",
+              "protocol": "http",
+              "host": [
+                "localhost"
+              ],
+              "port": "3000",
+              "path": [
+                "api",
+                "v1",
+                "auth",
+                "register"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "login",
+          "request": {
+            "auth": {
+              "type": "basic",
+              "basic": [
+                {
+                  "key": "password",
+                  "value": "p1@1§21231313",
+                  "type": "string"
+                },
+                {
+                  "key": "username",
+                  "value": "salehabdullssaictt@gmail.com",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "identifier",
+                  "value": "salehabdullssaictt@gmail.com",
+                  "type": "text",
+                  "uuid": "58853db0-b103-4963-a038-57b105660c98"
+                },
+                {
+                  "key": "password",
+                  "value": "p1@1§21231313",
+                  "type": "text",
+                  "uuid": "a29ba209-a990-4d98-a11e-7e69a29e917a"
+                }
+              ]
+            },
+            "url": {
+              "raw": "http://localhost:3000/api/v1/auth/login",
+              "protocol": "http",
+              "host": [
+                "localhost"
+              ],
+              "port": "3000",
+              "path": [
+                "api",
+                "v1",
+                "auth",
+                "login"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "logout",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "http://localhost:3000/api/v1/auth/logout",
+              "protocol": "http",
+              "host": [
+                "localhost"
+              ],
+              "port": "3000",
+              "path": [
+                "api",
+                "v1",
+                "auth",
+                "logout"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "getMe",
+          "request": {
+            "auth": {
+              "type": "basic",
+              "basic": [
+                {
+                  "key": "password",
+                  "value": "p1@1§21231313",
+                  "type": "string"
+                },
+                {
+                  "key": "username",
+                  "value": "salehabdullssaictt@gmail.com",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "GET",
+            "header": [
+              {
+                "key": "Cookie",
+                "value": "session_token=8bf4aaf8-ce76-4544-81be-d79a45bf4d43",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "http://localhost:3000/api/v1/auth/me",
+              "protocol": "http",
+              "host": [
+                "localhost"
+              ],
+              "port": "3000",
+              "path": [
+                "api",
+                "v1",
+                "auth",
+                "me"
+              ]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "categories",
+      "item": [
+        {
+          "name": "getCategories",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "http://localhost:3000/api/v1/categories",
+              "protocol": "http",
+              "host": [
+                "localhost"
+              ],
+              "port": "3000",
+              "path": [
+                "api",
+                "v1",
+                "categories"
+              ]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "posts",
+      "item": [
+        {
+          "name": "getPosts",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "http://localhost:3000/api/v1/posts?page=&size=10&sortBy=createdAt&sortOrder=desc",
+              "protocol": "http",
+              "host": [
+                "localhost"
+              ],
+              "port": "3000",
+              "path": [
+                "api",
+                "v1",
+                "posts"
+              ],
+              "query": [
+                {
+                  "key": "page",
+                  "value": ""
+                },
+                {
+                  "key": "size",
+                  "value": "10"
+                },
+                {
+                  "key": "sortBy",
+                  "value": "createdAt"
+                },
+                {
+                  "key": "sortOrder",
+                  "value": "desc"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "createPost",
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Cookie",
+                "value": "session_token=4f8fbf57-ad43-41c7-bdbd-a830cc3e7ec8",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"title\": \"This\",\n    \"content\": \"This is test content\",\n    \"categoryId\": 1\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "http://localhost:3000/api/v1/posts",
+              "protocol": "http",
+              "host": [
+                "localhost"
+              ],
+              "port": "3000",
+              "path": [
+                "api",
+                "v1",
+                "posts"
+              ]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "comments",
+      "item": [
+        {
+          "name": "getComments",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "http://localhost:3000/api/v1/posts/comments?postId=1222",
+              "protocol": "http",
+              "host": [
+                "localhost"
+              ],
+              "port": "3000",
+              "path": [
+                "api",
+                "v1",
+                "posts",
+                "comments"
+              ],
+              "query": [
+                {
+                  "key": "postId",
+                  "value": "1222"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "createCategory",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "http://localhost:3000/api/v1/posts/comments?postId=1&content=This is test comment",
+              "protocol": "http",
+              "host": [
+                "localhost"
+              ],
+              "port": "3000",
+              "path": [
+                "api",
+                "v1",
+                "posts",
+                "comments"
+              ],
+              "query": [
+                {
+                  "key": "postId",
+                  "value": "1"
+                },
+                {
+                  "key": "content",
+                  "value": "This is test comment"
+                }
+              ]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "reactions",
+      "item": [
+        {
+          "name": "React",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept-Language",
+                "value": "",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "http://localhost:3000/api/v1/reactions?entityType=comment&entityId=1&score=1",
+              "protocol": "http",
+              "host": [
+                "localhost"
+              ],
+              "port": "3000",
+              "path": [
+                "api",
+                "v1",
+                "reactions"
+              ],
+              "query": [
+                {
+                  "key": "entityType",
+                  "value": "comment"
+                },
+                {
+                  "key": "entityId",
+                  "value": "1"
+                },
+                {
+                  "key": "score",
+                  "value": "1"
+                }
+              ]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "messages",
+      "item": [
+        {
+          "name": "GetChatUsers",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "http://localhost:3000/api/v1/messages/users",
+              "protocol": "http",
+              "host": [
+                "localhost"
+              ],
+              "port": "3000",
+              "path": [
+                "api",
+                "v1",
+                "messages",
+                "users"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "GetChatMessages",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "http://localhost:3000/api/v1/messages?partnetId=d342495f-2c1d-45c8-908d-1a26fac34c27",
+              "protocol": "http",
+              "host": [
+                "localhost"
+              ],
+              "port": "3000",
+              "path": [
+                "api",
+                "v1",
+                "messages"
+              ],
+              "query": [
+                {
+                  "key": "partnetId",
+                  "value": "d342495f-2c1d-45c8-908d-1a26fac34c27"
+                }
+              ]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "websocket",
+      "item": [
+        {
+          "name": "serveWs",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "http://localhost:3000/ws",
+              "protocol": "http",
+              "host": [
+                "localhost"
+              ],
+              "port": "3000",
+              "path": [
+                "ws"
+              ]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "notification",
+      "item": [
+        {
+          "name": "New Request",
+          "request": {
+            "method": "GET",
+            "header": []
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "echo",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "http://localhost:3000/api/v1/echo?message=dddddd",
+          "protocol": "http",
+          "host": [
+            "localhost"
+          ],
+          "port": "3000",
+          "path": [
+            "api",
+            "v1",
+            "echo"
+          ],
+          "query": [
+            {
+              "key": "message",
+              "value": "dddddd"
+            }
+          ]
+        }
+      },
+      "response": []
+    }
+  ],
+  "auth": {
+    "type": "apikey",
+    "apikey": [
+      {
+        "key": "key",
+        "value": "X-Api-Key",
+        "type": "string"
+      },
+      {
+        "key": "value",
+        "value": "{{apiKey}}",
+        "type": "string"
+      },
+      {
+        "key": "in",
+        "value": "header",
+        "type": "string"
+      }
+    ]
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "example.com"
+    }
+  ]
+}

@@ -1,0 +1,42 @@
+# Git
+.git
+.gitignore
+.gitattributes
+
+# IDE & Editor
+.vscode
+.idea
+*.swp
+*.swo
+*~
+
+# Build artifacts
+tmp
+./tmp/main
+real-time-forum
+main
+
+# Database files (exclude local db, docker compose volume will handle it)
+*.db
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Docker files themselves
+Dockerfile
+docker-compose.yml
+.dockerignore
+
+# Node modules (if any)
+node_modules
+
+# Air hot-reload config (not needed in container)
+.air.toml
+
+# Diagrams & docs
+*.png
+*.drawio
+
+# Test files
+*_test.go
