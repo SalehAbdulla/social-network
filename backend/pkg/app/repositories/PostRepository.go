@@ -1,19 +1,19 @@
 package repositories
 
 import (
-	realtimeforum "real-time-forum"
-	"real-time-forum/pkg/models"
+	realtimeforum "social-network/backend"
+	"social-network/backend/pkg/models"
 )
 
 type PostRepository interface {
-	GetPosts(pageNumber int, pageSize int, sortBy string, sortOrder string, categoryId int) ([]models.Post, int, error)
+	GetPosts(pageNumber int, pageSize int, sortBy string, sortOrder string) ([]models.Post, int, error)
 	CreatePost(post models.Post) (models.Post, error)
 	DoesPostExists(postId int) error
 	GetPostByID(postId int) (models.Post, error)
 	DeletePost(postId int, userId string) error
 }
 
-func (db *DB) GetPosts(pageNumber int, pageSize int, sortBy string, sortOrder string, categoryId int) ([]models.Post, int, error) {
+func (db *DB) GetPosts(pageNumber int, pageSize int, sortBy string, sortOrder string) ([]models.Post, int, error) {
 	validSortColumns := map[string]string{
 		"createdat": "p.createdAt",
 		"title":     "p.title",
@@ -36,15 +36,7 @@ func (db *DB) GetPosts(pageNumber int, pageSize int, sortBy string, sortOrder st
 	}
 
 	var totalElements int
-	countQuery := "SELECT COUNT(*) FROM post p"
-	var countArgs []interface{}
-	var whereClause string
-	if categoryId > 0 {
-		whereClause = " WHERE p.categoryId = ?"
-		countQuery += whereClause
-		countArgs = append(countArgs, categoryId)
-	}
-	err := db.Conn.QueryRow(countQuery, countArgs...).Scan(&totalElements)
+	err := db.Conn.QueryRow("SELECT COUNT(*) FROM post").Scan(&totalElements)
 	if err != nil {
 		return nil, 0, err
 	}
@@ -52,22 +44,16 @@ func (db *DB) GetPosts(pageNumber int, pageSize int, sortBy string, sortOrder st
 	offset := (pageNumber - 1) * pageSize
 
 	query := `
-		SELECT p.postId, p.userId, u.nickName, p.title, p.content, 
-			   p.categoryId, c.categoryName, p.score, p.commentsCounter, 
+		SELECT p.postId, p.userId, u.nickName, p.title, p.content,
+			   p.score, p.commentsCounter,
 			   p.createdAt, p.updatedAt
 		FROM post p
 		JOIN user u ON p.userId = u.userId
-		JOIN category c ON p.categoryId = c.categoryId` + whereClause + `
 		ORDER BY ` + column + ` ` + order + `
 		LIMIT ? OFFSET ?
 	`
-	var queryArgs []interface{}
-	if categoryId > 0 {
-		queryArgs = append(queryArgs, categoryId)
-	}
-	queryArgs = append(queryArgs, pageSize, offset)
 
-	rows, err := db.Conn.Query(query, queryArgs...)
+	rows, err := db.Conn.Query(query, pageSize, offset)
 	if err != nil {
 		return nil, 0, err
 	}
@@ -82,8 +68,6 @@ func (db *DB) GetPosts(pageNumber int, pageSize int, sortBy string, sortOrder st
 			&post.Nickname,
 			&post.Title,
 			&post.Content,
-			&post.CategoryId,
-			&post.CategoryName,
 			&post.Score,
 			&post.CommentsCounter,
 			&post.CreatedAt,
@@ -122,11 +106,10 @@ func (db *DB) GetPostByID(postId int) (models.Post, error) {
 	var post models.Post
 	err := db.Conn.QueryRow(
 		`SELECT p.postId, p.userId, u.nickName, p.title, p.content,
-				p.categoryId, c.categoryName, p.score, p.commentsCounter,
+				p.score, p.commentsCounter,
 				p.createdAt, p.updatedAt
 		FROM post p
 		JOIN user u ON p.userId = u.userId
-		JOIN category c ON p.categoryId = c.categoryId
 		WHERE p.postId = ?`, postId,
 	).Scan(
 		&post.PostId,
@@ -134,8 +117,6 @@ func (db *DB) GetPostByID(postId int) (models.Post, error) {
 		&post.Nickname,
 		&post.Title,
 		&post.Content,
-		&post.CategoryId,
-		&post.CategoryName,
 		&post.Score,
 		&post.CommentsCounter,
 		&post.CreatedAt,
@@ -165,9 +146,9 @@ func (db *DB) DeletePost(postId int, userId string) error {
 func (db *DB) CreatePost(post models.Post) (models.Post, error) {
 	now := "datetime('now')"
 	result, err := db.Conn.Exec(
-		`INSERT INTO post (userId, title, content, categoryId, score, commentsCounter, createdAt, updatedAt)
-		 VALUES (?, ?, ?, ?, 0, 0, `+now+`, `+now+`)`,
-		post.UserId, post.Title, post.Content, post.CategoryId,
+		`INSERT INTO post (userId, title, content, score, commentsCounter, createdAt, updatedAt)
+		 VALUES (?, ?, ?, 0, 0, `+now+`, `+now+`)`,
+		post.UserId, post.Title, post.Content,
 	)
 	if err != nil {
 		return models.Post{}, err
@@ -180,11 +161,10 @@ func (db *DB) CreatePost(post models.Post) (models.Post, error) {
 
 	err = db.Conn.QueryRow(
 		`SELECT p.postId, p.userId, u.nickName, p.title, p.content,
-				p.categoryId, c.categoryName, p.score, p.commentsCounter,
+				p.score, p.commentsCounter,
 				p.createdAt, p.updatedAt
 		FROM post p
 		JOIN user u ON p.userId = u.userId
-		JOIN category c ON p.categoryId = c.categoryId
 		WHERE p.postId = ?`, postID,
 	).Scan(
 		&post.PostId,
@@ -192,8 +172,6 @@ func (db *DB) CreatePost(post models.Post) (models.Post, error) {
 		&post.Nickname,
 		&post.Title,
 		&post.Content,
-		&post.CategoryId,
-		&post.CategoryName,
 		&post.Score,
 		&post.CommentsCounter,
 		&post.CreatedAt,
