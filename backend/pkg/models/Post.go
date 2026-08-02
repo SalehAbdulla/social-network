@@ -14,8 +14,6 @@ type Post struct {
 	Nickname        string `json:"nickname"`
 	Title           string `json:"title"`
 	Content         string `json:"content"`
-	CategoryId      int    `json:"categoryId"`
-	CategoryName    string `json:"categoryName"`
 	Score           int    `json:"score"`
 	CommentsCounter int    `json:"commentsCounter"`
 	CreatedAt       string `json:"createdAt"`
