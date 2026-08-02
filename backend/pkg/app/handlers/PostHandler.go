@@ -3,10 +3,10 @@ package handlers
 import (
 	"encoding/json"
 	"net/http"
-	realtimeforum "real-time-forum"
-	"real-time-forum/pkg/middleware"
-	"real-time-forum/pkg/payload"
-	"real-time-forum/pkg/payload/posts"
+	realtimeforum "social-network/backend"
+	"social-network/backend/pkg/middleware"
+	"social-network/backend/pkg/payload"
+	"social-network/backend/pkg/payload/posts"
 	"strconv"
 	"strings"
 )
@@ -61,9 +61,6 @@ func (re *HandlerContext) GetPosts(w http.ResponseWriter, r *http.Request) {
 		sortOrder = "desc"
 	}
 
-	categoryIdStr := r.URL.Query().Get("categoryId")
-	categoryId, _ := strconv.Atoi(categoryIdStr)
-
 	pageNumber, err := strconv.Atoi(pageNumberStr)
 	if err != nil || pageNumber < 1 {
 		re.HandleError(w, r, realtimeforum.ErrBadRequest)
@@ -103,7 +100,7 @@ func (re *HandlerContext) GetPosts(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	response, err := re.PostService.GetPosts(pageNumber, pageSize, sortBy, sortOrder, categoryId, userID)
+	response, err := re.PostService.GetPosts(pageNumber, pageSize, sortBy, sortOrder, userID)
 	if err != nil {
 		re.HandleError(w, r, err)
 		return
@@ -118,9 +115,8 @@ func (re *HandlerContext) GetPosts(w http.ResponseWriter, r *http.Request) {
 }
 
 type CreatePostRequest struct {
-	Title      string `json:"title"`
-	Content    string `json:"content"`
-	CategoryID int    `json:"categoryId"`
+	Title   string `json:"title"`
+	Content string `json:"content"`
 }
 
 func (re *HandlerContext) DeletePost(w http.ResponseWriter, r *http.Request) {
@@ -175,7 +171,6 @@ func (re *HandlerContext) CreatePost(w http.ResponseWriter, r *http.Request) {
 
 	title := strings.TrimSpace(req.Title)
 	content := strings.TrimSpace(req.Content)
-	categoryId := req.CategoryID
 
 	if title == "" || len(title) < 3 || len(title) > 30 {
 		re.HandleError(w, r, realtimeforum.ErrTitleLength)
@@ -197,12 +192,7 @@ func (re *HandlerContext) CreatePost(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if categoryId < 1 || categoryId > 8 {
-		re.HandleError(w, r, realtimeforum.ErrNoCategorySelected)
-		return
-	}
-
-	response, err := re.PostService.CreatePost(userID, title, content, categoryId)
+	response, err := re.PostService.CreatePost(userID, title, content)
 	if err != nil {
 		re.HandleError(w, r, err)
 		return
