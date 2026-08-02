@@ -3,10 +3,10 @@ package handlers
 import (
 	"encoding/json"
 	"net/http"
-	realtimeforum "real-time-forum"
-	"real-time-forum/pkg/middleware"
-	"real-time-forum/pkg/payload"
-	"real-time-forum/pkg/payload/notification"
+	realtimeforum "social-network/backend"
+	"social-network/backend/pkg/middleware"
+	"social-network/backend/pkg/payload"
+	"social-network/backend/pkg/payload/notification"
 	"strconv"
 )
 

@@ -5,8 +5,8 @@ import (
 	"log"
 	"net/http"
 
-	"real-time-forum/pkg/app/service"
-	pkgwebsocket "real-time-forum/pkg/websocket"
+	"social-network/backend/pkg/app/service"
+	pkgwebsocket "social-network/backend/pkg/websocket"
 
 	"github.com/gorilla/websocket"
 )
