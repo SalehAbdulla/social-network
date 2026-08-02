@@ -5,8 +5,8 @@ import (
 	"log/slog"
 	"net/http"
 	"strings"
-	realtimeforum "real-time-forum"
-	"real-time-forum/pkg/payload"
+	realtimeforum "social-network/backend"
+	"social-network/backend/pkg/payload"
 )
 
 func (re *HandlerContext) parseForm(w http.ResponseWriter, r *http.Request) bool {
@@ -73,7 +73,6 @@ func (re *HandlerContext) HandleError(w http.ResponseWriter, r *http.Request, er
 			err == realtimeforum.ErrTitleLength,
 			err == realtimeforum.ErrContentLength,
 			err == realtimeforum.ErrCommentLength,
-			err == realtimeforum.ErrNoCategorySelected,
 			err == realtimeforum.ErrMissingPostId,
 			err == realtimeforum.ErrNonASCII,
 			err == realtimeforum.ErrBadRequest:
