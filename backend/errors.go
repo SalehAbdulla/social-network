@@ -22,7 +22,6 @@ var (
 	ErrTitleLength        = errors.New("title must be between 3 and 30 characters")
 	ErrContentLength      = errors.New("content must be between 10 and 500 characters")
 	ErrCommentLength      = errors.New("comment must be between 3 and 300 characters")
-	ErrNoCategorySelected = errors.New("please select a category for your post")
 	ErrMissingPostId      = errors.New("post not found")
 	ErrNonASCII           = errors.New("only English letters, numbers, and punctuation are allowed")
 )
