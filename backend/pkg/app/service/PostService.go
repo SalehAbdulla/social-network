@@ -2,14 +2,14 @@ package service
 
 import (
 	"math"
-	db "real-time-forum/pkg/app/repositories"
-	"real-time-forum/pkg/models"
-	"real-time-forum/pkg/payload/posts"
+	db "social-network/backend/pkg/app/repositories"
+	"social-network/backend/pkg/models"
+	"social-network/backend/pkg/payload/posts"
 )
 
 type PostService interface {
-	GetPosts(pageNumber int, pageSize int, sortBy string, sortOrder string, categoryId int, userId string) (posts.PostResponse, error)
-	CreatePost(userID string, title string, content string, categoryId int) (posts.PostDTO, error)
+	GetPosts(pageNumber int, pageSize int, sortBy string, sortOrder string, userId string) (posts.PostResponse, error)
+	CreatePost(userID string, title string, content string) (posts.PostDTO, error)
 	GetPostByID(postId int, userId string) (posts.PostDTO, error)
 	DeletePost(postId int, userID string) error
 }
@@ -33,8 +33,6 @@ func mapPostToDTO(post models.Post, userScore int) posts.PostDTO {
 		Nickname:        post.Nickname,
 		Title:           post.Title,
 		Content:         post.Content,
-		CategoryId:      post.CategoryId,
-		CategoryName:    post.CategoryName,
 		Score:           post.Score,
 		CommentsCounter: post.CommentsCounter,
 		UserScore:       userScore,
@@ -43,8 +41,8 @@ func mapPostToDTO(post models.Post, userScore int) posts.PostDTO {
 	}
 }
 
-func (p PostServiceImpl) GetPosts(pageNumber int, pageSize int, sortBy string, sortOrder string, categoryId int, userId string) (posts.PostResponse, error) {
-	postsModel, totalElements, err := p.db.GetPosts(pageNumber, pageSize, sortBy, sortOrder, categoryId)
+func (p PostServiceImpl) GetPosts(pageNumber int, pageSize int, sortBy string, sortOrder string, userId string) (posts.PostResponse, error) {
+	postsModel, totalElements, err := p.db.GetPosts(pageNumber, pageSize, sortBy, sortOrder)
 	if err != nil {
 		return posts.PostResponse{}, err
 	}
@@ -81,12 +79,11 @@ func (p PostServiceImpl) DeletePost(postId int, userID string) error {
 	return p.db.DeletePost(postId, userID)
 }
 
-func (p PostServiceImpl) CreatePost(userID string, title string, content string, categoryId int) (posts.PostDTO, error) {
+func (p PostServiceImpl) CreatePost(userID string, title string, content string) (posts.PostDTO, error) {
 	post := models.Post{
-		UserId:     userID,
-		Title:      title,
-		Content:    content,
-		CategoryId: categoryId,
+		UserId:  userID,
+		Title:   title,
+		Content: content,
 	}
 
 	createdPost, err := p.db.CreatePost(post)
