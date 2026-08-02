@@ -1,0 +1,82 @@
+CREATE TABLE IF NOT EXISTS user (
+    userId TEXT PRIMARY KEY,
+    email TEXT UNIQUE NOT NULL,
+    password TEXT NOT NULL,
+    firstName TEXT NOT NULL,
+    lastName TEXT NOT NULL,
+    nickName TEXT UNIQUE NOT NULL,
+    birthYear INTEGER NOT NULL,
+    gender TEXT NOT NULL,
+    aboutMe TEXT DEFAULT '',
+    avatar TEXT DEFAULT '',
+    isPublic INTEGER DEFAULT 1,
+    createdAt DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updatedAt DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS session (
+    token TEXT PRIMARY KEY,
+    userId TEXT NOT NULL,
+    expiresAt DATETIME NOT NULL,
+    FOREIGN KEY (userId) REFERENCES user(userId) ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS post (
+    postId INTEGER PRIMARY KEY,
+    userId TEXT NOT NULL,
+    title TEXT NOT NULL,
+    content TEXT NOT NULL,
+    privacy TEXT DEFAULT 'public',
+    score INTEGER DEFAULT 0,
+    commentsCounter INTEGER DEFAULT 0,
+    createdAt DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updatedAt DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (userId) REFERENCES user(userId) ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS comment (
+    commentId INTEGER PRIMARY KEY,
+    postId INTEGER NOT NULL,
+    userId TEXT NOT NULL,
+    content TEXT NOT NULL,
+    score INTEGER DEFAULT 0,
+    createdAt DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updatedAt DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (postId) REFERENCES post(postId) ON DELETE CASCADE,
+    FOREIGN KEY (userId) REFERENCES user(userId) ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS reaction (
+    reactionId INTEGER PRIMARY KEY,
+    userId TEXT NOT NULL,
+    entityType TEXT NOT NULL,
+    entityId INTEGER NOT NULL,
+    score INTEGER NOT NULL DEFAULT 0,
+    createdAt DATETIME DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(userId, entityType, entityId),
+    FOREIGN KEY (userId) REFERENCES user(userId) ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS message (
+    messageId INTEGER PRIMARY KEY,
+    senderId TEXT NOT NULL,
+    recipientId TEXT NOT NULL,
+    content TEXT NOT NULL,
+    isRead INTEGER DEFAULT 0,
+    createdAt DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (senderId) REFERENCES user(userId) ON DELETE CASCADE,
+    FOREIGN KEY (recipientId) REFERENCES user(userId) ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS notification (
+    notificationId INTEGER PRIMARY KEY,
+    userId TEXT NOT NULL,
+    actorId TEXT NOT NULL,
+    entityType TEXT NOT NULL,
+    entityId INTEGER NOT NULL,
+    message TEXT NOT NULL,
+    isRead INTEGER DEFAULT 0,
+    createdAt DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (userId) REFERENCES user(userId) ON DELETE CASCADE,
+    FOREIGN KEY (actorId) REFERENCES user(userId) ON DELETE CASCADE
+);
