@@ -2,8 +2,8 @@ package repositories
 
 import (
 	"database/sql"
-	realtimeforum "real-time-forum"
-	"real-time-forum/pkg/models"
+	realtimeforum "social-network/backend"
+	"social-network/backend/pkg/models"
 )
 
 type ReactionRepository interface {

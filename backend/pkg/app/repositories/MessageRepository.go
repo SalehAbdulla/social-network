@@ -1,8 +1,8 @@
 package repositories
 
 import (
-	realtimeforum "real-time-forum"
-	"real-time-forum/pkg/models"
+	realtimeforum "social-network/backend"
+	"social-network/backend/pkg/models"
 )
 
 type MessageRepository interface {
