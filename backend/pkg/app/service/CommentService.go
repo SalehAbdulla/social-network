@@ -2,8 +2,8 @@ package service
 
 import (
 	"math"
-	"real-time-forum/pkg/payload/comment"
-	db "real-time-forum/pkg/app/repositories"
+	"social-network/backend/pkg/payload/comment"
+	db "social-network/backend/pkg/app/repositories"
 )
 
 type CommentService interface {

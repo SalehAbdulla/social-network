@@ -1,9 +1,9 @@
 package service
 
 import (
-	realtimeforum "real-time-forum"
-	"real-time-forum/pkg/payload/message"
-	db "real-time-forum/pkg/app/repositories"
+	realtimeforum "social-network/backend"
+	"social-network/backend/pkg/payload/message"
+	db "social-network/backend/pkg/app/repositories"
 )
 
 type MessageService interface {

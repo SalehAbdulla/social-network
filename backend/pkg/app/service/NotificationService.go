@@ -1,9 +1,9 @@
 package service
 
 import (
-	realtimeforum "real-time-forum"
-	db "real-time-forum/pkg/app/repositories"
-	"real-time-forum/pkg/payload/notification"
+	realtimeforum "social-network/backend"
+	db "social-network/backend/pkg/app/repositories"
+	"social-network/backend/pkg/payload/notification"
 )
 
 type NotificationService interface {

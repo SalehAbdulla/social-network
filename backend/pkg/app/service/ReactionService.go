@@ -1,9 +1,9 @@
 package service
 
 import (
-	realtimeforum "real-time-forum"
-	"real-time-forum/pkg/payload/reaction"
-	db "real-time-forum/pkg/app/repositories"
+	realtimeforum "social-network/backend"
+	"social-network/backend/pkg/payload/reaction"
+	db "social-network/backend/pkg/app/repositories"
 )
 
 type ReactionService interface {

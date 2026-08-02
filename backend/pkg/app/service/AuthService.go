@@ -2,14 +2,14 @@ package service
 
 import (
 	"log/slog"
-	realtimeforum "real-time-forum"
+	realtimeforum "social-network/backend"
 	"strconv"
 	"time"
 
 	"golang.org/x/crypto/bcrypt"
 
-	"real-time-forum/pkg/payload/user"
-	db "real-time-forum/pkg/app/repositories"
+	"social-network/backend/pkg/payload/user"
+	db "social-network/backend/pkg/app/repositories"
 
 	"github.com/google/uuid"
 )
