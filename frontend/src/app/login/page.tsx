@@ -1,6 +1,6 @@
 "use client"
 import React from 'react'
-import {assets} from '../assets/assets';
+import {assets} from '../../../public/assets';
 import { Star } from 'lucide-react';
 import SignIn from '../components/SignIn';
 
@@ -29,9 +29,7 @@ const Login = () => {
       </div>
       {/* Right side :Login Form  */}
       <div className='flex-1 flex items-center justify-center p-6 sm:p-10'>
-       
         <SignIn/>
-
       </div>
     </div>
   )

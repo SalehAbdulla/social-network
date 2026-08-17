@@ -13,7 +13,7 @@ import {
   Loader2,
   X,
 } from "lucide-react";
-import { assets } from "../assets/assets";
+import { assets } from "../../../public/assets";
 
 const BRAND = "#0b1f3a";
 
