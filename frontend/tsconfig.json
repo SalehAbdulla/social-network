@@ -29,6 +29,6 @@
     ".next/types/**/*.ts",
     ".next/dev/types/**/*.ts",
     "**/*.mts"
-, "../App.jsx", "src/app/components/SignIn.tsx"  ],
+, "../App.jsx", "src/app/components/SignIn.tsx", "src/app/components/SideBar.tsx"  ],
   "exclude": ["node_modules"]
 }
