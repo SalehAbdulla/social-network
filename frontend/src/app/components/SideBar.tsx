@@ -12,7 +12,7 @@ const Sidebar = () => {
       <div className='p-4'>
         <img src={assets.logo.src} alt="logo" className='w-40'/>
       </div>
-      <hr className='border-b-2 border-gray-200 w-[123%] -mx-6' />
+      <hr className='border-b border-gray-200 w-[123%] -mx-6' />
       <div className='flex flex-col gap-2 items-start pl-4 text-xl my-0'>
         {
           menuItemsData.map(({to, label, Icon}) => {
