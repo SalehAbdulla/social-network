@@ -42,7 +42,7 @@ export default function StoryCarousel() {
   return (
     <div
       ref={sliderRef}
-      className={`flex gap-5 w-165 overflow-x-auto scrollbar-hide select-none ${
+      className={`flex gap-5 w-165 overflow-x-auto scrollbar-hide select-none min-h-42 ${
         isDragging ? "cursor-grabbing" : "cursor-grab"
       }`}
       onPointerDown={handlePointerDown}
