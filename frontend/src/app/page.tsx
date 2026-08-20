@@ -1,14 +1,9 @@
-import Image from "next/image";
-import { dummyStoriesData } from "../../public/assets";
-import StoryCard from "./components/StoryCard";
+import StoryCarousel from "./components/StoryCarousel";
 
 export default function Feed() {
   return (
     <div className="flex flex-col justify-center px-10">
-      <div className="flex gap-5 w-165 overflow-auto">
-        <StoryCard id=""/>
-        {dummyStoriesData.map((v) => <StoryCard key={v._id} id={v._id} />)}
-      </div>
+      <StoryCarousel />
     </div>
   );
 }
