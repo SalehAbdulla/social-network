@@ -46,7 +46,7 @@ const StoryCard = (props: StoryCardProps) => {
     const data = dummyStoriesData.find((v)=>{return v._id === props.id});
     if (data === undefined) 
         return <>
-            <button className="relative w-30 h-40 overflow-hidden rounded-lg border-2 border-dashed border-brand-1 items-center justify-center flex flex-col gap-2 cursor-pointer">
+            <button className="relative min-w-30 min-h-40 overflow-hidden rounded-lg border-2 border-dashed border-brand-1 items-center justify-center flex flex-col gap-2 cursor-pointer">
                 <div className="bg-brand-1 w-12 h-12 rounded-full flex items-center justify-center p-0 m-0">
                     <span className="m-0 p-0 text-4xl text-white">+</span>
                 </div>
@@ -57,7 +57,7 @@ const StoryCard = (props: StoryCardProps) => {
     const lastUpdated = getTimeAgo(data.updatedAt);
 
     return <>
-        <div style={{ backgroundColor: data.background_color }} className="relative w-30 h-40 overflow-hidden rounded-lg text-white cursor-pointer">
+        <div style={{ backgroundColor: data.background_color }} className="relative min-w-30 min-h-40 overflow-hidden rounded-lg text-white cursor-pointer">
             {data.media_type === "image" && (
                 <img src={data.media_url} alt="media" className="absolute inset-0 w-full h-full object-cover" />
             )}
