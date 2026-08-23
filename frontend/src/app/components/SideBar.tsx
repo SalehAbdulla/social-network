@@ -13,11 +13,11 @@ const Sidebar = () => {
         <img src={assets.logo.src} alt="logo" className='w-40'/>
       </div>
       <hr className='border-b border-gray-200 w-[123%] -mx-6' />
-      <div className='flex flex-col gap-2 items-start pl-4 text-xl my-0'>
+      <div className='flex flex-col gap-1 items-start pl-4 text-xl my-0'>
         {
           menuItemsData.map(({to, label, Icon}) => {
             return <div key={to}>
-              <button onClick={() => router.push(to)} className='p-1 rounded-lg w-50 flex gap-4 items-center hover:text-brand-1 hover:bg-brand-1/10 cursor-pointer hover:scale-110 transition duration-100 ease-in-out active:scale-95'>
+              <button onClick={() => router.push(to)} className='p-1 rounded-lg w-50 flex gap-4 items-center hover:text-brand-1 hover:bg-brand-1/10 cursor-pointer hover:scale-105 transition duration-100 ease-in-out active:scale-100'>
                 <Icon className='h-5 w-5'/>
                 {label}
               </button>
