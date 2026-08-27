@@ -3,6 +3,7 @@
 import { useRouter } from 'next/navigation';
 import {assets, menuItemsData} from '../../../public/assets';
 import MenuItems from './MenuItems';
+import { CirclePlus } from 'lucide-react';
 
 interface SideBarProps {
   isSideBarOpen: boolean
@@ -15,11 +16,16 @@ const Sidebar = ({isSideBarOpen, setSideBarOpen}: SideBarProps) => {
 
   return <div className={`w-60 xl:w-72 bg-white border-r border-gray-200 flex flex-col justify-between items-center max-sm:absolute top-0 z-20
   ${isSideBarOpen ? 'translate-x-0' : 'max-sm:-translate-x-full'} transition-all duration-300 ease-in-out`}>
-    <div className='w-full'>
+    <div className='flex flex-col w-full'>
       {/* fix: Logo */}
       <img onClick={() => router.push('/')} src={assets.logo.src} alt="" className='w-40 ml-7 my-2 cursor-pointer' />
       <hr className='border-gray-300 mb-8'/>
       <MenuItems setSideBarOpen={setSideBarOpen} />
+      <button className='mx-3 flex items-center justify-center gap-2 py-2.5 mt-6 rounded-lg bg-linear-to-r from-brand-1 to-brand-2 hover:from-blue-400 hover:to-blue-800-to-r active:scale-95 transition text-white cursor-pointer px-5'>
+        <CirclePlus onClick={() => router.push('/create-post')} className='w-5 h-5'/>
+      Create Post
+      </button>
+
     </div>
   </div>
 
