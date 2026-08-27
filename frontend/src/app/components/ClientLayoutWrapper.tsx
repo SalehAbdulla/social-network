@@ -16,7 +16,7 @@ export default function ClientLayoutWrapper({
 
   return user ? (
     <>
-      <SideBar />
+      <SideBar isSideBarOpen={isSideBarOpen} setSideBarOpen={setSideBarOpen}/>
       <main className="flex-1 bg-slate-50">{children}</main>
 
       <button 
