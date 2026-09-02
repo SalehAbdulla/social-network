@@ -1,9 +1,7 @@
-import React from 'react'
+import Connections from "../pages/Connections";
 
-const page = () => {
-  return (
-    <div>page</div>
-  )
-}
+const Page = () => {
+  return <Connections />;
+};
 
-export default page
+export default Page;
