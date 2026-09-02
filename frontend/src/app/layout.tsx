@@ -2,7 +2,7 @@ import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import { Metadata } from "next";
 import ClientLayoutWrapper from "./components/ClientLayoutWrapper";
-import { ClerkProvider, Show, SignInButton, SignUpButton, UserButton } from '@clerk/nextjs'
+import { ClerkProvider } from '@clerk/nextjs'
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -34,8 +34,8 @@ export default function RootLayout({
     >
       <body className="min-h-full h-full flex gap-20 bg-gray-100">
         <ClerkProvider>
-          <ClientLayoutWrapper>{children}</ClientLayoutWrapper>
-        </ClerkProvider>
+            <ClientLayoutWrapper>{children}</ClientLayoutWrapper>
+          </ClerkProvider>
       </body>
     </html>
   );
