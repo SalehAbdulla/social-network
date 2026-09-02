@@ -16,6 +16,7 @@ export default function ClientLayoutWrapper({
 }) {
     const { isLoaded, isSignedIn } = useUser();
     const [isSideBarOpen, setSideBarOpen] = useState(false);
+    const [isCollapsed, setIsCollapsed] = useState(false);
     const pathname = usePathname();
 
   // Public pages (like /login) — render without sidebar or auth checks
@@ -36,7 +37,12 @@ export default function ClientLayoutWrapper({
   // Signed in on a protected route — show full layout with sidebar
   return (
     <>
-      <SideBar isSideBarOpen={isSideBarOpen} setSideBarOpen={setSideBarOpen}/>
+      <SideBar
+        isSideBarOpen={isSideBarOpen}
+        setSideBarOpen={setSideBarOpen}
+        isCollapsed={isCollapsed}
+        setIsCollapsed={setIsCollapsed}
+      />
       <main className="flex-1 bg-slate-50">{children}</main>
 
       <button 
