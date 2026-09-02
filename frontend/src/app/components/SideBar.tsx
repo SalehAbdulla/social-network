@@ -1,10 +1,10 @@
 "use client"
 
 import { useRouter } from 'next/navigation';
-import {assets, dummyUserData, menuItemsData} from '../../../public/assets';
+import {assets, menuItemsData} from '../../../public/assets';
 import MenuItems from './MenuItems';
 import { CirclePlus, LogOut } from 'lucide-react';
-import { useClerk, UserButton } from '@clerk/nextjs';
+import {useClerk, useUser, UserButton } from '@clerk/nextjs';
 
 interface SideBarProps {
   isSideBarOpen: boolean
@@ -14,8 +14,11 @@ interface SideBarProps {
 const Sidebar = ({isSideBarOpen, setSideBarOpen}: SideBarProps) => {
 
   const router = useRouter();
-  const user = dummyUserData;
-  const {signOut} = useClerk()
+  const { user } = useUser();
+  const { signOut } = useClerk();
+
+  const displayName = user?.fullName || user?.username || 'User';
+  const displayUsername = user?.username ? `@${user.username}` : '';
 
   return <div className={`w-60 xl:w-72 bg-white border-r border-gray-200 flex flex-col justify-between items-center max-sm:absolute top-0 z-20
   ${isSideBarOpen ? 'translate-x-0' : 'max-sm:-translate-x-full'} transition-all duration-300 ease-in-out`}>
@@ -31,12 +34,18 @@ const Sidebar = ({isSideBarOpen, setSideBarOpen}: SideBarProps) => {
       </button>
 
     </div>
-          <div className='w-full border-t border-gray-200 p-4 px-7 flex items-center justify-between'>
+        <div className='w-full border-t border-gray-200 p-4 px-7 flex items-center justify-between'>
         <div className='flex gap-2 items-center cursor-pointer'>
-          <UserButton />
+          <UserButton
+            appearance={{
+              elements: {
+                avatarBox: 'w-9 h-9',
+              },
+            }}
+          />
           <div>
-            <h1 className='text-sm fong-medium'>{user.full_name}</h1>
-            <p className='text-xs text-gray-500'>@{user.username}</p>
+            <h1 className='text-sm font-medium truncate max-w-24'>{displayName}</h1>
+            {displayUsername && <p className='text-xs text-gray-500 truncate max-w-24'>{displayUsername}</p>}
           </div>
         </div>
         <LogOut onClick={() => signOut()} className='w-4.5 text-gray-400 hover:text-gray-700' />
