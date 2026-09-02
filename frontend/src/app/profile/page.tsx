@@ -1,8 +1,8 @@
 
-const Profile = () => {
-  return (
-    <div>Profile</div>
-  )
-}
+import Profile from "../pages/Profile";
 
-export default Profile
+const Page = () => {
+  return <Profile />;
+};
+
+export default Page;
