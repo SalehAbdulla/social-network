@@ -11,7 +11,7 @@ export default function ClientLayoutWrapper({
 }: {
   children: React.ReactNode;
 }) {
-    const user = dummyUserData
+    const user = dummyUserData // later will get the user from the backend
     const [isSideBarOpen, setSideBarOpen] = useState(false);
 
   return user ? (
