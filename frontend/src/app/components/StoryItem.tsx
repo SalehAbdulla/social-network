@@ -5,6 +5,7 @@ import { MoreVertical, Trash2 } from "lucide-react";
 import { toast } from "react-hot-toast";
 import api from "../api/axios";
 import { useAuth } from "@clerk/nextjs";
+import { imageSrc } from "../lib/imageSrc";
 
 
 import { StaticImageData } from "next/image";
@@ -48,11 +49,11 @@ const StoryItem = ({ story, fetchStories, currentUserId, onView }: StoryItemProp
   return (
     <div
       onClick={() => onView?.(story)}
-      className="relative rounded-lg shadow min-w-30 max-w-30 max-h-40 aspect-3/4 cursor-pointer hover:shadow-lg transition-all duration-200 bg-linear-to-b from-blue-500 to-blue-600 hover:from-indigo-700 hover:to-blue-800 active:scale-95 overflow-hidden"
+      className="relative rounded-lg shadow min-w-30 max-w-30 max-h-40 aspect-3/4 cursor-pointer hover:shadow-lg transition-all duration-200 bg-linear-to-b from-blue-500 to-blue-600 hover:from-blue-700 hover:to-blue-800 active:scale-95 overflow-hidden"
     >
       {/* Profile picture */}
       <img
-        src={story.user.profile_picture as string}
+        src={imageSrc(story.user.profile_picture)}
         alt=""
         className="absolute size-8 top-3 left-3 z-10 rounded-full ring-gray-100 shadow"
       />
