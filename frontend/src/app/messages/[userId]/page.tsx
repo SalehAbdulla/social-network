@@ -1,9 +1,7 @@
-import React from 'react'
+import ChatBox from "../../pages/ChatBox";
 
-const page = () => {
-  return (
-    <div>page</div>
-  )
-}
+const Page = () => {
+  return <ChatBox />;
+};
 
-export default page
+export default Page;
