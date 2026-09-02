@@ -78,7 +78,7 @@ export default Sidebar
     //     }
     //   </div>
     //   <div className='flex justify-center items-center w-full'>
-    //     <button className='m-0 p-0 w-full flex items-center justify-center gap-2 py-2.5 mt-6 mx-0 rounded-lg bg-linear-to-r from-brand-1 to-brand-2 hover:from-indigo-700 hover:to-purple-800 active:scale-95 transition text-white cursor-pointer'>Create Post</button>
+    //     <button className='m-0 p-0 w-full flex items-center justify-center gap-2 py-2.5 mt-6 mx-0 rounded-lg bg-linear-to-r from-brand-1 to-brand-2 hover:from-blue-700 hover:to-purple-800 active:scale-95 transition text-white cursor-pointer'>Create Post</button>
     //   </div>
     //   <div className='mt-auto p-10'>user account</div>
     //  </div>
