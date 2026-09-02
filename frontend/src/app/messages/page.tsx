@@ -1,9 +1,7 @@
-import React from 'react'
+import MessagesInboxPage from "../pages/MessagesInboxPage";
 
-const page = () => {
-  return (
-    <div>page</div>
-  )
-}
+const Page = () => {
+  return <MessagesInboxPage />;
+};
 
-export default page
+export default Page;
