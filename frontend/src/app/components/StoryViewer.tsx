@@ -1,6 +1,7 @@
 "use client"
 import React, { useEffect, useState } from 'react'
 import {BadgeCheck, X} from 'lucide-react';
+import { imageSrc } from "../lib/imageSrc";
 
 const StoryViewer = ({viewStory,setViewStory}) => {
   
@@ -66,7 +67,7 @@ const StoryViewer = ({viewStory,setViewStory}) => {
       </div>
       {/* user info top left  */}
       <div className="absolute top-4 left-4 flex items-center space-x-3 p-2 px-4 sm:p-4 sm:px-8 backdrop-blur-2xl rounded bg-black/50">
-       <img src={viewStory.user?.profile_picture} alt="" className='size-7 sm:size-8 rounded-full object-cover border border-white'/>
+       <img src={imageSrc(viewStory.user?.profile_picture)} alt="" className='size-7 sm:size-8 rounded-full object-cover border border-white'/>
        <div className="text-white font-medium flex items-center gap-1.5">
         <span className="">{viewStory.user?.full_name}</span>
         <BadgeCheck size={18}/>
