@@ -3,22 +3,25 @@ import { ArrowLeft, Sparkle, TextIcon, Upload } from "lucide-react";
 import React, { useState } from "react";
 import { toast } from "react-hot-toast";
 import api from "../api/axios";
-import { useAuth } from "@clerk/clerk-react";
+import { useAuth } from "@clerk/nextjs";
 
-const StoryModel = ({ setShowModel, fetchStories }) => {
+const StoryModel = ({ setShowModel, fetchStories }: {
+  setShowModel: (show: boolean) => void;
+  fetchStories: () => void;
+}) => {
   const bgColors = ["#4f46e5", "#7c3aed", "#db2777", "#e11d48", "#ea8a04", "#bd9488"];
   const [mode, setMode] = useState("text");
   const [background, setBackground] = useState(bgColors[0]);
   const [text, setText] = useState("");
-  const [media, setMedia] = useState(null);
-  const [previewUrl, setPreviewUrl] = useState(null);
+  const [media, setMedia] = useState<File | null>(null);
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
 
   const { getToken } = useAuth();
 
   const MAX_VIDEO_DURATION = 60; // seconds
   const MAX_VIDEO_SIZE_MB = 50; // in mb
 
-  const handleMediaUpload = (e) => {
+  const handleMediaUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
@@ -80,8 +83,9 @@ const StoryModel = ({ setShowModel, fetchStories }) => {
       } else {
         toast.error(data.message);
       }
-    } catch (error) {
-      toast.error(error.message);
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : "Something went wrong";
+      toast.error(message);
     }
   };
 
