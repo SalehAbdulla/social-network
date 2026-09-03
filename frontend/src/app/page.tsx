@@ -63,18 +63,7 @@ const Feed = () => {
   
         {/* Right sidebar */}
         <div className="max-xl:hidden sticky top-20">
-          <div className="max-w-xs bg-white text-xs p-4 rounded-md flex flex-col gap-2 shadow">
-            <h3 className="text-slate-800 font-semibold">Sponsored</h3>
-            <img
-              src={assets.sponsored_img.src} // or assets.sponsored_img
-              alt="Sponsored"
-              className="w-full h-auto rounded-md object-cover"
-            />
-            <p className="text-slate-600 font-medium">Email Marketing</p>
-            <p className="text-slate-400 text-sm">
-              Supercharge your marketing with a powerful, easy-to-use platform built for results.
-            </p>
-          </div>
+
           {/* <RecentMessages /> */}
         </div>
       </div>
