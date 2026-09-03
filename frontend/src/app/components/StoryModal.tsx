@@ -5,8 +5,8 @@ import { toast } from "react-hot-toast";
 import api from "../api/axios";
 import { useAuth } from "@clerk/nextjs";
 
-const StoryModel = ({ setShowModel, fetchStories }: {
-  setShowModel: (show: boolean) => void;
+const StoryModal = ({ setShowModal: setShowModel, fetchStories }: {
+  setShowModal: (show: boolean) => void;
   fetchStories: () => void;
 }) => {
   const bgColors = ["#4f46e5", "#7c3aed", "#db2777", "#e11d48", "#ea8a04", "#bd9488"];
@@ -168,4 +168,4 @@ const StoryModel = ({ setShowModel, fetchStories }: {
   );
 };
 
-export default StoryModel;
+export default StoryModal;

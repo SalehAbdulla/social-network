@@ -4,7 +4,11 @@ import { useRef, useState } from "react";
 import StoryCard from "./StoryCard";
 import { dummyStoriesData } from "../../../public/assets";
 
-export default function StoryCarousel() {
+interface StoryCarouselProps {
+  setShowModal: (show: boolean) => void
+}
+
+export default function StoryCarousel(props: StoryCarouselProps) {
   const sliderRef = useRef<HTMLDivElement | null>(null);
   const [isDragging, setIsDragging] = useState(false);
 
@@ -50,10 +54,10 @@ export default function StoryCarousel() {
       onPointerUp={stopDragging}
       onPointerCancel={stopDragging}
     >
-      <StoryCard id="" />
+      <StoryCard id="" setShowModal={props.setShowModal} />
 
       {dummyStoriesData.map((v) => (
-        <StoryCard key={v._id} id={v._id} />
+        <StoryCard key={v._id} id={v._id} setShowModal={undefined} />
       ))}
     </div>
   );

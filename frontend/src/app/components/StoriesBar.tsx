@@ -4,7 +4,7 @@ import { Plus } from 'lucide-react';
 import StoryItem from "./StoryItem";
 import StoryViewer from "./StoryViewer";
 import { useAuth } from '@clerk/nextjs';
-import StoryModel from './StoryModel';
+import StoryModal from './StoryModal';
 import { StaticImageData } from 'next/image';
 
 interface StoryType {
@@ -77,7 +77,7 @@ const StoriesBar = () => {
     
           {/* Add Story Model */}
           {showModel && (
-            <StoryModel setShowModel={setShowModel} fetchStories={fetchStories} />
+            <StoryModal setShowModal={setShowModel} fetchStories={fetchStories} />
           )}
     
           {/* View Story */}

@@ -1,7 +1,8 @@
 import { dummyStoriesData } from "../../../public/assets"
 
 type StoryCardProps = {
-    id: string
+    id: string,
+    setShowModal: ((show: boolean) => void) | undefined
 }
 
 const getTimeAgo = (dateString: string) => {
@@ -46,7 +47,12 @@ const StoryCard = (props: StoryCardProps) => {
     const data = dummyStoriesData.find((v)=>{return v._id === props.id});
     if (data === undefined) 
         return <>
-            <button className="relative min-w-30 min-h-40 max-h-40 overflow-hidden rounded-lg border-2 border-dashed border-brand-1 items-center justify-center flex flex-col gap-2 cursor-pointer">
+            <button onClick={()=> {
+                if (props.setShowModal !== undefined) {
+                    props.setShowModal(true);
+                }
+            }}
+             className="relative min-w-30 min-h-40 max-h-40 overflow-hidden rounded-lg border-2 border-dashed border-brand-1 items-center justify-center flex flex-col gap-2 cursor-pointer">
                 <div className="bg-brand-1 w-12 h-12 rounded-full flex items-center justify-center p-0 m-0">
                     <span className="m-0 p-0 text-4xl text-white">+</span>
                 </div>
