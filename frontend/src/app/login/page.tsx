@@ -29,7 +29,12 @@ const Login = () => {
       </div>
       {/* Right side :Login Form  */}
       <div className='flex-1 flex items-center justify-center p-6 sm:p-10'>
-        <SignIn routing="hash" />
+        {/* <SignIn routing="hash" /> */}
+
+                {/* TODO: Add react form - for the registration */}
+            
+
+
       </div>
     </div>
   )
