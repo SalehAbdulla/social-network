@@ -95,7 +95,7 @@ const searchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     if (!userId) return;
     try {
       const token = await getToken();
-      const { data } = await api.get("/api/v1/messages/users", {
+      const { data } = await api.get("/api/v1/messages", {
         headers: { Authorization: `Bearer ${token}` },
       });
       if (data.success) {
