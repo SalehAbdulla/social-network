@@ -6,22 +6,10 @@ import { toast } from "react-hot-toast";
 import api from "../api/axios";
 import { useAuth } from "@clerk/nextjs";
 import { imageSrc } from "../lib/imageSrc";
-
-
-import { StaticImageData } from "next/image";
+import Story from "../types/story";
 
 interface StoryItemProps {
-  story: {
-    _id: string;
-    user: {
-      _id: string;
-      profile_picture: string | StaticImageData;
-    };
-    content: string;
-    media_url: string;
-    media_type: string;
-    createdAt: string;
-  };
+  story: Story;
   fetchStories: () => void;
   currentUserId: string | null | undefined;
   onView: ((story: StoryItemProps["story"]) => void) | null;
