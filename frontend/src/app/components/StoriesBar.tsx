@@ -6,6 +6,7 @@ import StoryViewer from "./StoryViewer";
 import { useAuth } from '@clerk/nextjs';
 import StoryModal from './StoryModal';
 import { StaticImageData } from 'next/image';
+import Story from '../types/story';
 
 interface StoryType {
 _id: string;
@@ -38,7 +39,7 @@ const StoriesBar = () => {
     const { getToken, userId } = useAuth();
     const [showModel, setShowModel] = useState(false);
     const [stories, setStories] = useState<StoryType[]>([]);
-    const [viewStory, setViewStory] = useState(null);
+    const [viewStory, setViewStory] = useState<Story | null>(null);
 
     const fetchStories = async () => {
         setStories(dummyStoriesData);
@@ -49,11 +50,14 @@ const StoriesBar = () => {
     }, [])
 
   return (
-        <div className="w-screen sm:w-[calc(100vw-240px)] lg:max-w-2xl no-scrollbar overflow-x-auto px-4">
+        <div className="w-screen sm:w-[calc(100vw-240px)] lg:max-w-2xl no-scrollbar overflow-x-auto px-4 select-none">
           <div className="flex gap-4 pb-5">
             {/* Add story card */}
             <div
-              className="rounded-lg shadow-sm min-w-30 max-w-30 max-h-40 aspect-3/4 cursor-pointer hover:shadow-lg transition-all duration-200 border-2 border-dashed border-blue-300 bg-linear-to-b from-blue-50 to-white"
+				onClick={() => {
+					setShowModel(true);
+				}}
+              	className="rounded-lg shadow-sm min-w-30 max-w-30 max-h-40 aspect-3/4 cursor-pointer hover:shadow-lg transition-all duration-200 border-2 border-dashed border-blue-300 bg-linear-to-b from-blue-50 to-white"
             >
               <div className="h-full flex flex-col items-center justify-center p-4">
                 <div className="size-10 bg-blue-500 rounded-full flex items-center justify-center mb-3">
@@ -70,7 +74,9 @@ const StoriesBar = () => {
                 story={story}
                 fetchStories={fetchStories}
                 currentUserId={userId}
-                onView={null}
+                onView={() => {
+					setViewStory(story)
+				}}
               />
             ))}
           </div>
