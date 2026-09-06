@@ -6,6 +6,7 @@ import StoryViewer from "./StoryViewer";
 import { useAuth } from '@clerk/nextjs';
 import StoryModal from './StoryModal';
 import { StaticImageData } from 'next/image';
+import Story from '../types/story';
 
 interface StoryType {
 _id: string;
@@ -38,7 +39,7 @@ const StoriesBar = () => {
     const { getToken, userId } = useAuth();
     const [showModel, setShowModel] = useState(false);
     const [stories, setStories] = useState<StoryType[]>([]);
-    const [viewStory, setViewStory] = useState(null);
+    const [viewStory, setViewStory] = useState<Story | null>(null);
 
     const fetchStories = async () => {
         setStories(dummyStoriesData);
@@ -73,7 +74,9 @@ const StoriesBar = () => {
                 story={story}
                 fetchStories={fetchStories}
                 currentUserId={userId}
-                onView={null}
+                onView={() => {
+					setViewStory(story)
+				}}
               />
             ))}
           </div>
