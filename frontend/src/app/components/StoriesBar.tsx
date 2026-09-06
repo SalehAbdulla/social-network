@@ -53,7 +53,10 @@ const StoriesBar = () => {
           <div className="flex gap-4 pb-5">
             {/* Add story card */}
             <div
-              className="rounded-lg shadow-sm min-w-30 max-w-30 max-h-40 aspect-3/4 cursor-pointer hover:shadow-lg transition-all duration-200 border-2 border-dashed border-blue-300 bg-linear-to-b from-blue-50 to-white"
+				onClick={() => {
+					setShowModel(true);
+				}}
+              	className="rounded-lg shadow-sm min-w-30 max-w-30 max-h-40 aspect-3/4 cursor-pointer hover:shadow-lg transition-all duration-200 border-2 border-dashed border-blue-300 bg-linear-to-b from-blue-50 to-white"
             >
               <div className="h-full flex flex-col items-center justify-center p-4">
                 <div className="size-10 bg-blue-500 rounded-full flex items-center justify-center mb-3">
