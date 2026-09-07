@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import {assets} from '../../../public/assets';
+import {assets, dummyUserData} from '../../../public/assets';
 import MenuItems from './MenuItems';
 import { CirclePlus, LogOut, ChevronLeft, ChevronRight } from 'lucide-react';
 
@@ -16,12 +16,12 @@ interface SideBarProps {
 const Sidebar = ({isSideBarOpen, setSideBarOpen, isCollapsed, setIsCollapsed}: SideBarProps) => {
 
   const router = useRouter();
-  const { user } = useUser();
+  const user  = dummyUserData;
   const [isHovered, setIsHovered] = useState(false);
 
   // When collapsed and hovered, temporarily show expanded layout
   const effectiveExpanded = !isCollapsed || isHovered;
-  const displayName = user?.fullName || user?.username || 'User';
+  const displayName = user?.full_name || user?.username || 'User';
   const displayUsername = user?.username ? `@${user.username}` : '';
 
   return (
@@ -58,7 +58,7 @@ const Sidebar = ({isSideBarOpen, setSideBarOpen, isCollapsed, setIsCollapsed}: S
             onClick={() => router.push('/')}
             className="w-full flex justify-center py-4 cursor-pointer"
           >
-            <div className="w-8 h-8 rounded-lg bg-gradient-to-r from-brand-1 to-brand-2 flex items-center justify-center text-white font-bold text-sm">
+            <div className="w-8 h-8 rounded-lg bg-linear-to-r from-brand-1 to-brand-2 flex items-center justify-center text-white font-bold text-sm">
               S
             </div>
           </div>
@@ -92,13 +92,6 @@ const Sidebar = ({isSideBarOpen, setSideBarOpen, isCollapsed, setIsCollapsed}: S
       {/* ─── Bottom section ─── */}
       <div className={`w-full border-t border-gray-200 ${effectiveExpanded ? 'p-4 px-7' : 'py-4'} flex items-center ${effectiveExpanded ? 'justify-between' : 'flex-col gap-3'}`}>
         <div className={`flex items-center cursor-pointer ${effectiveExpanded ? 'gap-2' : 'flex-col gap-1'}`}>
-          <UserButton
-            appearance={{
-              elements: {
-                avatarBox: 'w-9 h-9 shrink-0',
-              },
-            }}
-          />
           {effectiveExpanded && (
             <div>
               <h1 className='text-sm font-medium truncate max-w-24'>{displayName}</h1>
@@ -107,7 +100,7 @@ const Sidebar = ({isSideBarOpen, setSideBarOpen, isCollapsed, setIsCollapsed}: S
           )}
         </div>
 
-        <LogOut onClick={() => signOut()} className='w-4.5 text-gray-400 hover:text-gray-700 shrink-0 cursor-pointer' />
+        <LogOut onClick={() => console.log('logged out')} className='w-4.5 text-gray-400 hover:text-gray-700 shrink-0 cursor-pointer' />
       </div>
 
       {/* ─── Collapse toggle button ─── */}

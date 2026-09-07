@@ -17,19 +17,19 @@ interface StoryItemProps {
 const StoryItem = ({ story, fetchStories, currentUserId, onView }: StoryItemProps) => {
   const [menuOpen, setMenuOpen] = useState<string | null>(null);
 
-  const handleDeleteStory = async (storyId: string) => {
-    const token = await getToken();
-    try {
-      await api.delete(`/api/story/${storyId}`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      toast.success("Story deleted successfully");
-      fetchStories();
-    } catch (error: unknown) {
-      const message = error instanceof Error ? error.message : "Something went wrong";
-      toast.error(message);
-    }
-  };
+  // const handleDeleteStory = async (storyId: string) => {
+
+  //   try {
+  //     await api.delete(`/api/story/${storyId}`, {
+  //       headers: { Authorization: `Bearer ${token}` },
+  //     });
+  //     toast.success("Story deleted successfully");
+  //     fetchStories();
+  //   } catch (error: unknown) {
+  //     const message = error instanceof Error ? error.message : "Something went wrong";
+  //     toast.error(message);
+  //   }
+  // };
 
 
   return (
@@ -88,7 +88,7 @@ const StoryItem = ({ story, fetchStories, currentUserId, onView }: StoryItemProp
             <div className="absolute right-0 mt-1 bg-white border rounded shadow-md text-sm z-30">
               <div
                 className="px-3 py-1 hover:bg-gray-100 cursor-pointer flex items-center gap-1 text-red-500"
-                onClick={() => handleDeleteStory(story._id)}
+                // onClick={() => handleDeleteStory(story._id)}
               >
                 <Trash2 className="w-4 h-4" /> Delete
               </div>
