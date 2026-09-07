@@ -5,7 +5,6 @@ import { useRouter } from 'next/navigation';
 import {assets} from '../../../public/assets';
 import MenuItems from './MenuItems';
 import { CirclePlus, LogOut, ChevronLeft, ChevronRight } from 'lucide-react';
-import {useClerk, useUser, UserButton } from '@clerk/nextjs';
 
 interface SideBarProps {
   isSideBarOpen: boolean
@@ -18,7 +17,6 @@ const Sidebar = ({isSideBarOpen, setSideBarOpen, isCollapsed, setIsCollapsed}: S
 
   const router = useRouter();
   const { user } = useUser();
-  const { signOut } = useClerk();
   const [isHovered, setIsHovered] = useState(false);
 
   // When collapsed and hovered, temporarily show expanded layout

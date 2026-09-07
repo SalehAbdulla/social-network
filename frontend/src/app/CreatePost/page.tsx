@@ -3,12 +3,10 @@ import React, { useState } from 'react'
 import { Image, X } from 'lucide-react';
 import api from '../api/axios';
 import toast from 'react-hot-toast';
-import { useAuth } from '@clerk/nextjs';
 import { dummyUserData } from '../../../public/assets';
 
 const CreatePost = () => {
 
-    const {getToken}=useAuth();
     const [content,setContent]=useState('');
     const [images,setImages]=useState<File[]>([]);
     const [loading,setLoading]=useState(false);

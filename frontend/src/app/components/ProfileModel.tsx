@@ -2,7 +2,6 @@
 
 import React, { useState } from "react";
 import { Pencil } from "lucide-react";
-import { useAuth, useUser } from "@clerk/nextjs";
 import api from "../api/axios";
 import toast from "react-hot-toast";
 
@@ -20,15 +19,12 @@ interface UserProfile {
 }
 
 const ProfileModel = ({ setShowEdit }: ProfileModelProps) => {
-  const { user } = useUser();
-  const { getToken } = useAuth();
 
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
   const [editForm, setEditForm] = useState({
     username: "",
     bio: "",
     location: "",
-    full_name: user?.fullName || "",
     profile_picture: null as File | null,
     cover_photo: null as File | null,
   });

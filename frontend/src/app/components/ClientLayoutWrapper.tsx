@@ -4,7 +4,6 @@ import { useState, useEffect } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
 import { Menu, X } from 'lucide-react';
 import SideBar from './SideBar';
-import { useUser } from '@clerk/nextjs';
 import Loading from './Loading';
 
 const PUBLIC_PATHS = ['/login'];
@@ -14,7 +13,6 @@ export default function ClientLayoutWrapper({
 }: {
   children: React.ReactNode;
 }) {
-    const { isLoaded, isSignedIn } = useUser();
     const [isSideBarOpen, setSideBarOpen] = useState(false);
     const [isCollapsed, setIsCollapsed] = useState(false);
     const pathname = usePathname();
@@ -24,15 +22,8 @@ export default function ClientLayoutWrapper({
     return <>{children}</>;
   }
 
-  // While Clerk is still loading the session, show a spinner
-  if (!isLoaded) {
-    return <Loading />;
-  }
 
-  // If not signed in on a protected route, redirect to login
-  if (!isSignedIn) {
-    return <RedirectToLogin />;
-  }
+
 
   // Signed in on a protected route — show full layout with sidebar
   return (

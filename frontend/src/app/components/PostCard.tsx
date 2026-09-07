@@ -10,7 +10,6 @@ import {
 } from "lucide-react";
 import React, { useState } from "react";
 import { useRouter } from "next/navigation";
-import { useAuth } from "@clerk/nextjs";
 import { StaticImageData } from "next/image";
 import api from "../api/axios";
 import toast from "react-hot-toast";

@@ -2,9 +2,11 @@
 import React from 'react'
 import {assets} from '../../../public/assets';
 import { Star } from 'lucide-react';
-import { SignIn } from '@clerk/nextjs';
-
+import { useForm } from 'react-hook-form';
 const Login = () => {
+
+  const {register} = useForm();
+
   return (
     <div className='min-h-screen flex flex-col md:flex-row'>
       {/*BackGround Image*/}
@@ -32,7 +34,9 @@ const Login = () => {
         {/* <SignIn routing="hash" /> */}
 
                 {/* TODO: Add react form - for the registration */}
-            
+            <form action="">
+                <input type="text" {...register("firstname")}  placeholder='First Name'/>
+            </form>
 
 
       </div>

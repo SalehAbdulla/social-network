@@ -3,7 +3,6 @@ import { ArrowLeft, Sparkle, TextIcon, Upload } from "lucide-react";
 import React, { useState } from "react";
 import { toast } from "react-hot-toast";
 import api from "../api/axios";
-import { useAuth } from "@clerk/nextjs";
 
 const StoryModal = ({ setShowModal: setShowModel, fetchStories }: {
   setShowModal: (show: boolean) => void;
@@ -16,7 +15,6 @@ const StoryModal = ({ setShowModal: setShowModel, fetchStories }: {
   const [media, setMedia] = useState<File | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
 
-  const { getToken } = useAuth();
 
   const MAX_VIDEO_DURATION = 60; // seconds
   const MAX_VIDEO_SIZE_MB = 50; // in mb

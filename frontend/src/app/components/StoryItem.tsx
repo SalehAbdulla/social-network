@@ -4,7 +4,6 @@ import { useState } from "react";
 import { MoreVertical, Trash2 } from "lucide-react";
 import { toast } from "react-hot-toast";
 import api from "../api/axios";
-import { useAuth } from "@clerk/nextjs";
 import { imageSrc } from "../lib/imageSrc";
 import Story from "../types/story";
 
@@ -17,7 +16,6 @@ interface StoryItemProps {
 
 const StoryItem = ({ story, fetchStories, currentUserId, onView }: StoryItemProps) => {
   const [menuOpen, setMenuOpen] = useState<string | null>(null);
-  const { getToken } = useAuth();
 
   const handleDeleteStory = async (storyId: string) => {
     const token = await getToken();

@@ -3,7 +3,6 @@ import { dummyStoriesData } from '../../../public/assets';
 import { Plus } from 'lucide-react';
 import StoryItem from "./StoryItem";
 import StoryViewer from "./StoryViewer";
-import { useAuth } from '@clerk/nextjs';
 import StoryModal from './StoryModal';
 import { StaticImageData } from 'next/image';
 import Story from '../types/story';
