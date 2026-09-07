@@ -44,7 +44,7 @@ func (db *DB) DoesNicknameExists(nickname string) error {
 
 func (db *DB) InsertUser(userID, nickName, firstName, lastName, email, hashedPassword string, yearOfBirth int, gender string) error {
 	_, err := db.Conn.Exec(
-		`INSERT INTO user (userId, nickName, firstName, lastName, email, hashedPassword, yearOfBirth, gender)
+		`INSERT INTO user (userId, nickName, firstName, lastName, email, password, birthYear, gender)
 		 VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
 		userID, nickName, firstName, lastName, email, hashedPassword, yearOfBirth, gender,
 	)
@@ -65,7 +65,7 @@ func (db *DB) GetUserCredentials(identifier string) (string, string, error) {
 	var hashedPassword string
 
 	err := db.Conn.QueryRow(
-		"SELECT userId, hashedPassword FROM user WHERE email = ? OR nickName = ?",
+		"SELECT userId, password FROM user WHERE email = ? OR nickName = ?",
 		identifier, identifier,
 	).Scan(&userID, &hashedPassword)
 	if errors.Is(err, sql.ErrNoRows) {

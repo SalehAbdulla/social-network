@@ -1,0 +1,15 @@
+DROP TRIGGER IF EXISTS message_cleanup;
+DROP TRIGGER IF EXISTS comment_cleanup;
+DROP TRIGGER IF EXISTS post_cleanup;
+DROP TABLE IF EXISTS hidden_message;
+DROP TABLE IF EXISTS story;
+DROP TABLE IF EXISTS media;
+DROP TABLE IF EXISTS connection;
+DROP TABLE IF EXISTS follow;
+DROP INDEX IF EXISTS message_conversation;
+ALTER TABLE message DROP COLUMN editedAt;
+ALTER TABLE message DROP COLUMN mediaType;
+ALTER TABLE message DROP COLUMN mediaUrl;
+ALTER TABLE post DROP COLUMN imageUrls;
+ALTER TABLE user DROP COLUMN location;
+ALTER TABLE user DROP COLUMN coverPhoto;

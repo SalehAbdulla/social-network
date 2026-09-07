@@ -8,7 +8,7 @@ import (
 type MessageRepository interface {
 	GetChatUsers(currentUserID string) ([]models.ChatUser, error)
 	GetMessages(conversationPartnerID string, currentUserID string, offset int, limit int) ([]models.Message, int, error)
-	SaveMessage(senderID string, recipientID string, textMessage string) (models.Message, error)
+	SaveMessage(senderID string, recipientID string, textMessage string, media ...string) (models.Message, error)
 }
 
 func (db *DB) GetMessages(conversationPartnerID string, currentUserID string, offset int, limit int) ([]models.Message, int, error) {
@@ -16,22 +16,22 @@ func (db *DB) GetMessages(conversationPartnerID string, currentUserID string, of
 	var totalElements int
 	err := db.Conn.QueryRow(
 		`SELECT COUNT(*) FROM message
-		 WHERE (senderId = ? AND recipientId = ?) OR (senderId = ? AND recipientId = ?)`,
-		currentUserID, conversationPartnerID, conversationPartnerID, currentUserID,
+		 WHERE NOT EXISTS (SELECT 1 FROM hidden_message h WHERE h.messageId=message.messageId AND h.userId=?) AND ( (senderId = ? AND recipientId = ?) OR (senderId = ? AND recipientId = ?))`,
+		currentUserID, currentUserID, conversationPartnerID, conversationPartnerID, currentUserID,
 	).Scan(&totalElements)
 	if err != nil {
 		return nil, 0, realtimeforum.ErrInternal
 	}
 
 	query := `
-		SELECT messageId, senderId, recipientId, textMessage, timeStamp, isRead
+		SELECT messageId, senderId, recipientId, content, createdAt, isRead, mediaUrl, mediaType, editedAt
 		FROM message
-		WHERE (senderId = ? AND recipientId = ?) OR (senderId = ? AND recipientId = ?)
-		ORDER BY timeStamp DESC
+		WHERE NOT EXISTS (SELECT 1 FROM hidden_message h WHERE h.messageId=message.messageId AND h.userId=?) AND ((senderId = ? AND recipientId = ?) OR (senderId = ? AND recipientId = ?))
+		ORDER BY createdAt DESC, messageId DESC
 		LIMIT ? OFFSET ?
 	`
 
-	rows, err := db.Conn.Query(query, currentUserID, conversationPartnerID, conversationPartnerID, currentUserID, limit, offset)
+	rows, err := db.Conn.Query(query, currentUserID, currentUserID, conversationPartnerID, conversationPartnerID, currentUserID, limit, offset)
 	if err != nil {
 		return nil, 0, realtimeforum.ErrInternal
 	}
@@ -40,7 +40,7 @@ func (db *DB) GetMessages(conversationPartnerID string, currentUserID string, of
 	var messages []models.Message
 	for rows.Next() {
 		var msg models.Message
-		if err := rows.Scan(&msg.MessageId, &msg.SenderId, &msg.RecipientId, &msg.TextMessage, &msg.TimeStamp, &msg.IsRead); err != nil {
+		if err := rows.Scan(&msg.MessageId, &msg.SenderId, &msg.RecipientId, &msg.TextMessage, &msg.TimeStamp, &msg.IsRead, &msg.MediaURL, &msg.MediaType, &msg.EditedAt); err != nil {
 			return nil, 0, realtimeforum.ErrInternal
 		}
 		messages = append(messages, msg)
@@ -57,11 +57,15 @@ func (db *DB) GetMessages(conversationPartnerID string, currentUserID string, of
 	return messages, totalElements, nil
 }
 
-func (db *DB) SaveMessage(senderID string, recipientID string, textMessage string) (models.Message, error) {
+func (db *DB) SaveMessage(senderID string, recipientID string, textMessage string, media ...string) (models.Message, error) {
+	mediaURL, mediaType := "", ""
+	if len(media) == 2 {
+		mediaURL, mediaType = media[0], media[1]
+	}
 	result, err := db.Conn.Exec(
-		`INSERT INTO message (senderId, recipientId, textMessage, isRead)
-		 VALUES (?, ?, ?, 0)`,
-		senderID, recipientID, textMessage,
+		`INSERT INTO message (senderId, recipientId, content, isRead, mediaUrl, mediaType)
+		 VALUES (?, ?, ?, 0, ?, ?)`,
+		senderID, recipientID, textMessage, mediaURL, mediaType,
 	)
 	if err != nil {
 		return models.Message{}, realtimeforum.ErrInternal
@@ -74,10 +78,10 @@ func (db *DB) SaveMessage(senderID string, recipientID string, textMessage strin
 
 	var msg models.Message
 	err = db.Conn.QueryRow(
-		`SELECT messageId, senderId, recipientId, textMessage, timeStamp, isRead
+		`SELECT messageId, senderId, recipientId, content, createdAt, isRead, mediaUrl, mediaType, editedAt
 		 FROM message WHERE messageId = ?`,
 		messageID,
-	).Scan(&msg.MessageId, &msg.SenderId, &msg.RecipientId, &msg.TextMessage, &msg.TimeStamp, &msg.IsRead)
+	).Scan(&msg.MessageId, &msg.SenderId, &msg.RecipientId, &msg.TextMessage, &msg.TimeStamp, &msg.IsRead, &msg.MediaURL, &msg.MediaType, &msg.EditedAt)
 	if err != nil {
 		return models.Message{}, realtimeforum.ErrInternal
 	}
@@ -91,7 +95,7 @@ func (db *DB) GetChatUsers(currentUserID string) ([]models.ChatUser, error) {
 			u.userId,
 			u.nickName,
 			(
-				SELECT MAX(m.timeStamp)
+				SELECT MAX(m.createdAt)
 				FROM message m
 				WHERE (m.senderId = u.userId AND m.recipientId = ?) OR (m.senderId = ? AND m.recipientId = u.userId)
 			) AS lastMessageTime

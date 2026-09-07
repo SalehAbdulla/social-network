@@ -9,6 +9,7 @@ const (
 )
 
 type Post struct {
+	ImageURLs       string
 	PostId          int    `json:"postId"`
 	UserId          string `json:"userId"`
 	Nickname        string `json:"nickname"`

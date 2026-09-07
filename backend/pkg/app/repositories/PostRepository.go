@@ -46,7 +46,7 @@ func (db *DB) GetPosts(pageNumber int, pageSize int, sortBy string, sortOrder st
 	query := `
 		SELECT p.postId, p.userId, u.nickName, p.title, p.content,
 			   p.score, p.commentsCounter,
-			   p.createdAt, p.updatedAt
+			   p.createdAt, p.updatedAt, p.imageUrls
 		FROM post p
 		JOIN user u ON p.userId = u.userId
 		ORDER BY ` + column + ` ` + order + `
@@ -72,6 +72,7 @@ func (db *DB) GetPosts(pageNumber int, pageSize int, sortBy string, sortOrder st
 			&post.CommentsCounter,
 			&post.CreatedAt,
 			&post.UpdatedAt,
+			&post.ImageURLs,
 		)
 		if err != nil {
 			return nil, 0, err
@@ -107,7 +108,7 @@ func (db *DB) GetPostByID(postId int) (models.Post, error) {
 	err := db.Conn.QueryRow(
 		`SELECT p.postId, p.userId, u.nickName, p.title, p.content,
 				p.score, p.commentsCounter,
-				p.createdAt, p.updatedAt
+				p.createdAt, p.updatedAt, p.imageUrls
 		FROM post p
 		JOIN user u ON p.userId = u.userId
 		WHERE p.postId = ?`, postId,
@@ -121,6 +122,7 @@ func (db *DB) GetPostByID(postId int) (models.Post, error) {
 		&post.CommentsCounter,
 		&post.CreatedAt,
 		&post.UpdatedAt,
+		&post.ImageURLs,
 	)
 	if err != nil {
 		return models.Post{}, realtimeforum.ErrNotFound
@@ -146,9 +148,9 @@ func (db *DB) DeletePost(postId int, userId string) error {
 func (db *DB) CreatePost(post models.Post) (models.Post, error) {
 	now := "datetime('now')"
 	result, err := db.Conn.Exec(
-		`INSERT INTO post (userId, title, content, score, commentsCounter, createdAt, updatedAt)
-		 VALUES (?, ?, ?, 0, 0, `+now+`, `+now+`)`,
-		post.UserId, post.Title, post.Content,
+		`INSERT INTO post (userId, title, content, score, commentsCounter, createdAt, updatedAt, imageUrls)
+		 VALUES (?, ?, ?, 0, 0, `+now+`, `+now+`, ?)`,
+		post.UserId, post.Title, post.Content, post.ImageURLs,
 	)
 	if err != nil {
 		return models.Post{}, err
@@ -162,7 +164,7 @@ func (db *DB) CreatePost(post models.Post) (models.Post, error) {
 	err = db.Conn.QueryRow(
 		`SELECT p.postId, p.userId, u.nickName, p.title, p.content,
 				p.score, p.commentsCounter,
-				p.createdAt, p.updatedAt
+				p.createdAt, p.updatedAt, p.imageUrls
 		FROM post p
 		JOIN user u ON p.userId = u.userId
 		WHERE p.postId = ?`, postID,
@@ -176,6 +178,7 @@ func (db *DB) CreatePost(post models.Post) (models.Post, error) {
 		&post.CommentsCounter,
 		&post.CreatedAt,
 		&post.UpdatedAt,
+		&post.ImageURLs,
 	)
 	if err != nil {
 		return models.Post{}, err

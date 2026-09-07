@@ -19,12 +19,21 @@ import (
 var app config.AppConfig
 
 func main() {
-	app.InProduction = false
+	app.InProduction = os.Getenv("APP_ENV") == "production"
+	app.DevDummyUser = !app.InProduction && os.Getenv("DEV_DUMMY_USER") == "true"
+	app.UploadDir = os.Getenv("UPLOAD_DIR")
+	if app.UploadDir == "" {
+		app.UploadDir = "./uploads"
+	}
+	app.FrontendOrigin = os.Getenv("FRONTEND_ORIGIN")
+	if app.FrontendOrigin == "" {
+		app.FrontendOrigin = "http://localhost:4000"
+	}
 	app.LogLevel = os.Getenv("LOG_LEVEL")
 
 	logger.InitLogger(&app)
 
-	database, err := sql.Open("sqlite3", "./pkg/db/socialnetwork.db")
+	database, err := sql.Open("sqlite3", "./pkg/db/socialnetwork.db?_foreign_keys=on&_busy_timeout=5000")
 	if err != nil {
 		app.Logger.Error("failed to open database", "error", err)
 		os.Exit(1)
@@ -46,6 +55,7 @@ func main() {
 	notificationService := service.NewNotificationService(dbConn)
 
 	hc := handlers.NewHandlerContext(&app, authService, postService, commentService, reactService, messageService, notificationService)
+	hc.SocialService = &service.SocialService{Repo: dbConn}
 	handlers.SetHandlerContext(hc)
 
 	wsHub := pkgwebsocket.NewHub()

@@ -1,6 +1,7 @@
 package service
 
 import (
+	"encoding/json"
 	"math"
 	db "social-network/backend/pkg/app/repositories"
 	"social-network/backend/pkg/models"
@@ -9,25 +10,28 @@ import (
 
 type PostService interface {
 	GetPosts(pageNumber int, pageSize int, sortBy string, sortOrder string, userId string) (posts.PostResponse, error)
-	CreatePost(userID string, title string, content string) (posts.PostDTO, error)
+	CreatePost(userID string, title string, content string, imageURLs ...string) (posts.PostDTO, error)
 	GetPostByID(postId int, userId string) (posts.PostDTO, error)
 	DeletePost(postId int, userID string) error
 }
 
 type PostServiceImpl struct {
-	db             db.PostRepository
+	db              db.PostRepository
 	reactionService ReactionService
 }
 
 func NewPostService(database db.PostRepository, rs ReactionService) PostService {
 	return PostServiceImpl{
-		db:             database,
+		db:              database,
 		reactionService: rs,
 	}
 }
 
 func mapPostToDTO(post models.Post, userScore int) posts.PostDTO {
+	images := []string{}
+	_ = json.Unmarshal([]byte(post.ImageURLs), &images)
 	return posts.PostDTO{
+		ImageURLs:       images,
 		PostId:          post.PostId,
 		UserId:          post.UserId,
 		Nickname:        post.Nickname,
@@ -79,11 +83,16 @@ func (p PostServiceImpl) DeletePost(postId int, userID string) error {
 	return p.db.DeletePost(postId, userID)
 }
 
-func (p PostServiceImpl) CreatePost(userID string, title string, content string) (posts.PostDTO, error) {
+func (p PostServiceImpl) CreatePost(userID string, title string, content string, imageURLs ...string) (posts.PostDTO, error) {
+	if imageURLs == nil {
+		imageURLs = []string{}
+	}
+	images, _ := json.Marshal(imageURLs)
 	post := models.Post{
-		UserId:  userID,
-		Title:   title,
-		Content: content,
+		ImageURLs: string(images),
+		UserId:    userID,
+		Title:     title,
+		Content:   content,
 	}
 
 	createdPost, err := p.db.CreatePost(post)

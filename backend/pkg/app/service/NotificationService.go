@@ -57,7 +57,7 @@ func (n NotificationServiceImpl) GetUnreadCount(userID string) (int, error) {
 }
 
 func (n NotificationServiceImpl) CreateNotification(userID, actorID, entityType string, entityID int) (notification.NotificationDTO, error) {
-	if entityType != "comment" && entityType != "message" {
+	if entityType != "comment" && entityType != "message" && entityType != "connection" && entityType != "follow" {
 		return notification.NotificationDTO{}, realtimeforum.ErrBadRequest
 	}
 

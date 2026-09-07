@@ -1,161 +1,33 @@
+'use client';
 
-"use client"
+import { useState } from 'react';
+import { useRouter } from 'next/navigation';
+import toast from 'react-hot-toast';
+import { displayName, errorMessage, request, upload } from '../api/social';
+import { useBackend } from '../components/BackendProvider';
+import Avatar from '../components/Avatar';
 
-import React, { useState } from "react";
-import { Image, X } from "lucide-react";
-import { useUser } from "@clerk/nextjs";
-import { useAuth } from "@clerk/nextjs";
-import api from "../api/axios";
-import { useRouter } from "next/navigation";
-import toast from "react-hot-toast";
-
-const CreatePost = () => {
+export default function CreatePost() {
+  const { user } = useBackend();
   const router = useRouter();
-  const { getToken } = useAuth();
-  const { user } = useUser();
-  const [content, setContent] = useState("");
+  const [title, setTitle] = useState('');
+  const [content, setContent] = useState('');
   const [images, setImages] = useState<File[]>([]);
-  const [loading, setLoading] = useState(false);
-
-  const handleSubmit = async () => {
-    if (!images.length && !content) {
-      return toast.error("Please add text or an image");
-    }
-    setLoading(true);
-    const postType =
-      images.length && content
-        ? "text_with_image"
-        : images.length
-        ? "image"
-        : "text";
-
+  const [busy, setBusy] = useState(false);
+  async function publish(event: React.FormEvent) {
+    event.preventDefault(); setBusy(true);
     try {
-      const formData = new FormData();
-      formData.append("content", content);
-      formData.append("post_type", postType);
-      images.forEach((image) => {
-        formData.append("images", image);
-      });
-
-      const token = await getToken();
-      const { data } = await api.post("/api/post/add", formData, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      });
-
-      if (data.success) {
-        toast.success("Post created!");
-        router.push("/");
-      } else {
-        toast.error(data.message);
-      }
-    } catch (error: unknown) {
-      const message =
-        error instanceof Error ? error.message : "Something went wrong";
-      toast.error(message);
-    }
-    setLoading(false);
-  };
-
-  return (
-    <div className="min-h-screen bg-gradient-to-b from-slate-50 to-white">
-      <div className="max-w-6xl mx-auto p-6">
-        {/* Title */}
-        <div className="mb-8">
-          <h1 className="text-3xl font-bold text-slate-900 mb-2">
-            Create Post
-          </h1>
-          <p className="text-slate-600">
-            Share your thoughts with the world.
-          </p>
-        </div>
-
-        {/* Form */}
-        <div className="max-w-xl bg-white p-4 sm:p-8 sm:pb-3 rounded-xl shadow-md space-y-4">
-          {/* Header */}
-          <div className="flex items-center gap-3">
-            <img
-              src={user?.imageUrl || ""}
-              alt=""
-              className="w-12 h-12 rounded-full shadow"
-            />
-            <div>
-              <h2 className="font-semibold">{user?.fullName || "User"}</h2>
-              <p className="text-sm text-gray-500">
-                @{user?.username || "username"}
-              </p>
-            </div>
-          </div>
-
-          {/* Textarea */}
-          <textarea
-            className="w-full resize-none max-h-20 mt-4 text-sm outline-none placeholder-gray-400"
-            placeholder="What's happening?"
-            onChange={(e) => setContent(e.target.value)}
-            value={content}
-          />
-
-          {/* Images preview */}
-          {images.length > 0 && (
-            <div className="flex flex-wrap gap-2 mt-4">
-              {images.map((image, i) => (
-                <div key={i} className="relative group">
-                  <img
-                    src={URL.createObjectURL(image)}
-                    alt=""
-                    className="h-20 rounded-md"
-                  />
-                  <div
-                    onClick={() =>
-                      setImages(images.filter((_, index) => index !== i))
-                    }
-                    className="absolute hidden group-hover:flex justify-center items-center top-0 right-0 bottom-0 left-0 bg-black/40 rounded-md cursor-pointer"
-                  >
-                    <X className="w-6 h-6 text-white" />
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-
-          {/* Bottom bar */}
-          <div className="flex items-center justify-between pt-3 border-t border-gray-300">
-            <label
-              htmlFor="images"
-              className="flex items-center gap-2 text-sm text-gray-500 hover:text-gray-700 transition cursor-pointer"
-            >
-              <Image className="size-6" />
-            </label>
-            <input
-              type="file"
-              id="images"
-              accept="image/*"
-              hidden
-              multiple
-              onChange={(e) =>
-                setImages([...images, ...Array.from(e.target.files || [])])
-              }
-            />
-            <button
-              disabled={loading}
-              onClick={() =>
-                toast.promise(handleSubmit(), {
-                  loading: "Uploading ...",
-                  success: <p>Post Added</p>,
-                  error: <p>Post Not Added</p>,
-                })
-              }
-              type="submit"
-              className="text-sm bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 scale-95 transition text-white font-medium px-8 py-2 rounded-md cursor-pointer"
-            >
-              Publish Post
-            </button>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-};
-
-export default CreatePost;
+      const imageUrls = [];
+      for (const file of images) imageUrls.push((await upload(file)).url);
+      await request('/posts', 'POST', { title, content, imageUrls });
+      toast.success('Post published'); router.push('/');
+    } catch (error) { toast.error(errorMessage(error)); } finally { setBusy(false); }
+  }
+  return <div className="mx-auto max-w-2xl p-6 sm:p-8 space-y-6"><h1 className="text-3xl font-bold">Create Post</h1><form onSubmit={publish} className="rounded-xl bg-white p-6 shadow-sm space-y-5"><div className="flex items-center gap-3"><Avatar name={displayName(user)} avatarUrl={user.avatar} /><div><p className="font-medium">{displayName(user)}</p><p className="text-sm text-slate-500">@{user.nickname}</p></div></div>
+    <label className="block text-sm font-medium">Title<input required minLength={3} maxLength={30} value={title} onChange={event => setTitle(event.target.value)} className="mt-2 w-full rounded-lg border border-slate-200 p-3" placeholder="Give your post a title" /></label>
+    <label className="block text-sm font-medium">Your post<textarea required={!images.length} minLength={images.length ? 0 : 10} maxLength={500} rows={6} value={content} onChange={event => setContent(event.target.value)} className="mt-2 w-full rounded-lg border border-slate-200 p-3" placeholder="What's happening?" /></label>
+    <label className="block text-sm text-slate-600">Photos (up to 4, 10 MB each)<input type="file" accept="image/jpeg,image/png,image/gif,image/webp" multiple onChange={event => { const files = Array.from(event.target.files || []); if (files.length > 4) toast.error('Choose up to four photos'); else setImages(files); }} className="mt-2 block w-full rounded-lg border border-slate-200 p-2" /></label>
+    {images.map((file, index) => <div key={`${file.name}-${index}`} className="flex justify-between text-sm"><span>{file.name}</span><button type="button" onClick={() => setImages(images.filter((_, i) => i !== index))}>Remove</button></div>)}
+    <button disabled={busy} className="rounded-lg bg-gradient-to-r from-blue-600 to-teal-600 px-6 py-3 text-white disabled:opacity-50">{busy ? 'Publishing?' : 'Publish Post'}</button>
+  </form></div>;
+}

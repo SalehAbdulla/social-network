@@ -1,155 +1,29 @@
+'use client';
+import { useState } from 'react';
+import Link from 'next/link';
+import toast from 'react-hot-toast';
+import { type Connections as ConnectionGroups, displayName, errorMessage, request } from '../api/social';
+import { useResource } from '../lib/useResource';
+import { useBackend } from '../components/BackendProvider';
+import Avatar from '../components/Avatar';
+import RequestState from '../components/RequestState';
+import Loading from '../components/Loading';
 
-"use client"
-
-import { MessageSquare, User, UserCheck, UserPlus, UserRoundPen } from "lucide-react";
-import React, { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
-import { useAuth } from "@clerk/nextjs";
-import api from "../api/axios";
-import toast from "react-hot-toast";
-
-interface ConnectionUser {
-  _id: string;
-  full_name: string;
-  username: string;
-  bio: string;
-  profile_picture: string;
+export default function Connections() {
+  const groups = useResource<ConnectionGroups>('/connections');
+  const { refreshUser } = useBackend();
+  const [tab, setTab] = useState<keyof ConnectionGroups>('followers');
+  const [busy, setBusy] = useState(false);
+  async function change(path: string, method: string) {
+    setBusy(true); try { await request(path, method); groups.reload(); await refreshUser(); } catch (error) { toast.error(errorMessage(error)); } finally { setBusy(false); }
+  }
+  const tabs: { key: keyof ConnectionGroups; label: string }[] = [{ key: 'followers', label: 'Followers' }, { key: 'following', label: 'Following' }, { key: 'pending', label: 'Received requests' }, { key: 'requested', label: 'Sent requests' }, { key: 'connections', label: 'Connections' }];
+  return <div className="mx-auto max-w-5xl p-6 sm:p-8 space-y-6"><h1 className="text-3xl font-bold">Connections</h1><div className="flex flex-wrap gap-2">{tabs.map(item => <button key={item.key} onClick={() => setTab(item.key)} className={`rounded-lg border px-4 py-2 ${tab === item.key ? 'border-blue-600 bg-blue-600 text-white' : 'border-slate-200 bg-white'}`}>{item.label} ({groups.data?.[item.key].length || 0})</button>)}</div>
+    {groups.loading && <Loading />}{groups.error && <RequestState error={groups.error} retry={groups.reload} />}
+    <div className="grid gap-4 md:grid-cols-2">{groups.data?.[tab].map(person => <div key={person.userId} className="rounded-xl bg-white p-5 shadow-sm space-y-4"><Link href={`/profile/${person.userId}`} className="flex items-center gap-3"><Avatar name={displayName(person)} avatarUrl={person.avatar} /><div><h2 className="font-semibold">{displayName(person)}</h2><p className="text-sm text-slate-500">@{person.nickname}</p></div></Link><div className="flex gap-3 text-sm"><Link href={`/messages/${person.userId}`} className="rounded-lg bg-blue-50 px-3 py-2 text-blue-700">Message</Link>
+      {tab === 'following' && <button disabled={busy} onClick={() => void change(`/users/${person.userId}/follow`, 'DELETE')}>Unfollow</button>}
+      {tab === 'pending' && <><button disabled={busy} onClick={() => void change(`/connections/${person.userId}`, 'PUT')}>Accept</button><button disabled={busy} onClick={() => void change(`/connections/${person.userId}`, 'DELETE')}>Decline</button></>}
+      {(tab === 'connections' || tab === 'requested') && <button disabled={busy} onClick={() => void change(`/connections/${person.userId}`, 'DELETE')}>{tab === 'requested' ? 'Cancel request' : 'Remove connection'}</button>}
+    </div></div>)}</div>{groups.data?.[tab].length === 0 && <RequestState empty="No people here yet. Visit Discover to grow your network." />}
+  </div>;
 }
-
-const Connections = () => {
-  const [currentTab, setCurrentTab] = useState("Followers");
-  const [connections, setConnections] = useState<ConnectionUser[]>([]);
-  const [pendingConnections, setPendingConnections] = useState<ConnectionUser[]>([]);
-  const [following, setFollowing] = useState<ConnectionUser[]>([]);
-  const [followers, setFollowers] = useState<ConnectionUser[]>([]);
-
-  const router = useRouter();
-  const { getToken } = useAuth();
-
-  const fetchConnectionsData = async () => {
-    try {
-      const token = await getToken();
-      const { data } = await api.get("/api/user/connections", {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      if (data.success) {
-        setConnections(data.connections || []);
-        setFollowers(data.followers || []);
-        setFollowing(data.following || []);
-        setPendingConnections(data.pending || []);
-      }
-    } catch (error: unknown) {
-      const message = error instanceof Error ? error.message : "Something went wrong";
-      toast.error(message);
-    }
-  };
-
-  useEffect(() => {
-    fetchConnectionsData();
-  }, []);
-
-  const handleUnfollow = async (userId: string) => {
-    try {
-      const { data } = await api.post(
-        "/api/user/unfollow", { id: userId },
-        { headers: { Authorization: `Bearer ${await getToken()}` } }
-      );
-      if (data.success) { toast.success(data.message); fetchConnectionsData(); }
-      else { toast(data.message); }
-    } catch (error: unknown) {
-      toast.error(error instanceof Error ? error.message : "Something went wrong");
-    }
-  };
-
-  const acceptConnection = async (userId: string) => {
-    try {
-      const { data } = await api.post(
-        "/api/user/accept", { id: userId },
-        { headers: { Authorization: `Bearer ${await getToken()}` } }
-      );
-      if (data.success) { toast.success(data.message); fetchConnectionsData(); }
-      else { toast(data.message); }
-    } catch (error: unknown) {
-      toast.error(error instanceof Error ? error.message : "Something went wrong");
-    }
-  };
-
-  const dataArray = [
-    { label: "Followers", value: followers, icon: User },
-    { label: "Following", value: following, icon: UserCheck },
-    { label: "Pending", value: pendingConnections, icon: UserRoundPen },
-    { label: "Connections", value: connections, icon: UserPlus },
-  ];
-return (
-    <div className="min-h-screen bg-slate-50">
-      <div className="max-w-6xl mx-auto p-6">
-        <div className="mb-8">
-          <h1 className="text-3xl font-bold text-slate-900 mb-2">Connections</h1>
-          <p className="text-slate-600">Manage your network and discover new connections</p>
-        </div>
-
-        <div className="mb-8 flex flex-wrap gap-6">
-          {dataArray.map((item, index) => (
-            <div key={index} className="flex flex-col items-center justify-center gap-1 border h-20 w-40 border-gray-200 bg-white shadow rounded-md">
-              <b>{item.value.length}</b>
-              <p className="text-slate-600">{item.label}</p>
-            </div>
-          ))}
-        </div>
-
-        <div className="inline-flex flex-wrap items-center border border-gray-200 rounded-md p-1 bg-white shadow-sm">
-          {dataArray.map((tab) => (
-            <button onClick={() => setCurrentTab(tab.label)} key={tab.label}
-              className={`flex items-center px-3 py-1 cursor-pointer text-sm rounded-md transition-colors ${
-                currentTab === tab.label ? "bg-white font-medium text-black" : "text-gray-500 hover:text-black"
-              }`}
-            >
-              <tab.icon className="w-4 h-4" />
-              <span className="ml-1">{tab.label}</span>
-            </button>
-          ))}
-        </div>
-
-        <div className="flex flex-wrap gap-6 mt-6">
-          {dataArray.find((item) => item.label === currentTab)?.value.map((user) => (
-            <div key={user._id} className="w-full max-w-88 flex gap-5 p-6 bg-white shadow rounded-md">
-              <img src={user.profile_picture} alt="" className="rounded-full w-12 h-12 shadow-md mx-auto" />
-              <div className="flex-1">
-                <p className="font-medium text-slate-700">{user.full_name}</p>
-                <p className="text-slate-500">@{user.username}</p>
-                <p className="text-sm text-gray-600">{user.bio?.slice(0, 30)}...</p>
-                <div className="flex max-sm:flex-col gap-2 mt-4">
-                  <button onClick={() => router.push(`/profile/${user._id}`)}
-                    className="w-full p-2 text-sm rounded bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 active:scale-95 transition text-white cursor-pointer">
-                    View Profile
-                  </button>
-                  {currentTab === "Following" && (
-                    <button onClick={() => handleUnfollow(user._id)}
-                      className="w-full p-2 text-sm rounded bg-slate-100 hover:bg-slate-200 text-black active:scale-95 transition cursor-pointer">
-                      Unfollow
-                    </button>
-                  )}
-                  {currentTab === "Pending" && (
-                    <button onClick={() => acceptConnection(user._id)}
-                      className="w-full p-2 text-sm rounded bg-slate-100 hover:bg-slate-200 text-black active:scale-95 transition cursor-pointer">
-                      Accept
-                    </button>
-                  )}
-                  {currentTab === "Connections" && (
-                    <button onClick={() => router.push(`/messages/${user._id}`)}
-                      className="w-full p-2 text-sm rounded bg-slate-100 hover:bg-slate-200 text-slate-800 active:scale-95 transition cursor-pointer flex items-center justify-center gap-1">
-                      <MessageSquare className="w-4 h-4" />
-                      Message
-                    </button>
-                  )}
-                </div>
-              </div>
-            </div>
-          ))}
-        </div>
-      </div>
-    </div>
-  );
-};
-
-export default Connections;

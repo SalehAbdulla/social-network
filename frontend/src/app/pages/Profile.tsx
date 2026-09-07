@@ -1,174 +1,54 @@
+'use client';
+import { useState } from 'react';
+import Link from 'next/link';
+import { useParams } from 'next/navigation';
+import toast from 'react-hot-toast';
+import { type Post, type SocialUser, dateLabel, displayName, errorMessage, request, upload } from '../api/social';
+import { useBackend } from '../components/BackendProvider';
+import { useResource } from '../lib/useResource';
+import Avatar from '../components/Avatar';
+import PostCard from '../components/PostCard';
+import RequestState from '../components/RequestState';
+import Loading from '../components/Loading';
 
-"use client"
-
-import React, { useEffect, useState } from "react";
-import Link from "next/link";
-import { useParams } from "next/navigation";
-import Loading from "../components/Loading";
-import UserProfileInfo from "../components/UserProfileInfo";
-import PostCard from "../components/PostCard";
-import ProfileModel from "../components/ProfileModel";
-import { useAuth } from "@clerk/nextjs";
-import api from "../api/axios";
-import toast from "react-hot-toast";
-import { StaticImageData } from "next/image";
-import { imageSrc } from "../lib/imageSrc";
-import { dummyUserData } from "../../../public/assets";
-
-interface ProfileUser {
-  _id: string;
-  email: string;
-  full_name: string;
-  username: string;
-  bio: string;
-  profile_picture: string | StaticImageData;
-  cover_photo: string | StaticImageData;
-  location: string;
-  followers: string[];
-  following: string[];
-  connections: string[];
-  posts: string[];
-  is_verified: boolean;
-  createdAt: string;
-  updatedAt: string;
+function EditProfile({ profile, close, saved }: { profile: SocialUser; close: () => void; saved: () => void }) {
+  const { refreshUser } = useBackend();
+  const [form, setForm] = useState(profile);
+  const [avatar, setAvatar] = useState<File | null>(null);
+  const [cover, setCover] = useState<File | null>(null);
+  const [busy, setBusy] = useState(false);
+  async function save(event: React.FormEvent) {
+    event.preventDefault(); setBusy(true);
+    try {
+      const updated = { ...form, avatar: avatar ? (await upload(avatar)).url : form.avatar, coverPhoto: cover ? (await upload(cover)).url : form.coverPhoto };
+      await request('/users/me', 'PUT', updated); await refreshUser(); saved(); close(); toast.success('Profile saved');
+    } catch (error) { toast.error(errorMessage(error)); } finally { setBusy(false); }
+  }
+  return <div className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-black/50 p-4" role="dialog" aria-modal="true" aria-label="Edit profile"><form onSubmit={save} className="max-h-[90vh] w-full max-w-xl overflow-y-auto rounded-xl bg-white p-6 space-y-4"><h2 className="text-xl font-bold">Edit profile</h2>
+    {(['firstName', 'lastName', 'nickname', 'location'] as const).map(field => <label key={field} className="block text-sm font-medium">{{ firstName: 'First name', lastName: 'Last name', nickname: 'Username', location: 'Location' }[field]}<input required={field !== 'location'} minLength={field === 'nickname' ? 2 : 1} maxLength={field === 'location' ? 100 : field === 'nickname' ? 33 : 50} pattern={field === 'nickname' ? '[a-zA-Z0-9_]{2,33}' : undefined} value={form[field]} onChange={event => setForm({ ...form, [field]: event.target.value })} className="mt-1 w-full rounded-lg border border-slate-200 p-2" /></label>)}
+    <label className="block text-sm font-medium">Bio<textarea maxLength={1000} rows={3} value={form.bio} onChange={event => setForm({ ...form, bio: event.target.value })} className="mt-1 w-full rounded-lg border border-slate-200 p-2" /></label>
+    <label className="block text-sm font-medium">Profile photo<input type="file" accept="image/jpeg,image/png,image/gif,image/webp" onChange={event => setAvatar(event.target.files?.[0] || null)} className="mt-1 block w-full" /></label>
+    <label className="block text-sm font-medium">Cover photo<input type="file" accept="image/jpeg,image/png,image/gif,image/webp" onChange={event => setCover(event.target.files?.[0] || null)} className="mt-1 block w-full" /></label>
+    <div className="flex justify-end gap-3"><button type="button" onClick={close} disabled={busy}>Cancel</button><button disabled={busy} className="rounded-lg bg-blue-600 px-4 py-2 text-white disabled:opacity-50">{busy ? 'Saving?' : 'Save changes'}</button></div>
+  </form></div>;
 }
-
-interface PostItem {
-  _id: string;
-  user: ProfileUser;
-  content: string;
-  image_urls: string[];
-  post_type: string;
-  likes_count: string[];
-  createdAt: string;
-  updatedAt: string;
+export default function Profile() {
+  const { user } = useBackend();
+  const params = useParams<{ profileId?: string }>();
+  const id = params.profileId || user.userId;
+  const profile = useResource<SocialUser>(`/users/${id}`);
+  const [tab, setTab] = useState('posts');
+  const [offset, setOffset] = useState(0);
+  const [editing, setEditing] = useState(false);
+  const posts = useResource<Post[]>(`/users/${id}/posts?liked=${tab === 'likes'}&offset=${offset}`);
+  const own = id === user.userId;
+  return <div className="mx-auto max-w-3xl p-6 space-y-6">{profile.loading && <Loading />}{profile.error && <RequestState error={profile.error} retry={profile.reload} />}{profile.data && <>
+    <section className="overflow-hidden rounded-xl bg-white shadow-sm"><div className="h-44 bg-gradient-to-r from-blue-200 to-teal-100">{profile.data.coverPhoto && <img src={profile.data.coverPhoto} alt="Cover photo" className="h-full w-full object-cover" />}</div><div className="p-6 space-y-4"><div className="flex items-center justify-between"><Avatar name={displayName(profile.data)} avatarUrl={profile.data.avatar} size={80} />{own ? <button onClick={() => setEditing(true)} className="rounded-lg border border-slate-200 px-4 py-2">Edit profile</button> : <Link href={`/messages/${id}`} className="rounded-lg bg-blue-600 px-4 py-2 text-white">Message</Link>}</div><div><h1 className="text-2xl font-bold">{displayName(profile.data)}</h1><p className="text-slate-500">@{profile.data.nickname}</p></div><p className="whitespace-pre-wrap break-words">{profile.data.bio}</p><p className="text-sm text-slate-400">{profile.data.location}{profile.data.location && ' ? '}Joined {dateLabel(profile.data.createdAt)}</p><div className="flex flex-wrap gap-5 text-sm"><span><b>{profile.data.followers.length}</b> followers</span><span><b>{profile.data.following.length}</b> following</span><span><b>{profile.data.connections.length}</b> connections</span></div></div></section>
+    <div className="flex gap-2">{['posts', 'media', 'likes'].map(item => <button key={item} onClick={() => { setTab(item); setOffset(0); }} className={`rounded-lg px-5 py-2 capitalize ${tab === item ? 'bg-blue-600 text-white' : 'bg-white'}`}>{item}</button>)}</div>
+    {posts.error && <RequestState error={posts.error} retry={posts.reload} />}{posts.loading && <Loading />}
+    {tab === 'media' ? <div className="grid grid-cols-2 gap-3">{posts.data?.flatMap(post => (post.imageUrls || []).map(url => <Link key={url} href={`/post/${post.postId}`}><img src={url} alt={post.title} className="h-48 w-full rounded-lg object-cover" /></Link>))}</div> : posts.data?.map(post => <PostCard key={post.postId} post={post} fetchPosts={posts.reload} />)}
+    {posts.data?.length === 0 && <RequestState empty={tab === 'likes' ? 'No liked posts yet.' : 'No posts yet.'} />}
+    <div className="flex justify-between text-sm"><button disabled={offset === 0} onClick={() => setOffset(Math.max(0, offset - 20))} className="disabled:opacity-40">Previous</button><button disabled={!posts.data || posts.data.length < 20} onClick={() => setOffset(offset + 20)} className="disabled:opacity-40">Next</button></div>
+    {editing && <EditProfile profile={profile.data} close={() => setEditing(false)} saved={profile.reload} />}
+  </>}</div>;
 }
-
-function timeAgo(date: string): string {
-  const seconds = Math.floor((Date.now() - new Date(date).getTime()) / 1000);
-  let interval = Math.floor(seconds / 31536000);
-  if (interval >= 1) return `${interval} year${interval === 1 ? "" : "s"} ago`;
-  interval = Math.floor(seconds / 2592000);
-  if (interval >= 1) return `${interval} month${interval === 1 ? "" : "s"} ago`;
-  interval = Math.floor(seconds / 86400);
-  if (interval >= 1) return `${interval} day${interval === 1 ? "" : "s"} ago`;
-  interval = Math.floor(seconds / 3600);
-  if (interval >= 1) return `${interval} hour${interval === 1 ? "" : "s"} ago`;
-  interval = Math.floor(seconds / 60);
-  if (interval >= 1) return `${interval} minute${interval === 1 ? "" : "s"} ago`;
-  return "just now";
-}
-
-const Profile = () => {
-  const { getToken, userId } = useAuth();
-  const params = useParams();
-  const profileId = params?.profileId as string | undefined;
-  // const [user, setUser] = useState<ProfileUser | null>(null);
-  const user = dummyUserData;
-  const [posts, setPosts] = useState<PostItem[]>([]);
-  const [activeTab, setActiveTab] = useState("posts");
-  const [showEdit, setShowEdit] = useState(false);
-
-  // const fetchUserProfile = async (id?: string) => {
-  //   const token = await getToken();
-  //   try {
-  //     const { data } = await api.post(
-  //       "/api/user/profiles",
-  //       { profileId: id },
-  //       { headers: { Authorization: `Bearer ${token}` } }
-  //     );
-  //     if (data.success) {
-  //       setUser(data.profile);
-  //       setPosts(data.posts);
-  //     } else {
-  //       toast.error(data.message);
-  //     }
-  //   } catch (error: unknown) {
-  //     const message =
-  //       error instanceof Error ? error.message : "Something went wrong";
-  //     toast.error(message);
-  //   }
-  // };
-
-  // useEffect(() => {
-  //   if (profileId) {
-  //     fetchUserProfile(profileId);
-  //   } else {
-  //     const fetchOwnProfile = async () => {
-  //       try {
-  //         const token = await getToken();
-  //         const { data } = await api.get("/api/user/me", {
-  //           headers: { Authorization: `Bearer ${token}` },
-  //         });
-  //         if (data.success) {
-  //           fetchUserProfile(data.user._id);
-  //         }
-  //       } catch {
-  //         // fallback
-  //       }
-  //     };
-  //     if (userId) fetchOwnProfile();
-  //   }
-  // }, [profileId, userId]);
-
-
-
-return user ? (
-    <div className="relative h-full overflow-y-scroll bg-gray-50 p-6">
-      <div className="max-w-3xl mx-auto">
-        <div className="bg-white rounded-2xl shadow overflow-hidden">
-          <div className="h-40 md:h-56 bg-gradient-to-r from-blue-200 via-blue-200 to-pink-200">
-            {user.cover_photo && (
-              <img src={imageSrc(user.cover_photo)} alt="" className="w-full h-full object-cover" />
-            )}
-          </div>
-          <UserProfileInfo user={user} posts={posts} profileId={profileId} setShowEdit={setShowEdit} />
-        </div>
-
-        <div className="mt-6">
-          <div className="bg-white rounded-xl shadow p-1 flex max-w-md mx-auto">
-            {["posts", "media", "likes"].map((tab) => (
-              <button key={tab} onClick={() => setActiveTab(tab)}
-                className={`flex-1 px-5 py-2 text-sm font-medium rounded-lg transition-colors cursor-pointer ${
-                  activeTab === tab ? "bg-blue-600 text-white" : "text-gray-600 hover:text-gray-900"
-                }`}
-              >
-                {tab.charAt(0).toUpperCase() + tab.slice(1)}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        {activeTab === "posts" && (
-          <div className="mt-6 flex flex-col items-center gap-6">
-            {posts.map((post) => (
-              <PostCard key={post._id} post={post} fetchPosts={() => {}} />
-            ))}
-          </div>
-        )}
-
-        {activeTab === "media" && (
-          <div className="mt-6 flex flex-wrap max-w-6xl">
-            {posts.filter((p) => p.image_urls.length > 0).map((post) => (
-              <React.Fragment key={post._id}>
-                {post.image_urls.map((image, index) => (
-                  <Link target="_blank" href={image} key={index} className="relative group">
-                    <img src={image} alt="" className="w-64 aspect-video object-cover" />
-                    <p className="absolute bottom-0 right-0 text-xs p-1 px-3 backdrop-blur-xl text-white opacity-0 group-hover:opacity-100 transition duration-300">
-                      Posted {timeAgo(post.createdAt)}
-                    </p>
-                  </Link>
-                ))}
-              </React.Fragment>
-            ))}
-          </div>
-        )}
-      </div>
-      {showEdit && <ProfileModel setShowEdit={setShowEdit} />}
-    </div>
-  ) : (
-    <Loading />
-  );
-};
-
-export default Profile;

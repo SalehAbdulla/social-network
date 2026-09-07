@@ -1,170 +1,35 @@
+'use client';
+import { useState } from 'react';
+import Link from 'next/link';
+import toast from 'react-hot-toast';
+import { displayName, errorMessage, request, type SocialUser } from '../api/social';
+import { useResource } from '../lib/useResource';
+import { useBackend } from '../components/BackendProvider';
+import Avatar from '../components/Avatar';
+import RequestState from '../components/RequestState';
+import Loading from '../components/Loading';
 
-"use client"
-
-import React, { useState } from "react";
-import { Search } from "lucide-react";
-import { useAuth } from "@clerk/nextjs";
-import api from "../api/axios";
-import toast from "react-hot-toast";
-import Loading from "../components/Loading";
-import UserCard from "../components/UserCard";
-
-interface DiscoverUser {
-  _id: string;
-  full_name: string;
-  username: string;
-  bio: string;
-  location: string;
-  profile_picture: string;
-  followers: string[];
-  following: string[];
-  connections: string[];
+export default function Discover() {
+  const { user, refreshUser } = useBackend();
+  const [input, setInput] = useState('');
+  const [search, setSearch] = useState('');
+  const [offset, setOffset] = useState(0);
+  const [busy, setBusy] = useState('');
+  const users = useResource<SocialUser[]>(`/users?q=${encodeURIComponent(search)}&offset=${offset}`);
+  async function change(id: string, path: string, method: string) {
+    setBusy(id); try { await request(path, method); await refreshUser(); users.reload(); } catch (error) { toast.error(errorMessage(error)); } finally { setBusy(''); }
+  }
+  return <div className="mx-auto max-w-6xl p-6 sm:p-8 space-y-6"><div><h1 className="text-3xl font-bold">Discover People</h1><p className="mt-2 text-slate-500">Find people to follow, connect with, and message.</p></div>
+    <form className="flex gap-3" onSubmit={event => { event.preventDefault(); setOffset(0); setSearch(input); }}><input aria-label="Search people" value={input} onChange={event => setInput(event.target.value)} className="min-w-0 flex-1 rounded-lg border border-slate-200 bg-white p-3" placeholder="Search by name, username, bio or location" /><button className="rounded-lg bg-blue-600 px-5 text-white">Search</button></form>
+    {users.loading && <Loading />}{users.error && <RequestState error={users.error} retry={users.reload} />}
+    <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">{users.data?.map(person => {
+      const following = user.following.includes(person.userId);
+      const connected = user.connections.includes(person.userId);
+      const pending = user.requested.includes(person.userId);
+      const incoming = user.pending.includes(person.userId);
+      return <div key={person.userId} className="rounded-xl bg-white p-5 shadow-sm space-y-4"><Link href={`/profile/${person.userId}`} className="flex items-center gap-3"><Avatar name={displayName(person)} avatarUrl={person.avatar} /><div><h2 className="font-semibold">{displayName(person)}</h2><p className="text-sm text-slate-500">@{person.nickname}</p></div></Link><p className="min-h-10 text-sm text-slate-600">{person.bio || person.location || 'Say hello and start a conversation.'}</p><div className="flex flex-wrap gap-2 text-sm"><button disabled={!!busy} className="rounded-lg bg-blue-50 px-3 py-2 text-blue-700 disabled:opacity-50" onClick={() => void change(person.userId, `/users/${person.userId}/follow`, following ? 'DELETE' : 'PUT')}>{following ? 'Unfollow' : 'Follow'}</button><button disabled={!!busy || connected || pending} className="rounded-lg border border-slate-200 px-3 py-2 disabled:opacity-50" onClick={() => void change(person.userId, `/connections/${person.userId}`, incoming ? 'PUT' : 'POST')}>{connected ? 'Connected' : pending ? 'Request sent' : incoming ? 'Accept request' : 'Connect'}</button><Link href={`/messages/${person.userId}`} className="rounded-lg border border-slate-200 px-3 py-2">Message</Link></div></div>;
+    })}</div>
+    {users.data?.length === 0 && <RequestState empty="No people matched your search." />}
+    <div className="flex justify-between"><button disabled={offset === 0} onClick={() => setOffset(Math.max(0, offset - 30))} className="disabled:opacity-40">Previous</button><button disabled={!users.data || users.data.length < 30} onClick={() => setOffset(offset + 30)} className="disabled:opacity-40">Next</button></div>
+  </div>;
 }
-
-const Discover = () => {
-  const { getToken, userId } = useAuth();
-  const [input, setInput] = useState("");
-  const [users, setUsers] = useState<DiscoverUser[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [following, setFollowing] = useState<string[]>([]);
-  const [connections, setConnections] = useState<string[]>([]);
-
-  const fetchCurrentUser = async () => {
-    try {
-      const token = await getToken();
-      const { data } = await api.get("/api/user/me", {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      if (data.success) {
-        setFollowing(data.user?.following || []);
-        setConnections(data.user?.connections || []);
-      }
-    } catch {
-      // ignore
-    }
-  };
-
-  React.useEffect(() => {
-    if (userId) fetchCurrentUser();
-  }, [userId, getToken]);
-
-  const handleSearch = async (event: React.KeyboardEvent) => {
-    if (event.key === "Enter") {
-      try {
-        setUsers([]);
-        setLoading(true);
-        const token = await getToken();
-        const { data } = await api.post(
-          "/api/user/discover",
-          { input },
-          { headers: { Authorization: `Bearer ${token}` } }
-        );
-        if (data.success) {
-          setUsers(data.users);
-        } else {
-          toast.error(data.message);
-        }
-        setInput("");
-      } catch (error: unknown) {
-        const message =
-          error instanceof Error ? error.message : "Something went wrong";
-        toast.error(message);
-      }
-      setLoading(false);
-    }
-  };
-
-  const handleFollow = async (userIdToFollow: string) => {
-    try {
-      const token = await getToken();
-      const { data } = await api.post(
-        "/api/user/follow",
-        { id: userIdToFollow },
-        { headers: { Authorization: `Bearer ${token}` } }
-      );
-      if (data.success) {
-        toast.success(data.message);
-        setFollowing((prev) =>
-          prev.includes(userIdToFollow) ? prev : [...prev, userIdToFollow]
-        );
-      } else {
-        toast.error(data.message);
-      }
-    } catch (error: unknown) {
-      const message =
-        error instanceof Error ? error.message : "Something went wrong";
-      toast.error(message);
-    }
-  };
-
-  const handleConnect = async (userIdToConnect: string) => {
-    try {
-      const token = await getToken();
-      const { data } = await api.post(
-        "/api/user/connect",
-        { id: userIdToConnect },
-        { headers: { Authorization: `Bearer ${token}` } }
-      );
-      if (data.success) {
-        toast.success(data.message);
-        fetchCurrentUser(); // refresh connection state
-      } else {
-        toast.error(data.message);
-      }
-    } catch (error: unknown) {
-      const message =
-        error instanceof Error ? error.message : "Something went wrong";
-      toast.error(message);
-    }
-  };
-
-  return (
-    <div className="min-h-screen bg-gradient-to-b from-slate-50 to-white">
-      <div className="max-w-6xl mx-auto p-6">
-        {/* Title */}
-        <div className="mb-8">
-          <h1 className="text-3xl font-bold text-slate-900 mb-2">
-            Discover People
-          </h1>
-          <p className="text-slate-600">
-            Connect with amazing people and grow your network
-          </p>
-        </div>
-
-        {/* Search */}
-        <div className="mb-8 shadow-md rounded-md border border-slate-200/60 bg-white/80">
-          <div className="p-6">
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-400 w-5 h-5" />
-              <input
-                type="text"
-                placeholder="Search people by name, username, bio or location..."
-                className="pl-10 sm:pl-12 py-2 w-full border border-gray-300 rounded-md max-sm:text-sm"
-                value={input}
-                onChange={(event) => setInput(event.target.value)}
-                onKeyUp={handleSearch}
-              />
-            </div>
-          </div>
-        </div>
-
-        <div className="flex flex-wrap gap-6">
-          {users.map((user) => (
-            <UserCard
-              key={user._id}
-              user={user}
-              isFollowing={following.includes(user._id)}
-              isConnected={connections.includes(user._id)}
-              onFollow={() => handleFollow(user._id)}
-              onConnect={() => handleConnect(user._id)}
-            />
-          ))}
-        </div>
-
-        {loading && <Loading height={60} />}
-      </div>
-    </div>
-  );
-};
-
-export default Discover;

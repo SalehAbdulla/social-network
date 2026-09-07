@@ -88,8 +88,8 @@ func (db *DB) GetUnreadCount(userID string) (int, error) {
 
 func (db *DB) CreateNotification(userID, actorID, entityType string, entityID int) (models.Notification, error) {
 	result, err := db.Conn.Exec(
-		`INSERT INTO notification (userId, actorId, entityType, entityId, isRead, createdAt)
-		 VALUES (?, ?, ?, ?, 0, datetime('now'))`,
+		`INSERT INTO notification (userId, actorId, entityType, entityId, message, isRead, createdAt)
+		 VALUES (?, ?, ?, ?, '', 0, datetime('now'))`,
 		userID, actorID, entityType, entityID,
 	)
 	if err != nil {
@@ -152,7 +152,7 @@ func (db *DB) MarkAllAsRead(userID string) error {
 	}
 
 	if rowsAffected == 0 {
-		
+
 		return nil
 	}
 

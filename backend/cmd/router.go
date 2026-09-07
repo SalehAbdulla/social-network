@@ -14,6 +14,7 @@ func routes() http.Handler {
 
 	mux.Handle("POST /api/v1/auth/logout", pkgmiddleware.AuthMiddleware(http.HandlerFunc(handlers.HandlerCtx.Logout)))
 	mux.Handle("GET /api/v1/auth/me", pkgmiddleware.AuthMiddleware(http.HandlerFunc(handlers.HandlerCtx.Me)))
+
 	mux.Handle("GET /api/v1/posts", pkgmiddleware.AuthMiddleware(http.HandlerFunc(handlers.HandlerCtx.GetPosts)))
 	mux.Handle("GET /api/v1/post", pkgmiddleware.AuthMiddleware(http.HandlerFunc(handlers.HandlerCtx.GetPost)))
 	mux.Handle("POST /api/v1/posts", pkgmiddleware.AuthMiddleware(http.HandlerFunc(handlers.HandlerCtx.CreatePost)))
@@ -30,6 +31,34 @@ func routes() http.Handler {
 	mux.Handle("GET /api/v1/notifications/unread-count", pkgmiddleware.AuthMiddleware(http.HandlerFunc(handlers.HandlerCtx.GetUnreadCount)))
 	mux.Handle("PATCH /api/v1/notifications/{notificationId}/read", pkgmiddleware.AuthMiddleware(http.HandlerFunc(handlers.HandlerCtx.MarkAsRead)))
 	mux.Handle("PATCH /api/v1/notifications/read-all", pkgmiddleware.AuthMiddleware(http.HandlerFunc(handlers.HandlerCtx.MarkAllAsRead)))
+
+	if handlers.HandlerCtx.App.DevDummyUser && !handlers.HandlerCtx.App.InProduction {
+		mux.HandleFunc("POST /api/v1/dev/session", handlers.HandlerCtx.DevSession)
+	}
+	for pattern, handler := range map[string]http.HandlerFunc{
+		"GET /api/v1/users":                    handlers.HandlerCtx.Discover,
+		"GET /api/v1/users/{userId}":           handlers.HandlerCtx.UserProfile,
+		"PUT /api/v1/users/me":                 handlers.HandlerCtx.UpdateProfile,
+		"GET /api/v1/users/{userId}/posts":     handlers.HandlerCtx.ProfilePosts,
+		"PUT /api/v1/users/{userId}/follow":    handlers.HandlerCtx.Follow,
+		"DELETE /api/v1/users/{userId}/follow": handlers.HandlerCtx.Follow,
+		"GET /api/v1/connections":              handlers.HandlerCtx.Connections,
+		"POST /api/v1/connections/{userId}":    handlers.HandlerCtx.ChangeConnection,
+		"PUT /api/v1/connections/{userId}":     handlers.HandlerCtx.ChangeConnection,
+		"DELETE /api/v1/connections/{userId}":  handlers.HandlerCtx.ChangeConnection,
+		"GET /api/v1/stories":                  handlers.HandlerCtx.Stories,
+		"POST /api/v1/stories":                 handlers.HandlerCtx.CreateStory,
+		"DELETE /api/v1/stories/{id}":          handlers.HandlerCtx.DeleteStory,
+		"POST /api/v1/media":                   handlers.HandlerCtx.UploadMedia,
+		"GET /api/v1/media/{id}":               handlers.HandlerCtx.GetMedia,
+		"PUT /api/v1/posts/comments/{id}":      handlers.HandlerCtx.EditComment,
+		"POST /api/v1/messages":                handlers.HandlerCtx.SendChatMessage,
+		"PUT /api/v1/messages/{id}":            handlers.HandlerCtx.EditChatMessage,
+		"DELETE /api/v1/messages/{id}":         handlers.HandlerCtx.DeleteChatMessage,
+		"POST /api/v1/messages/read":           handlers.HandlerCtx.ReadChat,
+	} {
+		mux.Handle(pattern, pkgmiddleware.AuthMiddleware(handler))
+	}
 
 	// Catch-all — return JSON 404 for unknown endpoints
 	mux.HandleFunc("/{path...}", handlers.HandlerCtx.NotFound)
