@@ -1,12 +1,14 @@
 "use client"
-import React from 'react'
+import React, { useState } from 'react'
 import {assets} from '../../../public/assets';
 import { Star } from 'lucide-react';
 import { useForm } from 'react-hook-form';
+
 const Login = () => {
 
-  const {register} = useForm();
-
+  const {register, handleSubmit } = useForm();
+  const [isLogin, setIsLogin] = useState<boolean>(true);
+  
   return (
     <div className='min-h-screen flex flex-col md:flex-row'>
       {/*BackGround Image*/}
@@ -32,12 +34,36 @@ const Login = () => {
       {/* Right side :Login Form  */}
       <div className='flex-1 flex items-center justify-center p-6 sm:p-10'>
         {/* <SignIn routing="hash" /> */}
-
-                {/* TODO: Add react form - for the registration */}
-            <form action="">
-                <input type="text" {...register("firstname")}  placeholder='First Name'/>
-            </form>
-
+            <div className='w-100' >
+                <div className='flex items-center justify-center gap-2 my-6'>
+                  <button className={`${isLogin ? 'underline underline-offset-6' : ''}`} onClick={() => setIsLogin(true)}>login</button>
+                  <br />
+                  <button className={`${!isLogin ? 'underline underline-offset-6' : ''}`} onClick={() => setIsLogin(false)}>register</button>
+                </div>
+              {!isLogin ?
+                <form onSubmit={handleSubmit((data) => {
+                console.log(data);
+              })} action="" className='flex flex-col gap-7'>
+                  <input className='p-2' type="text" {...register("nickname")}  placeholder='Nickname'/>
+                  <input className='p-2' type="email" {...register("email")}  placeholder='Email'/>
+                  <input className='p-2' type="text" {...register("firstname")}  placeholder='FirstName'/>
+                  <input className='p-2' type="text" {...register("lastname")}  placeholder='LastName'/>
+                  <input className='p-2' type="password" {...register("password")}  placeholder='Password'/>
+                  <input className='p-2' type="password" {...register("confirmpassword")}  placeholder='Confirm Password'/>
+                  <input className='p-2' type="text" {...register("age")}  placeholder='age'/>
+                  <input className='p-2' type="password" {...register("gender")}  placeholder='Gender'/>
+                  <input className='p-2 bg-black text-white' type="submit" />
+              </form>
+            : 
+              <form onSubmit={handleSubmit((data) => {
+                console.log(data);
+              })} action="" className='flex flex-col gap-7'>
+                  <input className='p-2 text-sm w-full' type="text" {...register("identifier")}  placeholder='email or nickname'/>
+                  <input className='p-2 text-sm' type="password" {...register("password")}  placeholder='password'/>
+                  <input className={`p-2 bg-black text-white `} type="submit" />
+              </form>
+             }
+            </div> 
 
       </div>
     </div>
