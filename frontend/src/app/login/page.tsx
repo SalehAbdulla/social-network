@@ -32,35 +32,35 @@ const Login = () => {
       <span className='md:h-10'></span>
       </div>
       {/* Right side :Login Form  */}
-      <div className='flex-1 flex items-center justify-center p-6 sm:p-10'>
+      <div className={isLogin ? `${'flex-1 flex items-start justify-center md:mt-[35vh] p-6 sm:p-10'}` : `${'flex-1 flex items-start justify-center md:mt-[18vh] p-6 sm:p-10'}`}>
         {/* <SignIn routing="hash" /> */}
             <div className='w-100' >
                 <div className='flex items-center justify-center gap-2 my-6'>
-                  <button className={`${isLogin ? 'underline underline-offset-6' : ''}`} onClick={() => setIsLogin(true)}>login</button>
+                  <button className={`${isLogin ? 'underline underline-offset-8 cursor-pointer text-black' : 'cursor-pointer text-slate-500'}`} onClick={() => setIsLogin(true)}>login</button>
                   <br />
-                  <button className={`${!isLogin ? 'underline underline-offset-6' : ''}`} onClick={() => setIsLogin(false)}>register</button>
+                  <button className={`${!isLogin ? 'underline underline-offset-8 cursor-pointer text-black' : ' cursor-pointer text-slate-500'}`} onClick={() => setIsLogin(false)}>register</button>
                 </div>
               {!isLogin ?
                 <form onSubmit={handleSubmit((data) => {
                 console.log(data);
               })} action="" className='flex flex-col gap-7'>
-                  <input className='p-2' type="text" {...register("nickname")}  placeholder='Nickname'/>
-                  <input className='p-2' type="email" {...register("email")}  placeholder='Email'/>
-                  <input className='p-2' type="text" {...register("firstname")}  placeholder='FirstName'/>
-                  <input className='p-2' type="text" {...register("lastname")}  placeholder='LastName'/>
-                  <input className='p-2' type="password" {...register("password")}  placeholder='Password'/>
-                  <input className='p-2' type="password" {...register("confirmpassword")}  placeholder='Confirm Password'/>
-                  <input className='p-2' type="text" {...register("age")}  placeholder='age'/>
-                  <input className='p-2' type="password" {...register("gender")}  placeholder='Gender'/>
-                  <input className='p-2 bg-black text-white' type="submit" />
+                  <input className='p-2  border border-slate-400 ' type="text" {...register("nickname")}  placeholder='Nickname'/>
+                  <input className='p-2  border border-slate-400 ' type="email" {...register("email")}  placeholder='Email'/>
+                  <input className='p-2  border border-slate-400 ' type="text" {...register("firstname")}  placeholder='FirstName'/>
+                  <input className='p-2  border border-slate-400 ' type="text" {...register("lastname")}  placeholder='LastName'/>
+                  <input className='p-2  border border-slate-400 ' type="password" {...register("password")}  placeholder='Password'/>
+                  <input className='p-2  border border-slate-400 ' type="password" {...register("confirmpassword")}  placeholder='Confirm Password'/>
+                  <input className='p-2  border border-slate-400 ' type="text" {...register("age")}  placeholder='age'/>
+                  <input className='p-2  border border-slate-400 ' type="password" {...register("gender")}  placeholder='Gender'/>
+                  <input className='p-2 bg-linear-to-r from-brand-1 to-brand-2 text-white hover:bg-blue-600' type="submit" />
               </form>
             : 
               <form onSubmit={handleSubmit((data) => {
                 console.log(data);
               })} action="" className='flex flex-col gap-7'>
-                  <input className='p-2 text-sm w-full' type="text" {...register("identifier")}  placeholder='email or nickname'/>
-                  <input className='p-2 text-sm' type="password" {...register("password")}  placeholder='password'/>
-                  <input className={`p-2 bg-black text-white `} type="submit" />
+                  <input className='p-2 text-sm w-full border border-slate-400 ' type="text" {...register("identifier")}  placeholder='email or nickname'/>
+                  <input className='p-2 text-sm  border border-slate-400 ' type="password" {...register("password")}  placeholder='password'/>
+                  <input className={`p-2 bg-linear-to-r from-brand-1 to-brand-2 text-white`} type="submit" />
               </form>
              }
             </div> 
