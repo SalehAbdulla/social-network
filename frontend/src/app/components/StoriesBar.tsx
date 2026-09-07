@@ -1,9 +1,8 @@
 import React, { useEffect, useState } from 'react'
-import { dummyStoriesData } from '../../../public/assets';
+import { dummyStoriesData, dummyUserData } from '../../../public/assets';
 import { Plus } from 'lucide-react';
 import StoryItem from "./StoryItem";
 import StoryViewer from "./StoryViewer";
-import { useAuth } from '@clerk/nextjs';
 import StoryModal from './StoryModal';
 import { StaticImageData } from 'next/image';
 import Story from '../types/story';
@@ -36,7 +35,6 @@ _id: string;
 }
 
 const StoriesBar = () => {
-    const { getToken, userId } = useAuth();
     const [showModel, setShowModel] = useState(false);
     const [stories, setStories] = useState<StoryType[]>([]);
     const [viewStory, setViewStory] = useState<Story | null>(null);
@@ -73,7 +71,7 @@ const StoriesBar = () => {
                 key={index}
                 story={story}
                 fetchStories={fetchStories}
-                currentUserId={userId}
+                currentUserId={dummyUserData._id}
                 onView={() => {
 					setViewStory(story)
 				}}

@@ -3,7 +3,6 @@ import { ArrowLeft, Sparkle, TextIcon, Upload } from "lucide-react";
 import React, { useState } from "react";
 import { toast } from "react-hot-toast";
 import api from "../api/axios";
-import { useAuth } from "@clerk/nextjs";
 
 const StoryModal = ({ setShowModal: setShowModel, fetchStories }: {
   setShowModal: (show: boolean) => void;
@@ -16,7 +15,6 @@ const StoryModal = ({ setShowModal: setShowModel, fetchStories }: {
   const [media, setMedia] = useState<File | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
 
-  const { getToken } = useAuth();
 
   const MAX_VIDEO_DURATION = 60; // seconds
   const MAX_VIDEO_SIZE_MB = 50; // in mb
@@ -53,41 +51,40 @@ const StoryModal = ({ setShowModal: setShowModel, fetchStories }: {
     }
   };
 
-  const handleCreateStory = async () => {
-    const media_type =
-      mode === "media"
-        ? media?.type.startsWith("image")
-          ? "image"
-          : "video"
-        : "text";
+  // const handleCreateStory = async () => {
+  //   const media_type =
+  //     mode === "media"
+  //       ? media?.type.startsWith("image")
+  //         ? "image"
+  //         : "video"
+  //       : "text";
 
-    if (media_type === "text" && !text.trim()) {
-      return toast.error("Please enter some text.");
-    }
+  //   if (media_type === "text" && !text.trim()) {
+  //     return toast.error("Please enter some text.");
+  //   }
 
-    const formData = new FormData();
-    formData.append("content", text);
-    formData.append("media_type", media_type);
-    formData.append("background_color", background);
-    if (media) formData.append("media", media);
+  //   const formData = new FormData();
+  //   formData.append("content", text);
+  //   formData.append("media_type", media_type);
+  //   formData.append("background_color", background);
+  //   if (media) formData.append("media", media);
 
-    const token = await getToken();
-    try {
-      const { data } = await api.post(`/api/story/create`, formData, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      if (data.success) {
-        setShowModel(false);
-        toast.success("Story created successfully");
-        fetchStories();
-      } else {
-        toast.error(data.message);
-      }
-    } catch (error: unknown) {
-      const message = error instanceof Error ? error.message : "Something went wrong";
-      toast.error(message);
-    }
-  };
+  //   try {
+  //     const { data } = await api.post(`/api/story/create`, formData, {
+  //       headers: { Authorization: `Bearer ${token}` },
+  //     });
+  //     if (data.success) {
+  //       setShowModel(false);
+  //       toast.success("Story created successfully");
+  //       fetchStories();
+  //     } else {
+  //       toast.error(data.message);
+  //     }
+  //   } catch (error: unknown) {
+  //     const message = error instanceof Error ? error.message : "Something went wrong";
+  //     toast.error(message);
+  //   }
+  // };
 
   return (
     <div className="fixed inset-0 z-50 min-h-screen bg-black/80 backdrop-blur text-white flex items-center justify-center p-4">
@@ -158,7 +155,7 @@ const StoryModal = ({ setShowModal: setShowModel, fetchStories }: {
 
         {/* Submit */}
         <button
-          onClick={() => toast.promise(handleCreateStory(), { loading: "Saving..." })}
+          // onClick={() => toast.promise(handleCreateStory(), { loading: "Saving..." })}
           className="flex items-center justify-center gap-2 text-white py-3 mt-4 w-full rounded bg-linear-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 active:scale-95 transition"
         >
           <Sparkle size={18} /> Create Story

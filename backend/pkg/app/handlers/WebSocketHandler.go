@@ -237,6 +237,7 @@ func (re *HandlerContext) handleOpenChat(client *pkgwebsocket.Client, msg pkgweb
 
 func (re *HandlerContext) handleCloseChat(client *pkgwebsocket.Client, msg pkgwebsocket.WSMessage) {
 	client.CurrentChatPartner = ""
+	println(msg);
 }
 
 func (re *HandlerContext) handleUserOffline(client *pkgwebsocket.Client) {

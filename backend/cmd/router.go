@@ -14,6 +14,12 @@ func routes() http.Handler {
 
 	mux.Handle("POST /api/v1/auth/logout", pkgmiddleware.AuthMiddleware(http.HandlerFunc(handlers.HandlerCtx.Logout)))
 	mux.Handle("GET /api/v1/auth/me", pkgmiddleware.AuthMiddleware(http.HandlerFunc(handlers.HandlerCtx.Me)))
+
+
+	///////// ---------
+
+
+
 	mux.Handle("GET /api/v1/posts", pkgmiddleware.AuthMiddleware(http.HandlerFunc(handlers.HandlerCtx.GetPosts)))
 	mux.Handle("GET /api/v1/post", pkgmiddleware.AuthMiddleware(http.HandlerFunc(handlers.HandlerCtx.GetPost)))
 	mux.Handle("POST /api/v1/posts", pkgmiddleware.AuthMiddleware(http.HandlerFunc(handlers.HandlerCtx.CreatePost)))

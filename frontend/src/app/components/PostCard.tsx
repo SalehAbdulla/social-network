@@ -10,11 +10,11 @@ import {
 } from "lucide-react";
 import React, { useState } from "react";
 import { useRouter } from "next/navigation";
-import { useAuth } from "@clerk/nextjs";
 import { StaticImageData } from "next/image";
 import api from "../api/axios";
 import toast from "react-hot-toast";
 import { imageSrc } from "../lib/imageSrc";
+import { dummyUserData } from "../../../public/assets";
 
 interface PostUser {
   _id: string;
@@ -64,10 +64,9 @@ const PostCard = ({ post, fetchPosts }: PostCardProps) => {
     /(#\w+)/g,
     '<span class="text-blue-600">$1</span>'
   );
-  const { getToken, userId } = useAuth();
-  const currentUser = { _id: userId ?? "" };
+  // const currentUser = { _id: userId ?? "" };
   const router = useRouter();
-
+  const currentUser = dummyUserData;
   // states
   const [likes, setLikes] = useState<string[]>(post.likes_count || []);
   const [comments, setComments] = useState<PostComment[]>([]);
@@ -78,138 +77,138 @@ const PostCard = ({ post, fetchPosts }: PostCardProps) => {
   const [postMenuOpen, setPostMenuOpen] = useState(false);
 
   // like / unlike
-  const handleLike = async () => {
-    try {
-      const token = await getToken();
-      const { data } = await api.post(
-        `/api/post/like`,
-        { postId: post._id },
-        { headers: { Authorization: `Bearer ${token}` } }
-      );
-      if (data.success) {
-        setLikes((prev) =>
-          prev.includes(currentUser._id)
-            ? prev.filter((id) => id !== currentUser._id)
-            : [...prev, currentUser._id]
-        );
-      } else {
-        toast.error(data.message);
-      }
-    } catch (error: unknown) {
-      const message = error instanceof Error ? error.message : "Something went wrong";
-      toast.error(message);
-    }
-  };
+  // const handleLike = async () => {
+  //   try {
+  //     const token = await getToken();
+  //     const { data } = await api.post(
+  //       `/api/post/like`,
+  //       { postId: post._id },
+  //       { headers: { Authorization: `Bearer ${token}` } }
+  //     );
+  //     if (data.success) {
+  //       setLikes((prev) =>
+  //         prev.includes(currentUser._id)
+  //           ? prev.filter((id) => id !== currentUser._id)
+  //           : [...prev, currentUser._id]
+  //       );
+  //     } else {
+  //       toast.error(data.message);
+  //     }
+  //   } catch (error: unknown) {
+  //     const message = error instanceof Error ? error.message : "Something went wrong";
+  //     toast.error(message);
+  //   }
+  // };
 
   // fetch comments
-  const fetchComments = async () => {
-    try {
-      const token = await getToken();
-      const { data } = await api.get(`/api/comment/${post._id}`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      if (data.success) {
-        setComments(data.comments);
-      }
-    } catch (error: unknown) {
-      const message = error instanceof Error ? error.message : "Something went wrong";
-      toast.error(message);
-    }
-  };
+  // const fetchComments = async () => {
+  //   try {
+  //     const token = await getToken();
+  //     const { data } = await api.get(`/api/comment/${post._id}`, {
+  //       headers: { Authorization: `Bearer ${token}` },
+  //     });
+  //     if (data.success) {
+  //       setComments(data.comments);
+  //     }
+  //   } catch (error: unknown) {
+  //     const message = error instanceof Error ? error.message : "Something went wrong";
+  //     toast.error(message);
+  //   }
+  // };
 
-  // toggle comments
-  const toggleComments = () => {
-    setShowComments((prev) => !prev);
-    if (!showComments) fetchComments();
-  };
+  // // toggle comments
+  // const toggleComments = () => {
+  //   setShowComments((prev) => !prev);
+  //   // if (!showComments) fetchComments();
+  // };
 
-  // add / edit comment
-  const handleSubmitComment = async () => {
-    if (!newComment.trim()) return;
-    try {
-      const token = await getToken();
+  // // add / edit comment
+  // const handleSubmitComment = async () => {
+  //   if (!newComment.trim()) return;
+  //   try {
+  //     // const token = await getToken();
 
-      if (editingComment) {
-        // edit existing
-        const { data } = await api.put(
-          `/api/comment/edit`,
-          { commentId: editingComment._id, text: newComment },
-          { headers: { Authorization: `Bearer ${token}` } }
-        );
-        if (data.success) {
-          toast.success("Comment updated");
-          setEditingComment(null);
-          fetchComments(); // refresh
-        } else {
-          toast.error(data.message);
-        }
-      } else {
-        // add new
-        const { data } = await api.post(
-          `/api/comment/add`,
-          { postId: post._id, text: newComment },
-          { headers: { Authorization: `Bearer ${token}` } }
-        );
-        if (data.success) {
-          toast.success("Comment added");
-          fetchComments(); // refresh after adding
-        } else {
-          toast.error(data.message);
-        }
-      }
+  //     if (editingComment) {
+  //       // edit existing
+  //       const { data } = await api.put(
+  //         `/api/comment/edit`,
+  //         { commentId: editingComment._id, text: newComment },
+  //         // { headers: { Authorization: `Bearer ${token}` } }
+  //       );
+  //       if (data.success) {
+  //         toast.success("Comment updated");
+  //         setEditingComment(null);
+  //         // fetchComments(); // refresh
+  //       } else {
+  //         toast.error(data.message);
+  //       }
+  //     } else {
+  //       // add new
+  //       const { data } = await api.post(
+  //         `/api/comment/add`,
+  //         { postId: post._id, text: newComment },
+  //         { headers: { Authorization: `Bearer ${token}` } }
+  //       );
+  //       if (data.success) {
+  //         toast.success("Comment added");
+  //         fetchComments(); // refresh after adding
+  //       } else {
+  //         toast.error(data.message);
+  //       }
+  //     }
 
-      setNewComment("");
-    } catch (error: unknown) {
-      const message = error instanceof Error ? error.message : "Something went wrong";
-      toast.error(message);
-    }
-  };
+  //     setNewComment("");
+  //   } catch (error: unknown) {
+  //     const message = error instanceof Error ? error.message : "Something went wrong";
+  //     toast.error(message);
+  //   }
+  // };
 
-  // delete comment
-  const handleDeleteComment = async (commentId: string) => {
-    try {
-      const token = await getToken();
-      const { data } = await api.delete(`/api/comment/delete`, {
-        headers: { Authorization: `Bearer ${token}` },
-        data: { commentId },
-      });
-      if (data.success) {
-        toast.success("Comment deleted");
-        fetchComments(); // refresh
-      } else {
-        toast.error(data.message);
-      }
-    } catch (error: unknown) {
-      const message = error instanceof Error ? error.message : "Something went wrong";
-      toast.error(message);
-    }
-  };
+  // // delete comment
+  // const handleDeleteComment = async (commentId: string) => {
+  //   try {
+  //     const token = await getToken();
+  //     const { data } = await api.delete(`/api/comment/delete`, {
+  //       headers: { Authorization: `Bearer ${token}` },
+  //       data: { commentId },
+  //     });
+  //     if (data.success) {
+  //       toast.success("Comment deleted");
+  //       fetchComments(); // refresh
+  //     } else {
+  //       toast.error(data.message);
+  //     }
+  //   } catch (error: unknown) {
+  //     const message = error instanceof Error ? error.message : "Something went wrong";
+  //     toast.error(message);
+  //   }
+  // };
 
-  // delete post
-  const handleDeletePost = async () => {
-    try {
-      const token = await getToken();
-      const { data } = await api.delete(`/api/post/${post._id}`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      if (data.success) {
-        toast.success("Post deleted");
-        if (fetchPosts) fetchPosts();
-      } else {
-        toast.error(data.message);
-      }
-    } catch (error: unknown) {
-      const message = error instanceof Error ? error.message : "Something went wrong";
-      toast.error(message);
-    }
-  };
+  // // delete post
+  // const handleDeletePost = async () => {
+  //   try {
+  //     const token = await getToken();
+  //     const { data } = await api.delete(`/api/post/${post._id}`, {
+  //       headers: { Authorization: `Bearer ${token}` },
+  //     });
+  //     if (data.success) {
+  //       toast.success("Post deleted");
+  //       if (fetchPosts) fetchPosts();
+  //     } else {
+  //       toast.error(data.message);
+  //     }
+  //   } catch (error: unknown) {
+  //     const message = error instanceof Error ? error.message : "Something went wrong";
+  //     toast.error(message);
+  //   }
+  // };
 
-  // share
-  const handleShare = () => {
-    const link = `${window.location.origin}/post/${post._id}`;
-    navigator.clipboard.writeText(link);
-    toast.success("Post link copied!");
-  };
+  // // share
+  // const handleShare = () => {
+  //   const link = `${window.location.origin}/post/${post._id}`;
+  //   navigator.clipboard.writeText(link);
+  //   toast.success("Post link copied!");
+  // };
 
   return (
     <div className="bg-white rounded-xl shadow p-4 space-y-4 w-full max-w-2xl">
@@ -246,7 +245,7 @@ const PostCard = ({ post, fetchPosts }: PostCardProps) => {
               <div className="absolute right-0 mt-1 bg-white border rounded shadow-md text-sm z-10">
                 <div
                   className="px-3 py-1 hover:bg-gray-100 cursor-pointer flex items-center gap-1 text-red-500"
-                  onClick={handleDeletePost}
+                  // onClick={handleDeletePost}
                 >
                   <Trash2 className="w-4 h-4" /> Delete Post
                 </div>
@@ -287,19 +286,19 @@ const PostCard = ({ post, fetchPosts }: PostCardProps) => {
             className={`w-4 h-4 cursor-pointer ${
               likes.includes(currentUser._id) && "text-red-500 fill-red-500"
             }`}
-            onClick={handleLike}
+            // onClick={handleLike}
           />
           <span>{likes.length}</span>
         </div>
         <div className="flex items-center gap-1">
           <MessageCircle
             className="w-4 h-4 cursor-pointer"
-            onClick={toggleComments}
+            // onClick={toggleComments}
           />
           <span>{comments.length}</span>
         </div>
         <div className="flex items-center gap-1">
-          <Share2 className="w-4 h-4 cursor-pointer" onClick={handleShare} />
+          {/* <Share2 className="w-4 h-4 cursor-pointer" onClick={handleShare} /> */}
         </div>
       </div>
 
@@ -316,7 +315,7 @@ const PostCard = ({ post, fetchPosts }: PostCardProps) => {
               className="flex-1 border rounded-md p-2 text-sm"
             />
             <button
-              onClick={handleSubmitComment}
+              // onClick={handleSubmitComment}
               className="bg-blue-500 text-white px-3 py-1 rounded"
             >
               {editingComment ? "Update" : "Post"}
@@ -367,7 +366,7 @@ const PostCard = ({ post, fetchPosts }: PostCardProps) => {
                       <div
                         className="px-3 py-1 hover:bg-gray-100 cursor-pointer flex items-center gap-1 text-red-500"
                         onClick={() => {
-                          handleDeleteComment(c._id);
+                          // handleDeleteComment(c._id);
                           setMenuOpen(null);
                         }}
                       >
