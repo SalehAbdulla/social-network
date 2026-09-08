@@ -1,8 +1,8 @@
 'use client';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import toast from 'react-hot-toast';
-import { type Connections as ConnectionGroups, displayName, errorMessage, request } from '../api/social';
+import { type Connections as ConnectionGroups, type SocketEvent, displayName, errorMessage, request } from '../api/social';
 import { useResource } from '../lib/useResource';
 import { useBackend } from '../components/BackendProvider';
 import Avatar from '../components/Avatar';
@@ -11,6 +11,14 @@ import Loading from '../components/Loading';
 
 export default function Connections() {
   const groups = useResource<ConnectionGroups>('/connections');
+  const reload = groups.reload;
+  useEffect(() => {
+    const listener = (event: Event) => {
+      if (['social_changed', 'connected'].includes((event as CustomEvent<SocketEvent>).detail.type)) reload();
+    };
+    window.addEventListener('social:socket', listener);
+    return () => window.removeEventListener('social:socket', listener);
+  }, [reload]);
   const { refreshUser } = useBackend();
   const [tab, setTab] = useState<keyof ConnectionGroups>('followers');
   const [busy, setBusy] = useState(false);

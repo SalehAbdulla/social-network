@@ -88,16 +88,20 @@ func (db *DB) UpdateSocialProfile(u models.SocialUser) error {
 	return err
 }
 
-func (db *DB) FollowUser(actor, target string, follow bool) error {
+func (db *DB) FollowUser(actor, target string, follow bool) (bool, error) {
 	query := "INSERT INTO follow (followerId, followedId) VALUES (?, ?) ON CONFLICT DO NOTHING"
 	if !follow {
 		query = "DELETE FROM follow WHERE followerId = ? AND followedId = ?"
 	}
-	_, err := db.Conn.Exec(query, actor, target)
-	return err
+	result, err := db.Conn.Exec(query, actor, target)
+	if err != nil {
+		return false, err
+	}
+	n, err := result.RowsAffected()
+	return n > 0, err
 }
 
-func (db *DB) ChangeConnection(actor, target, action string) error {
+func (db *DB) ChangeConnection(actor, target, action string) (bool, error) {
 	var result sql.Result
 	var err error
 	switch action {
@@ -108,16 +112,16 @@ func (db *DB) ChangeConnection(actor, target, action string) error {
 	case "remove":
 		result, err = db.Conn.Exec("DELETE FROM connection WHERE (requesterId = ? AND recipientId = ?) OR (requesterId = ? AND recipientId = ?)", actor, target, target, actor)
 	default:
-		return backend.ErrBadRequest
+		return false, backend.ErrBadRequest
 	}
 	if err != nil {
-		return err
+		return false, err
 	}
 	n, err := result.RowsAffected()
 	if err == nil && n == 0 && action == "accept" {
-		return backend.ErrNotFound
+		return false, backend.ErrNotFound
 	}
-	return err
+	return n > 0, err
 }
 
 func (db *DB) ProfilePostIDs(userID string, liked bool, offset int) ([]string, error) {

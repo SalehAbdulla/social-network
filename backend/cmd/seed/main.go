@@ -7,6 +7,7 @@ import (
 	"flag"
 	"fmt"
 	"log"
+	"path/filepath"
 
 	"github.com/google/uuid"
 	_ "github.com/mattn/go-sqlite3"
@@ -14,6 +15,7 @@ import (
 
 	backend "social-network/backend"
 	"social-network/backend/pkg/app/repositories"
+	"social-network/backend/pkg/config"
 	sqlitedb "social-network/backend/pkg/db/sqlite"
 )
 
@@ -26,7 +28,11 @@ const (
 func main() {
 	demo := flag.Bool("demo", false, "also create Alex Demo for testing social features")
 	flag.Parse()
-	database, err := sql.Open("sqlite3", "./pkg/db/socialnetwork.db")
+	backendDir, err := config.BackendDir()
+	if err != nil {
+		log.Fatal(err)
+	}
+	database, err := sql.Open("sqlite3", filepath.Join(backendDir, "pkg", "db", "socialnetwork.db"))
 	if err != nil {
 		log.Fatal(err)
 	}

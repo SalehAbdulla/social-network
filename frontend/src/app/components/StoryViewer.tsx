@@ -9,15 +9,15 @@ interface IStoryViewerProps {
 	setViewStory: (value: Story | null) => void;
 }
 
-const StoryViewer = (props: IStoryViewerProps) => {
+const StoryViewerContent = (props: IStoryViewerProps) => {
 
 	const [progress,setProgress]=useState(0);
+	const { viewStory, setViewStory } = props;
 
 	useEffect(()=>{
 		let timer: NodeJS.Timeout;
 		let progressInterval: NodeJS.Timeout;
-		if(props.viewStory && props.viewStory.media_type!=='video'){
-			setProgress(0);
+		if(viewStory && viewStory.media_type!=='video'){
 			const duration=10000;
 			const setTime=100;
 			let elapsed=0;
@@ -28,7 +28,7 @@ const StoryViewer = (props: IStoryViewerProps) => {
 
 			// close story after duration 10 sec 
 			timer=setTimeout(()=>{
-				props.setViewStory(null);
+				setViewStory(null);
 			},duration);
 		}
 
@@ -37,7 +37,7 @@ const StoryViewer = (props: IStoryViewerProps) => {
 			clearInterval(progressInterval);
 		}
 
-	},[props.viewStory, props.setViewStory]);
+	},[viewStory, setViewStory]);
 
 	const handleClose=()=>{
 		props.setViewStory(null);
@@ -91,5 +91,7 @@ const StoryViewer = (props: IStoryViewerProps) => {
   )
 }
 
-export default StoryViewer
+export default function StoryViewer(props: IStoryViewerProps) {
+  return props.viewStory ? <StoryViewerContent key={props.viewStory._id} {...props} /> : null;
+}
 

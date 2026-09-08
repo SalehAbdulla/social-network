@@ -39,6 +39,7 @@ func (n NotificationServiceImpl) GetNotifications(userID string, offset, limit i
 			ActorNickname:  notif.ActorNickname,
 			EntityType:     notif.EntityType,
 			EntityId:       notif.EntityId,
+			PostId:         notif.PostId,
 			IsRead:         notif.IsRead,
 			CreatedAt:      notif.CreatedAt,
 		}
@@ -72,6 +73,7 @@ func (n NotificationServiceImpl) CreateNotification(userID, actorID, entityType 
 		ActorNickname:  notif.ActorNickname,
 		EntityType:     notif.EntityType,
 		EntityId:       notif.EntityId,
+		PostId:         notif.PostId,
 		IsRead:         notif.IsRead,
 		CreatedAt:      notif.CreatedAt,
 	}, nil

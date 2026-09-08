@@ -27,7 +27,7 @@ export interface ChatMessage {
   isRead: number; mediaUrl: string; mediaType: string; editedAt: string;
 }
 export interface Notification {
-  notificationId: number; actorId: string; actorNickname: string; entityType: string; entityId: number; isRead: number; createdAt: string;
+  notificationId: number; actorId: string; actorNickname: string; entityType: string; entityId: number; postId?: number; isRead: number; createdAt: string;
 }
 export type Connections = Record<'followers' | 'following' | 'connections' | 'pending' | 'requested', SocialUser[]>;
 export interface SocketEvent { type: string; payload: Record<string, unknown> }

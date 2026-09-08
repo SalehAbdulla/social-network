@@ -88,7 +88,6 @@ func decoded[T any](t *testing.T, raw json.RawMessage) T {
 
 func integrationServer(t *testing.T, dev, production bool) (*httptest.Server, *repositories.DB) {
 	t.Helper()
-	t.Chdir("..")
 	database, err := sql.Open("sqlite3", filepath.Join(t.TempDir(), "test.db")+"?_foreign_keys=on&_busy_timeout=5000")
 	if err != nil {
 		t.Fatal(err)
@@ -154,6 +153,10 @@ func TestSocialIntegration(t *testing.T) {
 		}
 		dummy.call("POST", "/api/v1/connections/alex-id", nil, 200)
 		dummy.call("POST", "/api/v1/connections/alex-id", nil, 200)
+		alerts := decoded[notification.NotificationResponse](t, alex.call("GET", "/api/v1/notifications", nil, 200))
+		if len(alerts.Notifications) != 2 {
+			t.Fatal("follow and connection request must each notify once")
+		}
 		dummy.call("PUT", "/api/v1/connections/alex-id", nil, 404)
 		pending := decoded[map[string][]models.SocialUser](t, alex.call("GET", "/api/v1/connections", nil, 200))
 		if len(pending["pending"]) != 1 {
@@ -243,10 +246,16 @@ func TestSocialIntegration(t *testing.T) {
 	}
 	dummy.call("POST", "/api/v1/reactions", map[string]any{"entityType": "comment", "entityId": commentData.CommentId, "score": 1}, 200)
 	notifications := decoded[notification.NotificationResponse](t, dummy.call("GET", "/api/v1/notifications", nil, 200))
-	if len(notifications.Notifications) != 1 {
+	var commentNotificationID int
+	for _, alert := range notifications.Notifications {
+		if alert.EntityType == "comment" && alert.EntityId == commentData.CommentId && alert.PostId == post.PostId {
+			commentNotificationID = alert.NotificationId
+		}
+	}
+	if commentNotificationID == 0 {
 		t.Fatal("comment notification missing")
 	}
-	dummy.call("PATCH", "/api/v1/notifications/"+strconv.Itoa(notifications.Notifications[0].NotificationId)+"/read", nil, 200)
+	dummy.call("PATCH", "/api/v1/notifications/"+strconv.Itoa(commentNotificationID)+"/read", nil, 200)
 	dummy.call("PATCH", "/api/v1/notifications/read-all", nil, 200)
 	count := decoded[notification.UnreadCountResponse](t, dummy.call("GET", "/api/v1/notifications/unread-count", nil, 200))
 	if count.Count != 0 {
@@ -347,6 +356,69 @@ func TestSocialIntegration(t *testing.T) {
 func TestDevSessionUnavailableByDefault(t *testing.T) {
 	server, _ := integrationServer(t, false, false)
 	newIntegrationClient(t, server).call("POST", "/api/v1/dev/session", map[string]string{}, 404)
+}
+
+func TestLiveConnectionUpdates(t *testing.T) {
+	server, _ := integrationServer(t, true, false)
+	dummy, alex := newIntegrationClient(t, server), newIntegrationClient(t, server)
+	dummy.call("POST", "/api/v1/dev/session", map[string]string{"email": "dummy@example.com"}, 200)
+	alex.call("POST", "/api/v1/dev/session", map[string]string{"email": "alex@example.com"}, 200)
+
+	connect := func(client integrationClient, userID string) *websocket.Conn {
+		t.Helper()
+		parsed, _ := url.Parse(server.URL)
+		var cookies []string
+		for _, cookie := range client.client.Jar.Cookies(parsed) {
+			cookies = append(cookies, cookie.String())
+		}
+		socket, _, err := websocket.DefaultDialer.Dial("ws"+strings.TrimPrefix(server.URL, "http")+"/ws", http.Header{"Cookie": {strings.Join(cookies, "; ")}, "Origin": {server.URL}})
+		if err != nil {
+			t.Fatal(err)
+		}
+		t.Cleanup(func() { socket.Close() })
+		deadline := time.Now().Add(3 * time.Second)
+		for !handlers.HandlerCtx.Hub.IsUserOnline(userID) {
+			if time.Now().After(deadline) {
+				t.Fatal("WebSocket was not registered")
+			}
+			time.Sleep(time.Millisecond)
+		}
+		return socket
+	}
+	readUpdate := func(socket *websocket.Conn, actorID string) {
+		t.Helper()
+		seen := map[string]bool{}
+		socket.SetReadDeadline(time.Now().Add(3 * time.Second))
+		for !seen["notification"] || !seen["social_changed"] {
+			_, data, err := socket.ReadMessage()
+			if err != nil {
+				t.Fatal(err)
+			}
+			for _, line := range bytes.Split(data, []byte("\n")) {
+				var event struct {
+					Type    string `json:"type"`
+					Payload struct {
+						ActorID string `json:"actorId"`
+					} `json:"payload"`
+				}
+				if err := json.Unmarshal(line, &event); err != nil {
+					t.Fatal(err)
+				}
+				if event.Payload.ActorID == actorID {
+					seen[event.Type] = true
+				}
+			}
+		}
+	}
+
+	alexSocket := connect(alex, "alex-id")
+	dummySocket := connect(dummy, "dummy-id")
+	dummy.call("PUT", "/api/v1/users/alex-id/follow", nil, 200)
+	readUpdate(alexSocket, "dummy-id")
+	dummy.call("POST", "/api/v1/connections/alex-id", nil, 200)
+	readUpdate(alexSocket, "dummy-id")
+	alex.call("PUT", "/api/v1/connections/dummy-id", nil, 200)
+	readUpdate(dummySocket, "alex-id")
 }
 
 func TestDevSessionUnavailableInProduction(t *testing.T) {

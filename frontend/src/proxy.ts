@@ -4,7 +4,8 @@ import { NextResponse, type NextRequest, type NextFetchEvent } from 'next/server
 const clerk = clerkMiddleware();
 
 export default function proxy(request: NextRequest, event: NextFetchEvent) {
-  if (process.env.NODE_ENV !== 'production' && process.env.NEXT_PUBLIC_DEV_USER === 'true' && !request.nextUrl.pathname.startsWith('/login')) {
+  if (process.env.NODE_ENV !== 'production' && process.env.NEXT_PUBLIC_DEV_USER === 'true') {
+    if (request.nextUrl.pathname === '/login') return NextResponse.redirect(new URL('/', request.url));
     return NextResponse.next();
   }
   return clerk(request, event);

@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"net/http"
 	"os"
+	"path/filepath"
 
 	_ "github.com/mattn/go-sqlite3"
 
@@ -22,9 +23,6 @@ func main() {
 	app.InProduction = os.Getenv("APP_ENV") == "production"
 	app.DevDummyUser = !app.InProduction && os.Getenv("DEV_DUMMY_USER") == "true"
 	app.UploadDir = os.Getenv("UPLOAD_DIR")
-	if app.UploadDir == "" {
-		app.UploadDir = "./uploads"
-	}
 	app.FrontendOrigin = os.Getenv("FRONTEND_ORIGIN")
 	if app.FrontendOrigin == "" {
 		app.FrontendOrigin = "http://localhost:4000"
@@ -33,7 +31,16 @@ func main() {
 
 	logger.InitLogger(&app)
 
-	database, err := sql.Open("sqlite3", "./pkg/db/socialnetwork.db?_foreign_keys=on&_busy_timeout=5000")
+	backendDir, err := config.BackendDir()
+	if err != nil {
+		app.Logger.Error("failed to locate backend files", "error", err)
+		os.Exit(1)
+	}
+	if app.UploadDir == "" {
+		app.UploadDir = filepath.Join(backendDir, "uploads")
+	}
+	databasePath := filepath.Join(backendDir, "pkg", "db", "socialnetwork.db")
+	database, err := sql.Open("sqlite3", databasePath+"?_foreign_keys=on&_busy_timeout=5000")
 	if err != nil {
 		app.Logger.Error("failed to open database", "error", err)
 		os.Exit(1)

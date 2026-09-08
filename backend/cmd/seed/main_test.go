@@ -12,8 +12,7 @@ import (
 )
 
 func TestSeedDummyUser(t *testing.T) {
-	// Run the application's real migrations from the backend directory.
-	t.Chdir("../..")
+	// Real migrations must also work when launched from cmd/seed.
 	database, err := sql.Open("sqlite3", ":memory:")
 	if err != nil {
 		t.Fatal(err)

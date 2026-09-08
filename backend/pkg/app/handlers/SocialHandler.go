@@ -191,11 +191,30 @@ func (re *HandlerContext) Follow(w http.ResponseWriter, r *http.Request) {
 		re.HandleError(w, r, err)
 		return
 	}
-	if err := re.SocialService.Repo.FollowUser(actor, target, r.Method == http.MethodPut); err != nil {
+	changed, err := re.SocialService.Repo.FollowUser(actor, target, r.Method == http.MethodPut)
+	if err != nil {
 		re.HandleError(w, r, err)
 		return
 	}
+	if changed {
+		if r.Method == http.MethodPut {
+			re.socialNotification(actor, target, "follow")
+		}
+		re.chatEvent(actor, target, "social_changed", map[string]string{"actorId": actor, "targetId": target})
+	}
 	respond(w, http.StatusOK, nil)
+}
+
+func (re *HandlerContext) socialNotification(actor, target, kind string) {
+	notification, err := re.NotificationService.CreateNotification(target, actor, kind, 0)
+	if err != nil {
+		re.App.Logger.Error("social notification failed", "error", err)
+		return
+	}
+	if re.Hub != nil {
+		data, _ := json.Marshal(map[string]any{"type": "notification", "payload": notification})
+		re.Hub.SendToUser(target, data)
+	}
 }
 
 func (re *HandlerContext) Connections(w http.ResponseWriter, r *http.Request) {
@@ -228,9 +247,16 @@ func (re *HandlerContext) ChangeConnection(w http.ResponseWriter, r *http.Reques
 		return
 	}
 	action := map[string]string{http.MethodPost: "request", http.MethodPut: "accept", http.MethodDelete: "remove"}[r.Method]
-	if err := re.SocialService.Repo.ChangeConnection(actor, target, action); err != nil {
+	changed, err := re.SocialService.Repo.ChangeConnection(actor, target, action)
+	if err != nil {
 		re.HandleError(w, r, err)
 		return
+	}
+	if changed {
+		if action != "remove" {
+			re.socialNotification(actor, target, "connection")
+		}
+		re.chatEvent(actor, target, "social_changed", map[string]string{"actorId": actor, "targetId": target})
 	}
 	respond(w, http.StatusOK, nil)
 }

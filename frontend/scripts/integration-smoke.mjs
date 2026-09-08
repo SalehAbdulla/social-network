@@ -4,7 +4,7 @@ import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 
 const base = process.env.BASE_URL || 'http://localhost:4000';
-const taskDir = path.resolve('../backend/tmp/browser-check');
+const taskDir = process.env.TEST_ARTIFACT_DIR || path.resolve('../backend/tmp/browser-check');
 await mkdir(taskDir, { recursive: true });
 const browserProfile = path.join(taskDir, `profile-${Date.now()}`);
 await mkdir(browserProfile);
@@ -57,12 +57,15 @@ async function until(page, expression, label, timeout = 60000) {
   }
   throw new Error(`Timed out: ${label}\n${await evaluate(page, 'document.body.innerText')}`);
 }
-async function createPage() {
+async function createPage(email = 'dummy@example.com') {
   const { browserContextId } = await command('Target.createBrowserContext');
   const { targetId } = await command('Target.createTarget', { url: 'about:blank', browserContextId });
   const { sessionId } = await command('Target.attachToTarget', { targetId, flatten: true });
   await command('Runtime.enable', {}, sessionId);
   await command('Page.enable', {}, sessionId);
+  await command('Page.addScriptToEvaluateOnNewDocument', {
+    source: `if (location.origin === ${JSON.stringify(base)} && !localStorage.getItem('social:dev-user')) localStorage.setItem('social:dev-user', ${JSON.stringify(email)});`,
+  }, sessionId);
   // Keep the smoke test offline except for the local application.
   await command('Fetch.enable', { patterns: [{ urlPattern: '*' }] }, sessionId);
   return sessionId;
@@ -108,7 +111,7 @@ try {
   await until(dummy, `(async () => (await (await fetch('/api/v1/post?id=${postId}')).json()).data.score === 1)()`, 'post reaction');
   console.log('PASS: post creation, image upload, detail page and reaction persist');
 
-  alex = await createPage();
+  alex = await createPage('alex@example.com');
   await navigate(alex, '/');
   await fill(alex, 'select[aria-label="Development user"]', 'alex@example.com');
   await until(alex, `document.querySelector('select[aria-label="Development user"]')?.value === 'alex@example.com' && document.body.innerText.includes('@alexdemo')`, 'switch demo user');
@@ -121,20 +124,23 @@ try {
   await until(alex, `document.body.innerText.includes(${JSON.stringify(`Browser comment ${stamp}`)}) && document.querySelector('textarea').value === ''`, 'comment creation');
   const notifications = await api(dummy, '/notifications');
   assert(notifications.notifications.some(item => item.entityType === 'comment' && item.actorId === originalAlex.userId));
+  await navigate(dummy, '/notifications');
+  await until(dummy, `!!document.querySelector('a[href="/post/${postId}"]')`, 'comment notification links to its post');
   console.log('PASS: second user comments and the post owner receives a notification');
 
   await navigate(alex, '/discover');
   await until(alex, `document.body.innerText.includes('@dummyuser')`, 'discover users');
+  await navigate(dummy, '/connections');
+  await evaluate(dummy, `[...document.querySelectorAll('button')].find(button => button.textContent.includes('Received requests')).click()`);
   if (!originalAlex.following.includes(originalDummy.userId)) await button(alex, 'Follow');
   await pause(500);
   if (!originalAlex.connections.includes(originalDummy.userId) && !originalAlex.requested.includes(originalDummy.userId)) {
     await button(alex, 'Connect');
     await until(alex, `document.body.innerText.includes('Request sent')`, 'connection request');
-    await navigate(dummy, '/connections');
-    await evaluate(dummy, `[...document.querySelectorAll('button')].find(button => button.textContent.includes('Received requests')).click()`);
     await until(dummy, `document.body.innerText.includes('@alexdemo')`, 'incoming request');
     await button(dummy, 'Accept');
     await until(dummy, `(async () => (await (await fetch('/api/v1/users/me')).json()).data.connections.includes(${JSON.stringify(originalAlex.userId)}))()`, 'accept request');
+    await until(alex, `document.body.innerText.includes('Connected')`, 'live connection acceptance');
   }
   console.log('PASS: discovery, follow and connection acceptance');
 
@@ -171,6 +177,15 @@ try {
   await button(dummy, 'Delete for everyone');
   await until(dummy, `!document.body.innerText.includes(${JSON.stringify(`Edited browser message ${stamp}`)})`, 'delete for everyone');
   console.log('PASS: live typing, messages, read receipts, edits and scoped deletion');
+
+  await api(dummy, '/auth/logout', 'POST');
+  await evaluate(dummy, `fetch('/api/v1/users/me').then(response => { if (response.status === 401) window.dispatchEvent(new Event('social:session-expired')); })`);
+  await until(dummy, `document.body.innerText.includes('Your backend session expired')`, 'expired session state');
+  await button(dummy, 'Reconnect');
+  await until(dummy, `!!document.querySelector('select[aria-label="Development user"]')`, 'reconnect demo session');
+  await navigate(dummy, '/login');
+  await until(dummy, `location.pathname === '/'`, 'demo login redirects to feed');
+  console.log('PASS: expired demo sessions reconnect and login opens the feed');
 
   await navigate(dummy, '/');
   const screenshot = await command('Page.captureScreenshot', { format: 'png' }, dummy);
