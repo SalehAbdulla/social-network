@@ -136,11 +136,11 @@ func (db *DB) ChangeConnection(actor, target, action string) (bool, error) {
 	return n > 0, err
 }
 
-func (db *DB) ProfilePostIDs(userID string, liked bool, offset int) ([]string, error) {
+func (db *DB) ProfilePostIDs(userID string, liked bool, offset int, viewerID string) ([]string, error) {
 	if liked {
-		return db.stringList("SELECT CAST(p.postId AS TEXT) FROM post p JOIN reaction r ON r.entityType='post' AND r.entityId=p.postId WHERE r.userId=? AND r.score=1 ORDER BY p.createdAt DESC, p.postId DESC LIMIT 20 OFFSET ?", userID, offset)
+		return db.stringList("SELECT CAST(p.postId AS TEXT) FROM post p JOIN reaction r ON r.entityType='post' AND r.entityId=p.postId WHERE r.userId=? AND r.score=1 AND p.userId=? AND "+postVisibility+" ORDER BY p.createdAt DESC, p.postId DESC LIMIT 20 OFFSET ?", userID, userID, viewerID, viewerID, viewerID, offset)
 	}
-	return db.stringList("SELECT CAST(postId AS TEXT) FROM post WHERE userId=? ORDER BY createdAt DESC, postId DESC LIMIT 20 OFFSET ?", userID, offset)
+	return db.stringList("SELECT CAST(p.postId AS TEXT) FROM post p WHERE p.userId=? AND "+postVisibility+" ORDER BY p.createdAt DESC, p.postId DESC LIMIT 20 OFFSET ?", userID, viewerID, viewerID, viewerID, offset)
 }
 
 func (db *DB) AddMedia(id, userID, contentType string) error {
@@ -155,6 +155,19 @@ func (db *DB) MediaInfo(id string) (string, string, error) {
 		return "", "", backend.ErrNotFound
 	}
 	return owner, contentType, err
+}
+
+func (db *DB) CanViewMedia(id, viewerID string) (bool, error) {
+	var allowed bool
+	err := db.Conn.QueryRow(`SELECT EXISTS(
+		SELECT 1 FROM media m WHERE m.mediaId = ? AND (
+			m.userId = ? OR EXISTS(
+				SELECT 1 FROM post p, json_each(p.imageUrls) image
+				WHERE image.value = '/api/v1/media/' || m.mediaId AND `+postVisibility+`
+			)
+		)
+	)`, id, viewerID, viewerID, viewerID, viewerID).Scan(&allowed)
+	return allowed, err
 }
 
 func (db *DB) CreateStory(s models.Story) (int, error) {
