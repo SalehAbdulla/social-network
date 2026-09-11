@@ -28,8 +28,8 @@ func (db *DB) stringList(query string, args ...any) ([]string, error) {
 
 func (db *DB) SocialProfile(id string) (models.SocialUser, error) {
 	u := models.SocialUser{}
-	err := db.Conn.QueryRow(`SELECT userId, nickName, firstName, lastName, COALESCE(aboutMe,''), COALESCE(avatar,''), coverPhoto, location, createdAt FROM user WHERE userId = ?`, id).
-		Scan(&u.UserID, &u.Nickname, &u.FirstName, &u.LastName, &u.Bio, &u.Avatar, &u.CoverPhoto, &u.Location, &u.CreatedAt)
+	err := db.Conn.QueryRow(`SELECT userId, nickName, firstName, lastName, COALESCE(aboutMe,''), COALESCE(avatar,''), coverPhoto, location, isPublic, createdAt FROM user WHERE userId = ?`, id).
+		Scan(&u.UserID, &u.Nickname, &u.FirstName, &u.LastName, &u.Bio, &u.Avatar, &u.CoverPhoto, &u.Location, &u.IsPublic, &u.CreatedAt)
 	if errors.Is(err, sql.ErrNoRows) {
 		return u, backend.ErrNotFound
 	}
@@ -54,6 +54,18 @@ func (db *DB) SocialProfile(id string) (models.SocialUser, error) {
 		}
 	}
 	return u, nil
+}
+
+func (db *DB) CanViewPrivateProfile(viewerID, profileID string) (bool, error) {
+	if viewerID == profileID {
+		return true, nil
+	}
+	var allowed bool
+	err := db.Conn.QueryRow(`SELECT isPublic = 1 OR EXISTS(SELECT 1 FROM follow WHERE followerId = ? AND followedId = ?) FROM user WHERE userId = ?`, viewerID, profileID, profileID).Scan(&allowed)
+	if errors.Is(err, sql.ErrNoRows) {
+		return false, backend.ErrNotFound
+	}
+	return allowed, err
 }
 
 func (db *DB) DiscoverUsers(currentID, search string, offset int) ([]models.SocialUser, error) {
@@ -84,7 +96,7 @@ func (db *DB) UpdateSocialProfile(u models.SocialUser) error {
 	if !errors.Is(err, sql.ErrNoRows) {
 		return err
 	}
-	_, err = db.Conn.Exec(`UPDATE user SET nickName=?, firstName=?, lastName=?, aboutMe=?, avatar=?, coverPhoto=?, location=?, updatedAt=datetime('now') WHERE userId=?`, u.Nickname, u.FirstName, u.LastName, u.Bio, u.Avatar, u.CoverPhoto, u.Location, u.UserID)
+	_, err = db.Conn.Exec(`UPDATE user SET nickName=?, firstName=?, lastName=?, aboutMe=?, avatar=?, coverPhoto=?, location=?, isPublic=?, updatedAt=datetime('now') WHERE userId=?`, u.Nickname, u.FirstName, u.LastName, u.Bio, u.Avatar, u.CoverPhoto, u.Location, u.IsPublic, u.UserID)
 	return err
 }
 
