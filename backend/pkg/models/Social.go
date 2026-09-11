@@ -9,6 +9,7 @@ type SocialUser struct {
 	Avatar      string   `json:"avatar"`
 	CoverPhoto  string   `json:"coverPhoto"`
 	Location    string   `json:"location"`
+	IsPublic    bool     `json:"isPublic"`
 	CreatedAt   string   `json:"createdAt"`
 	Followers   []string `json:"followers"`
 	Following   []string `json:"following"`
