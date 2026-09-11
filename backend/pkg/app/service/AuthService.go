@@ -3,13 +3,12 @@ package service
 import (
 	"log/slog"
 	realtimeforum "social-network/backend"
-	"strconv"
 	"time"
 
 	"golang.org/x/crypto/bcrypt"
 
-	"social-network/backend/pkg/payload/user"
 	db "social-network/backend/pkg/app/repositories"
+	"social-network/backend/pkg/payload/user"
 
 	"github.com/google/uuid"
 )
@@ -19,6 +18,7 @@ type AuthService interface {
 	Login(identifier, password string) (string, string, error)
 	Logout(token string) error
 	GetMe(userID string) (user.UserDTO, error)
+	NicknameAvailable(nickname string) (bool, error)
 }
 
 type AuthServiceImpl struct {
@@ -48,11 +48,11 @@ func (s AuthServiceImpl) Register(req user.RegisterRequestDTO) (string, string, 
 		return "", "", realtimeforum.ErrInternal
 	}
 
-	age, _ := strconv.Atoi(req.Age)
-	yearOfBirth := time.Now().Year() - age
+	birthDate, _ := time.Parse("2006-01-02", req.BirthDate)
+	yearOfBirth := birthDate.Year()
 
 	userID := uuid.NewString()
-	if err := s.db.InsertUser(userID, req.Nickname, req.FirstName, req.LastName, req.Email, string(hashedPassword), yearOfBirth, req.Gender); err != nil {
+	if err := s.db.InsertUser(userID, req.Nickname, req.FirstName, req.LastName, req.Email, string(hashedPassword), req.BirthDate, yearOfBirth, req.Gender); err != nil {
 		return "", "", err
 	}
 
@@ -60,6 +60,14 @@ func (s AuthServiceImpl) Register(req user.RegisterRequestDTO) (string, string, 
 	s.sessionManager.CreateSession(userID, token)
 
 	return userID, token, nil
+}
+
+func (s AuthServiceImpl) NicknameAvailable(nickname string) (bool, error) {
+	nickname, err := user.ValidateNickname(nickname)
+	if err != nil {
+		return false, realtimeforum.ErrBadRequest
+	}
+	return s.db.NicknameAvailable(nickname)
 }
 
 func (s AuthServiceImpl) Login(identifier, password string) (string, string, error) {
@@ -98,5 +106,6 @@ func (s AuthServiceImpl) GetMe(userID string) (user.UserDTO, error) {
 		FirstName: profile.FirstName,
 		LastName:  profile.LastName,
 		Email:     profile.Email,
+		BirthDate: profile.BirthDate,
 	}, nil
 }
