@@ -2,10 +2,10 @@ package user
 
 import (
 	"net/http"
-	realtimeforum "social-network/backend"
 	"net/mail"
-	"strconv"
+	realtimeforum "social-network/backend"
 	"strings"
+	"time"
 	"unicode"
 )
 
@@ -16,7 +16,7 @@ type RegisterRequestDTO struct {
 	LastName        string
 	Password        string
 	ConfirmPassword string
-	Age             string
+	BirthDate       string
 	Gender          string
 }
 
@@ -44,27 +44,54 @@ func passwordStrength(password string) bool {
 	return hasLetter && hasNumber && hasSymbol
 }
 
+func ValidateNickname(value string) (string, error) {
+	nickname := strings.TrimSpace(strings.ToLower(value))
+	if !isASCIIPrintable(nickname) || len(nickname) < 2 || len(nickname) > 33 {
+		return "", realtimeforum.ErrNickNameLength
+	}
+	for _, ch := range nickname {
+		if (ch < 'a' || ch > 'z') && (ch < '0' || ch > '9') && ch != '_' {
+			return "", realtimeforum.ErrBadRequest
+		}
+	}
+	return nickname, nil
+}
+
+func validBirthDate(value string) bool {
+	birthDate, err := time.Parse("2006-01-02", value)
+	if err != nil || birthDate.After(time.Now().UTC()) {
+		return false
+	}
+	now := time.Now().UTC()
+	age := now.Year() - birthDate.Year()
+	birthday := time.Date(now.Year(), birthDate.Month(), birthDate.Day(), 0, 0, 0, 0, time.UTC)
+	if now.Before(birthday) {
+		age--
+	}
+	return age >= 13 && age <= 100
+}
+
 func (d *RegisterRequestDTO) ParseAndValidate(r *http.Request) error {
-	d.Nickname = strings.TrimSpace(strings.ToLower(r.FormValue("nickName")))
+	nickname, nicknameErr := ValidateNickname(r.FormValue("nickName"))
+	d.Nickname = nickname
 	d.Email = strings.TrimSpace(strings.ToLower(r.FormValue("email")))
 	d.FirstName = strings.TrimSpace(strings.ToLower(r.FormValue("firstName")))
 	d.LastName = strings.TrimSpace(strings.ToLower(r.FormValue("lastName")))
 	d.Password = strings.TrimSpace(r.FormValue("password"))
 	d.ConfirmPassword = strings.TrimSpace(r.FormValue("confirmPassword"))
-	d.Age = strings.TrimSpace(strings.ToLower(r.FormValue("age")))
+	d.BirthDate = strings.TrimSpace(r.FormValue("birthDate"))
 	d.Gender = strings.TrimSpace(strings.ToLower(r.FormValue("gender")))
+	if nicknameErr != nil {
+		return nicknameErr
+	}
 
 	if d.Nickname == "" || d.Email == "" || d.FirstName == "" || d.LastName == "" ||
-		d.Password == "" || d.ConfirmPassword == "" || d.Age == "" || d.Gender == "" {
+		d.Password == "" || d.ConfirmPassword == "" || d.BirthDate == "" || d.Gender == "" {
 		return realtimeforum.ErrBadRequest
 	}
 
-	if !isASCIIPrintable(d.Nickname) || !isASCIIPrintable(d.FirstName) || !isASCIIPrintable(d.LastName) {
+	if d.Nickname == "" || !isASCIIPrintable(d.FirstName) || !isASCIIPrintable(d.LastName) {
 		return realtimeforum.ErrNonASCII
-	}
-
-	if len(d.Nickname) < 2 || len(d.Nickname) > 33 {
-		return realtimeforum.ErrNickNameLength
 	}
 
 	if len(d.FirstName) < 1 || len(d.FirstName) > 50 {
@@ -91,9 +118,8 @@ func (d *RegisterRequestDTO) ParseAndValidate(r *http.Request) error {
 		return realtimeforum.ErrInvalidPassForm
 	}
 
-	age, err := strconv.Atoi(d.Age)
-	if err != nil || age <= 0 || age > 100 {
-		return realtimeforum.ErrInvalidAge
+	if !validBirthDate(d.BirthDate) {
+		return realtimeforum.ErrInvalidBirthDate
 	}
 
 	if d.Gender != "male" && d.Gender != "female" {
