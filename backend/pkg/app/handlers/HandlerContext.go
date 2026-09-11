@@ -20,6 +20,7 @@ type HandlerContext struct {
 	ReactService        service.ReactionService
 	MessageService      service.MessageService
 	NotificationService service.NotificationService
+	GroupService        *service.GroupService
 	Hub                 *pkgwebsocket.Hub
 }
 
