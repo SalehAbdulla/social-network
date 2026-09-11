@@ -83,6 +83,15 @@ func (re *HandlerContext) GetMedia(w http.ResponseWriter, r *http.Request) {
 		re.HandleError(w, r, err)
 		return
 	}
+	allowed, err := re.SocialService.CanViewMedia(id, currentUser(r))
+	if err != nil {
+		re.HandleError(w, r, err)
+		return
+	}
+	if !allowed {
+		re.HandleError(w, r, backend.ErrForbidden)
+		return
+	}
 	w.Header().Set("Content-Type", mime)
 	w.Header().Set("X-Content-Type-Options", "nosniff")
 	w.Header().Set("Cache-Control", "private, max-age=3600")
