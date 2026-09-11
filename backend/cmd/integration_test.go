@@ -18,8 +18,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/gorilla/websocket"
-	"golang.org/x/crypto/bcrypt"
 	"social-network/backend/pkg/app/handlers"
 	"social-network/backend/pkg/app/repositories"
 	"social-network/backend/pkg/app/service"
@@ -31,6 +29,9 @@ import (
 	"social-network/backend/pkg/payload/notification"
 	"social-network/backend/pkg/payload/posts"
 	ws "social-network/backend/pkg/websocket"
+
+	"github.com/gorilla/websocket"
+	"golang.org/x/crypto/bcrypt"
 )
 
 type integrationClient struct {
@@ -109,6 +110,7 @@ func integrationServer(t *testing.T, dev, production bool) (*httptest.Server, *r
 	reactions := service.NewReactionService(repo)
 	hc := handlers.NewHandlerContext(&app, auth, service.NewPostService(repo, reactions), service.NewCommentService(repo), reactions, service.NewMessageService(repo, repo), service.NewNotificationService(repo))
 	hc.SocialService = &service.SocialService{Repo: repo}
+	hc.GroupService = &service.GroupService{Repo: repo}
 	hub := ws.NewHub()
 	hc.SetHub(hub)
 	go hub.Run()
@@ -138,6 +140,27 @@ func TestSocialIntegration(t *testing.T) {
 	dummy.call("POST", "/api/v1/dev/session", map[string]string{}, 200)
 	dummy.call("GET", "/api/v1/auth/me", nil, 200)
 	dummy.call("GET", "/api/v1/posts", nil, 200)
+
+	t.Run("groups", func(t *testing.T) {
+		group := decoded[models.Group](t, dummy.call("POST", "/api/v1/groups", map[string]string{"title": "Integration Group", "description": "A test community"}, 201))
+		if !group.IsOwner || group.MemberCount != 1 {
+			t.Fatalf("unexpected group owner state: %+v", group)
+		}
+		groups := decoded[[]models.Group](t, alex.call("GET", "/api/v1/groups?q=Integration", nil, 200))
+		if len(groups) != 1 || groups[0].GroupID != group.GroupID || groups[0].IsMember {
+			t.Fatalf("unexpected group listing: %+v", groups)
+		}
+		alex.call("POST", "/api/v1/groups/"+strconv.Itoa(group.GroupID)+"/join", nil, 200)
+		requests := decoded[[]models.GroupRequest](t, dummy.call("GET", "/api/v1/groups/"+strconv.Itoa(group.GroupID)+"/requests", nil, 200))
+		if len(requests) != 1 || requests[0].UserID != "alex-id" {
+			t.Fatalf("unexpected group requests: %+v", requests)
+		}
+		dummy.call("PUT", "/api/v1/groups/"+strconv.Itoa(group.GroupID)+"/requests/"+strconv.Itoa(requests[0].RequestID), map[string]string{"status": "accepted"}, 200)
+		members := decoded[[]models.GroupMember](t, alex.call("GET", "/api/v1/groups/"+strconv.Itoa(group.GroupID)+"/members", nil, 200))
+		if len(members) != 2 {
+			t.Fatalf("unexpected group members: %+v", members)
+		}
+	})
 
 	t.Run("profiles and connections", func(t *testing.T) {
 		users := decoded[[]models.SocialUser](t, dummy.call("GET", "/api/v1/users?q=Alex", nil, 200))
