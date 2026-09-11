@@ -1,0 +1,137 @@
+package repositories
+
+import (
+	"database/sql"
+	"strings"
+
+	backend "social-network/backend"
+	"social-network/backend/pkg/models"
+)
+
+func (db *DB) CreateGroup(ownerID, title, description string) (models.Group, error) {
+	tx, err := db.Conn.Begin()
+	if err != nil {
+		return models.Group{}, err
+	}
+	defer tx.Rollback()
+	result, err := tx.Exec("INSERT INTO socialGroup (ownerId,title,description) VALUES (?,?,?)", ownerID, title, description)
+	if err != nil {
+		return models.Group{}, err
+	}
+	id, err := result.LastInsertId()
+	if err != nil {
+		return models.Group{}, err
+	}
+	if _, err = tx.Exec("INSERT INTO socialGroupMember (groupId,userId,role) VALUES (?,?,?)", id, ownerID, "owner"); err != nil {
+		return models.Group{}, err
+	}
+	if err = tx.Commit(); err != nil {
+		return models.Group{}, err
+	}
+	return db.Group(int(id), ownerID)
+}
+
+func (db *DB) Groups(userID, search string, offset int) ([]models.Group, error) {
+	pattern := "%" + strings.ReplaceAll(strings.ReplaceAll(strings.ReplaceAll(search, "\\", "\\\\"), "%", "\\%"), "_", "\\_") + "%"
+	rows, err := db.Conn.Query(`SELECT g.groupId,g.ownerId,trim(u.firstName || ' ' || u.lastName),g.title,g.description,
+        (SELECT COUNT(*) FROM socialGroupMember gm WHERE gm.groupId=g.groupId),
+        EXISTS(SELECT 1 FROM socialGroupMember mine WHERE mine.groupId=g.groupId AND mine.userId=?),
+        EXISTS(SELECT 1 FROM socialGroupMember owner WHERE owner.groupId=g.groupId AND owner.userId=? AND owner.role='owner'),g.createdAt
+        FROM socialGroup g JOIN user u ON u.userId=g.ownerId
+		WHERE g.title LIKE ? ESCAPE '\' OR g.description LIKE ? ESCAPE '\'
+        ORDER BY g.createdAt DESC,g.groupId DESC LIMIT 30 OFFSET ?`, userID, userID, pattern, pattern, offset)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	groups := []models.Group{}
+	for rows.Next() {
+		var group models.Group
+		if err := rows.Scan(&group.GroupID, &group.OwnerID, &group.OwnerName, &group.Title, &group.Description, &group.MemberCount, &group.IsMember, &group.IsOwner, &group.CreatedAt); err != nil {
+			return nil, err
+		}
+		groups = append(groups, group)
+	}
+	return groups, rows.Err()
+}
+
+func (db *DB) Group(groupID int, userID string) (models.Group, error) {
+	var group models.Group
+	err := db.Conn.QueryRow(`SELECT g.groupId,g.ownerId,trim(u.firstName || ' ' || u.lastName),g.title,g.description,
+        (SELECT COUNT(*) FROM socialGroupMember gm WHERE gm.groupId=g.groupId),
+        EXISTS(SELECT 1 FROM socialGroupMember mine WHERE mine.groupId=g.groupId AND mine.userId=?),
+        EXISTS(SELECT 1 FROM socialGroupMember owner WHERE owner.groupId=g.groupId AND owner.userId=? AND owner.role='owner'),g.createdAt
+        FROM socialGroup g JOIN user u ON u.userId=g.ownerId WHERE g.groupId=?`, userID, userID, groupID).
+		Scan(&group.GroupID, &group.OwnerID, &group.OwnerName, &group.Title, &group.Description, &group.MemberCount, &group.IsMember, &group.IsOwner, &group.CreatedAt)
+	if err == sql.ErrNoRows {
+		return group, backend.ErrNotFound
+	}
+	return group, err
+}
+
+func (db *DB) AddGroupRequest(groupID int, userID string) error {
+	_, err := db.Conn.Exec(`INSERT INTO socialGroupRequest (groupId,userId) VALUES (?,?)
+        ON CONFLICT(groupId,userId) DO UPDATE SET status='pending',createdAt=CURRENT_TIMESTAMP`, groupID, userID)
+	return err
+}
+
+func (db *DB) GroupMembers(groupID int) ([]models.GroupMember, error) {
+	rows, err := db.Conn.Query(`SELECT u.userId,u.nickName,u.firstName,u.lastName,COALESCE(u.avatar,''),gm.role,gm.joinedAt
+        FROM socialGroupMember gm JOIN user u ON u.userId=gm.userId WHERE gm.groupId=? ORDER BY gm.role='owner' DESC,gm.joinedAt`, groupID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	members := []models.GroupMember{}
+	for rows.Next() {
+		var member models.GroupMember
+		if err := rows.Scan(&member.UserID, &member.Nickname, &member.FirstName, &member.LastName, &member.Avatar, &member.Role, &member.JoinedAt); err != nil {
+			return nil, err
+		}
+		members = append(members, member)
+	}
+	return members, rows.Err()
+}
+
+func (db *DB) GroupRequests(groupID int) ([]models.GroupRequest, error) {
+	rows, err := db.Conn.Query(`SELECT r.requestId,r.groupId,r.userId,u.nickName,r.status,r.createdAt
+        FROM socialGroupRequest r JOIN user u ON u.userId=r.userId WHERE r.groupId=? AND r.status='pending' ORDER BY r.createdAt`, groupID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	requests := []models.GroupRequest{}
+	for rows.Next() {
+		var request models.GroupRequest
+		if err := rows.Scan(&request.RequestID, &request.GroupID, &request.UserID, &request.Nickname, &request.Status, &request.CreatedAt); err != nil {
+			return nil, err
+		}
+		requests = append(requests, request)
+	}
+	return requests, rows.Err()
+}
+
+func (db *DB) GroupRequestDecision(groupID, requestID int, status string) error {
+	tx, err := db.Conn.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	var userID string
+	err = tx.QueryRow("SELECT userId FROM socialGroupRequest WHERE requestId=? AND groupId=? AND status='pending'", requestID, groupID).Scan(&userID)
+	if err == sql.ErrNoRows {
+		return backend.ErrNotFound
+	}
+	if err != nil {
+		return err
+	}
+	if _, err = tx.Exec("UPDATE socialGroupRequest SET status=? WHERE requestId=?", status, requestID); err != nil {
+		return err
+	}
+	if status == "accepted" {
+		if _, err = tx.Exec("INSERT OR IGNORE INTO socialGroupMember (groupId,userId) VALUES (?,?)", groupID, userID); err != nil {
+			return err
+		}
+	}
+	return tx.Commit()
+}
