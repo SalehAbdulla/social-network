@@ -60,6 +60,10 @@ func (s *SocialService) ValidateTarget(actor, target string) error {
 	return s.Repo.DoesUserExists(target)
 }
 
+func (s *SocialService) CanViewProfile(viewerID, profileID string) (bool, error) {
+	return s.Repo.CanViewPrivateProfile(viewerID, profileID)
+}
+
 func (s *SocialService) AddStory(story models.Story) (int, error) {
 	story.Content = strings.TrimSpace(story.Content)
 	if utf8.RuneCountInString(story.Content) > 1000 || !colorPattern.MatchString(story.BackgroundColor) {
