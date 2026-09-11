@@ -1,10 +1,41 @@
-"use client"
-import React from 'react'
-import {assets} from '../../../public/assets';
+'use client';
+
+import { FormEvent, useState } from 'react';
+import { useRouter } from 'next/navigation';
+import { assets } from '../../../public/assets';
 import { Star } from 'lucide-react';
-import { SignIn } from '@clerk/nextjs';
+import { authRequest, errorMessage } from '../api/social';
 
 const Login = () => {
+  const router = useRouter();
+  const [registering, setRegistering] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+
+  async function submit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setBusy(true);
+    setError('');
+    const values = Object.fromEntries(new FormData(event.currentTarget).entries());
+    try {
+      if (registering) {
+        await authRequest('/auth/register', Object.fromEntries(Object.entries(values).map(([key, value]) => [key, String(value)])));
+      } else {
+        await authRequest('/auth/login', {
+          identifier: String(values.identifier || ''),
+          password: String(values.password || ''),
+          rememberMe: values.rememberMe === 'on' ? 'true' : 'false',
+        });
+      }
+      router.replace('/');
+      router.refresh();
+    } catch (caught) {
+      setError(errorMessage(caught));
+    } finally {
+      setBusy(false);
+    }
+  }
+
   return (
     <div className='min-h-screen flex flex-col md:flex-row'>
       {/*BackGround Image*/}
@@ -27,12 +58,28 @@ const Login = () => {
       </div>
       <span className='md:h-10'></span>
       </div>
-      {/* Right side :Login Form  */}
+      {/* Right side: authentication form */}
       <div className='flex-1 flex items-center justify-center p-6 sm:p-10'>
-        <SignIn routing="hash" />
+        <form onSubmit={submit} className="w-full max-w-md space-y-5 rounded-2xl bg-white/95 p-6 shadow-lg sm:p-8">
+          <div><h2 className="text-2xl font-bold text-brand-deep">{registering ? 'Create your account' : 'Welcome back'}</h2><p className="mt-1 text-sm text-slate-500">{registering ? 'Join the community and start connecting.' : 'Sign in to continue to your network.'}</p></div>
+          {registering ? <>
+            <div className="grid gap-4 sm:grid-cols-2"><Field name="firstName" label="First name" required /><Field name="lastName" label="Last name" required /></div>
+            <div className="grid gap-4 sm:grid-cols-2"><Field name="nickName" label="Nickname" required /><Field name="age" label="Age" type="number" min="1" max="100" required /></div>
+            <Field name="email" label="Email" type="email" required />
+            <div className="grid gap-4 sm:grid-cols-2"><Field name="password" label="Password" type="password" minLength={12} required /><Field name="confirmPassword" label="Confirm password" type="password" minLength={12} required /></div>
+            <label className="block text-sm text-slate-700">Gender<select name="gender" required className="mt-1 w-full rounded-lg border border-slate-200 p-2.5"><option value="">Select gender</option><option value="female">Female</option><option value="male">Male</option></select></label>
+          </> : <><Field name="identifier" label="Email or nickname" required /><Field name="password" label="Password" type="password" required /><label className="flex items-center gap-2 text-sm text-slate-600"><input name="rememberMe" type="checkbox" />Remember me</label></>}
+          {error && <p className="rounded-lg bg-red-50 p-3 text-sm text-red-700" role="alert">{error}</p>}
+          <button disabled={busy} className="w-full rounded-lg bg-blue-600 px-4 py-3 font-medium text-white hover:bg-blue-700 disabled:opacity-50">{busy ? 'Please wait...' : registering ? 'Create account' : 'Sign in'}</button>
+          <button type="button" onClick={() => { setRegistering(!registering); setError(''); }} className="w-full text-sm text-blue-600">{registering ? 'Already have an account? Sign in' : 'Need an account? Register'}</button>
+        </form>
       </div>
     </div>
   )
+}
+
+function Field({ name, label, type = 'text', min, max, minLength, required }: { name: string; label: string; type?: string; min?: string; max?: string; minLength?: number; required?: boolean }) {
+  return <label className="block text-sm text-slate-700">{label}<input name={name} type={type} min={min} max={max} minLength={minLength} required={required} className="mt-1 w-full rounded-lg border border-slate-200 p-2.5" /></label>;
 }
 
 export default Login

@@ -1,6 +1,7 @@
 'use client';
 
 import { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react';
+import { usePathname } from 'next/navigation';
 import axios from 'axios';
 import { Menu } from 'lucide-react';
 import { devUserEnabled, errorMessage, request, type SocialUser, type SocketEvent } from '../api/social';
@@ -24,6 +25,7 @@ export function useBackend() {
 }
 
 export default function BackendProvider({ children }: { children: React.ReactNode }) {
+  const pathname = usePathname();
   const [user, setUser] = useState<SocialUser | null>(null);
   const [error, setError] = useState('');
   const [devEmail, setDevEmail] = useState('dummy@example.com');
@@ -40,7 +42,7 @@ export default function BackendProvider({ children }: { children: React.ReactNod
     try {
       const email = localStorage.getItem('social:dev-user') || 'dummy@example.com';
       const profile = devUserEnabled
-        ? await request<SocialUser>('/dev/session', 'POST', { email })
+        ? await request<SocialUser>('/users/me', 'GET', undefined, undefined, false).catch(() => request<SocialUser>('/dev/session', 'POST', { email }))
         : await request<SocialUser>('/users/me');
       if (revision !== sessionRevision.current) return;
       setUser(profile);
@@ -54,11 +56,12 @@ export default function BackendProvider({ children }: { children: React.ReactNod
   }, []);
 
   useEffect(() => {
+    if (pathname === '/login') return;
     const timer = setTimeout(() => { void initialize(); }, 0);
     const expired = () => { setSocket(null); setError('Your backend session expired. Reconnect to continue.'); };
     window.addEventListener('social:session-expired', expired);
     return () => { sessionRevision.current++; clearTimeout(timer); window.removeEventListener('social:session-expired', expired); };
-  }, [initialize]);
+  }, [initialize, pathname]);
 
   const userId = user?.userId;
   useEffect(() => {
@@ -124,6 +127,7 @@ export default function BackendProvider({ children }: { children: React.ReactNod
     <h1 className="text-xl font-semibold">Couldn&apos;t connect</h1><p>{error}</p>
     <button className="rounded-lg bg-blue-600 px-5 py-2 text-white" onClick={() => void initialize()}>Reconnect</button>
   </div>;
+  if (pathname === '/login') return <>{children}</>;
   if (!user) return <Loading />;
   return <Context.Provider value={{ user, refreshUser, switchUser, connected: socket?.readyState === WebSocket.OPEN, devEmail, sendEvent }}><div key={user.userId} className="flex h-full min-h-screen w-full min-w-0">
     <Sidebar isSideBarOpen={isSideBarOpen} setSideBarOpen={setSideBarOpen} isCollapsed={isCollapsed} setIsCollapsed={setIsCollapsed} />

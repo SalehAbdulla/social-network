@@ -39,7 +39,17 @@ export function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : 'Something went wrong. Please try again.';
 }
 
-export async function request<T>(path: string, method = 'GET', body?: unknown, signal?: AbortSignal): Promise<T> {
+export async function authRequest<T>(path: string, values: Record<string, string>): Promise<T> {
+  const { data } = await api.post<{ success: boolean; data: T; error?: string }>(
+    `/api/v1${path}`,
+    new URLSearchParams(values),
+    { headers: { 'Content-Type': 'application/x-www-form-urlencoded' } },
+  );
+  if (!data.success) throw new Error(data.error || 'Authentication failed');
+  return data.data;
+}
+
+export async function request<T>(path: string, method = 'GET', body?: unknown, signal?: AbortSignal, notifySessionExpired = true): Promise<T> {
   try {
     const { data } = await api.request<{ success: boolean; data: T; error?: string }>({
       url: `/api/v1${path}`, method, data: body, signal,
@@ -47,7 +57,7 @@ export async function request<T>(path: string, method = 'GET', body?: unknown, s
     if (!data.success) throw new Error(data.error || 'Request failed');
     return data.data;
   } catch (error) {
-    if (axios.isAxiosError(error) && error.response?.status === 401 && typeof window !== 'undefined') {
+    if (notifySessionExpired && axios.isAxiosError(error) && error.response?.status === 401 && typeof window !== 'undefined') {
       window.dispatchEvent(new Event('social:session-expired'));
     }
     throw error;
