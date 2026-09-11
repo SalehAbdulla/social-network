@@ -11,7 +11,8 @@ import (
 type AuthRepository interface {
 	DoesEmailExists(email string) error
 	DoesNicknameExists(nickname string) error
-	InsertUser(userID, nickName, firstName, lastName, email, hashedPassword string, yearOfBirth int, gender string) error
+	InsertUser(userID, nickName, firstName, lastName, email, hashedPassword, birthDate string, yearOfBirth int, gender string) error
+	NicknameAvailable(nickname string) (bool, error)
 	GetUserCredentials(identifier string) (string, string, error)
 	GetUserProfile(userID string) (models.UserProfile, error)
 	DoesUserExists(userID string) error
@@ -42,11 +43,11 @@ func (db *DB) DoesNicknameExists(nickname string) error {
 	return nil
 }
 
-func (db *DB) InsertUser(userID, nickName, firstName, lastName, email, hashedPassword string, yearOfBirth int, gender string) error {
+func (db *DB) InsertUser(userID, nickName, firstName, lastName, email, hashedPassword, birthDate string, yearOfBirth int, gender string) error {
 	_, err := db.Conn.Exec(
-		`INSERT INTO user (userId, nickName, firstName, lastName, email, password, birthYear, gender)
-		 VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-		userID, nickName, firstName, lastName, email, hashedPassword, yearOfBirth, gender,
+		`INSERT INTO user (userId, nickName, firstName, lastName, email, password, birthDate, birthYear, gender)
+		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		userID, nickName, firstName, lastName, email, hashedPassword, birthDate, yearOfBirth, gender,
 	)
 	if err != nil {
 		slog.Error("failed to insert user into database",
@@ -54,10 +55,24 @@ func (db *DB) InsertUser(userID, nickName, firstName, lastName, email, hashedPas
 			"nickname", nickName,
 			"error", err,
 		)
+		if nicknameErr := db.DoesNicknameExists(nickName); nicknameErr == realtimeforum.ErrNickName {
+			return nicknameErr
+		}
+		if emailErr := db.DoesEmailExists(email); emailErr == realtimeforum.ErrEmailExists {
+			return emailErr
+		}
 		return realtimeforum.ErrInternal
 	}
 
 	return nil
+}
+
+func (db *DB) NicknameAvailable(nickname string) (bool, error) {
+	var exists int
+	if err := db.Conn.QueryRow("SELECT EXISTS(SELECT 1 FROM user WHERE nickName = ?)", nickname).Scan(&exists); err != nil {
+		return false, realtimeforum.ErrInternal
+	}
+	return exists == 0, nil
 }
 
 func (db *DB) GetUserCredentials(identifier string) (string, string, error) {
@@ -82,9 +97,9 @@ func (db *DB) GetUserProfile(userID string) (models.UserProfile, error) {
 	var profile models.UserProfile
 
 	err := db.Conn.QueryRow(
-		"SELECT userId, nickName, firstName, lastName, email FROM user WHERE userId = ?",
+		"SELECT userId, nickName, firstName, lastName, email, birthDate FROM user WHERE userId = ?",
 		userID,
-	).Scan(&profile.UserID, &profile.Nickname, &profile.FirstName, &profile.LastName, &profile.Email)
+	).Scan(&profile.UserID, &profile.Nickname, &profile.FirstName, &profile.LastName, &profile.Email, &profile.BirthDate)
 	if errors.Is(err, sql.ErrNoRows) {
 		return models.UserProfile{}, realtimeforum.ErrNotFound
 	}
