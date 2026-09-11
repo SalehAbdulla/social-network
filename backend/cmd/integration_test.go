@@ -12,6 +12,7 @@ import (
 	"net/http/cookiejar"
 	"net/http/httptest"
 	"net/url"
+	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -38,6 +39,63 @@ type integrationClient struct {
 	t      *testing.T
 	client *http.Client
 	base   string
+}
+
+func TestPostPrivacyIntegration(t *testing.T) {
+	server, repo := integrationServer(t, true, false)
+	dummy, alex := newIntegrationClient(t, server), newIntegrationClient(t, server)
+	dummy.call("POST", "/api/v1/dev/session", map[string]string{}, 200)
+	alex.call("POST", "/api/v1/dev/session", map[string]string{"email": "alex@example.com"}, 200)
+
+	public := decoded[posts.PostDTO](t, dummy.call("POST", "/api/v1/posts", map[string]any{
+		"title": "Public privacy post", "content": "Everyone can read this post.", "privacy": "public",
+	}, 201))
+	if public.Privacy != "public" {
+		t.Fatalf("expected public privacy, got %q", public.Privacy)
+	}
+	alex.call("GET", "/api/v1/post?id="+strconv.Itoa(public.PostId), nil, 200)
+
+	mediaID := "123e4567-e89b-12d3-a456-426614174000"
+	if err := repo.AddMedia(mediaID, "dummy-id", "image/png"); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(app.UploadDir, mediaID), []byte("png"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	followersOnly := decoded[posts.PostDTO](t, dummy.call("POST", "/api/v1/posts", map[string]any{
+		"title": "Followers privacy post", "content": "Only followers can read this post.", "privacy": "followers",
+		"imageUrls": []string{"/api/v1/media/" + mediaID},
+	}, 201))
+	postPath := "/api/v1/post?id=" + strconv.Itoa(followersOnly.PostId)
+	alex.call("GET", postPath, nil, 404)
+	alex.call("GET", "/api/v1/users/dummy-id/posts", nil, 200)
+	alex.call("GET", "/api/v1/posts/comments?postId="+strconv.Itoa(followersOnly.PostId), nil, 404)
+	alex.call("GET", "/api/v1/media/"+mediaID, nil, 403)
+
+	alex.call("PUT", "/api/v1/users/dummy-id/follow", nil, 200)
+	alex.call("GET", postPath, nil, 200)
+	alex.call("GET", "/api/v1/media/"+mediaID, nil, 200)
+	alex.call("POST", "/api/v1/posts/comments", url.Values{
+		"postId": {strconv.Itoa(followersOnly.PostId)}, "content": {"A visible follower comment"},
+	}, 201)
+
+	selected := decoded[posts.PostDTO](t, dummy.call("POST", "/api/v1/posts", map[string]any{
+		"title": "Selected privacy post", "content": "Only selected followers can read this post.", "privacy": "selected",
+		"selectedFollowerIds": []string{"alex-id"},
+	}, 201))
+	if len(selected.SelectedUsers) != 1 || selected.SelectedUsers[0] != "alex-id" {
+		t.Fatalf("selected audience was not persisted: %+v", selected.SelectedUsers)
+	}
+	alex.call("GET", "/api/v1/post?id="+strconv.Itoa(selected.PostId), nil, 200)
+
+	if err := repo.InsertUser("carol-id", "caroldemo", "Carol", "Demo", "carol@example.com", "hash", "2000-01-01", 2000, "female"); err != nil {
+		t.Fatal(err)
+	}
+	service.DefaultSessionManager.CreateSession("carol-id", "carol-token")
+	serverURL, _ := url.Parse(server.URL)
+	carol := newIntegrationClient(t, server)
+	carol.client.Jar.SetCookies(serverURL, []*http.Cookie{{Name: "session_token", Value: "carol-token", Path: "/"}})
+	carol.call("GET", "/api/v1/post?id="+strconv.Itoa(selected.PostId), nil, 404)
 }
 
 func (c integrationClient) call(method, path string, body any, status int) json.RawMessage {
