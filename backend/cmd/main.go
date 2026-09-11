@@ -63,6 +63,7 @@ func main() {
 
 	hc := handlers.NewHandlerContext(&app, authService, postService, commentService, reactService, messageService, notificationService)
 	hc.SocialService = &service.SocialService{Repo: dbConn}
+	hc.GroupService = &service.GroupService{Repo: dbConn}
 	handlers.SetHandlerContext(hc)
 
 	wsHub := pkgwebsocket.NewHub()
