@@ -10,7 +10,8 @@ export interface SocialUser {
 }
 export interface Post {
   postId: number; userId: string; nickname: string; title: string; content: string;
-  imageUrls: string[]; score: number; userScore: number; commentsCounter: number; createdAt: string; updatedAt: string;
+  imageUrls: string[]; privacy: 'public' | 'followers' | 'selected'; selectedFollowerIds?: string[];
+  score: number; userScore: number; commentsCounter: number; createdAt: string; updatedAt: string;
 }
 export interface Page<T> { posts: T[]; totalPages: number; totalElements: number; lastPage: boolean }
 export interface Comment {
