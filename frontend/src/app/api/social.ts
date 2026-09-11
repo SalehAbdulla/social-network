@@ -5,7 +5,7 @@ export const devUserEnabled = process.env.NODE_ENV !== 'production' && process.e
 
 export interface SocialUser {
   userId: string; nickname: string; firstName: string; lastName: string;
-  bio: string; avatar: string; coverPhoto: string; location: string; createdAt: string;
+  bio: string; avatar: string; coverPhoto: string; location: string; isPublic: boolean; createdAt: string;
   followers: string[]; following: string[]; connections: string[]; pending: string[]; requested: string[];
 }
 export interface Post {
