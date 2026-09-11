@@ -11,6 +11,7 @@ func routes() http.Handler {
 
 	mux.HandleFunc("POST /api/v1/auth/register", handlers.HandlerCtx.Register)
 	mux.HandleFunc("POST /api/v1/auth/login", handlers.HandlerCtx.Login)
+	mux.HandleFunc("GET /api/v1/auth/nickname-availability", handlers.HandlerCtx.NicknameAvailability)
 
 	mux.Handle("POST /api/v1/auth/logout", pkgmiddleware.AuthMiddleware(http.HandlerFunc(handlers.HandlerCtx.Logout)))
 	mux.Handle("GET /api/v1/auth/me", pkgmiddleware.AuthMiddleware(http.HandlerFunc(handlers.HandlerCtx.Me)))
