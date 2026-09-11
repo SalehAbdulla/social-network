@@ -64,6 +64,10 @@ func (s *SocialService) CanViewProfile(viewerID, profileID string) (bool, error)
 	return s.Repo.CanViewPrivateProfile(viewerID, profileID)
 }
 
+func (s *SocialService) CanViewMedia(mediaID, viewerID string) (bool, error) {
+	return s.Repo.CanViewMedia(mediaID, viewerID)
+}
+
 func (s *SocialService) AddStory(story models.Story) (int, error) {
 	story.Content = strings.TrimSpace(story.Content)
 	if utf8.RuneCountInString(story.Content) > 1000 || !colorPattern.MatchString(story.BackgroundColor) {
