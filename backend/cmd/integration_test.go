@@ -101,7 +101,7 @@ func integrationServer(t *testing.T, dev, production bool) (*httptest.Server, *r
 	repo := &repositories.DB{Conn: database}
 	hash, _ := bcrypt.GenerateFromPassword([]byte("DummyUser123!"), bcrypt.MinCost)
 	for _, u := range []struct{ id, email, nick, first string }{{"dummy-id", "dummy@example.com", "dummyuser", "Dummy"}, {"alex-id", "alex@example.com", "alexdemo", "Alex"}} {
-		if err := repo.InsertUser(u.id, u.nick, u.first, "User", u.email, string(hash), 2000, "male"); err != nil {
+		if err := repo.InsertUser(u.id, u.nick, u.first, "User", u.email, string(hash), "2000-01-01", 2000, "male"); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -140,6 +140,18 @@ func TestSocialIntegration(t *testing.T) {
 	dummy.call("POST", "/api/v1/dev/session", map[string]string{}, 200)
 	dummy.call("GET", "/api/v1/auth/me", nil, 200)
 	dummy.call("GET", "/api/v1/posts", nil, 200)
+	availability := decoded[map[string]bool](t, dummy.call("GET", "/api/v1/auth/nickname-availability?nickname=dummyuser", nil, 200))
+	if availability["available"] {
+		t.Fatal("existing nickname reported as available")
+	}
+	availability = decoded[map[string]bool](t, dummy.call("GET", "/api/v1/auth/nickname-availability?nickname=new_user_42", nil, 200))
+	if !availability["available"] {
+		t.Fatal("unused nickname reported as unavailable")
+	}
+	dummy.call("POST", "/api/v1/auth/register", url.Values{
+		"nickName": {"young_user"}, "email": {"young@example.com"}, "firstName": {"Young"}, "lastName": {"User"},
+		"password": {"ValidPassword!123"}, "confirmPassword": {"ValidPassword!123"}, "birthDate": {"2015-01-01"}, "gender": {"male"},
+	}, 400)
 
 	t.Run("groups", func(t *testing.T) {
 		group := decoded[models.Group](t, dummy.call("POST", "/api/v1/groups", map[string]string{"title": "Integration Group", "description": "A test community"}, 201))
