@@ -24,6 +24,15 @@ type logoutResponse struct {
 	Message string `json:"message"`
 }
 
+func (re *HandlerContext) NicknameAvailability(w http.ResponseWriter, r *http.Request) {
+	available, err := re.AuthService.NicknameAvailable(r.URL.Query().Get("nickname"))
+	if err != nil {
+		re.HandleError(w, r, err)
+		return
+	}
+	respond(w, http.StatusOK, map[string]bool{"available": available})
+}
+
 func (re *HandlerContext) Register(w http.ResponseWriter, r *http.Request) {
 	var req user.RegisterRequestDTO
 
@@ -90,7 +99,7 @@ func (re *HandlerContext) Login(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if rememberMe {
-		cookie.MaxAge = 60 * 60 * 24 * 30 
+		cookie.MaxAge = 60 * 60 * 24 * 30
 	}
 
 	http.SetCookie(w, cookie)
