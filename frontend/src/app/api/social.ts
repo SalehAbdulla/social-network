@@ -52,6 +52,14 @@ export async function authRequest<T>(path: string, values: Record<string, string
   return data.data;
 }
 
+export async function nicknameAvailability(nickname: string): Promise<boolean> {
+  const { data } = await api.get<{ success: boolean; data: { available: boolean }; error?: string }>(
+    `/api/v1/auth/nickname-availability?nickname=${encodeURIComponent(nickname)}`,
+  );
+  if (!data.success) throw new Error(data.error || 'Could not check nickname availability');
+  return data.data.available;
+}
+
 export async function request<T>(path: string, method = 'GET', body?: unknown, signal?: AbortSignal, notifySessionExpired = true): Promise<T> {
   try {
     const { data } = await api.request<{ success: boolean; data: T; error?: string }>({
