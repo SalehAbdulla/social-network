@@ -30,6 +30,9 @@ export interface Notification {
   notificationId: number; actorId: string; actorNickname: string; entityType: string; entityId: number; postId?: number; isRead: number; createdAt: string;
 }
 export type Connections = Record<'followers' | 'following' | 'connections' | 'pending' | 'requested', SocialUser[]>;
+export interface Group { groupId: number; ownerId: string; ownerName: string; title: string; description: string; memberCount: number; isMember: boolean; isOwner: boolean; createdAt: string }
+export interface GroupMember { userId: string; nickname: string; firstName: string; lastName: string; avatar: string; role: string; joinedAt: string }
+export interface GroupRequest { requestId: number; groupId: number; userId: string; nickname: string; status: string; createdAt: string }
 export interface SocketEvent { type: string; payload: Record<string, unknown> }
 
 export function errorMessage(error: unknown): string {
