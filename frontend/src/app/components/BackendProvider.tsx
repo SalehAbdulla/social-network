@@ -2,8 +2,10 @@
 
 import { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react';
 import axios from 'axios';
+import { Menu } from 'lucide-react';
 import { devUserEnabled, errorMessage, request, type SocialUser, type SocketEvent } from '../api/social';
 import Loading from './Loading';
+import Sidebar from './SideBar';
 
 interface Session {
   user: SocialUser;
@@ -26,6 +28,8 @@ export default function BackendProvider({ children }: { children: React.ReactNod
   const [error, setError] = useState('');
   const [devEmail, setDevEmail] = useState('dummy@example.com');
   const [socket, setSocket] = useState<WebSocket | null>(null);
+  const [isSideBarOpen, setSideBarOpen] = useState(true);
+  const [isCollapsed, setIsCollapsed] = useState(false);
   const sessionRevision = useRef(0);
 
   const initialize = useCallback(async () => {
@@ -121,5 +125,11 @@ export default function BackendProvider({ children }: { children: React.ReactNod
     <button className="rounded-lg bg-blue-600 px-5 py-2 text-white" onClick={() => void initialize()}>Reconnect</button>
   </div>;
   if (!user) return <Loading />;
-  return <Context.Provider value={{ user, refreshUser, switchUser, connected: socket?.readyState === WebSocket.OPEN, devEmail, sendEvent }}><div key={user.userId} className="flex h-full min-h-screen w-full min-w-0">{children}</div></Context.Provider>;
+  return <Context.Provider value={{ user, refreshUser, switchUser, connected: socket?.readyState === WebSocket.OPEN, devEmail, sendEvent }}><div key={user.userId} className="flex h-full min-h-screen w-full min-w-0">
+    <Sidebar isSideBarOpen={isSideBarOpen} setSideBarOpen={setSideBarOpen} isCollapsed={isCollapsed} setIsCollapsed={setIsCollapsed} />
+    <main className="relative min-w-0 flex-1">
+      <button aria-label="Open navigation" onClick={() => setSideBarOpen(true)} className="fixed left-4 top-4 z-30 rounded-lg border border-slate-200 bg-white p-2 shadow-sm sm:hidden"><Menu size={20} /></button>
+      {children}
+    </main>
+  </div></Context.Provider>;
 }

@@ -1,6 +1,6 @@
 import "./globals.css";
 import { Metadata } from "next";
-import ClientLayoutWrapper from "./components/ClientLayoutWrapper";
+import BackendProvider from "./components/BackendProvider";
 
 export const metadata: Metadata = {
   title: "Social Network",
@@ -21,7 +21,7 @@ export default function RootLayout({
       className="h-full antialiased"
     >
       <body className="min-h-full h-full flex bg-gray-100">
-        <ClientLayoutWrapper>{children}</ClientLayoutWrapper>
+        <BackendProvider>{children}</BackendProvider>
       </body>
     </html>
   );
