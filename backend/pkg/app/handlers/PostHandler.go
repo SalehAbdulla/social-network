@@ -115,9 +115,11 @@ func (re *HandlerContext) GetPosts(w http.ResponseWriter, r *http.Request) {
 }
 
 type CreatePostRequest struct {
-	Title     string   `json:"title"`
-	Content   string   `json:"content"`
-	ImageURLs []string `json:"imageUrls"`
+	Title         string   `json:"title"`
+	Content       string   `json:"content"`
+	Privacy       string   `json:"privacy"`
+	SelectedUsers []string `json:"selectedFollowerIds"`
+	ImageURLs     []string `json:"imageUrls"`
 }
 
 func (re *HandlerContext) DeletePost(w http.ResponseWriter, r *http.Request) {
@@ -207,7 +209,7 @@ func (re *HandlerContext) CreatePost(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-	response, err := re.PostService.CreatePost(userID, title, content, req.ImageURLs...)
+	response, err := re.PostService.CreatePost(userID, title, content, req.Privacy, req.SelectedUsers, req.ImageURLs...)
 	if err != nil {
 		re.HandleError(w, r, err)
 		return
