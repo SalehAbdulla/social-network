@@ -8,13 +8,14 @@ import (
 	"strings"
 	"unicode/utf8"
 
-	"github.com/google/uuid"
 	backend "social-network/backend"
 	"social-network/backend/pkg/app/service"
 	"social-network/backend/pkg/middleware"
 	"social-network/backend/pkg/models"
 	"social-network/backend/pkg/payload"
 	"social-network/backend/pkg/payload/posts"
+
+	"github.com/google/uuid"
 )
 
 func respond(w http.ResponseWriter, status int, data any) {
@@ -185,7 +186,7 @@ func (re *HandlerContext) ProfilePosts(w http.ResponseWriter, r *http.Request) {
 		re.HandleError(w, r, backend.ErrForbidden)
 		return
 	}
-	ids, err := re.SocialService.Repo.ProfilePostIDs(id, r.URL.Query().Get("liked") == "true", offset)
+	ids, err := re.SocialService.Repo.ProfilePostIDs(id, r.URL.Query().Get("liked") == "true", offset, currentUser(r))
 	if err != nil {
 		re.HandleError(w, r, err)
 		return
