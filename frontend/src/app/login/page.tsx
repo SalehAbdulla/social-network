@@ -1,16 +1,34 @@
 'use client';
 
-import { FormEvent, useState } from 'react';
+import { FormEvent, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { assets } from '../../../public/assets';
 import { Star } from 'lucide-react';
-import { authRequest, errorMessage } from '../api/social';
+import { authRequest, errorMessage, nicknameAvailability } from '../api/social';
 
 const Login = () => {
   const router = useRouter();
   const [registering, setRegistering] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
+  const [nickname, setNickname] = useState('');
+  const [nicknameState, setNicknameState] = useState<'idle' | 'checking' | 'available' | 'taken' | 'invalid'>('idle');
+  const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+
+  useEffect(() => {
+    if (!registering) return;
+    const normalized = nickname.trim().toLowerCase();
+    if (!/^[a-z0-9_]{2,33}$/.test(normalized)) {
+      setNicknameState(normalized ? 'invalid' : 'idle');
+      return;
+    }
+    setNicknameState('checking');
+    const timer = window.setTimeout(() => {
+      void nicknameAvailability(normalized).then(available => setNicknameState(available ? 'available' : 'taken')).catch(() => setNicknameState('idle'));
+    }, 350);
+    return () => window.clearTimeout(timer);
+  }, [nickname, registering]);
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -19,6 +37,8 @@ const Login = () => {
     const values = Object.fromEntries(new FormData(event.currentTarget).entries());
     try {
       if (registering) {
+        if (nicknameState !== 'available') throw new Error(nicknameState === 'taken' ? 'This nickname is already reserved.' : 'Enter an available nickname.');
+        if (password !== confirmPassword) throw new Error('Passwords do not match.');
         await authRequest('/auth/register', Object.fromEntries(Object.entries(values).map(([key, value]) => [key, String(value)])));
       } else {
         await authRequest('/auth/login', {
@@ -64,9 +84,9 @@ const Login = () => {
           <div><h2 className="text-2xl font-bold text-brand-deep">{registering ? 'Create your account' : 'Welcome back'}</h2><p className="mt-1 text-sm text-slate-500">{registering ? 'Join the community and start connecting.' : 'Sign in to continue to your network.'}</p></div>
           {registering ? <>
             <div className="grid gap-4 sm:grid-cols-2"><Field name="firstName" label="First name" required /><Field name="lastName" label="Last name" required /></div>
-            <div className="grid gap-4 sm:grid-cols-2"><Field name="nickName" label="Nickname" required /><Field name="age" label="Age" type="number" min="1" max="100" required /></div>
+            <div className="grid gap-4 sm:grid-cols-2"><label className="block text-sm text-slate-700">Nickname<input name="nickName" value={nickname} onChange={event => setNickname(event.target.value)} required minLength={2} maxLength={33} pattern="[a-zA-Z0-9_]+" className="mt-1 w-full rounded-lg border border-slate-200 p-2.5" />{nicknameState === 'checking' && <span className="text-xs text-slate-500">Checking availability...</span>}{nicknameState === 'available' && <span className="text-xs text-teal-700">Nickname is available.</span>}{(nicknameState === 'taken' || nicknameState === 'invalid') && <span className="text-xs text-red-700">{nicknameState === 'taken' ? 'Nickname is already reserved.' : 'Use 2-33 letters, numbers, or underscores.'}</span>}</label><Field name="birthDate" label="Date of birth" type="date" min={dateYearsAgo(100)} max={dateYearsAgo(13)} required /></div>
             <Field name="email" label="Email" type="email" required />
-            <div className="grid gap-4 sm:grid-cols-2"><Field name="password" label="Password" type="password" minLength={12} required /><Field name="confirmPassword" label="Confirm password" type="password" minLength={12} required /></div>
+            <div className="grid gap-4 sm:grid-cols-2"><Field name="password" label="Password" type="password" minLength={12} required onChange={setPassword} /><Field name="confirmPassword" label="Confirm password" type="password" minLength={12} required onChange={setConfirmPassword} /></div>
             <label className="block text-sm text-slate-700">Gender<select name="gender" required className="mt-1 w-full rounded-lg border border-slate-200 p-2.5"><option value="">Select gender</option><option value="female">Female</option><option value="male">Male</option></select></label>
           </> : <><Field name="identifier" label="Email or nickname" required /><Field name="password" label="Password" type="password" required /><label className="flex items-center gap-2 text-sm text-slate-600"><input name="rememberMe" type="checkbox" />Remember me</label></>}
           {error && <p className="rounded-lg bg-red-50 p-3 text-sm text-red-700" role="alert">{error}</p>}
@@ -78,8 +98,14 @@ const Login = () => {
   )
 }
 
-function Field({ name, label, type = 'text', min, max, minLength, required }: { name: string; label: string; type?: string; min?: string; max?: string; minLength?: number; required?: boolean }) {
-  return <label className="block text-sm text-slate-700">{label}<input name={name} type={type} min={min} max={max} minLength={minLength} required={required} className="mt-1 w-full rounded-lg border border-slate-200 p-2.5" /></label>;
+function dateYearsAgo(years: number) {
+  const date = new Date();
+  date.setFullYear(date.getFullYear() - years);
+  return date.toISOString().slice(0, 10);
+}
+
+function Field({ name, label, type = 'text', min, max, minLength, required, onChange }: { name: string; label: string; type?: string; min?: string; max?: string; minLength?: number; required?: boolean; onChange?: (value: string) => void }) {
+  return <label className="block text-sm text-slate-700">{label}<input name={name} type={type} min={min} max={max} minLength={minLength} required={required} onChange={event => onChange?.(event.target.value)} className="mt-1 w-full rounded-lg border border-slate-200 p-2.5" /></label>;
 }
 
 export default Login
