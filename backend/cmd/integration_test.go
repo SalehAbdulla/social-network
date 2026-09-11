@@ -175,6 +175,22 @@ func TestSocialIntegration(t *testing.T) {
 	})
 
 	t.Run("profiles and connections", func(t *testing.T) {
+		privateProfile := decoded[models.SocialUser](t, dummy.call("GET", "/api/v1/users/me", nil, 200))
+		privateProfile.IsPublic = false
+		dummy.call("PUT", "/api/v1/users/me", privateProfile, 200)
+		redacted := decoded[models.SocialUser](t, alex.call("GET", "/api/v1/users/dummy-id", nil, 200))
+		if redacted.Bio != "" || len(redacted.Followers) != 0 {
+			t.Fatal("private profile exposed details to a non-follower")
+		}
+		alex.call("GET", "/api/v1/users/dummy-id/posts", nil, 403)
+		alex.call("PUT", "/api/v1/users/dummy-id/follow", nil, 200)
+		visible := decoded[models.SocialUser](t, alex.call("GET", "/api/v1/users/dummy-id", nil, 200))
+		if visible.Bio != privateProfile.Bio || len(visible.Followers) != 1 {
+			t.Fatal("follower could not view private profile")
+		}
+		dummy.call("PUT", "/api/v1/users/alex-id/follow", nil, 200)
+		privateProfile.IsPublic = true
+		dummy.call("PUT", "/api/v1/users/me", privateProfile, 200)
 		users := decoded[[]models.SocialUser](t, dummy.call("GET", "/api/v1/users?q=Alex", nil, 200))
 		if len(users) != 1 || users[0].UserID != "alex-id" {
 			t.Fatalf("unexpected discovery: %+v", users)
