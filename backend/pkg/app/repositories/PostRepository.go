@@ -6,14 +6,18 @@ import (
 )
 
 type PostRepository interface {
-	GetPosts(pageNumber int, pageSize int, sortBy string, sortOrder string) ([]models.Post, int, error)
+	GetPosts(pageNumber int, pageSize int, sortBy string, sortOrder string, viewerID string) ([]models.Post, int, error)
 	CreatePost(post models.Post) (models.Post, error)
 	DoesPostExists(postId int) error
-	GetPostByID(postId int) (models.Post, error)
+	GetPostByID(postId int, viewerID string) (models.Post, error)
+	CanViewPost(postID int, viewerID string) (bool, error)
+	ValidateSelectedFollowers(ownerID string, selectedIDs []string) error
 	DeletePost(postId int, userId string) error
 }
 
-func (db *DB) GetPosts(pageNumber int, pageSize int, sortBy string, sortOrder string) ([]models.Post, int, error) {
+const postVisibility = `(p.privacy = 'public' OR p.userId = ? OR (p.privacy = 'followers' AND EXISTS (SELECT 1 FROM follow f WHERE f.followerId = ? AND f.followedId = p.userId)) OR (p.privacy = 'selected' AND EXISTS (SELECT 1 FROM post_selected_follower psf WHERE psf.postId = p.postId AND psf.userId = ?)))`
+
+func (db *DB) GetPosts(pageNumber int, pageSize int, sortBy string, sortOrder string, viewerID string) ([]models.Post, int, error) {
 	validSortColumns := map[string]string{
 		"createdat": "p.createdAt",
 		"title":     "p.title",
@@ -36,7 +40,7 @@ func (db *DB) GetPosts(pageNumber int, pageSize int, sortBy string, sortOrder st
 	}
 
 	var totalElements int
-	err := db.Conn.QueryRow("SELECT COUNT(*) FROM post").Scan(&totalElements)
+	err := db.Conn.QueryRow("SELECT COUNT(*) FROM post p WHERE "+postVisibility, viewerID, viewerID, viewerID).Scan(&totalElements)
 	if err != nil {
 		return nil, 0, err
 	}
@@ -44,16 +48,17 @@ func (db *DB) GetPosts(pageNumber int, pageSize int, sortBy string, sortOrder st
 	offset := (pageNumber - 1) * pageSize
 
 	query := `
-		SELECT p.postId, p.userId, u.nickName, p.title, p.content,
+		SELECT p.postId, p.userId, p.privacy, u.nickName, p.title, p.content,
 			   p.score, p.commentsCounter,
 			   p.createdAt, p.updatedAt, p.imageUrls
 		FROM post p
 		JOIN user u ON p.userId = u.userId
+		WHERE ` + postVisibility + `
 		ORDER BY ` + column + ` ` + order + `
 		LIMIT ? OFFSET ?
 	`
 
-	rows, err := db.Conn.Query(query, pageSize, offset)
+	rows, err := db.Conn.Query(query, viewerID, viewerID, viewerID, pageSize, offset)
 	if err != nil {
 		return nil, 0, err
 	}
@@ -65,6 +70,7 @@ func (db *DB) GetPosts(pageNumber int, pageSize int, sortBy string, sortOrder st
 		err := rows.Scan(
 			&post.PostId,
 			&post.UserId,
+			&post.Privacy,
 			&post.Nickname,
 			&post.Title,
 			&post.Content,
@@ -76,6 +82,12 @@ func (db *DB) GetPosts(pageNumber int, pageSize int, sortBy string, sortOrder st
 		)
 		if err != nil {
 			return nil, 0, err
+		}
+		if post.UserId == viewerID {
+			post.SelectedUsers, err = db.selectedUsers(post.PostId)
+			if err != nil {
+				return nil, 0, err
+			}
 		}
 		posts = append(posts, post)
 	}
@@ -103,18 +115,19 @@ func (db *DB) DoesPostExists(postId int) error {
 	return nil
 }
 
-func (db *DB) GetPostByID(postId int) (models.Post, error) {
+func (db *DB) GetPostByID(postId int, viewerID string) (models.Post, error) {
 	var post models.Post
 	err := db.Conn.QueryRow(
-		`SELECT p.postId, p.userId, u.nickName, p.title, p.content,
+		`SELECT p.postId, p.userId, p.privacy, u.nickName, p.title, p.content,
 				p.score, p.commentsCounter,
 				p.createdAt, p.updatedAt, p.imageUrls
 		FROM post p
 		JOIN user u ON p.userId = u.userId
-		WHERE p.postId = ?`, postId,
+			WHERE p.postId = ? AND `+postVisibility, postId, viewerID, viewerID, viewerID,
 	).Scan(
 		&post.PostId,
 		&post.UserId,
+		&post.Privacy,
 		&post.Nickname,
 		&post.Title,
 		&post.Content,
@@ -127,7 +140,36 @@ func (db *DB) GetPostByID(postId int) (models.Post, error) {
 	if err != nil {
 		return models.Post{}, realtimeforum.ErrNotFound
 	}
+	if post.UserId == viewerID {
+		post.SelectedUsers, err = db.selectedUsers(post.PostId)
+		if err != nil {
+			return models.Post{}, err
+		}
+	}
 	return post, nil
+}
+
+func (db *DB) CanViewPost(postID int, viewerID string) (bool, error) {
+	var allowed bool
+	err := db.Conn.QueryRow("SELECT EXISTS(SELECT 1 FROM post p WHERE p.postId = ? AND "+postVisibility+")", postID, viewerID, viewerID, viewerID).Scan(&allowed)
+	return allowed, err
+}
+
+func (db *DB) ValidateSelectedFollowers(ownerID string, selectedIDs []string) error {
+	for _, selectedID := range selectedIDs {
+		var exists bool
+		if err := db.Conn.QueryRow("SELECT EXISTS(SELECT 1 FROM follow WHERE followerId = ? AND followedId = ?)", selectedID, ownerID).Scan(&exists); err != nil {
+			return err
+		}
+		if !exists {
+			return realtimeforum.ErrBadRequest
+		}
+	}
+	return nil
+}
+
+func (db *DB) selectedUsers(postID int) ([]string, error) {
+	return db.stringList("SELECT userId FROM post_selected_follower WHERE postId = ? ORDER BY userId", postID)
 }
 
 func (db *DB) DeletePost(postId int, userId string) error {
@@ -148,9 +190,9 @@ func (db *DB) DeletePost(postId int, userId string) error {
 func (db *DB) CreatePost(post models.Post) (models.Post, error) {
 	now := "datetime('now')"
 	result, err := db.Conn.Exec(
-		`INSERT INTO post (userId, title, content, score, commentsCounter, createdAt, updatedAt, imageUrls)
-		 VALUES (?, ?, ?, 0, 0, `+now+`, `+now+`, ?)`,
-		post.UserId, post.Title, post.Content, post.ImageURLs,
+		`INSERT INTO post (userId, title, content, privacy, score, commentsCounter, createdAt, updatedAt, imageUrls)
+		 VALUES (?, ?, ?, ?, 0, 0, `+now+`, `+now+`, ?)`,
+		post.UserId, post.Title, post.Content, post.Privacy, post.ImageURLs,
 	)
 	if err != nil {
 		return models.Post{}, err
@@ -162,7 +204,7 @@ func (db *DB) CreatePost(post models.Post) (models.Post, error) {
 	}
 
 	err = db.Conn.QueryRow(
-		`SELECT p.postId, p.userId, u.nickName, p.title, p.content,
+		`SELECT p.postId, p.userId, p.privacy, u.nickName, p.title, p.content,
 				p.score, p.commentsCounter,
 				p.createdAt, p.updatedAt, p.imageUrls
 		FROM post p
@@ -171,6 +213,7 @@ func (db *DB) CreatePost(post models.Post) (models.Post, error) {
 	).Scan(
 		&post.PostId,
 		&post.UserId,
+		&post.Privacy,
 		&post.Nickname,
 		&post.Title,
 		&post.Content,
@@ -180,6 +223,15 @@ func (db *DB) CreatePost(post models.Post) (models.Post, error) {
 		&post.UpdatedAt,
 		&post.ImageURLs,
 	)
+	if err != nil {
+		return models.Post{}, err
+	}
+	for _, selectedID := range post.SelectedUsers {
+		if _, err := db.Conn.Exec("INSERT INTO post_selected_follower(postId,userId) VALUES (?,?)", postID, selectedID); err != nil {
+			return models.Post{}, err
+		}
+	}
+	post.SelectedUsers, err = db.selectedUsers(post.PostId)
 	if err != nil {
 		return models.Post{}, err
 	}
