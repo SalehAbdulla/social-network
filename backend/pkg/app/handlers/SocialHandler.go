@@ -122,6 +122,15 @@ func (re *HandlerContext) UserProfile(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if id != currentUser(r) {
+		visible, err := re.SocialService.CanViewProfile(currentUser(r), id)
+		if err != nil {
+			re.HandleError(w, r, err)
+			return
+		}
+		if !visible {
+			u.FirstName, u.LastName, u.Bio, u.Avatar, u.CoverPhoto, u.Location = "", "", "", "", "", ""
+			u.Followers, u.Following, u.Connections = []string{}, []string{}, []string{}
+		}
 		u.Pending, u.Requested = []string{}, []string{}
 	}
 	respond(w, http.StatusOK, u)
@@ -165,6 +174,15 @@ func (re *HandlerContext) ProfilePosts(w http.ResponseWriter, r *http.Request) {
 	}
 	if err := re.SocialService.Repo.DoesUserExists(id); err != nil {
 		re.HandleError(w, r, err)
+		return
+	}
+	visible, err := re.SocialService.CanViewProfile(currentUser(r), id)
+	if err != nil {
+		re.HandleError(w, r, err)
+		return
+	}
+	if !visible {
+		re.HandleError(w, r, backend.ErrForbidden)
 		return
 	}
 	ids, err := re.SocialService.Repo.ProfilePostIDs(id, r.URL.Query().Get("liked") == "true", offset)
