@@ -7,8 +7,9 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/google/uuid"
 	backend "social-network/backend"
+
+	"github.com/google/uuid"
 )
 
 const maxUpload = 50 << 20
