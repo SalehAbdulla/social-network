@@ -249,6 +249,16 @@ func TestSocialIntegration(t *testing.T) {
 			t.Fatalf("unexpected group listing: %+v", groups)
 		}
 		alex.call("POST", "/api/v1/groups/"+strconv.Itoa(group.GroupID)+"/join", nil, 200)
+		pendingGroup := decoded[models.Group](t, alex.call("GET", "/api/v1/groups/"+strconv.Itoa(group.GroupID), nil, 200))
+		groups = decoded[[]models.Group](t, alex.call("GET", "/api/v1/groups?q=Integration", nil, 200))
+		if !pendingGroup.JoinRequested || !groups[0].JoinRequested || pendingGroup.IsMember {
+			t.Fatalf("join request state was not persisted: %+v", pendingGroup)
+		}
+		ownerGroup := decoded[models.Group](t, dummy.call("GET", "/api/v1/groups/"+strconv.Itoa(group.GroupID), nil, 200))
+		if ownerGroup.JoinRequested {
+			t.Fatal("another user's request was exposed as the owner's own request")
+		}
+		alex.call("POST", "/api/v1/groups/"+strconv.Itoa(group.GroupID)+"/join", nil, 200)
 		requests := decoded[[]models.GroupRequest](t, dummy.call("GET", "/api/v1/groups/"+strconv.Itoa(group.GroupID)+"/requests", nil, 200))
 		if len(requests) != 1 || requests[0].UserID != "alex-id" {
 			t.Fatalf("unexpected group requests: %+v", requests)
@@ -257,6 +267,10 @@ func TestSocialIntegration(t *testing.T) {
 		members := decoded[[]models.GroupMember](t, alex.call("GET", "/api/v1/groups/"+strconv.Itoa(group.GroupID)+"/members", nil, 200))
 		if len(members) != 2 {
 			t.Fatalf("unexpected group members: %+v", members)
+		}
+		acceptedGroup := decoded[models.Group](t, alex.call("GET", "/api/v1/groups/"+strconv.Itoa(group.GroupID), nil, 200))
+		if acceptedGroup.JoinRequested || !acceptedGroup.IsMember || acceptedGroup.MemberCount != 2 {
+			t.Fatalf("accepted request state is incorrect: %+v", acceptedGroup)
 		}
 	})
 

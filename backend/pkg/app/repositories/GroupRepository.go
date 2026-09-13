@@ -36,10 +36,11 @@ func (db *DB) Groups(userID, search string, offset int) ([]models.Group, error) 
 	rows, err := db.Conn.Query(`SELECT g.groupId,g.ownerId,trim(u.firstName || ' ' || u.lastName),g.title,g.description,
         (SELECT COUNT(*) FROM socialGroupMember gm WHERE gm.groupId=g.groupId),
         EXISTS(SELECT 1 FROM socialGroupMember mine WHERE mine.groupId=g.groupId AND mine.userId=?),
-        EXISTS(SELECT 1 FROM socialGroupMember owner WHERE owner.groupId=g.groupId AND owner.userId=? AND owner.role='owner'),g.createdAt
+        EXISTS(SELECT 1 FROM socialGroupMember owner WHERE owner.groupId=g.groupId AND owner.userId=? AND owner.role='owner'),
+        EXISTS(SELECT 1 FROM socialGroupRequest pending WHERE pending.groupId=g.groupId AND pending.userId=? AND pending.status='pending'),g.createdAt
         FROM socialGroup g JOIN user u ON u.userId=g.ownerId
 		WHERE g.title LIKE ? ESCAPE '\' OR g.description LIKE ? ESCAPE '\'
-        ORDER BY g.createdAt DESC,g.groupId DESC LIMIT 30 OFFSET ?`, userID, userID, pattern, pattern, offset)
+        ORDER BY g.createdAt DESC,g.groupId DESC LIMIT 30 OFFSET ?`, userID, userID, userID, pattern, pattern, offset)
 	if err != nil {
 		return nil, err
 	}
@@ -47,7 +48,7 @@ func (db *DB) Groups(userID, search string, offset int) ([]models.Group, error) 
 	groups := []models.Group{}
 	for rows.Next() {
 		var group models.Group
-		if err := rows.Scan(&group.GroupID, &group.OwnerID, &group.OwnerName, &group.Title, &group.Description, &group.MemberCount, &group.IsMember, &group.IsOwner, &group.CreatedAt); err != nil {
+		if err := rows.Scan(&group.GroupID, &group.OwnerID, &group.OwnerName, &group.Title, &group.Description, &group.MemberCount, &group.IsMember, &group.IsOwner, &group.JoinRequested, &group.CreatedAt); err != nil {
 			return nil, err
 		}
 		groups = append(groups, group)
@@ -60,9 +61,10 @@ func (db *DB) Group(groupID int, userID string) (models.Group, error) {
 	err := db.Conn.QueryRow(`SELECT g.groupId,g.ownerId,trim(u.firstName || ' ' || u.lastName),g.title,g.description,
         (SELECT COUNT(*) FROM socialGroupMember gm WHERE gm.groupId=g.groupId),
         EXISTS(SELECT 1 FROM socialGroupMember mine WHERE mine.groupId=g.groupId AND mine.userId=?),
-        EXISTS(SELECT 1 FROM socialGroupMember owner WHERE owner.groupId=g.groupId AND owner.userId=? AND owner.role='owner'),g.createdAt
-        FROM socialGroup g JOIN user u ON u.userId=g.ownerId WHERE g.groupId=?`, userID, userID, groupID).
-		Scan(&group.GroupID, &group.OwnerID, &group.OwnerName, &group.Title, &group.Description, &group.MemberCount, &group.IsMember, &group.IsOwner, &group.CreatedAt)
+        EXISTS(SELECT 1 FROM socialGroupMember owner WHERE owner.groupId=g.groupId AND owner.userId=? AND owner.role='owner'),
+        EXISTS(SELECT 1 FROM socialGroupRequest pending WHERE pending.groupId=g.groupId AND pending.userId=? AND pending.status='pending'),g.createdAt
+        FROM socialGroup g JOIN user u ON u.userId=g.ownerId WHERE g.groupId=?`, userID, userID, userID, groupID).
+		Scan(&group.GroupID, &group.OwnerID, &group.OwnerName, &group.Title, &group.Description, &group.MemberCount, &group.IsMember, &group.IsOwner, &group.JoinRequested, &group.CreatedAt)
 	if err == sql.ErrNoRows {
 		return group, backend.ErrNotFound
 	}

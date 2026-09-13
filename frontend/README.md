@@ -52,15 +52,16 @@ Lightning CSS. The project enables optional dependencies in `.npmrc`; keep the
 lockfile, which includes both Windows and Linux packages. Reinstall dependencies
 when switching the operating system used to run this shared checkout.
 
-Open **http://localhost:4000**. The app opens as Dummy User; use the
-**Development user** selector at the bottom of the sidebar to switch to Alex Demo.
-Login redirects to the feed in demo mode. Restart Next.js after changing its
-environment settings. If Go restarts, click **Reconnect** to renew the demo session.
+Open **http://localhost:4000** and sign in with `dummy@example.com` and
+`DummyUser123!`. Once signed in, use the **Development user** selector at the
+bottom of the sidebar to switch to Alex Demo. Anonymous page visits and expired
+sessions redirect to login, including in demo mode. Restart Next.js after
+changing its environment settings. If Go restarts, sign in again.
 
 Use separate browser profiles or a private window to interact as both users.
 The backend allows one session per account; a fresh login for the same account
 invalidates its previous session. Select a different demo user in each window
-and reconnect the first window if needed.
+and sign in again in the first window if needed.
 
 The connected screens cover posts, comments, reactions, uploaded images, profiles,
 stories, discovery, follows, connection requests, notifications, and chat with
@@ -68,8 +69,8 @@ typing, read receipts, attachments, editing, and deletion. Follow and connection
 changes update both users over WebSocket. Comment notifications open their post.
 
 Demo sessions are available only in development, with `DEV_DUMMY_USER=true` on
-Go and `NEXT_PUBLIC_DEV_USER=true` on Next.js. This setup uses the demo users;
-Clerk-to-Go authentication is still separate work before production login.
+Go and `NEXT_PUBLIC_DEV_USER=true` on Next.js. Login and registration use the
+backend's session authentication regardless of whether demo switching is enabled.
 
 ## Checks
 

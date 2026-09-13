@@ -1,6 +1,7 @@
 import "./globals.css";
 import type { Metadata } from "next";
 import BackendProvider from "./components/BackendProvider";
+import { Toaster } from "react-hot-toast";
 
 export const metadata: Metadata = {
   title: "Social Network",
@@ -17,8 +18,9 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" className="h-full antialiased">
-      <body className="min-h-full h-full flex bg-gray-100">
+      <body className="min-h-screen bg-gray-100">
         <BackendProvider>{children}</BackendProvider>
+        <Toaster position="top-right" />
       </body>
     </html>
   );

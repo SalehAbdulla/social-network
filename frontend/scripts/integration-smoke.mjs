@@ -23,6 +23,7 @@ await new Promise((resolve, reject) => { socket.addEventListener('open', resolve
 let sequence = 0;
 const pending = new Map();
 const exceptions = [];
+const failedResponses = [];
 socket.addEventListener('message', async ({ data }) => {
   const event = JSON.parse(String(data));
   if (event.id) {
@@ -31,6 +32,9 @@ socket.addEventListener('message', async ({ data }) => {
     if (event.error) entry.reject(new Error(JSON.stringify(event.error))); else entry.resolve(event.result);
   }
   if (event.method === 'Runtime.exceptionThrown') exceptions.push(event.params.exceptionDetails.text + ': ' + (event.params.exceptionDetails.exception?.description || ''));
+  if (event.method === 'Network.responseReceived' && event.params.response.status >= 400 && event.params.response.url.startsWith(base)) {
+    failedResponses.push({ url: event.params.response.url, status: event.params.response.status });
+  }
   if (event.method === 'Fetch.requestPaused') {
     const local = event.params.request.url.startsWith(base + '/') || event.params.request.url.startsWith('data:') || event.params.request.url.startsWith('blob:');
     try { await command(local ? 'Fetch.continueRequest' : 'Fetch.failRequest', local ? { requestId: event.params.requestId } : { requestId: event.params.requestId, errorReason: 'BlockedByClient' }, event.sessionId); } catch { /* A page may close with a request pending. */ }
@@ -55,7 +59,7 @@ async function until(page, expression, label, timeout = 60000) {
     if (await evaluate(page, expression)) return;
     await pause(250);
   }
-  throw new Error(`Timed out: ${label}\n${await evaluate(page, 'document.body.innerText')}`);
+  throw new Error(`Timed out: ${label}\n${await evaluate(page, 'location.href + "\\n" + document.body.innerText')}\n${JSON.stringify(failedResponses.slice(-10))}`);
 }
 async function createPage(email = 'dummy@example.com') {
   const { browserContextId } = await command('Target.createBrowserContext');
@@ -63,11 +67,16 @@ async function createPage(email = 'dummy@example.com') {
   const { sessionId } = await command('Target.attachToTarget', { targetId, flatten: true });
   await command('Runtime.enable', {}, sessionId);
   await command('Page.enable', {}, sessionId);
+  await command('Network.enable', {}, sessionId);
   await command('Page.addScriptToEvaluateOnNewDocument', {
     source: `if (location.origin === ${JSON.stringify(base)} && !localStorage.getItem('social:dev-user')) localStorage.setItem('social:dev-user', ${JSON.stringify(email)});`,
   }, sessionId);
   // Keep the smoke test offline except for the local application.
   await command('Fetch.enable', { patterns: [{ urlPattern: '*' }] }, sessionId);
+  await command('Page.navigate', { url: base + '/login' }, sessionId);
+  await until(sessionId, `!!document.querySelector('input[name="identifier"]')`, 'login form');
+  // Tests explicitly authenticate; page visits must never create a session.
+  if (email) await api(sessionId, '/dev/session', 'POST', { email });
   return sessionId;
 }
 async function navigate(page, route) {
@@ -80,6 +89,10 @@ async function fill(page, selector, value) {
 async function button(page, text) {
   await evaluate(page, `(() => { const button = [...document.querySelectorAll('button')].find(element => element.textContent.trim() === ${JSON.stringify(text)}); if (!button) throw new Error('Button not found: ' + ${JSON.stringify(text)}); button.click(); })()`);
 }
+async function enter(page, shift = false) {
+  await command('Input.dispatchKeyEvent', { type: 'keyDown', key: 'Enter', code: 'Enter', windowsVirtualKeyCode: 13, text: '\r', modifiers: shift ? 8 : 0 }, page);
+  await command('Input.dispatchKeyEvent', { type: 'keyUp', key: 'Enter', code: 'Enter', windowsVirtualKeyCode: 13, modifiers: shift ? 8 : 0 }, page);
+}
 async function api(page, route, method = 'GET', body) {
   const result = await evaluate(page, `(async () => { const response = await fetch('/api/v1' + ${JSON.stringify(route)}, { method: ${JSON.stringify(method)}, headers: { 'Content-Type': 'application/json' }, ${body === undefined ? '' : `body: JSON.stringify(${JSON.stringify(body)}),`} credentials: 'include' }); const result = await response.json(); if (!response.ok || !result.success) throw new Error(JSON.stringify(result)); return result.data; })()`);
   return result;
@@ -87,11 +100,26 @@ async function api(page, route, method = 'GET', body) {
 const stamp = String(Date.now());
 let dummy, alex, originalDummy, originalAlex, postId, storyId, mediaURL;
 try {
+  for (const route of ['/', '/post/1', '/profile', '/profile/someone', '/messages', '/messages/someone', '/groups', '/groups/1', '/connections', '/discover', '/notifications', '/create-post', '/CreatePost', '/missing-page']) {
+    const response = await fetch(base + route, { redirect: 'manual' });
+    assert.equal(response.status, 307, `Anonymous ${route} must redirect before rendering`);
+    assert.equal(new URL(response.headers.get('location'), base).pathname, '/login');
+  }
+  assert.equal((await fetch(base + '/api/v1/posts')).status, 401, 'API authentication remains a 401');
+  const guest = await createPage(null);
+  await command('Page.navigate', { url: base + '/post/1' }, guest);
+  await until(guest, `location.pathname === '/login' && !!document.querySelector('input[name="identifier"]')`, 'anonymous post redirects to login');
+  await command('Network.setCookie', { name: 'session_token', value: 'expired-session', url: base, httpOnly: true }, guest);
+  await command('Page.navigate', { url: base + '/' }, guest);
+  await until(guest, `location.pathname === '/login' && !!document.querySelector('input[name="identifier"]')`, 'invalid session redirects to login');
+  assert(!(await evaluate(guest, 'document.body.innerText')).includes('Could not reach the backend'));
+  console.log('PASS: all anonymous pages and invalid sessions redirect to login; API requests retain 401');
+
   dummy = await createPage();
   await navigate(dummy, '/');
   originalDummy = await api(dummy, '/users/me');
   assert.equal(originalDummy.nickname, 'dummyuser');
-  console.log('PASS: frontend bootstraps the dummy session through the same-origin proxy');
+  console.log('PASS: authenticated frontend loads through the same-origin proxy');
 
   await navigate(dummy, '/create-post');
   await fill(dummy, 'input[placeholder="Give your post a title"]', `Browser ${stamp}`);
@@ -122,6 +150,15 @@ try {
   await fill(alex, `#comment-${postId}`, `Browser comment ${stamp}`);
   await button(alex, 'Comment');
   await until(alex, `document.body.innerText.includes(${JSON.stringify(`Browser comment ${stamp}`)}) && document.querySelector('textarea').value === ''`, 'comment creation');
+  await fill(alex, `#comment-${postId}`, 'Draft preserved while voting');
+  await evaluate(alex, `window.commentRow = document.querySelector('[aria-label="Upvote comment"]').parentElement.parentElement; performance.clearResourceTimings()`);
+  for (const [label, score] of [['Upvote comment', 1], ['Upvote comment', 0], ['Downvote comment', -1], ['Upvote comment', 1]]) {
+    await evaluate(alex, `document.querySelector('[aria-label="${label}"]').click()`);
+    await until(alex, `document.querySelector('[aria-label="Upvote comment"]').nextElementSibling.textContent === '${score}' && !document.querySelector('[aria-label="Upvote comment"]').disabled`, `comment score ${score}`);
+    assert(await evaluate(alex, `window.commentRow === document.querySelector('[aria-label="Upvote comment"]').parentElement.parentElement && document.querySelector('textarea').value === 'Draft preserved while voting'`));
+  }
+  assert(await evaluate(alex, `!performance.getEntriesByType('resource').some(entry => entry.name.includes('/api/v1/post'))`), 'Comment voting must not refetch the post or comments');
+  console.log('PASS: comment votes toggle in place without refetching or losing the draft');
   const notifications = await api(dummy, '/notifications');
   assert(notifications.notifications.some(item => item.entityType === 'comment' && item.actorId === originalAlex.userId));
   await navigate(dummy, '/notifications');
@@ -144,6 +181,45 @@ try {
   }
   console.log('PASS: discovery, follow and connection acceptance');
 
+  await navigate(dummy, '/profile');
+  await navigate(alex, `/profile/${originalDummy.userId}`);
+  await until(alex, `!!document.querySelector('[aria-label="Profile statistics"]') && document.body.innerText.includes('Unfollow')`, 'profile follow control');
+  const beforeFollow = await api(dummy, '/users/me');
+  const stats = followers => `document.querySelector('[aria-label="Profile statistics"]')?.innerText.replace(/\\s+/g, ' ').trim() === ${JSON.stringify(`${followers} followers ${beforeFollow.following.length} following ${beforeFollow.connections.length} connections`)}`;
+  await button(alex, 'Unfollow');
+  await until(alex, stats(beforeFollow.followers.length - 1), 'viewed profile updates follower count');
+  await until(dummy, stats(beforeFollow.followers.length - 1), 'owner sees live follower count');
+  await button(alex, 'Follow');
+  await until(alex, stats(beforeFollow.followers.length), 'follow restores follower count');
+  await until(dummy, stats(beforeFollow.followers.length), 'owner sees restored count');
+  console.log('PASS: profile follow/unfollow and live database counts');
+
+  await navigate(dummy, '/groups');
+  await button(dummy, 'Create group');
+  await fill(dummy, 'input[name="title"]', `Browser group ${stamp}`);
+  await fill(dummy, 'textarea[name="description"]', 'Browser group join workflow');
+  await button(dummy, 'Create group');
+  await until(dummy, `!document.querySelector('input[name="title"]') && document.body.innerText.includes(${JSON.stringify(`Browser group ${stamp}`)})`, 'create group');
+  const group = (await api(dummy, '/groups')).find(item => item.title === `Browser group ${stamp}`);
+  await navigate(alex, '/groups');
+  await until(alex, `!!document.querySelector('a[href="/groups/${group.groupId}"]')`, 'group listing');
+  await evaluate(alex, `document.querySelector('a[href="/groups/${group.groupId}"]').closest('article').querySelector('button').click()`);
+  await until(alex, `document.querySelector('a[href="/groups/${group.groupId}"]').closest('article').innerText.includes('Request pending')`, 'join request feedback');
+  await navigate(alex, `/groups/${group.groupId}`);
+  await until(alex, `document.body.innerText.includes('Request pending')`, 'pending request persists on group details');
+  await navigate(dummy, `/groups/${group.groupId}`);
+  await until(dummy, `document.body.innerText.includes('@alexdemo')`, 'owner receives join request');
+  await button(dummy, 'Accept');
+  await until(dummy, `document.body.innerText.includes('2 members')`, 'owner accepts join request');
+  await navigate(alex, `/groups/${group.groupId}`);
+  await until(alex, `document.body.innerText.includes('2 members') && !document.body.innerText.includes('Request pending')`, 'membership persists');
+  const detailsGroup = await api(dummy, '/groups', 'POST', { title: `Details group ${stamp}` });
+  await navigate(alex, `/groups/${detailsGroup.groupId}`);
+  await until(alex, `document.body.innerText.includes('Request to join')`, 'detail join button');
+  await button(alex, 'Request to join');
+  await until(alex, `document.body.innerText.includes('Request pending')`, 'request from group details');
+  console.log('PASS: group creation, join from listing and details, persistent pending state and owner acceptance');
+
   await navigate(dummy, '/');
   await evaluate(dummy, `[...document.querySelectorAll('button')].find(button => button.textContent.includes('Create story')).click()`);
   await fill(dummy, '[role="dialog"] textarea', `Browser story ${stamp}`);
@@ -164,9 +240,17 @@ try {
   await until(alex, `document.body.innerText.includes('Live updates connected')`, 'Alex WebSocket');
   await fill(dummy, 'textarea[aria-label="Message"]', `Browser message ${stamp}`);
   await until(alex, `document.body.innerText.includes('is typing')`, 'live typing', 10000);
-  await button(dummy, 'Send');
+  await evaluate(dummy, `document.querySelector('textarea[aria-label="Message"]').focus()`);
+  await enter(dummy, true);
+  assert.equal(await evaluate(dummy, `document.querySelector('textarea[aria-label="Message"]').value`), `Browser message ${stamp}\n`);
+  assert(!(await api(dummy, `/messages?partnerId=${originalAlex.userId}`)).messages.some(message => message.textMessage.includes(`Browser message ${stamp}`)), 'Shift+Enter must not send');
+  await command('Input.insertText', { text: 'Second line' }, dummy);
+  await enter(dummy);
   await until(alex, `document.body.innerText.includes(${JSON.stringify(`Browser message ${stamp}`)})`, 'live message receipt', 10000);
   await until(dummy, `document.body.innerText.includes('read')`, 'message read receipt', 10000);
+  const sentMessages = (await api(dummy, `/messages?partnerId=${originalAlex.userId}`)).messages.filter(message => message.textMessage.includes(`Browser message ${stamp}`));
+  assert.equal(sentMessages.length, 1);
+  assert.equal(sentMessages[0].textMessage, `Browser message ${stamp}\nSecond line`);
   await button(dummy, 'Edit');
   await fill(dummy, 'textarea[aria-label="Message"]', `Edited browser message ${stamp}`);
   await button(dummy, 'Save');
@@ -179,15 +263,22 @@ try {
   console.log('PASS: live typing, messages, read receipts, edits and scoped deletion');
 
   await api(dummy, '/auth/logout', 'POST');
-  await evaluate(dummy, `fetch('/api/v1/users/me').then(response => { if (response.status === 401) window.dispatchEvent(new Event('social:session-expired')); })`);
-  await until(dummy, `document.body.innerText.includes('Your backend session expired')`, 'expired session state');
-  await button(dummy, 'Reconnect');
-  await until(dummy, `!!document.querySelector('select[aria-label="Development user"]')`, 'reconnect demo session');
-  await navigate(dummy, '/login');
-  await until(dummy, `location.pathname === '/'`, 'demo login redirects to feed');
-  console.log('PASS: expired demo sessions reconnect and login opens the feed');
+  await fill(dummy, 'textarea[aria-label="Message"]', 'This unauthorized message must not be sent');
+  await button(dummy, 'Send');
+  await until(dummy, `location.pathname === '/login' && !!document.querySelector('input[name="identifier"]')`, 'expired session redirects to login');
+  await fill(dummy, 'input[name="identifier"]', 'dummy@example.com');
+  await fill(dummy, 'input[name="password"]', 'DummyUser123!');
+  await evaluate(dummy, `document.querySelector('form').requestSubmit()`);
+  await until(dummy, `location.pathname === '/' && !!document.querySelector('aside[aria-label="Main navigation"]')`, 'sign back in after expiry');
+  console.log('PASS: API 401 redirects to login and the normal login form restores access');
 
   await navigate(dummy, '/');
+  await until(dummy, `!!document.querySelector('article')`, 'feed ready for scroll');
+  await evaluate(dummy, `window.scrollTo(0, document.body.scrollHeight)`);
+  const sidebarPosition = await evaluate(dummy, `({ scrollY: window.scrollY, top: document.querySelector('aside[aria-label="Main navigation"]').getBoundingClientRect().top, bodyHeight: document.body.offsetHeight, viewport: window.innerHeight })`);
+  assert(sidebarPosition.scrollY > 0 && Math.abs(sidebarPosition.top) < 1, `Sidebar stays at top while the feed scrolls: ${JSON.stringify(sidebarPosition)}`);
+  assert(await evaluate(dummy, `document.querySelector('aside img[alt="Social Network"]').naturalWidth > 0`), 'Sidebar logo loads');
+  await evaluate(dummy, `window.scrollTo(0, 0)`);
   const screenshot = await command('Page.captureScreenshot', { format: 'png' }, dummy);
   await writeFile(path.join(taskDir, 'frontend.png'), Buffer.from(screenshot.data, 'base64'));
   assert.deepEqual(exceptions, [], 'Browser runtime exceptions');
@@ -200,7 +291,7 @@ try {
     if (originalAlex && !originalDummy.connections.includes(originalAlex.userId)) await api(dummy, `/connections/${originalAlex.userId}`, 'DELETE').catch(() => {});
   }
   if (alex && originalAlex && originalDummy && !originalAlex.following.includes(originalDummy.userId)) await api(alex, `/users/${originalDummy.userId}/follow`, 'DELETE').catch(() => {});
-  await writeFile(path.join(taskDir, 'result.json'), JSON.stringify({ postId, storyId, mediaURL, exceptions }, null, 2));
+  await writeFile(path.join(taskDir, 'result.json'), JSON.stringify({ postId, storyId, mediaURL, exceptions, failedResponses }, null, 2));
   await command('Browser.close').catch(() => {});
   socket.close();
   browser.kill();

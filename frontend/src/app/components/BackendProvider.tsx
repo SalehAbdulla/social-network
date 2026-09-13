@@ -1,10 +1,9 @@
 'use client';
 
 import { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react';
-import { usePathname } from 'next/navigation';
-import axios from 'axios';
+import { usePathname, useRouter } from 'next/navigation';
 import { Menu } from 'lucide-react';
-import { devUserEnabled, errorMessage, request, type SocialUser, type SocketEvent } from '../api/social';
+import { errorMessage, isUnauthorized, request, type SocialUser, type SocketEvent } from '../api/social';
 import Loading from './Loading';
 import Sidebar from './SideBar';
 
@@ -26,13 +25,27 @@ export function useBackend() {
 
 export default function BackendProvider({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
+  if (pathname === '/login') return <>{children}</>;
+  return <AuthenticatedBackend>{children}</AuthenticatedBackend>;
+}
+
+function AuthenticatedBackend({ children }: { children: React.ReactNode }) {
+  const router = useRouter();
   const [user, setUser] = useState<SocialUser | null>(null);
   const [error, setError] = useState('');
   const [devEmail, setDevEmail] = useState('dummy@example.com');
   const [socket, setSocket] = useState<WebSocket | null>(null);
-  const [isSideBarOpen, setSideBarOpen] = useState(true);
+  const [isSideBarOpen, setSideBarOpen] = useState(false);
   const [isCollapsed, setIsCollapsed] = useState(false);
   const sessionRevision = useRef(0);
+
+  const redirectToLogin = useCallback(() => {
+    sessionRevision.current++;
+    setUser(null);
+    setSocket(null);
+    setError('');
+    router.replace('/login');
+  }, [router]);
 
   const initialize = useCallback(async () => {
     const revision = ++sessionRevision.current;
@@ -41,27 +54,22 @@ export default function BackendProvider({ children }: { children: React.ReactNod
     setSocket(null);
     try {
       const email = localStorage.getItem('social:dev-user') || 'dummy@example.com';
-      const profile = devUserEnabled
-        ? await request<SocialUser>('/users/me', 'GET', undefined, undefined, false).catch(() => request<SocialUser>('/dev/session', 'POST', { email }))
-        : await request<SocialUser>('/users/me');
+      const profile = await request<SocialUser>('/users/me', 'GET', undefined, undefined, false);
       if (revision !== sessionRevision.current) return;
       setUser(profile);
       setDevEmail(email);
     } catch (error) {
       if (revision !== sessionRevision.current) return;
-      setError(devUserEnabled && axios.isAxiosError(error) && error.response?.status === 404
-        ? 'Start the backend with backend/dev.cmd to enable the demo users, then reconnect.'
-        : errorMessage(error));
+      if (isUnauthorized(error)) redirectToLogin();
+      else setError(errorMessage(error));
     }
-  }, []);
+  }, [redirectToLogin]);
 
   useEffect(() => {
-    if (pathname === '/login') return;
     const timer = setTimeout(() => { void initialize(); }, 0);
-    const expired = () => { setSocket(null); setError('Your backend session expired. Reconnect to continue.'); };
-    window.addEventListener('social:session-expired', expired);
-    return () => { sessionRevision.current++; clearTimeout(timer); window.removeEventListener('social:session-expired', expired); };
-  }, [initialize, pathname]);
+    window.addEventListener('social:session-expired', redirectToLogin);
+    return () => { sessionRevision.current++; clearTimeout(timer); window.removeEventListener('social:session-expired', redirectToLogin); };
+  }, [initialize, redirectToLogin]);
 
   const userId = user?.userId;
   useEffect(() => {
@@ -116,7 +124,7 @@ export default function BackendProvider({ children }: { children: React.ReactNod
   useEffect(() => {
     const listener = (event: Event) => {
       if (['social_changed', 'connected'].includes((event as CustomEvent<SocketEvent>).detail.type)) {
-        void refreshUser().catch(error => setError(errorMessage(error)));
+        void refreshUser().catch(error => { if (!isUnauthorized(error)) setError(errorMessage(error)); });
       }
     };
     window.addEventListener('social:socket', listener);
@@ -127,9 +135,8 @@ export default function BackendProvider({ children }: { children: React.ReactNod
     <h1 className="text-xl font-semibold">Couldn&apos;t connect</h1><p>{error}</p>
     <button className="rounded-lg bg-blue-600 px-5 py-2 text-white" onClick={() => void initialize()}>Reconnect</button>
   </div>;
-  if (pathname === '/login') return <>{children}</>;
   if (!user) return <Loading />;
-  return <Context.Provider value={{ user, refreshUser, switchUser, connected: socket?.readyState === WebSocket.OPEN, devEmail, sendEvent }}><div key={user.userId} className="flex h-full min-h-screen w-full min-w-0">
+  return <Context.Provider value={{ user, refreshUser, switchUser, connected: socket?.readyState === WebSocket.OPEN, devEmail, sendEvent }}><div key={user.userId} className="flex min-h-screen w-full min-w-0">
     <Sidebar isSideBarOpen={isSideBarOpen} setSideBarOpen={setSideBarOpen} isCollapsed={isCollapsed} setIsCollapsed={setIsCollapsed} />
     <main className="relative min-w-0 flex-1">
       <button aria-label="Open navigation" onClick={() => setSideBarOpen(true)} className="fixed left-4 top-4 z-30 rounded-lg border border-slate-200 bg-white p-2 shadow-sm sm:hidden"><Menu size={20} /></button>

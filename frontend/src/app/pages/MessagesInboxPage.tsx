@@ -52,7 +52,7 @@ function Thread({ partner, nickname }: { partner: string; nickname: string }) {
 
   async function send(event: React.FormEvent) {
     event.preventDefault();
-    if (!text.trim() && !attachment) return;
+    if (busy || (!text.trim() && !attachment)) return;
     setBusy(true);
     try {
       if (editing) await request(`/messages/${editing}`, 'PUT', { text });
@@ -78,7 +78,13 @@ function Thread({ partner, nickname }: { partner: string; nickname: string }) {
     </div>
     <div className="min-h-6 px-4 text-xs text-slate-500">{typing && `${nickname} is typing?`}</div>
     <form onSubmit={send} className="border-t border-slate-100 bg-white p-4 space-y-2">{editing && <div className="flex justify-between text-sm text-blue-600">Editing message<button type="button" onClick={() => { setEditing(null); setText(''); }}>Cancel</button></div>}{attachment && <div className="flex justify-between text-sm"><span>{attachment.name}</span><button type="button" onClick={() => { setAttachment(null); if (fileInput.current) fileInput.current.value = ''; }}>Remove</button></div>}
-      <div className="flex items-end gap-2"><textarea aria-label="Message" value={text} rows={2} maxLength={2000} onChange={event => { setText(event.target.value); sendEvent({ type: event.target.value ? 'typing' : 'typing_stopped', payload: { senderId: user.userId, recipientId: partner } }); }} onBlur={() => sendEvent({ type: 'typing_stopped', payload: { senderId: user.userId, recipientId: partner } })} placeholder="Write a message?" className="min-w-0 flex-1 resize-none rounded-lg border border-slate-200 p-3 text-sm" /><button disabled={busy || (!text.trim() && !attachment)} className="rounded-lg bg-blue-600 px-4 py-3 text-sm text-white disabled:opacity-50">{busy ? 'Sending?' : editing ? 'Save' : 'Send'}</button></div>
+      <div className="flex items-end gap-2"><textarea aria-label="Message" aria-describedby="message-keyboard-hint" value={text} rows={2} maxLength={2000} onChange={event => { setText(event.target.value); sendEvent({ type: event.target.value ? 'typing' : 'typing_stopped', payload: { senderId: user.userId, recipientId: partner } }); }} onKeyDown={event => {
+        if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing) {
+          event.preventDefault();
+          if (!event.repeat && !busy) event.currentTarget.form?.requestSubmit();
+        }
+      }} onBlur={() => sendEvent({ type: 'typing_stopped', payload: { senderId: user.userId, recipientId: partner } })} placeholder="Write a message..." className="min-w-0 flex-1 resize-none rounded-lg border border-slate-200 p-3 text-sm" /><button disabled={busy || (!text.trim() && !attachment)} className="rounded-lg bg-blue-600 px-4 py-3 text-sm text-white disabled:opacity-50">{busy ? 'Sending...' : editing ? 'Save' : 'Send'}</button></div>
+      <p id="message-keyboard-hint" className="text-xs text-slate-500">Enter to send, Shift + Enter for a new line.</p>
       {!editing && <input ref={fileInput} aria-label="Attach photo or video" type="file" accept="image/jpeg,image/png,image/gif,image/webp,video/mp4,video/webm" onChange={event => setAttachment(event.target.files?.[0] || null)} className="max-w-full text-xs text-slate-500" />}
     </form>
   </div>;

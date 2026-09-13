@@ -31,15 +31,26 @@ export interface Notification {
   notificationId: number; actorId: string; actorNickname: string; entityType: string; entityId: number; postId?: number; isRead: number; createdAt: string;
 }
 export type Connections = Record<'followers' | 'following' | 'connections' | 'pending' | 'requested', SocialUser[]>;
-export interface Group { groupId: number; ownerId: string; ownerName: string; title: string; description: string; memberCount: number; isMember: boolean; isOwner: boolean; createdAt: string }
+export interface Group { groupId: number; ownerId: string; ownerName: string; title: string; description: string; memberCount: number; isMember: boolean; isOwner: boolean; joinRequested: boolean; createdAt: string }
 export interface GroupMember { userId: string; nickname: string; firstName: string; lastName: string; avatar: string; role: string; joinedAt: string }
 export interface GroupRequest { requestId: number; groupId: number; userId: string; nickname: string; status: string; createdAt: string }
 export interface GroupInvitation { invitationId: number; groupId: number; userId: string; nickname: string; groupTitle: string; status: string; createdAt: string }
 export interface SocketEvent { type: string; payload: Record<string, unknown> }
 
+export function isUnauthorized(error: unknown): boolean {
+  return axios.isAxiosError(error) && error.response?.status === 401;
+}
+
 export function errorMessage(error: unknown): string {
   if (axios.isAxiosError(error)) {
-    return error.response?.data?.error || error.response?.data?.message || 'Could not reach the backend. Please try again.';
+    if (!error.response) return 'Could not reach the backend. Please try again.';
+    const { data, status } = error.response;
+    if (typeof data?.error === 'string') return data.error;
+    if (typeof data?.message === 'string') return data.message;
+    if (isUnauthorized(error)) return 'Please sign in to continue.';
+    if (status === 403) return 'You do not have permission to access this content.';
+    if (status === 404) return 'The requested content could not be found.';
+    return 'The request failed. Please try again.';
   }
   return error instanceof Error ? error.message : 'Something went wrong. Please try again.';
 }
@@ -70,7 +81,7 @@ export async function request<T>(path: string, method = 'GET', body?: unknown, s
     if (!data.success) throw new Error(data.error || 'Request failed');
     return data.data;
   } catch (error) {
-    if (notifySessionExpired && axios.isAxiosError(error) && error.response?.status === 401 && typeof window !== 'undefined') {
+    if (notifySessionExpired && isUnauthorized(error) && typeof window !== 'undefined') {
       window.dispatchEvent(new Event('social:session-expired'));
     }
     throw error;

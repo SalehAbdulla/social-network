@@ -1,0 +1,22 @@
+'use client';
+
+import { useState } from 'react';
+import toast from 'react-hot-toast';
+import { type Group, errorMessage, request } from '../api/social';
+
+export default function GroupJoinButton({ group, onRequested }: { group: Group; onRequested: () => void }) {
+  const [busy, setBusy] = useState(false);
+  async function join() {
+    if (busy || group.joinRequested) return;
+    setBusy(true);
+    try {
+      await request(`/groups/${group.groupId}/join`, 'POST');
+      onRequested();
+      toast.success('Join request sent');
+    } catch (error) { toast.error(errorMessage(error)); } finally { setBusy(false); }
+  }
+  if (group.isMember) return <span className="font-medium text-teal-700">Member</span>;
+  return <button type="button" disabled={busy || group.joinRequested} onClick={() => void join()} className="rounded-lg bg-blue-50 px-3 py-2 text-sm text-blue-700 disabled:opacity-50">
+    {group.joinRequested ? 'Request pending' : busy ? 'Sending...' : 'Request to join'}
+  </button>;
+}

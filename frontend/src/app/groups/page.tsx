@@ -7,23 +7,18 @@ import { type Group, errorMessage, request } from '../api/social';
 import { useResource } from '../lib/useResource';
 import Loading from '../components/Loading';
 import RequestState from '../components/RequestState';
+import GroupJoinButton from '../components/GroupJoinButton';
 
 export default function Groups() {
   const [input, setInput] = useState('');
   const [search, setSearch] = useState('');
   const [showCreate, setShowCreate] = useState(false);
   const groups = useResource<Group[]>(`/groups?q=${encodeURIComponent(search)}`);
-  const [busy, setBusy] = useState<number | null>(null);
-  async function join(groupID: number) {
-    setBusy(groupID);
-    try { await request(`/groups/${groupID}/join`, 'POST'); toast.success('Join request sent'); groups.reload(); }
-    catch (error) { toast.error(errorMessage(error)); }
-    finally { setBusy(null); }
-  }
   async function create(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    const values = Object.fromEntries(new FormData(event.currentTarget).entries());
-    try { await request('/groups', 'POST', { title: values.title, description: values.description }); setShowCreate(false); event.currentTarget.reset(); groups.reload(); toast.success('Group created'); }
+    const form = event.currentTarget;
+    const values = Object.fromEntries(new FormData(form).entries());
+    try { await request('/groups', 'POST', { title: values.title, description: values.description }); form.reset(); setShowCreate(false); groups.reload(); toast.success('Group created'); }
     catch (error) { toast.error(errorMessage(error)); }
   }
   return <div className="mx-auto max-w-5xl space-y-6 p-6 sm:p-8">
@@ -31,7 +26,7 @@ export default function Groups() {
     {showCreate && <form onSubmit={create} className="space-y-4 rounded-xl border border-slate-200 bg-white p-5"><label className="block text-sm font-medium">Title<input name="title" required minLength={3} maxLength={100} className="mt-1 w-full rounded-lg border p-3" /></label><label className="block text-sm font-medium">Description<textarea name="description" maxLength={1000} className="mt-1 w-full rounded-lg border p-3" /></label><button className="rounded-lg bg-teal-600 px-4 py-2 text-white">Create group</button></form>}
     <form onSubmit={event => { event.preventDefault(); setSearch(input); }} className="flex gap-3"><input aria-label="Search groups" value={input} onChange={event => setInput(event.target.value)} placeholder="Search groups" className="min-w-0 flex-1 rounded-lg border border-slate-200 bg-white p-3" /><button className="rounded-lg bg-slate-900 px-5 text-white">Search</button></form>
     {groups.loading && <Loading />}{groups.error && <RequestState error={groups.error} retry={groups.reload} />}
-    <div className="grid gap-4 md:grid-cols-2">{groups.data?.map(group => <article key={group.groupId} className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm"><div className="flex items-start justify-between gap-4"><div><Link href={`/groups/${group.groupId}`} className="text-xl font-semibold text-slate-900 hover:text-blue-700">{group.title}</Link><p className="mt-2 text-sm text-slate-600">{group.description || 'No description yet.'}</p></div><span className="whitespace-nowrap text-sm text-slate-500">{group.memberCount} member{group.memberCount === 1 ? '' : 's'}</span></div><div className="mt-4 flex items-center justify-between text-sm"><span className="text-slate-500">Created by {group.ownerName || 'Unknown'}</span>{group.isMember ? <span className="font-medium text-teal-700">Member</span> : <button disabled={busy === group.groupId} onClick={() => void join(group.groupId)} className="rounded-lg bg-blue-50 px-3 py-2 text-blue-700 disabled:opacity-50">{busy === group.groupId ? 'Sending...' : 'Request to join'}</button>}</div></article>)}</div>
+    <div className="grid gap-4 md:grid-cols-2">{groups.data?.map(group => <article key={group.groupId} className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm"><div className="flex items-start justify-between gap-4"><div><Link href={`/groups/${group.groupId}`} className="text-xl font-semibold text-slate-900 hover:text-blue-700">{group.title}</Link><p className="mt-2 text-sm text-slate-600">{group.description || 'No description yet.'}</p></div><span className="whitespace-nowrap text-sm text-slate-500">{group.memberCount} member{group.memberCount === 1 ? '' : 's'}</span></div><div className="mt-4 flex items-center justify-between text-sm"><span className="text-slate-500">Created by {group.ownerName || 'Unknown'}</span><GroupJoinButton group={group} onRequested={() => groups.update(items => items.map(item => item.groupId === group.groupId ? { ...item, joinRequested: true } : item))} /></div></article>)}</div>
     {groups.data?.length === 0 && <RequestState empty="No groups found." />}
   </div>;
 }

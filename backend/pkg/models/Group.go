@@ -1,15 +1,16 @@
 package models
 
 type Group struct {
-	GroupID     int    `json:"groupId"`
-	OwnerID     string `json:"ownerId"`
-	OwnerName   string `json:"ownerName"`
-	Title       string `json:"title"`
-	Description string `json:"description"`
-	MemberCount int    `json:"memberCount"`
-	IsMember    bool   `json:"isMember"`
-	IsOwner     bool   `json:"isOwner"`
-	CreatedAt   string `json:"createdAt"`
+	GroupID       int    `json:"groupId"`
+	OwnerID       string `json:"ownerId"`
+	OwnerName     string `json:"ownerName"`
+	Title         string `json:"title"`
+	Description   string `json:"description"`
+	MemberCount   int    `json:"memberCount"`
+	IsMember      bool   `json:"isMember"`
+	IsOwner       bool   `json:"isOwner"`
+	JoinRequested bool   `json:"joinRequested"`
+	CreatedAt     string `json:"createdAt"`
 }
 
 type GroupMember struct {
