@@ -55,3 +55,31 @@ func (s *GroupService) Decide(groupID, requestID int, ownerID, status string) er
 	}
 	return s.Repo.GroupRequestDecision(groupID, requestID, status)
 }
+
+func (s *GroupService) Invite(groupID int, inviterID, inviteeID string) error {
+	if inviteeID == "" {
+		return backend.ErrBadRequest
+	}
+	if _, err := s.Repo.SocialProfile(inviteeID); err != nil {
+		return err
+	}
+	group, err := s.Repo.Group(groupID, inviterID)
+	if err != nil {
+		return err
+	}
+	if !group.IsOwner && !group.IsMember {
+		return backend.ErrForbidden
+	}
+	return s.Repo.AddGroupInvitation(groupID, inviterID, inviteeID)
+}
+
+func (s *GroupService) Invitations(userID string) ([]models.GroupInvitation, error) {
+	return s.Repo.GroupInvitations(userID)
+}
+
+func (s *GroupService) DecideInvitation(groupID, invitationID int, userID, status string) error {
+	if status != "accepted" && status != "declined" {
+		return backend.ErrBadRequest
+	}
+	return s.Repo.GroupInvitationDecision(groupID, invitationID, userID, status)
+}

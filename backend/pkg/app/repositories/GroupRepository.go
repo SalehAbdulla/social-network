@@ -135,3 +135,90 @@ func (db *DB) GroupRequestDecision(groupID, requestID int, status string) error 
 	}
 	return tx.Commit()
 }
+
+func (db *DB) AddGroupInvitation(groupID int, inviterID, inviteeID string) error {
+	tx, err := db.Conn.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+
+	var isOwner, isMember bool
+	if err := tx.QueryRow("SELECT EXISTS(SELECT 1 FROM socialGroup WHERE groupId=? AND ownerId=?)", groupID, inviterID).Scan(&isOwner); err != nil {
+		return err
+	}
+	if !isOwner {
+		if err := tx.QueryRow("SELECT EXISTS(SELECT 1 FROM socialGroupMember WHERE groupId=? AND userId=?)", groupID, inviterID).Scan(&isMember); err != nil {
+			return err
+		}
+		if !isMember {
+			return backend.ErrForbidden
+		}
+	}
+	if inviteeID == inviterID {
+		return backend.ErrBadRequest
+	}
+	if inviteeID == "" {
+		return backend.ErrBadRequest
+	}
+	if err := tx.QueryRow("SELECT EXISTS(SELECT 1 FROM socialGroupMember WHERE groupId=? AND userId=?)", groupID, inviteeID).Scan(&isMember); err != nil {
+		return err
+	}
+	if isMember {
+		return backend.ErrBadRequest
+	}
+	_, err = tx.Exec(`INSERT INTO socialGroupInvitation (groupId,userId) VALUES (?,?)
+		ON CONFLICT(groupId,userId) DO UPDATE SET status='pending',createdAt=CURRENT_TIMESTAMP`, groupID, inviteeID)
+	if err != nil {
+		return err
+	}
+	return tx.Commit()
+}
+
+func (db *DB) GroupInvitations(userID string) ([]models.GroupInvitation, error) {
+	rows, err := db.Conn.Query(`SELECT i.invitationId,i.groupId,i.userId,g.title,i.status,i.createdAt
+		FROM socialGroupInvitation i JOIN socialGroup g ON g.groupId=i.groupId
+		WHERE i.userId=? AND i.status='pending' ORDER BY i.createdAt`, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	invitations := []models.GroupInvitation{}
+	for rows.Next() {
+		var invitation models.GroupInvitation
+		if err := rows.Scan(&invitation.InvitationID, &invitation.GroupID, &invitation.UserID, &invitation.GroupTitle, &invitation.Status, &invitation.CreatedAt); err != nil {
+			return nil, err
+		}
+		invitations = append(invitations, invitation)
+	}
+	return invitations, rows.Err()
+}
+
+func (db *DB) GroupInvitationDecision(groupID, invitationID int, userID, status string) error {
+	tx, err := db.Conn.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+
+	var inviteeID string
+	err = tx.QueryRow("SELECT userId FROM socialGroupInvitation WHERE invitationId=? AND groupId=? AND status='pending'", invitationID, groupID).Scan(&inviteeID)
+	if err == sql.ErrNoRows {
+		return backend.ErrNotFound
+	}
+	if err != nil {
+		return err
+	}
+	if inviteeID != userID {
+		return backend.ErrForbidden
+	}
+	if _, err = tx.Exec("UPDATE socialGroupInvitation SET status=? WHERE invitationId=?", status, invitationID); err != nil {
+		return err
+	}
+	if status == "accepted" {
+		if _, err = tx.Exec("INSERT OR IGNORE INTO socialGroupMember (groupId,userId) VALUES (?,?)", groupID, userID); err != nil {
+			return err
+		}
+	}
+	return tx.Commit()
+}

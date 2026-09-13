@@ -110,6 +110,55 @@ func (re *HandlerContext) GetGroupRequests(w http.ResponseWriter, r *http.Reques
 	respond(w, http.StatusOK, requests)
 }
 
+func (re *HandlerContext) InviteToGroup(w http.ResponseWriter, r *http.Request) {
+	groupID, ok := re.groupID(w, r)
+	if !ok {
+		return
+	}
+	userID := r.PathValue("userId")
+	if userID == "" {
+		re.HandleError(w, r, backend.ErrBadRequest)
+		return
+	}
+	if err := re.GroupService.Invite(groupID, currentUser(r), userID); err != nil {
+		re.HandleError(w, r, err)
+		return
+	}
+	respond(w, http.StatusOK, nil)
+}
+
+func (re *HandlerContext) GetGroupInvitations(w http.ResponseWriter, r *http.Request) {
+	invitations, err := re.GroupService.Invitations(currentUser(r))
+	if err != nil {
+		re.HandleError(w, r, err)
+		return
+	}
+	respond(w, http.StatusOK, invitations)
+}
+
+func (re *HandlerContext) DecideGroupInvitation(w http.ResponseWriter, r *http.Request) {
+	groupID, ok := re.groupID(w, r)
+	if !ok {
+		return
+	}
+	invitationID, err := strconv.Atoi(r.PathValue("invitationId"))
+	if err != nil || invitationID < 1 {
+		re.HandleError(w, r, backend.ErrBadRequest)
+		return
+	}
+	var input struct {
+		Status string `json:"status"`
+	}
+	if !re.decode(w, r, &input) {
+		return
+	}
+	if err := re.GroupService.DecideInvitation(groupID, invitationID, currentUser(r), input.Status); err != nil {
+		re.HandleError(w, r, err)
+		return
+	}
+	respond(w, http.StatusOK, models.GroupInvitation{InvitationID: invitationID, GroupID: groupID, UserID: currentUser(r), Status: input.Status})
+}
+
 func (re *HandlerContext) DecideGroupRequest(w http.ResponseWriter, r *http.Request) {
 	groupID, ok := re.groupID(w, r)
 	if !ok {

@@ -138,9 +138,9 @@ func (db *DB) ChangeConnection(actor, target, action string) (bool, error) {
 
 func (db *DB) ProfilePostIDs(userID string, liked bool, offset int, viewerID string) ([]string, error) {
 	if liked {
-		return db.stringList("SELECT CAST(p.postId AS TEXT) FROM post p JOIN reaction r ON r.entityType='post' AND r.entityId=p.postId WHERE r.userId=? AND r.score=1 AND p.userId=? AND "+postVisibility+" ORDER BY p.createdAt DESC, p.postId DESC LIMIT 20 OFFSET ?", userID, userID, viewerID, viewerID, viewerID, offset)
+		return db.stringList("SELECT CAST(p.postId AS TEXT) FROM post p JOIN reaction r ON r.entityType='post' AND r.entityId=p.postId WHERE r.userId=? AND r.score=1 AND p.userId=? AND "+postVisibility+" ORDER BY p.createdAt DESC, p.postId DESC LIMIT 20 OFFSET ?", userID, userID, viewerID, viewerID, viewerID, viewerID, offset)
 	}
-	return db.stringList("SELECT CAST(p.postId AS TEXT) FROM post p WHERE p.userId=? AND "+postVisibility+" ORDER BY p.createdAt DESC, p.postId DESC LIMIT 20 OFFSET ?", userID, viewerID, viewerID, viewerID, offset)
+	return db.stringList("SELECT CAST(p.postId AS TEXT) FROM post p WHERE p.userId=? AND "+postVisibility+" ORDER BY p.createdAt DESC, p.postId DESC LIMIT 20 OFFSET ?", userID, viewerID, viewerID, viewerID, viewerID, offset)
 }
 
 func (db *DB) AddMedia(id, userID, contentType string) error {
@@ -166,7 +166,7 @@ func (db *DB) CanViewMedia(id, viewerID string) (bool, error) {
 				WHERE image.value = '/api/v1/media/' || m.mediaId AND `+postVisibility+`
 			)
 		)
-	)`, id, viewerID, viewerID, viewerID, viewerID).Scan(&allowed)
+	)`, id, viewerID, viewerID, viewerID, viewerID, viewerID).Scan(&allowed)
 	return allowed, err
 }
 

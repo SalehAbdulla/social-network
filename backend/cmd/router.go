@@ -37,9 +37,12 @@ func routes() http.Handler {
 	mux.Handle("POST /api/v1/groups", pkgmiddleware.AuthMiddleware(http.HandlerFunc(handlers.HandlerCtx.CreateGroup)))
 	mux.Handle("GET /api/v1/groups/{groupId}", pkgmiddleware.AuthMiddleware(http.HandlerFunc(handlers.HandlerCtx.GetGroup)))
 	mux.Handle("POST /api/v1/groups/{groupId}/join", pkgmiddleware.AuthMiddleware(http.HandlerFunc(handlers.HandlerCtx.JoinGroup)))
+	mux.Handle("POST /api/v1/groups/{groupId}/invite/{userId}", pkgmiddleware.AuthMiddleware(http.HandlerFunc(handlers.HandlerCtx.InviteToGroup)))
 	mux.Handle("GET /api/v1/groups/{groupId}/members", pkgmiddleware.AuthMiddleware(http.HandlerFunc(handlers.HandlerCtx.GetGroupMembers)))
 	mux.Handle("GET /api/v1/groups/{groupId}/requests", pkgmiddleware.AuthMiddleware(http.HandlerFunc(handlers.HandlerCtx.GetGroupRequests)))
 	mux.Handle("PUT /api/v1/groups/{groupId}/requests/{requestId}", pkgmiddleware.AuthMiddleware(http.HandlerFunc(handlers.HandlerCtx.DecideGroupRequest)))
+	mux.Handle("GET /api/v1/groups/invitations", pkgmiddleware.AuthMiddleware(http.HandlerFunc(handlers.HandlerCtx.GetGroupInvitations)))
+	mux.Handle("PUT /api/v1/groups/{groupId}/invitations/{invitationId}", pkgmiddleware.AuthMiddleware(http.HandlerFunc(handlers.HandlerCtx.DecideGroupInvitation)))
 
 	if handlers.HandlerCtx.App.DevDummyUser && !handlers.HandlerCtx.App.InProduction {
 		mux.HandleFunc("POST /api/v1/dev/session", handlers.HandlerCtx.DevSession)

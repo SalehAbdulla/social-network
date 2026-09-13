@@ -5,8 +5,8 @@
 - [x] Define final product acceptance criteria
 - [x] Implement profile privacy controls
 - [x] Enforce private profile visibility
-- [ ] Implement post privacy levels
-- [ ] Enforce private post visibility
+- [x] Implement post privacy levels
+- [x] Enforce private post visibility
 
 ## Groups
 

@@ -30,3 +30,13 @@ type GroupRequest struct {
 	Status    string `json:"status"`
 	CreatedAt string `json:"createdAt"`
 }
+
+type GroupInvitation struct {
+	InvitationID int    `json:"invitationId"`
+	GroupID      int    `json:"groupId"`
+	UserID       string `json:"userId"`
+	Nickname     string `json:"nickname"`
+	GroupTitle   string `json:"groupTitle"`
+	Status       string `json:"status"`
+	CreatedAt    string `json:"createdAt"`
+}

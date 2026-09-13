@@ -41,6 +41,34 @@ type integrationClient struct {
 	base   string
 }
 
+func TestPrivateProfilePublicPostVisibility(t *testing.T) {
+	server, _ := integrationServer(t, true, false)
+	dummy, alex := newIntegrationClient(t, server), newIntegrationClient(t, server)
+	dummy.call("POST", "/api/v1/dev/session", map[string]string{}, 200)
+	alex.call("POST", "/api/v1/dev/session", map[string]string{"email": "alex@example.com"}, 200)
+
+	post := decoded[posts.PostDTO](t, dummy.call("POST", "/api/v1/posts", map[string]any{
+		"title":   "Public profile post",
+		"content": "Public posts should not be visible when the profile is private.",
+		"privacy": "public",
+	}, 201))
+
+	profile := decoded[models.SocialUser](t, dummy.call("GET", "/api/v1/users/me", nil, 200))
+	profile.IsPublic = false
+	dummy.call("PUT", "/api/v1/users/me", profile, 200)
+
+	alex.call("GET", "/api/v1/post?id="+strconv.Itoa(post.PostId), nil, 404)
+	feed := decoded[posts.PostResponse](t, alex.call("GET", "/api/v1/posts?page=1&size=20", nil, 200))
+	for _, item := range feed.Posts {
+		if item.PostId == post.PostId {
+			t.Fatalf("private profile public post is visible in the feed: %+v", item)
+		}
+	}
+
+	alex.call("PUT", "/api/v1/users/dummy-id/follow", nil, 200)
+	alex.call("GET", "/api/v1/post?id="+strconv.Itoa(post.PostId), nil, 200)
+}
+
 func TestPostPrivacyIntegration(t *testing.T) {
 	server, repo := integrationServer(t, true, false)
 	dummy, alex := newIntegrationClient(t, server), newIntegrationClient(t, server)
@@ -229,6 +257,20 @@ func TestSocialIntegration(t *testing.T) {
 		members := decoded[[]models.GroupMember](t, alex.call("GET", "/api/v1/groups/"+strconv.Itoa(group.GroupID)+"/members", nil, 200))
 		if len(members) != 2 {
 			t.Fatalf("unexpected group members: %+v", members)
+		}
+	})
+
+	t.Run("group invitations", func(t *testing.T) {
+		group := decoded[models.Group](t, dummy.call("POST", "/api/v1/groups", map[string]string{"title": "Invite Group", "description": "Invitation workflow"}, 201))
+		dummy.call("POST", "/api/v1/groups/"+strconv.Itoa(group.GroupID)+"/invite/"+"alex-id", nil, 200)
+		invites := decoded[[]models.GroupInvitation](t, alex.call("GET", "/api/v1/groups/invitations", nil, 200))
+		if len(invites) != 1 || invites[0].GroupID != group.GroupID {
+			t.Fatalf("unexpected group invitations: %+v", invites)
+		}
+		alex.call("PUT", "/api/v1/groups/"+strconv.Itoa(group.GroupID)+"/invitations/"+strconv.Itoa(invites[0].InvitationID), map[string]string{"status": "accepted"}, 200)
+		members := decoded[[]models.GroupMember](t, alex.call("GET", "/api/v1/groups/"+strconv.Itoa(group.GroupID)+"/members", nil, 200))
+		if len(members) != 2 {
+			t.Fatalf("unexpected invited member list: %+v", members)
 		}
 	})
 

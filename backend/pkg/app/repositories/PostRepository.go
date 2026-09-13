@@ -15,7 +15,7 @@ type PostRepository interface {
 	DeletePost(postId int, userId string) error
 }
 
-const postVisibility = `(p.privacy = 'public' OR p.userId = ? OR (p.privacy = 'followers' AND EXISTS (SELECT 1 FROM follow f WHERE f.followerId = ? AND f.followedId = p.userId)) OR (p.privacy = 'selected' AND EXISTS (SELECT 1 FROM post_selected_follower psf WHERE psf.postId = p.postId AND psf.userId = ?)))`
+const postVisibility = `(p.userId = ? OR (p.privacy = 'public' AND (EXISTS (SELECT 1 FROM user u WHERE u.userId = p.userId AND u.isPublic = 1) OR EXISTS (SELECT 1 FROM follow f WHERE f.followerId = ? AND f.followedId = p.userId))) OR (p.privacy = 'followers' AND EXISTS (SELECT 1 FROM follow f WHERE f.followerId = ? AND f.followedId = p.userId)) OR (p.privacy = 'selected' AND EXISTS (SELECT 1 FROM post_selected_follower psf WHERE psf.postId = p.postId AND psf.userId = ?)))`
 
 func (db *DB) GetPosts(pageNumber int, pageSize int, sortBy string, sortOrder string, viewerID string) ([]models.Post, int, error) {
 	validSortColumns := map[string]string{
@@ -40,7 +40,7 @@ func (db *DB) GetPosts(pageNumber int, pageSize int, sortBy string, sortOrder st
 	}
 
 	var totalElements int
-	err := db.Conn.QueryRow("SELECT COUNT(*) FROM post p WHERE "+postVisibility, viewerID, viewerID, viewerID).Scan(&totalElements)
+	err := db.Conn.QueryRow("SELECT COUNT(*) FROM post p WHERE "+postVisibility, viewerID, viewerID, viewerID, viewerID).Scan(&totalElements)
 	if err != nil {
 		return nil, 0, err
 	}
@@ -58,7 +58,7 @@ func (db *DB) GetPosts(pageNumber int, pageSize int, sortBy string, sortOrder st
 		LIMIT ? OFFSET ?
 	`
 
-	rows, err := db.Conn.Query(query, viewerID, viewerID, viewerID, pageSize, offset)
+	rows, err := db.Conn.Query(query, viewerID, viewerID, viewerID, viewerID, pageSize, offset)
 	if err != nil {
 		return nil, 0, err
 	}
@@ -123,7 +123,7 @@ func (db *DB) GetPostByID(postId int, viewerID string) (models.Post, error) {
 				p.createdAt, p.updatedAt, p.imageUrls
 		FROM post p
 		JOIN user u ON p.userId = u.userId
-			WHERE p.postId = ? AND `+postVisibility, postId, viewerID, viewerID, viewerID,
+			WHERE p.postId = ? AND `+postVisibility, postId, viewerID, viewerID, viewerID, viewerID,
 	).Scan(
 		&post.PostId,
 		&post.UserId,
@@ -151,7 +151,7 @@ func (db *DB) GetPostByID(postId int, viewerID string) (models.Post, error) {
 
 func (db *DB) CanViewPost(postID int, viewerID string) (bool, error) {
 	var allowed bool
-	err := db.Conn.QueryRow("SELECT EXISTS(SELECT 1 FROM post p WHERE p.postId = ? AND "+postVisibility+")", postID, viewerID, viewerID, viewerID).Scan(&allowed)
+	err := db.Conn.QueryRow("SELECT EXISTS(SELECT 1 FROM post p WHERE p.postId = ? AND "+postVisibility+")", postID, viewerID, viewerID, viewerID, viewerID).Scan(&allowed)
 	return allowed, err
 }
 
