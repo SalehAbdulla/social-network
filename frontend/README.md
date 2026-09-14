@@ -82,9 +82,14 @@ The backend allows one session per account; a fresh login for the same account
 invalidates its previous session. Select a different demo user in each window
 and sign in again in the first window if needed.
 
+Post owners can edit a post's title, content, photos, and audience from its pencil
+button. Creating a group immediately shows it in the list and clears the previous
+search. Followers and following are the only social relationships; the former
+connections URL redirects to `/follows`.
+
 The connected screens cover posts, comments, reactions, uploaded images, profiles,
-stories, discovery, follows, connection requests, notifications, and chat with
-typing, read receipts, attachments, editing, and deletion. Follow and connection
+stories, discovery, followers and following, notifications, and chat with
+typing, read receipts, attachments, editing, and deletion. Follow
 changes update both users over WebSocket. Comment notifications open their post.
 
 Demo sessions are available only in development, with `DEV_DUMMY_USER=true` on

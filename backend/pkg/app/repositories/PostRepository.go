@@ -8,6 +8,7 @@ import (
 type PostRepository interface {
 	GetPosts(pageNumber int, pageSize int, sortBy string, sortOrder string, viewerID string) ([]models.Post, int, error)
 	CreatePost(post models.Post) (models.Post, error)
+	UpdatePost(post models.Post) (models.Post, error)
 	DoesPostExists(postId int) error
 	GetPostByID(postId int, viewerID string) (models.Post, error)
 	CanViewPost(postID int, viewerID string) (bool, error)
@@ -185,6 +186,38 @@ func (db *DB) DeletePost(postId int, userId string) error {
 		return realtimeforum.ErrNotFound
 	}
 	return nil
+}
+
+func (db *DB) UpdatePost(post models.Post) (models.Post, error) {
+	tx, err := db.Conn.Begin()
+	if err != nil {
+		return models.Post{}, err
+	}
+	defer tx.Rollback()
+	result, err := tx.Exec(`UPDATE post SET title=?,content=?,privacy=?,imageUrls=?,updatedAt=datetime('now') WHERE postId=? AND userId=?`,
+		post.Title, post.Content, post.Privacy, post.ImageURLs, post.PostId, post.UserId)
+	if err != nil {
+		return models.Post{}, err
+	}
+	count, err := result.RowsAffected()
+	if err != nil {
+		return models.Post{}, err
+	}
+	if count == 0 {
+		return models.Post{}, realtimeforum.ErrNotFound
+	}
+	if _, err = tx.Exec("DELETE FROM post_selected_follower WHERE postId=?", post.PostId); err != nil {
+		return models.Post{}, err
+	}
+	for _, userID := range post.SelectedUsers {
+		if _, err = tx.Exec("INSERT INTO post_selected_follower(postId,userId) VALUES (?,?) ON CONFLICT DO NOTHING", post.PostId, userID); err != nil {
+			return models.Post{}, err
+		}
+	}
+	if err = tx.Commit(); err != nil {
+		return models.Post{}, err
+	}
+	return db.GetPostByID(post.PostId, post.UserId)
 }
 
 func (db *DB) CreatePost(post models.Post) (models.Post, error) {

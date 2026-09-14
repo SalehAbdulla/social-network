@@ -162,54 +162,12 @@ func (re *HandlerContext) CreatePost(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if !re.parseForm(w, r) {
+	req, valid := re.postInput(w, r, userID)
+	if !valid {
 		return
 	}
 
-	var req CreatePostRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		re.HandleError(w, r, realtimeforum.ErrBadRequest)
-		return
-	}
-
-	title := strings.TrimSpace(req.Title)
-	content := strings.TrimSpace(req.Content)
-
-	if title == "" || len(title) < 3 || len(title) > 30 {
-		re.HandleError(w, r, realtimeforum.ErrTitleLength)
-		return
-	}
-
-	if !isASCII(title) {
-		re.HandleError(w, r, realtimeforum.ErrNonASCII)
-		return
-	}
-
-	if (len(content) < 10 && len(req.ImageURLs) == 0) || len(content) > 500 {
-		re.HandleError(w, r, realtimeforum.ErrContentLength)
-		return
-	}
-
-	if !isASCII(content) {
-		re.HandleError(w, r, realtimeforum.ErrNonASCII)
-		return
-	}
-
-	if len(req.ImageURLs) > 4 {
-		re.HandleError(w, r, realtimeforum.ErrBadRequest)
-		return
-	}
-	for _, url := range req.ImageURLs {
-		if url == "" {
-			re.HandleError(w, r, realtimeforum.ErrBadRequest)
-			return
-		}
-		if err := re.SocialService.ValidateMedia(userID, url, "image"); err != nil {
-			re.HandleError(w, r, err)
-			return
-		}
-	}
-	response, err := re.PostService.CreatePost(userID, title, content, req.Privacy, req.SelectedUsers, req.ImageURLs...)
+	response, err := re.PostService.CreatePost(userID, req.Title, req.Content, req.Privacy, req.SelectedUsers, req.ImageURLs...)
 	if err != nil {
 		re.HandleError(w, r, err)
 		return
@@ -226,4 +184,75 @@ func (re *HandlerContext) CreatePost(w http.ResponseWriter, r *http.Request) {
 		Data:    response,
 		Message: "Post created successfully",
 	})
+}
+
+func (re *HandlerContext) postInput(w http.ResponseWriter, r *http.Request, userID string) (CreatePostRequest, bool) {
+	var req CreatePostRequest
+	if !re.parseForm(w, r) {
+		return req, false
+	}
+
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		re.HandleError(w, r, realtimeforum.ErrBadRequest)
+		return req, false
+	}
+
+	title := strings.TrimSpace(req.Title)
+	content := strings.TrimSpace(req.Content)
+
+	if title == "" || len(title) < 3 || len(title) > 30 {
+		re.HandleError(w, r, realtimeforum.ErrTitleLength)
+		return req, false
+	}
+
+	if !isASCII(title) {
+		re.HandleError(w, r, realtimeforum.ErrNonASCII)
+		return req, false
+	}
+
+	if (len(content) < 10 && len(req.ImageURLs) == 0) || len(content) > 500 {
+		re.HandleError(w, r, realtimeforum.ErrContentLength)
+		return req, false
+	}
+
+	if !isASCII(content) {
+		re.HandleError(w, r, realtimeforum.ErrNonASCII)
+		return req, false
+	}
+
+	if len(req.ImageURLs) > 4 {
+		re.HandleError(w, r, realtimeforum.ErrBadRequest)
+		return req, false
+	}
+	for _, url := range req.ImageURLs {
+		if url == "" {
+			re.HandleError(w, r, realtimeforum.ErrBadRequest)
+			return req, false
+		}
+		if err := re.SocialService.ValidateMedia(userID, url, "image"); err != nil {
+			re.HandleError(w, r, err)
+			return req, false
+		}
+	}
+	req.Title, req.Content = title, content
+	return req, true
+}
+
+func (re *HandlerContext) UpdatePost(w http.ResponseWriter, r *http.Request) {
+	postID, err := strconv.Atoi(r.PathValue("postId"))
+	if err != nil || postID < 1 {
+		re.HandleError(w, r, realtimeforum.ErrBadRequest)
+		return
+	}
+	userID := currentUser(r)
+	req, valid := re.postInput(w, r, userID)
+	if !valid {
+		return
+	}
+	post, err := re.PostService.UpdatePost(postID, userID, req.Title, req.Content, req.Privacy, req.SelectedUsers, req.ImageURLs...)
+	if err != nil {
+		re.HandleError(w, r, err)
+		return
+	}
+	respond(w, http.StatusOK, post)
 }

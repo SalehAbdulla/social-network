@@ -20,10 +20,10 @@ func (db *DB) GetNotifications(userID string, offset, limit int, unreadOnly bool
 	var countArgs []interface{}
 
 	if unreadOnly {
-		countQuery = "SELECT COUNT(*) FROM notification WHERE userId = ? AND isRead = 0"
+		countQuery = "SELECT COUNT(*) FROM notification WHERE entityType IN ('comment','message','follow') AND userId = ? AND isRead = 0"
 		countArgs = []interface{}{userID}
 	} else {
-		countQuery = "SELECT COUNT(*) FROM notification WHERE userId = ?"
+		countQuery = "SELECT COUNT(*) FROM notification WHERE entityType IN ('comment','message','follow') AND userId = ?"
 		countArgs = []interface{}{userID}
 	}
 
@@ -37,7 +37,7 @@ func (db *DB) GetNotifications(userID string, offset, limit int, unreadOnly bool
 		FROM notification n
 		LEFT JOIN user u ON n.actorId = u.userId
 		LEFT JOIN comment c ON n.entityType = 'comment' AND n.entityId = c.commentId
-		WHERE n.userId = ?
+		WHERE n.entityType IN ('comment','message','follow') AND n.userId = ?
 	`
 	var args []interface{}
 	args = append(args, userID)
@@ -78,7 +78,7 @@ func (db *DB) GetNotifications(userID string, offset, limit int, unreadOnly bool
 func (db *DB) GetUnreadCount(userID string) (int, error) {
 	var count int
 	err := db.Conn.QueryRow(
-		"SELECT COUNT(*) FROM notification WHERE userId = ? AND isRead = 0",
+		"SELECT COUNT(*) FROM notification WHERE entityType IN ('comment','message','follow') AND userId = ? AND isRead = 0",
 		userID,
 	).Scan(&count)
 	if err != nil {

@@ -15,7 +15,6 @@ interface ProfileUser {
   cover_photo: string | StaticImageData;
   followers: string[];
   following: string[];
-  connections: string[];
   posts: string[];
   createdAt: string;
 }

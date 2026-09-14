@@ -130,9 +130,8 @@ func (re *HandlerContext) UserProfile(w http.ResponseWriter, r *http.Request) {
 		}
 		if !visible {
 			u.FirstName, u.LastName, u.Bio, u.Avatar, u.CoverPhoto, u.Location = "", "", "", "", "", ""
-			u.Followers, u.Following, u.Connections = []string{}, []string{}, []string{}
+			u.Followers, u.Following = []string{}, []string{}
 		}
-		u.Pending, u.Requested = []string{}, []string{}
 	}
 	respond(w, http.StatusOK, u)
 }
@@ -236,13 +235,13 @@ func (re *HandlerContext) socialNotification(actor, target, kind string) {
 	}
 }
 
-func (re *HandlerContext) Connections(w http.ResponseWriter, r *http.Request) {
+func (re *HandlerContext) FollowLists(w http.ResponseWriter, r *http.Request) {
 	u, err := re.SocialService.Repo.SocialProfile(currentUser(r))
 	if err != nil {
 		re.HandleError(w, r, err)
 		return
 	}
-	groups := map[string][]string{"followers": u.Followers, "following": u.Following, "connections": u.Connections, "pending": u.Pending, "requested": u.Requested}
+	groups := map[string][]string{"followers": u.Followers, "following": u.Following}
 	result := map[string][]models.SocialUser{}
 	for name, ids := range groups {
 		result[name] = []models.SocialUser{}
@@ -252,32 +251,10 @@ func (re *HandlerContext) Connections(w http.ResponseWriter, r *http.Request) {
 				re.HandleError(w, r, err)
 				return
 			}
-			profile.Pending, profile.Requested = []string{}, []string{}
 			result[name] = append(result[name], profile)
 		}
 	}
 	respond(w, http.StatusOK, result)
-}
-
-func (re *HandlerContext) ChangeConnection(w http.ResponseWriter, r *http.Request) {
-	actor, target := currentUser(r), r.PathValue("userId")
-	if err := re.SocialService.ValidateTarget(actor, target); err != nil {
-		re.HandleError(w, r, err)
-		return
-	}
-	action := map[string]string{http.MethodPost: "request", http.MethodPut: "accept", http.MethodDelete: "remove"}[r.Method]
-	changed, err := re.SocialService.Repo.ChangeConnection(actor, target, action)
-	if err != nil {
-		re.HandleError(w, r, err)
-		return
-	}
-	if changed {
-		if action != "remove" {
-			re.socialNotification(actor, target, "connection")
-		}
-		re.chatEvent(actor, target, "social_changed", map[string]string{"actorId": actor, "targetId": target})
-	}
-	respond(w, http.StatusOK, nil)
 }
 
 func (re *HandlerContext) Stories(w http.ResponseWriter, r *http.Request) {

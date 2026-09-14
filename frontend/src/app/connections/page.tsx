@@ -1,7 +1,5 @@
-import Connections from "../pages/Connections";
+import { redirect } from 'next/navigation';
 
-const Page = () => {
-  return <Connections />;
-};
-
-export default Page;
+export default function LegacyConnections() {
+  redirect('/follows');
+}

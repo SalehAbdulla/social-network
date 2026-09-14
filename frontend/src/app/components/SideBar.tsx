@@ -29,7 +29,7 @@ export default function Sidebar({ isSideBarOpen, setSideBarOpen, isCollapsed, se
   }, [reload]);
   const links = [
     { href: '/', label: 'Feed', icon: House }, { href: '/messages', label: 'Messages', icon: MessageSquare },
-    { href: '/connections', label: 'Connections', icon: Users }, { href: '/groups', label: 'Groups', icon: UsersRound }, { href: '/discover', label: 'Discover', icon: Compass },
+    { href: '/follows', label: 'Followers', icon: Users }, { href: '/groups', label: 'Groups', icon: UsersRound }, { href: '/discover', label: 'Discover', icon: Compass },
     { href: '/notifications', label: 'Notifications', icon: Bell }, { href: '/profile', label: 'Profile', icon: UserRound },
   ];
   async function logout() {
@@ -42,7 +42,7 @@ export default function Sidebar({ isSideBarOpen, setSideBarOpen, isCollapsed, se
       setLoggingOut(false);
     }
   }
-  return <aside aria-label="Main navigation" className={`sticky top-0 h-dvh self-start shrink-0 border-r border-slate-200 bg-white transition-all max-sm:fixed max-sm:left-0 max-sm:top-0 max-sm:z-40 ${isCollapsed ? 'w-20' : 'w-64'} ${isSideBarOpen ? '' : 'max-sm:-translate-x-full'}`}>
+  return <aside aria-label="Main navigation" className={`sticky top-0 z-20 h-dvh self-start shrink-0 border-r border-slate-200 bg-white transition-all max-sm:fixed max-sm:left-0 max-sm:top-0 max-sm:z-40 ${isCollapsed ? 'w-20' : 'w-64'} ${isSideBarOpen ? '' : 'max-sm:-translate-x-full'}`}>
     <div className="flex h-full flex-col overflow-y-auto p-4">
     <Link href="/" aria-label="Social Network home" className="mb-6 mt-2 block shrink-0"><img src={isCollapsed ? '/favicon.svg' : '/logo.svg'} alt="Social Network" className={isCollapsed ? 'mx-auto h-10 w-10 object-contain' : 'h-16 w-full object-contain'} /></Link>
     <nav className="space-y-2">{links.map(({ href, label, icon: Icon }) => <Link key={href} href={href} title={label} onClick={() => setSideBarOpen(false)} className={`flex items-center gap-3 rounded-xl px-3 py-3 ${pathname === href || (href !== '/' && pathname.startsWith(href + '/')) ? 'bg-blue-50 text-blue-700' : 'text-slate-600 hover:bg-slate-50'}`}>

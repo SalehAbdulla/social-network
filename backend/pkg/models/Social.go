@@ -1,21 +1,18 @@
 package models
 
 type SocialUser struct {
-	UserID      string   `json:"userId"`
-	Nickname    string   `json:"nickname"`
-	FirstName   string   `json:"firstName"`
-	LastName    string   `json:"lastName"`
-	Bio         string   `json:"bio"`
-	Avatar      string   `json:"avatar"`
-	CoverPhoto  string   `json:"coverPhoto"`
-	Location    string   `json:"location"`
-	IsPublic    bool     `json:"isPublic"`
-	CreatedAt   string   `json:"createdAt"`
-	Followers   []string `json:"followers"`
-	Following   []string `json:"following"`
-	Connections []string `json:"connections"`
-	Pending     []string `json:"pending"`
-	Requested   []string `json:"requested"`
+	UserID     string   `json:"userId"`
+	Nickname   string   `json:"nickname"`
+	FirstName  string   `json:"firstName"`
+	LastName   string   `json:"lastName"`
+	Bio        string   `json:"bio"`
+	Avatar     string   `json:"avatar"`
+	CoverPhoto string   `json:"coverPhoto"`
+	Location   string   `json:"location"`
+	IsPublic   bool     `json:"isPublic"`
+	CreatedAt  string   `json:"createdAt"`
+	Followers  []string `json:"followers"`
+	Following  []string `json:"following"`
 }
 
 type Story struct {

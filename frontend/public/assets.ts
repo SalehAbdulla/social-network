@@ -20,7 +20,7 @@ export const assets = {
 export const menuItemsData = [
     { to: '/', label: 'Feed', Icon: Home },
     { to: '/messages', label: 'Messages', Icon: MessageCircle },
-    { to: '/connections', label: 'Connections', Icon: Users },
+    { to: '/follows', label: 'Followers', Icon: Users },
     { to: '/discover', label: 'Discover', Icon: Search },
     { to: '/profile', label: 'Profile', Icon: UserIcon },
 ];
@@ -36,7 +36,6 @@ export const dummyUserData = {
     "location": "New York, NY",
     "followers": ["user_2", "user_3"],
     "following": ["user_2", "user_3"],
-    "connections": ["user_2", "user_3"],
     "posts": [],
     "is_verified": true,
     "createdAt": "2025-07-09T09:26:59.231Z",
@@ -277,11 +276,6 @@ export const dummyMessagesData = [
     },
 ]
 
-export const dummyConnectionsData = [
-    dummyUserData,
-    dummyUser2Data,
-    dummyUser3Data
-]
 
 export const dummyFollowersData = [
     dummyUser2Data,
@@ -291,8 +285,4 @@ export const dummyFollowersData = [
 export const dummyFollowingData = [
     dummyUser2Data,
     dummyUser3Data
-]
-
-export const dummyPendingConnectionsData = [
-    dummyUserData
 ]

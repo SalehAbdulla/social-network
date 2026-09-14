@@ -6,7 +6,7 @@ export const devUserEnabled = process.env.NODE_ENV !== 'production' && process.e
 export interface SocialUser {
   userId: string; nickname: string; firstName: string; lastName: string;
   bio: string; avatar: string; coverPhoto: string; location: string; isPublic: boolean; createdAt: string;
-  followers: string[]; following: string[]; connections: string[]; pending: string[]; requested: string[];
+  followers: string[]; following: string[];
 }
 export interface Post {
   postId: number; userId: string; nickname: string; title: string; content: string;
@@ -30,7 +30,7 @@ export interface ChatMessage {
 export interface Notification {
   notificationId: number; actorId: string; actorNickname: string; entityType: string; entityId: number; postId?: number; isRead: number; createdAt: string;
 }
-export type Connections = Record<'followers' | 'following' | 'connections' | 'pending' | 'requested', SocialUser[]>;
+export type FollowLists = Record<'followers' | 'following', SocialUser[]>;
 export interface Group { groupId: number; ownerId: string; ownerName: string; title: string; description: string; memberCount: number; isMember: boolean; isOwner: boolean; joinRequested: boolean; createdAt: string }
 export interface GroupMember { userId: string; nickname: string; firstName: string; lastName: string; avatar: string; role: string; joinedAt: string }
 export interface GroupRequest { requestId: number; groupId: number; userId: string; nickname: string; status: string; createdAt: string }

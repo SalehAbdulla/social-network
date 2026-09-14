@@ -288,7 +288,7 @@ func TestSocialIntegration(t *testing.T) {
 		}
 	})
 
-	t.Run("profiles and connections", func(t *testing.T) {
+	t.Run("profiles and follows", func(t *testing.T) {
 		privateProfile := decoded[models.SocialUser](t, dummy.call("GET", "/api/v1/users/me", nil, 200))
 		privateProfile.IsPublic = false
 		dummy.call("PUT", "/api/v1/users/me", privateProfile, 200)
@@ -316,21 +316,26 @@ func TestSocialIntegration(t *testing.T) {
 		if len(profile.Following) != 1 {
 			t.Fatal("follow must be idempotent")
 		}
-		dummy.call("POST", "/api/v1/connections/alex-id", nil, 200)
-		dummy.call("POST", "/api/v1/connections/alex-id", nil, 200)
 		alerts := decoded[notification.NotificationResponse](t, alex.call("GET", "/api/v1/notifications", nil, 200))
-		if len(alerts.Notifications) != 2 {
-			t.Fatal("follow and connection request must each notify once")
+		if len(alerts.Notifications) != 1 {
+			t.Fatal("following twice must notify only once")
 		}
-		dummy.call("PUT", "/api/v1/connections/alex-id", nil, 404)
-		pending := decoded[map[string][]models.SocialUser](t, alex.call("GET", "/api/v1/connections", nil, 200))
-		if len(pending["pending"]) != 1 {
-			t.Fatal("missing incoming connection")
+		follows := decoded[map[string][]models.SocialUser](t, dummy.call("GET", "/api/v1/follows", nil, 200))
+		if len(follows) != 2 || len(follows["followers"]) != 1 || len(follows["following"]) != 1 {
+			t.Fatalf("unexpected follow lists: %+v", follows)
 		}
-		alex.call("PUT", "/api/v1/connections/dummy-id", nil, 200)
-		profile = decoded[models.SocialUser](t, dummy.call("GET", "/api/v1/users/me", nil, 200))
-		if len(profile.Connections) != 1 {
-			t.Fatal("connection was not accepted")
+		if follows["followers"][0].FirstName != "Alex" {
+			t.Fatal("follower list must contain profile details")
+		}
+		for _, method := range []string{"GET", "POST", "PUT", "DELETE"} {
+			dummy.call(method, "/api/v1/connections/alex-id", nil, 404)
+		}
+		dummy.call("GET", "/api/v1/connections", nil, 404)
+		profileData := decoded[map[string]json.RawMessage](t, dummy.call("GET", "/api/v1/users/me", nil, 200))
+		for _, key := range []string{"connections", "pending", "requested"} {
+			if _, exists := profileData[key]; exists {
+				t.Fatalf("obsolete profile field: %s", key)
+			}
 		}
 		profile.Bio = "Integration profile"
 		profile.Location = "Bahrain"
@@ -339,7 +344,6 @@ func TestSocialIntegration(t *testing.T) {
 		if err != nil || stored.Bio != profile.Bio {
 			t.Fatal("profile was not persisted", err)
 		}
-		dummy.call("DELETE", "/api/v1/connections/alex-id", nil, 200)
 		dummy.call("DELETE", "/api/v1/users/alex-id/follow", nil, 200)
 	})
 
@@ -580,9 +584,7 @@ func TestLiveConnectionUpdates(t *testing.T) {
 	dummySocket := connect(dummy, "dummy-id")
 	dummy.call("PUT", "/api/v1/users/alex-id/follow", nil, 200)
 	readUpdate(alexSocket, "dummy-id")
-	dummy.call("POST", "/api/v1/connections/alex-id", nil, 200)
-	readUpdate(alexSocket, "dummy-id")
-	alex.call("PUT", "/api/v1/connections/dummy-id", nil, 200)
+	alex.call("PUT", "/api/v1/users/dummy-id/follow", nil, 200)
 	readUpdate(dummySocket, "alex-id")
 }
 

@@ -12,6 +12,7 @@ import (
 type PostService interface {
 	GetPosts(pageNumber int, pageSize int, sortBy string, sortOrder string, userId string) (posts.PostResponse, error)
 	CreatePost(userID string, title string, content string, privacy string, selectedUsers []string, imageURLs ...string) (posts.PostDTO, error)
+	UpdatePost(postID int, userID string, title string, content string, privacy string, selectedUsers []string, imageURLs ...string) (posts.PostDTO, error)
 	GetPostByID(postId int, userId string) (posts.PostDTO, error)
 	DeletePost(postId int, userID string) error
 }
@@ -87,21 +88,52 @@ func (p PostServiceImpl) DeletePost(postId int, userID string) error {
 }
 
 func (p PostServiceImpl) CreatePost(userID string, title string, content string, privacy string, selectedUsers []string, imageURLs ...string) (posts.PostDTO, error) {
+	post, err := p.preparePost(userID, title, content, privacy, selectedUsers, imageURLs)
+	if err != nil {
+		return posts.PostDTO{}, err
+	}
+	createdPost, err := p.db.CreatePost(post)
+	if err != nil {
+		return posts.PostDTO{}, err
+	}
+	return mapPostToDTO(createdPost, 0), nil
+}
+
+func (p PostServiceImpl) UpdatePost(postID int, userID string, title string, content string, privacy string, selectedUsers []string, imageURLs ...string) (posts.PostDTO, error) {
+	current, err := p.db.GetPostByID(postID, userID)
+	if err != nil {
+		return posts.PostDTO{}, err
+	}
+	if current.UserId != userID {
+		return posts.PostDTO{}, realtimeforum.ErrForbidden
+	}
+	post, err := p.preparePost(userID, title, content, privacy, selectedUsers, imageURLs)
+	if err != nil {
+		return posts.PostDTO{}, err
+	}
+	post.PostId = postID
+	if _, err = p.db.UpdatePost(post); err != nil {
+		return posts.PostDTO{}, err
+	}
+	return p.GetPostByID(postID, userID)
+}
+
+func (p PostServiceImpl) preparePost(userID, title, content, privacy string, selectedUsers, imageURLs []string) (models.Post, error) {
 	if privacy == "" {
 		privacy = "public"
 	}
 	if privacy != "public" && privacy != "followers" && privacy != "selected" {
-		return posts.PostDTO{}, realtimeforum.ErrBadRequest
+		return models.Post{}, realtimeforum.ErrBadRequest
 	}
 	if privacy == "selected" {
 		if len(selectedUsers) == 0 {
-			return posts.PostDTO{}, realtimeforum.ErrBadRequest
+			return models.Post{}, realtimeforum.ErrBadRequest
 		}
 		if err := p.db.ValidateSelectedFollowers(userID, selectedUsers); err != nil {
-			return posts.PostDTO{}, err
+			return models.Post{}, err
 		}
 	} else if len(selectedUsers) > 0 {
-		return posts.PostDTO{}, realtimeforum.ErrBadRequest
+		return models.Post{}, realtimeforum.ErrBadRequest
 	}
 	if imageURLs == nil {
 		imageURLs = []string{}
@@ -116,10 +148,5 @@ func (p PostServiceImpl) CreatePost(userID string, title string, content string,
 		SelectedUsers: selectedUsers,
 	}
 
-	createdPost, err := p.db.CreatePost(post)
-	if err != nil {
-		return posts.PostDTO{}, err
-	}
-
-	return mapPostToDTO(createdPost, 0), nil
+	return post, nil
 }

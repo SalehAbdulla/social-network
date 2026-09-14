@@ -43,9 +43,6 @@ func (db *DB) SocialProfile(id string) (models.SocialUser, error) {
 	}{
 		{&u.Followers, "SELECT followerId FROM follow WHERE followedId = ?", []any{id}},
 		{&u.Following, "SELECT followedId FROM follow WHERE followerId = ?", []any{id}},
-		{&u.Connections, "SELECT CASE WHEN requesterId = ? THEN recipientId ELSE requesterId END FROM connection WHERE (requesterId = ? OR recipientId = ?) AND status = 'accepted'", []any{id, id, id}},
-		{&u.Pending, "SELECT requesterId FROM connection WHERE recipientId = ? AND status = 'pending'", []any{id}},
-		{&u.Requested, "SELECT recipientId FROM connection WHERE requesterId = ? AND status = 'pending'", []any{id}},
 	}
 	for _, q := range queries {
 		*q.target, err = db.stringList(q.query, q.args...)
@@ -80,8 +77,6 @@ func (db *DB) DiscoverUsers(currentID, search string, offset int) ([]models.Soci
 		if err != nil {
 			return nil, err
 		}
-		// Pending requests are visible only to the account owner.
-		u.Pending, u.Requested = []string{}, []string{}
 		users = append(users, u)
 	}
 	return users, nil
@@ -110,29 +105,6 @@ func (db *DB) FollowUser(actor, target string, follow bool) (bool, error) {
 		return false, err
 	}
 	n, err := result.RowsAffected()
-	return n > 0, err
-}
-
-func (db *DB) ChangeConnection(actor, target, action string) (bool, error) {
-	var result sql.Result
-	var err error
-	switch action {
-	case "request":
-		result, err = db.Conn.Exec("INSERT INTO connection (requesterId, recipientId) VALUES (?, ?) ON CONFLICT DO NOTHING", actor, target)
-	case "accept":
-		result, err = db.Conn.Exec("UPDATE connection SET status = 'accepted' WHERE requesterId = ? AND recipientId = ? AND status = 'pending'", target, actor)
-	case "remove":
-		result, err = db.Conn.Exec("DELETE FROM connection WHERE (requesterId = ? AND recipientId = ?) OR (requesterId = ? AND recipientId = ?)", actor, target, target, actor)
-	default:
-		return false, backend.ErrBadRequest
-	}
-	if err != nil {
-		return false, err
-	}
-	n, err := result.RowsAffected()
-	if err == nil && n == 0 && action == "accept" {
-		return false, backend.ErrNotFound
-	}
 	return n > 0, err
 }
 

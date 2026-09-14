@@ -73,7 +73,7 @@ try {
   const web = start('frontend', process.execPath, [path.join(frontend, 'node_modules/next/dist/bin/next'), 'dev', '-p', String(frontendPort)], {
     cwd: frontend, env: { ...env, NODE_ENV: 'development', NEXT_PUBLIC_DEV_USER: 'true', BACKEND_URL: backendURL, NEXT_DIST_DIR: '.next-smoke', NEXT_TELEMETRY_DISABLED: '1' },
   });
-  await ready(web, base, 200);
+  await ready(web, base + '/login', 200);
   await run(process.execPath, ['scripts/integration-smoke.mjs'], { cwd: frontend, env: { ...env, BASE_URL: base, TEST_ARTIFACT_DIR: taskDir } });
 } finally {
   for (const child of services.reverse()) {

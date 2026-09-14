@@ -23,7 +23,10 @@ await new Promise((resolve, reject) => { socket.addEventListener('open', resolve
 let sequence = 0;
 const pending = new Map();
 const exceptions = [];
+const exceptionDetails = [];
 const failedResponses = [];
+let holdGroupRefresh = false;
+const heldGroupRequests = [];
 socket.addEventListener('message', async ({ data }) => {
   const event = JSON.parse(String(data));
   if (event.id) {
@@ -31,11 +34,29 @@ socket.addEventListener('message', async ({ data }) => {
     pending.delete(event.id); clearTimeout(entry.timer);
     if (event.error) entry.reject(new Error(JSON.stringify(event.error))); else entry.resolve(event.result);
   }
-  if (event.method === 'Runtime.exceptionThrown') exceptions.push(event.params.exceptionDetails.text + ': ' + (event.params.exceptionDetails.exception?.description || ''));
+  if (event.method === 'Runtime.exceptionThrown') {
+    const detail = event.params.exceptionDetails;
+    exceptions.push(detail.text + ': ' + (detail.exception?.description || ''));
+    exceptionDetails.push(detail);
+    if (detail.exception?.objectId) {
+      try {
+        const inspected = await command('Runtime.callFunctionOn', { objectId: detail.exception.objectId, functionDeclaration: 'function() { return { type: this.type, target: this.target?.tagName, src: this.target?.src, href: this.target?.href, url: this.target?.url, stack: this.stack }; }', returnByValue: true }, event.sessionId);
+        detail.event = inspected.result.value;
+      } catch { /* Navigation can discard the exception object. */ }
+    }
+  }
   if (event.method === 'Network.responseReceived' && event.params.response.status >= 400 && event.params.response.url.startsWith(base)) {
     failedResponses.push({ url: event.params.response.url, status: event.params.response.status });
   }
   if (event.method === 'Fetch.requestPaused') {
+    // Use the system font offline without making the stylesheet loader reject.
+    if (new URL(event.params.request.url).hostname === 'fonts.googleapis.com') {
+      await command('Fetch.fulfillRequest', { requestId: event.params.requestId, responseCode: 200, responseHeaders: [{ name: 'Content-Type', value: 'text/css' }], body: '' }, event.sessionId);
+      return;
+    }
+    if (holdGroupRefresh && event.params.request.method === 'GET' && new URL(event.params.request.url).pathname === '/api/v1/groups') {
+      heldGroupRequests.push(event); return;
+    }
     const local = event.params.request.url.startsWith(base + '/') || event.params.request.url.startsWith('data:') || event.params.request.url.startsWith('blob:');
     try { await command(local ? 'Fetch.continueRequest' : 'Fetch.failRequest', local ? { requestId: event.params.requestId } : { requestId: event.params.requestId, errorReason: 'BlockedByClient' }, event.sessionId); } catch { /* A page may close with a request pending. */ }
   }
@@ -81,12 +102,13 @@ async function createPage(email = 'dummy@example.com') {
 }
 async function navigate(page, route) {
   await command('Page.navigate', { url: base + route }, page);
-  await until(page, `!!document.querySelector('select[aria-label="Development user"]')`, `load ${route}`);
+  await until(page, `location.pathname === ${JSON.stringify(route)} && !!document.querySelector('select[aria-label="Development user"]')`, `load ${route}`);
 }
 async function fill(page, selector, value) {
   await evaluate(page, `(() => { const element = document.querySelector(${JSON.stringify(selector)}); if (!element) throw new Error('Input not found'); Object.getOwnPropertyDescriptor(Object.getPrototypeOf(element), 'value').set.call(element, ${JSON.stringify(value)}); element.dispatchEvent(new Event('input', { bubbles: true })); element.dispatchEvent(new Event('change', { bubbles: true })); })()`);
 }
 async function button(page, text) {
+  await until(page, `[...document.querySelectorAll('button')].some(element => element.textContent.trim() === ${JSON.stringify(text)} && !element.disabled)`, `button ${text}`);
   await evaluate(page, `(() => { const button = [...document.querySelectorAll('button')].find(element => element.textContent.trim() === ${JSON.stringify(text)}); if (!button) throw new Error('Button not found: ' + ${JSON.stringify(text)}); button.click(); })()`);
 }
 async function enter(page, shift = false) {
@@ -100,7 +122,7 @@ async function api(page, route, method = 'GET', body) {
 const stamp = String(Date.now());
 let dummy, alex, originalDummy, originalAlex, postId, storyId, mediaURL;
 try {
-  for (const route of ['/', '/post/1', '/profile', '/profile/someone', '/messages', '/messages/someone', '/groups', '/groups/1', '/connections', '/discover', '/notifications', '/create-post', '/CreatePost', '/missing-page']) {
+  for (const route of ['/', '/post/1', '/post/1/edit', '/profile', '/profile/someone', '/messages', '/messages/someone', '/groups', '/groups/1', '/follows', '/connections', '/discover', '/notifications', '/create-post', '/CreatePost', '/missing-page']) {
     const response = await fetch(base + route, { redirect: 'manual' });
     assert.equal(response.status, 307, `Anonymous ${route} must redirect before rendering`);
     assert.equal(new URL(response.headers.get('location'), base).pathname, '/login');
@@ -139,11 +161,36 @@ try {
   await until(dummy, `(async () => (await (await fetch('/api/v1/post?id=${postId}')).json()).data.score === 1)()`, 'post reaction');
   console.log('PASS: post creation, image upload, detail page and reaction persist');
 
+  await evaluate(dummy, `document.querySelector('a[aria-label="Edit post"]').click()`);
+  await until(dummy, `document.querySelector('h1')?.textContent === 'Edit Post' && !!document.querySelector('img[alt="Post photo 1"]')`, 'prefilled post editor');
+  assert.equal(await evaluate(dummy, `document.querySelector('input[placeholder="Give your post a title"]').value`), created.title);
+  await fill(dummy, 'input[placeholder="Give your post a title"]', 'Cancelled edit');
+  await evaluate(dummy, `[...document.querySelectorAll('main a')].find(link => link.textContent === 'Cancel').click()`);
+  await until(dummy, `location.pathname === '/post/${postId}' && !!document.querySelector('a[aria-label="Edit post"]')`, 'cancel edit');
+  assert.equal((await api(dummy, `/post?id=${postId}`)).title, created.title);
+  await evaluate(dummy, `document.querySelector('a[aria-label="Edit post"]').click()`);
+  await until(dummy, `document.querySelector('h1')?.textContent === 'Edit Post'`, 'reopen editor');
+  await fill(dummy, 'input[placeholder="Give your post a title"]', `Updated ${stamp}`);
+  await fill(dummy, 'textarea', `Updated browser post content ${stamp}`);
+  await button(dummy, 'Save changes');
+  await until(dummy, `location.pathname === '/post/${postId}' && document.body.innerText.includes(${JSON.stringify(`Updated browser post content ${stamp}`)})`, 'saved post');
+  const edited = await api(dummy, `/post?id=${postId}`);
+  assert.equal(edited.title, `Updated ${stamp}`);
+  assert.deepEqual(edited.imageUrls, created.imageUrls);
+  assert.equal(edited.score, 1);
+  console.log('PASS: owner edit button, prefilled editor, cancel and save preserve photos and votes');
+
   alex = await createPage('alex@example.com');
   await navigate(alex, '/');
   await fill(alex, 'select[aria-label="Development user"]', 'alex@example.com');
   await until(alex, `document.querySelector('select[aria-label="Development user"]')?.value === 'alex@example.com' && document.body.innerText.includes('@alexdemo')`, 'switch demo user');
   originalAlex = await api(alex, '/users/me');
+  await navigate(alex, `/post/${postId}`);
+  await until(alex, `!!document.querySelector('button[aria-label="Upvote post"]')`, 'other author post');
+  assert(!(await evaluate(alex, `!!document.querySelector('a[aria-label="Edit post"]')`)));
+  await navigate(alex, `/post/${postId}/edit`);
+  await until(alex, `document.body.innerText.includes('You can only edit your own posts.')`, 'non-owner editor denied');
+  assert(!(await evaluate(alex, `!!document.querySelector('input[placeholder="Give your post a title"]')`)));
   await navigate(alex, `/post/${postId}`);
   await until(alex, `!!document.querySelector('article')`, 'Alex post details');
   await evaluate(alex, `[...document.querySelectorAll('button')].find(button => button.textContent.includes('comments')).click()`);
@@ -166,26 +213,33 @@ try {
   console.log('PASS: second user comments and the post owner receives a notification');
 
   await navigate(alex, '/discover');
-  await until(alex, `document.body.innerText.includes('@dummyuser')`, 'discover users');
-  await navigate(dummy, '/connections');
-  await evaluate(dummy, `[...document.querySelectorAll('button')].find(button => button.textContent.includes('Received requests')).click()`);
+  await until(alex, `document.querySelector('h1')?.textContent === 'Discover People' && document.querySelector('main').innerText.includes('@dummyuser')`, 'discover users');
+  await navigate(dummy, '/follows');
   if (!originalAlex.following.includes(originalDummy.userId)) await button(alex, 'Follow');
-  await pause(500);
-  if (!originalAlex.connections.includes(originalDummy.userId) && !originalAlex.requested.includes(originalDummy.userId)) {
-    await button(alex, 'Connect');
-    await until(alex, `document.body.innerText.includes('Request sent')`, 'connection request');
-    await until(dummy, `document.body.innerText.includes('@alexdemo')`, 'incoming request');
-    await button(dummy, 'Accept');
-    await until(dummy, `(async () => (await (await fetch('/api/v1/users/me')).json()).data.connections.includes(${JSON.stringify(originalAlex.userId)}))()`, 'accept request');
-    await until(alex, `document.body.innerText.includes('Connected')`, 'live connection acceptance');
-  }
-  console.log('PASS: discovery, follow and connection acceptance');
+  await until(dummy, `document.body.innerText.includes('@alexdemo')`, 'live follower list');
+  assert(!(await evaluate(alex, 'document.body.innerText')).includes('Connect'));
+  assert(!(await evaluate(dummy, 'document.body.innerText')).includes('Received requests'));
+  console.log('PASS: follow and live follower lists without connection controls');
+
+  await navigate(dummy, `/post/${postId}/edit`);
+  await until(dummy, `document.querySelector('h1')?.textContent === 'Edit Post'`, 'edit audience');
+  await fill(dummy, 'main select', 'selected');
+  await until(dummy, `!!document.querySelector('input[aria-label="Alex Demo"]')`, 'named follower choice');
+  assert(!(await evaluate(dummy, `document.querySelector('fieldset').innerText`)).includes(originalAlex.userId));
+  await evaluate(dummy, `document.querySelector('input[aria-label="Alex Demo"]').click()`);
+  await button(dummy, 'Save changes');
+  await until(dummy, `location.pathname === '/post/${postId}' && !!document.querySelector('article')`, 'saved audience');
+  const restricted = await api(dummy, `/post?id=${postId}`);
+  assert.equal(restricted.privacy, 'selected');
+  assert.deepEqual(restricted.selectedFollowerIds, [originalAlex.userId]);
+  assert.equal(restricted.commentsCounter, 1);
+  console.log('PASS: editing selected followers preserves comments and saves the correct audience');
 
   await navigate(dummy, '/profile');
   await navigate(alex, `/profile/${originalDummy.userId}`);
   await until(alex, `!!document.querySelector('[aria-label="Profile statistics"]') && document.body.innerText.includes('Unfollow')`, 'profile follow control');
   const beforeFollow = await api(dummy, '/users/me');
-  const stats = followers => `document.querySelector('[aria-label="Profile statistics"]')?.innerText.replace(/\\s+/g, ' ').trim() === ${JSON.stringify(`${followers} followers ${beforeFollow.following.length} following ${beforeFollow.connections.length} connections`)}`;
+  const stats = followers => `document.querySelector('[aria-label="Profile statistics"]')?.innerText.replace(/\\s+/g, ' ').trim() === ${JSON.stringify(`${followers} followers ${beforeFollow.following.length} following`)}`;
   await button(alex, 'Unfollow');
   await until(alex, stats(beforeFollow.followers.length - 1), 'viewed profile updates follower count');
   await until(dummy, stats(beforeFollow.followers.length - 1), 'owner sees live follower count');
@@ -195,11 +249,20 @@ try {
   console.log('PASS: profile follow/unfollow and live database counts');
 
   await navigate(dummy, '/groups');
+  await fill(dummy, 'input[aria-label="Search groups"]', 'does-not-match-new-group');
+  await button(dummy, 'Search');
+  await until(dummy, `document.body.innerText.includes('No groups found.')`, 'filtered group list');
   await button(dummy, 'Create group');
   await fill(dummy, 'input[name="title"]', `Browser group ${stamp}`);
   await fill(dummy, 'textarea[name="description"]', 'Browser group join workflow');
+  holdGroupRefresh = true;
   await button(dummy, 'Create group');
   await until(dummy, `!document.querySelector('input[name="title"]') && document.body.innerText.includes(${JSON.stringify(`Browser group ${stamp}`)})`, 'create group');
+  assert.equal(await evaluate(dummy, `document.querySelector('input[aria-label="Search groups"]').value`), '');
+  assert(!(await evaluate(dummy, 'document.body.innerText')).includes('No groups found.'));
+  holdGroupRefresh = false;
+  for (const event of heldGroupRequests.splice(0)) await command('Fetch.continueRequest', { requestId: event.params.requestId }, event.sessionId);
+  console.log('PASS: created group appears before list refresh and clears the previous search');
   const group = (await api(dummy, '/groups')).find(item => item.title === `Browser group ${stamp}`);
   await navigate(alex, '/groups');
   await until(alex, `!!document.querySelector('a[href="/groups/${group.groupId}"]')`, 'group listing');
@@ -288,10 +351,9 @@ try {
     if (postId) await api(dummy, `/posts?id=${postId}`, 'DELETE').catch(() => {});
     if (storyId) await api(dummy, `/stories/${storyId}`, 'DELETE').catch(() => {});
     await api(dummy, '/users/me', 'PUT', originalDummy).catch(() => {});
-    if (originalAlex && !originalDummy.connections.includes(originalAlex.userId)) await api(dummy, `/connections/${originalAlex.userId}`, 'DELETE').catch(() => {});
   }
   if (alex && originalAlex && originalDummy && !originalAlex.following.includes(originalDummy.userId)) await api(alex, `/users/${originalDummy.userId}/follow`, 'DELETE').catch(() => {});
-  await writeFile(path.join(taskDir, 'result.json'), JSON.stringify({ postId, storyId, mediaURL, exceptions, failedResponses }, null, 2));
+  await writeFile(path.join(taskDir, 'result.json'), JSON.stringify({ postId, storyId, mediaURL, exceptions, exceptionDetails, failedResponses }, null, 2));
   await command('Browser.close').catch(() => {});
   socket.close();
   browser.kill();
