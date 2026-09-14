@@ -6,6 +6,25 @@ The browser sends the backend's HTTP-only session cookie with these requests.
 
 ## Run locally with the demo users
 
+The root `./run.sh` keeps the existing startup behavior outside WSL. Inside WSL,
+it automatically delegates to `scripts/run-wsl.sh` for the features below.
+
+For WSL, keep the working copy in Ubuntu's filesystem, for example
+`~/projects/social-network`, for faster installs and builds. Open that directory
+with VS Code's WSL support and run `./run.sh` from the project root. The launcher
+checks native dependencies, installs missing packages with `npm ci`, and starts
+both services. Ctrl+C stops both services and their child processes. You can also
+run `./run.sh status` or `./run.sh stop` from another terminal. These commands
+work from either working copy: starting a second copy reports the directory
+already running. Edit files in that directory to see your changes in the app.
+The launcher checks for occupied ports before starting either service.
+
+The WSL helper uses the Linux versions of Node.js/npm and Go, and the `setsid`,
+`flock`, and `ss` utilities supplied by Ubuntu. It loads nvm when Node.js is not
+on PATH.
+Its automatic install skips the registry's audit request; use `npm audit`
+separately when you want a vulnerability report.
+
 From `backend`, start the demo backend in one terminal:
 
 ```powershell
