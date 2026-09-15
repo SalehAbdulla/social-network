@@ -1,0 +1,24 @@
+services:
+  backend:
+    build: ./backend
+    environment:
+      APP_ENV: ${APP_ENV:-development}
+      DEV_DUMMY_USER: "false"
+      FRONTEND_ORIGIN: ${FRONTEND_ORIGIN:-http://localhost:4000}
+      DATABASE_PATH: /data/socialnetwork.db
+      UPLOAD_DIR: /data/uploads
+    volumes:
+      - social-data:/data
+    restart: unless-stopped
+  frontend:
+    build:
+      context: ./frontend
+      args:
+        BACKEND_URL: http://backend:5174
+    ports:
+      - "127.0.0.1:4000:4000"
+    depends_on:
+      - backend
+    restart: unless-stopped
+volumes:
+  social-data:

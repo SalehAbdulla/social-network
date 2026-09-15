@@ -1,0 +1,5 @@
+tmp
+uploads
+pkg/db/*.db*
+.env*
+*.exe

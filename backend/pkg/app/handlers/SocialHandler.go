@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"encoding/json"
+	"io"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -27,7 +28,12 @@ func respond(w http.ResponseWriter, status int, data any) {
 
 func (re *HandlerContext) decode(w http.ResponseWriter, r *http.Request, value any) bool {
 	r.Body = http.MaxBytesReader(w, r.Body, 1<<20)
-	if err := json.NewDecoder(r.Body).Decode(value); err != nil {
+	decoder := json.NewDecoder(r.Body)
+	if err := decoder.Decode(value); err != nil {
+		re.HandleError(w, r, backend.ErrBadRequest)
+		return false
+	}
+	if err := decoder.Decode(new(any)); err != io.EOF {
 		re.HandleError(w, r, backend.ErrBadRequest)
 		return false
 	}

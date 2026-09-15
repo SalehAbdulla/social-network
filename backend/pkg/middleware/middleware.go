@@ -3,6 +3,7 @@ package middleware
 import (
 	"context"
 	"net/http"
+	"os"
 	"social-network/backend/pkg/app/service"
 )
 
@@ -44,7 +45,7 @@ func clearSessionCookie(w http.ResponseWriter) {
 		Path:     "/",
 		MaxAge:   -1,
 		HttpOnly: true,
-		Secure:   false,
+		Secure:   os.Getenv("APP_ENV") == "production",
 		SameSite: http.SameSiteLaxMode,
 	}
 	http.SetCookie(w, cookie)

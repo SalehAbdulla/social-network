@@ -7,7 +7,7 @@ import { useResource } from '../lib/useResource';
 import { useBackend } from './BackendProvider';
 import RequestState from './RequestState';
 
-function CreateStory({ close, saved }: { close: () => void; saved: () => void }) {
+export function CreateStory({ close, saved }: { close: () => void; saved: () => void }) {
   const [text, setText] = useState('');
   const [color, setColor] = useState('#4f46e5');
   const [media, setMedia] = useState<{ file: File; preview: string } | null>(null);

@@ -11,6 +11,7 @@ type SessionManager struct {
 	TokenToUID map[string]string
 	UIDToToken map[string]string
 	Presence   map[string]time.Time
+	Expires    map[string]time.Time
 }
 
 var DefaultSessionManager = NewSessionManager()
@@ -20,6 +21,7 @@ func NewSessionManager() *SessionManager {
 		TokenToUID: make(map[string]string),
 		UIDToToken: make(map[string]string),
 		Presence:   make(map[string]time.Time),
+		Expires:    make(map[string]time.Time),
 	}
 }
 
@@ -29,6 +31,7 @@ func (m *SessionManager) CreateSession(userID, token string) {
 
 	if previousToken, ok := m.UIDToToken[userID]; ok {
 		delete(m.TokenToUID, previousToken)
+		delete(m.Expires, previousToken)
 	}
 
 	if existingUserID, ok := m.TokenToUID[token]; ok && existingUserID != userID {
@@ -36,15 +39,23 @@ func (m *SessionManager) CreateSession(userID, token string) {
 	}
 
 	m.TokenToUID[token] = userID
+	m.Expires[token] = time.Now().Add(30 * 24 * time.Hour)
 	m.UIDToToken[userID] = token
 	m.Presence[userID] = time.Now().UTC()
 }
 
 func (m *SessionManager) GetUserIdByToken(token string) (string, bool) {
-	m.mu.RLock()
-	defer m.mu.RUnlock()
+	m.mu.Lock()
+	defer m.mu.Unlock()
 
 	userID, ok := m.TokenToUID[token]
+	if ok && time.Now().After(m.Expires[token]) {
+		delete(m.TokenToUID, token)
+		delete(m.UIDToToken, userID)
+		delete(m.Expires, token)
+		delete(m.Presence, userID)
+		return "", false
+	}
 	return userID, ok
 }
 
@@ -58,6 +69,7 @@ func (m *SessionManager) DeleteSession(token string) {
 	}
 
 	delete(m.TokenToUID, token)
+	delete(m.Expires, token)
 	delete(m.UIDToToken, userID)
 	delete(m.Presence, userID)
 }

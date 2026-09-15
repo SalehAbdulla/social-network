@@ -70,9 +70,22 @@ func (db *DB) Group(groupID int, userID string) (models.Group, error) {
 }
 
 func (db *DB) AddGroupRequest(groupID int, userID string) error {
-	_, err := db.Conn.Exec(`INSERT INTO socialGroupRequest (groupId,userId) VALUES (?,?)
-        ON CONFLICT(groupId,userId) DO UPDATE SET status='pending',createdAt=CURRENT_TIMESTAMP`, groupID, userID)
-	return err
+	tx, err := db.Conn.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	result, err := tx.Exec(`INSERT INTO socialGroupRequest (groupId,userId) VALUES (?,?)
+        ON CONFLICT(groupId,userId) DO UPDATE SET status='pending',createdAt=CURRENT_TIMESTAMP WHERE status<>'pending'`, groupID, userID)
+	if err != nil {
+		return err
+	}
+	if count, _ := result.RowsAffected(); count > 0 {
+		if _, err = tx.Exec(`INSERT INTO notification(userId,actorId,entityType,entityId,message) SELECT ownerId,?,'group_request',groupId,'' FROM socialGroup WHERE groupId=?`, userID, groupID); err != nil {
+			return err
+		}
+	}
+	return tx.Commit()
 }
 
 func (db *DB) GroupMembers(groupID int) ([]models.GroupMember, error) {
@@ -167,10 +180,15 @@ func (db *DB) AddGroupInvitation(groupID int, inviterID, inviteeID string) error
 	if isMember {
 		return backend.ErrBadRequest
 	}
-	_, err = tx.Exec(`INSERT INTO socialGroupInvitation (groupId,userId) VALUES (?,?)
-		ON CONFLICT(groupId,userId) DO UPDATE SET status='pending',createdAt=CURRENT_TIMESTAMP`, groupID, inviteeID)
+	result, err := tx.Exec(`INSERT INTO socialGroupInvitation (groupId,userId) VALUES (?,?)
+		ON CONFLICT(groupId,userId) DO UPDATE SET status='pending',createdAt=CURRENT_TIMESTAMP WHERE status<>'pending'`, groupID, inviteeID)
 	if err != nil {
 		return err
+	}
+	if count, _ := result.RowsAffected(); count > 0 {
+		if _, err = tx.Exec(`INSERT INTO notification(userId,actorId,entityType,entityId,message) VALUES(?,?,'group_invitation',?,'')`, inviteeID, inviterID, groupID); err != nil {
+			return err
+		}
 	}
 	return tx.Commit()
 }
