@@ -3,6 +3,7 @@ package websocket
 import (
 	"encoding/json"
 	"log"
+	"sync"
 	"time"
 
 	"github.com/gorilla/websocket"
@@ -25,12 +26,16 @@ type Client struct {
 	Conn               *websocket.Conn
 	Send               chan []byte
 	UserID             string
-	CurrentChatPartner string
+	currentChatPartner string
+	chatMu             sync.RWMutex
 }
 
 func (c *Client) ReadPump(handleMessage func(client *Client, messageType int, data []byte)) {
 	defer func() {
-		c.Hub.Unregister <- c
+		select {
+		case c.Hub.Unregister <- c:
+		case <-c.Hub.done:
+		}
 		c.Conn.Close()
 	}()
 
@@ -86,7 +91,7 @@ func (c *Client) WritePump() {
 				return
 			}
 
-		case <- ticker.C:
+		case <-ticker.C:
 			c.Conn.SetWriteDeadline(time.Now().Add(writeWait))
 			if err := c.Conn.WriteMessage(websocket.PingMessage, nil); err != nil {
 				return
@@ -112,4 +117,14 @@ func defaultMessageHandler(c *Client, messageType int, data []byte) {
 	default:
 		log.Printf("unknown message type: %s", msg.Type)
 	}
+}
+func (c *Client) SetChatPartner(id string) {
+	c.chatMu.Lock()
+	defer c.chatMu.Unlock()
+	c.currentChatPartner = id
+}
+func (c *Client) ChatPartner() string {
+	c.chatMu.RLock()
+	defer c.chatMu.RUnlock()
+	return c.currentChatPartner
 }

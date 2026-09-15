@@ -47,7 +47,7 @@ func (db *DB) GetComments(postId int, pageNumber int, pageSize int, sortBy strin
 	offset := (pageNumber - 1) * pageSize
 
 	query := `
-		SELECT c.commentId, c.postId, c.userId, u.nickName, c.commentText, c.score, c.createdAt,
+		SELECT c.commentId, c.postId, c.userId, u.nickName, c.content, c.score, c.createdAt,
 		       COALESCE(r.score, 0) AS userScore
 		FROM comment c
 		JOIN user u ON c.userId = u.userId
@@ -99,7 +99,7 @@ func (db *DB) CreateComment(userId string, postId int, content string) (models.C
 	}
 
 	result, err := db.Conn.Exec(
-		`INSERT INTO comment (postId, userId, commentText, score, createdAt)
+		`INSERT INTO comment (postId, userId, content, score, createdAt)
 		 VALUES (?, ?, ?, 0, datetime('now'))`,
 		postId, userId, content,
 	)
@@ -112,7 +112,6 @@ func (db *DB) CreateComment(userId string, postId int, content string) (models.C
 		return models.Comment{}, realtimeforum.ErrInternal
 	}
 
-	
 	_, err = db.Conn.Exec(
 		`UPDATE post SET commentsCounter = commentsCounter + 1 WHERE postId = ?`,
 		postId,
@@ -123,7 +122,7 @@ func (db *DB) CreateComment(userId string, postId int, content string) (models.C
 
 	var com models.Comment
 	err = db.Conn.QueryRow(
-		`SELECT commentId, postId, userId, commentText, createdAt
+		`SELECT commentId, postId, userId, content, createdAt
 		 FROM comment
 		 WHERE commentId = ?`, commentID,
 	).Scan(
@@ -133,7 +132,7 @@ func (db *DB) CreateComment(userId string, postId int, content string) (models.C
 		&com.CommentText,
 		&com.CreatedAt,
 	)
-	
+
 	if err != nil {
 		return models.Comment{}, realtimeforum.ErrInternal
 	}

@@ -33,9 +33,10 @@ func (db *DB) GetNotifications(userID string, offset, limit int, unreadOnly bool
 	}
 
 	query := `
-		SELECT n.notificationId, n.userId, n.actorId, COALESCE(u.nickName, ''), n.entityType, n.entityId, n.isRead, n.createdAt
+		SELECT n.notificationId, n.userId, n.actorId, COALESCE(u.nickName, ''), n.entityType, n.entityId, n.isRead, n.createdAt, COALESCE(c.postId, 0)
 		FROM notification n
 		LEFT JOIN user u ON n.actorId = u.userId
+		LEFT JOIN comment c ON n.entityType = 'comment' AND n.entityId = c.commentId
 		WHERE n.userId = ?
 	`
 	var args []interface{}
@@ -57,7 +58,7 @@ func (db *DB) GetNotifications(userID string, offset, limit int, unreadOnly bool
 	var notifications []models.Notification
 	for rows.Next() {
 		var n models.Notification
-		if err := rows.Scan(&n.NotificationId, &n.UserId, &n.ActorId, &n.ActorNickname, &n.EntityType, &n.EntityId, &n.IsRead, &n.CreatedAt); err != nil {
+		if err := rows.Scan(&n.NotificationId, &n.UserId, &n.ActorId, &n.ActorNickname, &n.EntityType, &n.EntityId, &n.IsRead, &n.CreatedAt, &n.PostId); err != nil {
 			return nil, 0, realtimeforum.ErrInternal
 		}
 		notifications = append(notifications, n)
@@ -88,8 +89,8 @@ func (db *DB) GetUnreadCount(userID string) (int, error) {
 
 func (db *DB) CreateNotification(userID, actorID, entityType string, entityID int) (models.Notification, error) {
 	result, err := db.Conn.Exec(
-		`INSERT INTO notification (userId, actorId, entityType, entityId, isRead, createdAt)
-		 VALUES (?, ?, ?, ?, 0, datetime('now'))`,
+		`INSERT INTO notification (userId, actorId, entityType, entityId, message, isRead, createdAt)
+		 VALUES (?, ?, ?, ?, '', 0, datetime('now'))`,
 		userID, actorID, entityType, entityID,
 	)
 	if err != nil {
@@ -103,12 +104,13 @@ func (db *DB) CreateNotification(userID, actorID, entityType string, entityID in
 
 	var n models.Notification
 	err = db.Conn.QueryRow(
-		`SELECT n.notificationId, n.userId, n.actorId, COALESCE(u.nickName, ''), n.entityType, n.entityId, n.isRead, n.createdAt
+		`SELECT n.notificationId, n.userId, n.actorId, COALESCE(u.nickName, ''), n.entityType, n.entityId, n.isRead, n.createdAt, COALESCE(c.postId, 0)
 		 FROM notification n
 		 LEFT JOIN user u ON n.actorId = u.userId
+		 LEFT JOIN comment c ON n.entityType = 'comment' AND n.entityId = c.commentId
 		 WHERE n.notificationId = ?`,
 		notificationID,
-	).Scan(&n.NotificationId, &n.UserId, &n.ActorId, &n.ActorNickname, &n.EntityType, &n.EntityId, &n.IsRead, &n.CreatedAt)
+	).Scan(&n.NotificationId, &n.UserId, &n.ActorId, &n.ActorNickname, &n.EntityType, &n.EntityId, &n.IsRead, &n.CreatedAt, &n.PostId)
 	if err != nil {
 		return models.Notification{}, realtimeforum.ErrInternal
 	}
@@ -152,7 +154,7 @@ func (db *DB) MarkAllAsRead(userID string) error {
 	}
 
 	if rowsAffected == 0 {
-		
+
 		return nil
 	}
 

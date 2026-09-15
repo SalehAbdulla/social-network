@@ -39,6 +39,7 @@ func (n NotificationServiceImpl) GetNotifications(userID string, offset, limit i
 			ActorNickname:  notif.ActorNickname,
 			EntityType:     notif.EntityType,
 			EntityId:       notif.EntityId,
+			PostId:         notif.PostId,
 			IsRead:         notif.IsRead,
 			CreatedAt:      notif.CreatedAt,
 		}
@@ -57,7 +58,7 @@ func (n NotificationServiceImpl) GetUnreadCount(userID string) (int, error) {
 }
 
 func (n NotificationServiceImpl) CreateNotification(userID, actorID, entityType string, entityID int) (notification.NotificationDTO, error) {
-	if entityType != "comment" && entityType != "message" {
+	if entityType != "comment" && entityType != "message" && entityType != "connection" && entityType != "follow" {
 		return notification.NotificationDTO{}, realtimeforum.ErrBadRequest
 	}
 
@@ -72,6 +73,7 @@ func (n NotificationServiceImpl) CreateNotification(userID, actorID, entityType 
 		ActorNickname:  notif.ActorNickname,
 		EntityType:     notif.EntityType,
 		EntityId:       notif.EntityId,
+		PostId:         notif.PostId,
 		IsRead:         notif.IsRead,
 		CreatedAt:      notif.CreatedAt,
 	}, nil

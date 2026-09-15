@@ -20,7 +20,7 @@ var upgrader = websocket.Upgrader{
 }
 
 func (re *HandlerContext) ServeWs(w http.ResponseWriter, r *http.Request) {
-	
+
 	var sessionToken string
 
 	cookie, err := r.Cookie("session_token")
@@ -41,7 +41,9 @@ func (re *HandlerContext) ServeWs(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	conn, err := upgrader.Upgrade(w, r, nil)
+	socketUpgrader := upgrader
+	socketUpgrader.CheckOrigin = re.allowedOrigin
+	conn, err := socketUpgrader.Upgrade(w, r, nil)
 	if err != nil {
 		log.Printf("websocket upgrade error: %v", err)
 		return
@@ -102,23 +104,6 @@ func (re *HandlerContext) handlePrivateMessage(sender *pkgwebsocket.Client, msg 
 		return
 	}
 
-	if !re.Hub.IsUserOnline(payload.RecipientId) {
-		errPayload := pkgwebsocket.SendErrorPayload{
-			RecipientId: payload.RecipientId,
-			Message:     "User is offline. Messages can only be sent to online users.",
-		}
-		errData, err := json.Marshal(map[string]interface{}{
-			"type":    pkgwebsocket.MsgTypeSendError,
-			"payload": errPayload,
-		})
-		if err != nil {
-			log.Printf("failed to marshal send_error: %v", err)
-			return
-		}
-		re.Hub.SendToUser(sender.UserID, errData)
-		return
-	}
-
 	savedMsg, err := re.MessageService.SendMessage(sender.UserID, payload.RecipientId, payload.Text)
 	if err != nil {
 		log.Printf("failed to save message: %v", err)
@@ -151,14 +136,12 @@ func (re *HandlerContext) handlePrivateMessage(sender *pkgwebsocket.Client, msg 
 
 	re.Hub.SendToUser(sender.UserID, incomingData)
 
-	
 	isRecipientViewingSender := false
 	recipientClient := re.Hub.GetClientByUserID(payload.RecipientId)
-	if recipientClient != nil && recipientClient.CurrentChatPartner == sender.UserID {
+	if recipientClient != nil && recipientClient.ChatPartner() == sender.UserID {
 		isRecipientViewingSender = true
 	}
 
-	
 	if !isRecipientViewingSender {
 		notif, err := re.NotificationService.CreateNotification(payload.RecipientId, sender.UserID, "message", savedMsg.MessageId)
 		if err != nil {
@@ -198,7 +181,6 @@ func (re *HandlerContext) handleTyping(client *pkgwebsocket.Client, msg pkgwebso
 		return
 	}
 
-	
 	if client.UserID != payload.SenderId {
 		return
 	}
@@ -209,7 +191,7 @@ func (re *HandlerContext) handleTyping(client *pkgwebsocket.Client, msg pkgwebso
 	}
 
 	typingData, err := json.Marshal(map[string]interface{}{
-		"type":    pkgwebsocket.MsgTypeTyping,
+		"type": pkgwebsocket.MsgTypeTyping,
 		"payload": pkgwebsocket.TypingPayload{
 			SenderId:       client.UserID,
 			RecipientId:    payload.RecipientId,
@@ -229,15 +211,13 @@ func (re *HandlerContext) handleOpenChat(client *pkgwebsocket.Client, msg pkgweb
 		return
 	}
 
-	client.CurrentChatPartner = payload.PartnerId
+	client.SetChatPartner(payload.PartnerId)
 
-	
 	re.NotificationService.MarkAsReadByActor(client.UserID, payload.PartnerId, "message")
 }
 
 func (re *HandlerContext) handleCloseChat(client *pkgwebsocket.Client, msg pkgwebsocket.WSMessage) {
-	client.CurrentChatPartner = ""
-	println(msg);
+	client.SetChatPartner("")
 }
 
 func (re *HandlerContext) handleUserOffline(client *pkgwebsocket.Client) {
@@ -256,7 +236,6 @@ func (re *HandlerContext) handleTypingStopped(client *pkgwebsocket.Client, msg p
 		return
 	}
 
-	
 	if client.UserID != payload.SenderId {
 		return
 	}
@@ -267,7 +246,7 @@ func (re *HandlerContext) handleTypingStopped(client *pkgwebsocket.Client, msg p
 	}
 
 	stoppedData, err := json.Marshal(map[string]interface{}{
-		"type":    pkgwebsocket.MsgTypeTypingStopped,
+		"type": pkgwebsocket.MsgTypeTypingStopped,
 		"payload": pkgwebsocket.TypingPayload{
 			SenderId:       client.UserID,
 			RecipientId:    payload.RecipientId,

@@ -1,36 +1,89 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+﻿# Social Network frontend
 
-## Getting Started
+The Next.js frontend calls the Go backend through the same origin. API requests
+to `/api/v1/*`, uploaded media, and the `/ws` WebSocket are proxied to `BACKEND_URL`.
+The browser sends the backend's HTTP-only session cookie with these requests.
 
-First, run the development server:
+## Run locally with the demo users
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+From `backend`, start the demo backend in one terminal:
+
+```powershell
+.\dev.cmd
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+On Ubuntu / WSL, use `sh ./dev.sh` instead.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+This creates Dummy User and Alex Demo if they do not already exist, enables demo
+sessions, and starts Go on port 5174. Existing accounts and their data are kept.
+Go and a C compiler are required; the script detects GCC at
+`C:\msys64\mingw64\bin` on Windows.
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+In `frontend/.env`, keep your existing keys and add:
 
-## Learn More
+```dotenv
+NEXT_PUBLIC_DEV_USER=true
+BACKEND_URL=http://127.0.0.1:5174
+```
 
-To learn more about Next.js, take a look at the following resources:
+Check `.env.local` too if you have one, since its values override `.env`.
+Then run in a second terminal from `frontend`:
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+```powershell
+npm install
+npm run dev
+```
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+Run the install command inside the same operating system as the dev server.
+For Ubuntu / WSL, use Ubuntu's Node.js and npm. Windows native dependencies in a
+shared `node_modules` folder cannot be loaded by Linux.
 
-## Deploy on Vercel
+If Next.js reports missing `@next/swc-linux-*` packages or falls back to WASM,
+stop the dev server with Ctrl+C and run these commands in the Ubuntu terminal,
+from `frontend`:
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+```sh
+npm install --include=optional
+npm run dev
+```
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+This installs the Linux native packages required by Next.js, Tailwind, and
+Lightning CSS. The project enables optional dependencies in `.npmrc`; keep the
+lockfile, which includes both Windows and Linux packages. Reinstall dependencies
+when switching the operating system used to run this shared checkout.
+
+Open **http://localhost:4000**. The app opens as Dummy User; use the
+**Development user** selector at the bottom of the sidebar to switch to Alex Demo.
+Login redirects to the feed in demo mode. Restart Next.js after changing its
+environment settings. If Go restarts, click **Reconnect** to renew the demo session.
+
+Use separate browser profiles or a private window to interact as both users.
+The backend allows one session per account; a fresh login for the same account
+invalidates its previous session. Select a different demo user in each window
+and reconnect the first window if needed.
+
+The connected screens cover posts, comments, reactions, uploaded images, profiles,
+stories, discovery, follows, connection requests, notifications, and chat with
+typing, read receipts, attachments, editing, and deletion. Follow and connection
+changes update both users over WebSocket. Comment notifications open their post.
+
+Demo sessions are available only in development, with `DEV_DUMMY_USER=true` on
+Go and `NEXT_PUBLIC_DEV_USER=true` on Next.js. This setup uses the demo users;
+Clerk-to-Go authentication is still separate work before production login.
+
+## Checks
+
+```powershell
+npm run lint
+npx tsc --noEmit
+npm run build
+npm run test:integration
+```
+
+The integration command builds and starts temporary backend and frontend servers
+on available ports, seeds a separate database, and drives two headless Chrome
+sessions through the UI. It does not use your development database. Chrome must
+be installed; set `CHROME_PATH` if it is outside its default Windows location.
+Logs, the test database, and screenshots remain in `backend/tmp/integration-*`.
+The temporary servers stop when the check finishes. Go uses `backend/tmp/go-build`
+for its cache unless `GOCACHE` is already set.

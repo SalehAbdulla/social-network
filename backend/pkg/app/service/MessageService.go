@@ -2,8 +2,10 @@ package service
 
 import (
 	realtimeforum "social-network/backend"
-	"social-network/backend/pkg/payload/message"
 	db "social-network/backend/pkg/app/repositories"
+	"social-network/backend/pkg/payload/message"
+	"strings"
+	"unicode/utf8"
 )
 
 type MessageService interface {
@@ -45,6 +47,9 @@ func (m MessageServiceImpl) GetMessages(conversationPartnerID string, currentUse
 	for i, msg := range messages {
 		dtos[i] = message.MessageDTO{
 			MessageId:   msg.MessageId,
+			MediaURL:    msg.MediaURL,
+			MediaType:   msg.MediaType,
+			EditedAt:    msg.EditedAt,
 			SenderId:    msg.SenderId,
 			RecipientId: msg.RecipientId,
 			TextMessage: msg.TextMessage,
@@ -62,6 +67,10 @@ func (m MessageServiceImpl) GetMessages(conversationPartnerID string, currentUse
 }
 
 func (m MessageServiceImpl) SendMessage(senderID string, recipientID string, textMessage string) (message.MessageDTO, error) {
+	textMessage = strings.TrimSpace(textMessage)
+	if utf8.RuneCountInString(textMessage) > 2000 {
+		return message.MessageDTO{}, realtimeforum.ErrBadRequest
+	}
 	if senderID == recipientID {
 		return message.MessageDTO{}, realtimeforum.ErrBadRequest
 	}
@@ -77,6 +86,9 @@ func (m MessageServiceImpl) SendMessage(senderID string, recipientID string, tex
 
 	return message.MessageDTO{
 		MessageId:   msg.MessageId,
+		MediaURL:    msg.MediaURL,
+		MediaType:   msg.MediaType,
+		EditedAt:    msg.EditedAt,
 		SenderId:    msg.SenderId,
 		RecipientId: msg.RecipientId,
 		TextMessage: msg.TextMessage,

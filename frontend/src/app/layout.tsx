@@ -1,24 +1,13 @@
-import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
-import { Metadata } from "next";
-import ClientLayoutWrapper from "./components/ClientLayoutWrapper";
-
-const geistSans = Geist({
-  variable: "--font-geist-sans",
-  subsets: ["latin"],
-});
-
-const geistMono = Geist_Mono({
-  variable: "--font-geist-mono",
-  subsets: ["latin"],
-});
+import type { Metadata } from "next";
+import BackendProvider from "./components/BackendProvider";
 
 export const metadata: Metadata = {
   title: "Social Network",
   description: "Powered By Reboot",
   icons: {
-    icon: '/favicon.svg'
-  }
+    icon: "/favicon.svg",
+  },
 };
 
 export default function RootLayout({
@@ -27,12 +16,9 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html
-      lang="en"
-      className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
-    >
+    <html lang="en" className="h-full antialiased">
       <body className="min-h-full h-full flex bg-gray-100">
-            <ClientLayoutWrapper>{children}</ClientLayoutWrapper>
+        <BackendProvider>{children}</BackendProvider>
       </body>
     </html>
   );

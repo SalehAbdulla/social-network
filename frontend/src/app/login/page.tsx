@@ -1,14 +1,61 @@
-"use client"
-import React, { useState } from 'react'
-import {assets} from '../../../public/assets';
+'use client';
+
+import { FormEvent, useEffect, useState } from 'react';
+import { useRouter } from 'next/navigation';
+import { assets } from '../../../public/assets';
 import { Star } from 'lucide-react';
-import { useForm } from 'react-hook-form';
+import { authRequest, errorMessage, nicknameAvailability } from '../api/social';
 
 const Login = () => {
+  const router = useRouter();
+  const [registering, setRegistering] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+  const [nickname, setNickname] = useState('');
+  const [nicknameState, setNicknameState] = useState<'idle' | 'checking' | 'available' | 'taken' | 'invalid'>('idle');
+  const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
 
-  const {register, handleSubmit } = useForm();
-  const [isLogin, setIsLogin] = useState<boolean>(true);
-  
+  useEffect(() => {
+    if (!registering) return;
+    const normalized = nickname.trim().toLowerCase();
+    if (!/^[a-z0-9_]{2,33}$/.test(normalized)) {
+      setNicknameState(normalized ? 'invalid' : 'idle');
+      return;
+    }
+    setNicknameState('checking');
+    const timer = window.setTimeout(() => {
+      void nicknameAvailability(normalized).then(available => setNicknameState(available ? 'available' : 'taken')).catch(() => setNicknameState('idle'));
+    }, 350);
+    return () => window.clearTimeout(timer);
+  }, [nickname, registering]);
+
+  async function submit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setBusy(true);
+    setError('');
+    const values = Object.fromEntries(new FormData(event.currentTarget).entries());
+    try {
+      if (registering) {
+        if (nicknameState !== 'available') throw new Error(nicknameState === 'taken' ? 'This nickname is already reserved.' : 'Enter an available nickname.');
+        if (password !== confirmPassword) throw new Error('Passwords do not match.');
+        await authRequest('/auth/register', Object.fromEntries(Object.entries(values).map(([key, value]) => [key, String(value)])));
+      } else {
+        await authRequest('/auth/login', {
+          identifier: String(values.identifier || ''),
+          password: String(values.password || ''),
+          rememberMe: values.rememberMe === 'on' ? 'true' : 'false',
+        });
+      }
+      router.replace('/');
+      router.refresh();
+    } catch (caught) {
+      setError(errorMessage(caught));
+    } finally {
+      setBusy(false);
+    }
+  }
+
   return (
     <div className='min-h-screen flex flex-col md:flex-row'>
       {/*BackGround Image*/}
@@ -31,43 +78,34 @@ const Login = () => {
       </div>
       <span className='md:h-10'></span>
       </div>
-      {/* Right side :Login Form  */}
-      <div className={isLogin ? `${'flex-1 flex items-start justify-center md:mt-[35vh] p-6 sm:p-10'}` : `${'flex-1 flex items-start justify-center md:mt-[18vh] p-6 sm:p-10'}`}>
-        {/* <SignIn routing="hash" /> */}
-            <div className='w-100' >
-                <div className='flex items-center justify-center gap-2 my-6'>
-                  <button className={`${isLogin ? 'underline underline-offset-8 cursor-pointer text-black' : 'cursor-pointer text-slate-500'}`} onClick={() => setIsLogin(true)}>login</button>
-                  <br />
-                  <button className={`${!isLogin ? 'underline underline-offset-8 cursor-pointer text-black' : ' cursor-pointer text-slate-500'}`} onClick={() => setIsLogin(false)}>register</button>
-                </div>
-              {!isLogin ?
-                <form onSubmit={handleSubmit((data) => {
-                console.log(data);
-              })} action="" className='flex flex-col gap-7'>
-                  <input className='p-2  border border-slate-400 ' type="text" {...register("nickname")}  placeholder='Nickname'/>
-                  <input className='p-2  border border-slate-400 ' type="email" {...register("email")}  placeholder='Email'/>
-                  <input className='p-2  border border-slate-400 ' type="text" {...register("firstname")}  placeholder='FirstName'/>
-                  <input className='p-2  border border-slate-400 ' type="text" {...register("lastname")}  placeholder='LastName'/>
-                  <input className='p-2  border border-slate-400 ' type="password" {...register("password")}  placeholder='Password'/>
-                  <input className='p-2  border border-slate-400 ' type="password" {...register("confirmpassword")}  placeholder='Confirm Password'/>
-                  <input className='p-2  border border-slate-400 ' type="text" {...register("age")}  placeholder='age'/>
-                  <input className='p-2  border border-slate-400 ' type="password" {...register("gender")}  placeholder='Gender'/>
-                  <input className='p-2 bg-linear-to-r from-brand-1 to-brand-2 text-white hover:bg-blue-600' type="submit" />
-              </form>
-            : 
-              <form onSubmit={handleSubmit((data) => {
-                console.log(data);
-              })} action="" className='flex flex-col gap-7'>
-                  <input className='p-2 text-sm w-full border border-slate-400 ' type="text" {...register("identifier")}  placeholder='email or nickname'/>
-                  <input className='p-2 text-sm  border border-slate-400 ' type="password" {...register("password")}  placeholder='password'/>
-                  <input className={`p-2 bg-linear-to-r from-brand-1 to-brand-2 text-white`} type="submit" />
-              </form>
-             }
-            </div> 
-
+      {/* Right side: authentication form */}
+      <div className='flex-1 flex items-center justify-center p-6 sm:p-10'>
+        <form onSubmit={submit} className="w-full max-w-md space-y-5 rounded-2xl bg-white/95 p-6 shadow-lg sm:p-8">
+          <div><h2 className="text-2xl font-bold text-brand-deep">{registering ? 'Create your account' : 'Welcome back'}</h2><p className="mt-1 text-sm text-slate-500">{registering ? 'Join the community and start connecting.' : 'Sign in to continue to your network.'}</p></div>
+          {registering ? <>
+            <div className="grid gap-4 sm:grid-cols-2"><Field name="firstName" label="First name" required /><Field name="lastName" label="Last name" required /></div>
+            <div className="grid gap-4 sm:grid-cols-2"><label className="block text-sm text-slate-700">Nickname<input name="nickName" value={nickname} onChange={event => setNickname(event.target.value)} required minLength={2} maxLength={33} pattern="[a-zA-Z0-9_]+" className="mt-1 w-full rounded-lg border border-slate-200 p-2.5" />{nicknameState === 'checking' && <span className="text-xs text-slate-500">Checking availability...</span>}{nicknameState === 'available' && <span className="text-xs text-teal-700">Nickname is available.</span>}{(nicknameState === 'taken' || nicknameState === 'invalid') && <span className="text-xs text-red-700">{nicknameState === 'taken' ? 'Nickname is already reserved.' : 'Use 2-33 letters, numbers, or underscores.'}</span>}</label><Field name="birthDate" label="Date of birth" type="date" min={dateYearsAgo(100)} max={dateYearsAgo(13)} required /></div>
+            <Field name="email" label="Email" type="email" required />
+            <div className="grid gap-4 sm:grid-cols-2"><Field name="password" label="Password" type="password" minLength={12} required onChange={setPassword} /><Field name="confirmPassword" label="Confirm password" type="password" minLength={12} required onChange={setConfirmPassword} /></div>
+            <label className="block text-sm text-slate-700">Gender<select name="gender" required className="mt-1 w-full rounded-lg border border-slate-200 p-2.5"><option value="">Select gender</option><option value="female">Female</option><option value="male">Male</option></select></label>
+          </> : <><Field name="identifier" label="Email or nickname" required /><Field name="password" label="Password" type="password" required /><label className="flex items-center gap-2 text-sm text-slate-600"><input name="rememberMe" type="checkbox" />Remember me</label></>}
+          {error && <p className="rounded-lg bg-red-50 p-3 text-sm text-red-700" role="alert">{error}</p>}
+          <button disabled={busy} className="w-full rounded-lg bg-blue-600 px-4 py-3 font-medium text-white hover:bg-blue-700 disabled:opacity-50">{busy ? 'Please wait...' : registering ? 'Create account' : 'Sign in'}</button>
+          <button type="button" onClick={() => { setRegistering(!registering); setError(''); }} className="w-full text-sm text-blue-600">{registering ? 'Already have an account? Sign in' : 'Need an account? Register'}</button>
+        </form>
       </div>
     </div>
   )
+}
+
+function dateYearsAgo(years: number) {
+  const date = new Date();
+  date.setFullYear(date.getFullYear() - years);
+  return date.toISOString().slice(0, 10);
+}
+
+function Field({ name, label, type = 'text', min, max, minLength, required, onChange }: { name: string; label: string; type?: string; min?: string; max?: string; minLength?: number; required?: boolean; onChange?: (value: string) => void }) {
+  return <label className="block text-sm text-slate-700">{label}<input name={name} type={type} min={min} max={max} minLength={minLength} required={required} onChange={event => onChange?.(event.target.value)} className="mt-1 w-full rounded-lg border border-slate-200 p-2.5" /></label>;
 }
 
 export default Login

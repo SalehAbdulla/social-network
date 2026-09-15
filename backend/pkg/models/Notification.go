@@ -5,8 +5,9 @@ type Notification struct {
 	UserId         string
 	ActorId        string
 	ActorNickname  string
-	EntityType     string 
+	EntityType     string
 	EntityId       int
-	IsRead         int 
+	PostId         int
+	IsRead         int
 	CreatedAt      string
 }

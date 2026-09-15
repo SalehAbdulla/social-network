@@ -1,6 +1,9 @@
 package models
 
 type Message struct {
+	MediaURL    string
+	MediaType   string
+	EditedAt    string
 	MessageId   int
 	SenderId    string
 	RecipientId string

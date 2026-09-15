@@ -31,6 +31,10 @@ func (re *HandlerContext) GetComments(w http.ResponseWriter, r *http.Request) {
 		re.HandleError(w, r, realtimeforum.ErrBadRequest)
 		return
 	}
+	if _, err := re.PostService.GetPostByID(postIdInt, userID); err != nil {
+		re.HandleError(w, r, err)
+		return
+	}
 
 	pageNumberStr := r.URL.Query().Get("page")
 	if pageNumberStr == "" {
@@ -109,6 +113,10 @@ func (re *HandlerContext) CreateComments(w http.ResponseWriter, r *http.Request)
 
 	if !isASCII(content) {
 		re.HandleError(w, r, realtimeforum.ErrNonASCII)
+		return
+	}
+	if _, err := re.PostService.GetPostByID(postId, userID); err != nil {
+		re.HandleError(w, r, err)
 		return
 	}
 

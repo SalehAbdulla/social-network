@@ -14,6 +14,7 @@ var (
 	ErrInvalidCredentials = errors.New("invalid email or password")
 	ErrPasswordsDontMatch = errors.New("passwords do not match")
 	ErrInvalidAge         = errors.New("please enter a valid age between 1 and 100")
+	ErrInvalidBirthDate   = errors.New("please enter a valid date of birth; you must be at least 13 years old")
 	ErrInvalidEmail       = errors.New("please enter a valid email address")
 	ErrEmailExists        = errors.New("this email is already registered")
 	ErrNickName           = errors.New("this username is already taken")

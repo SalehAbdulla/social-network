@@ -6,123 +6,105 @@ import (
 )
 
 type Hub struct {
-	mu sync.RWMutex
-
-	clients map[string]*Client
-
-	Register chan *Client
-
+	mu         sync.RWMutex
+	clients    map[string]map[*Client]struct{}
+	Register   chan *Client
 	Unregister chan *Client
-
-	broadcast chan []byte
+	done       chan struct{}
+	stop       sync.Once
 }
 
 func NewHub() *Hub {
-	return &Hub{
-		clients:    make(map[string]*Client),
-		Register:   make(chan *Client),
-		Unregister: make(chan *Client),
-		broadcast:  make(chan []byte, 256),
-	}
+	return &Hub{clients: make(map[string]map[*Client]struct{}), Register: make(chan *Client), Unregister: make(chan *Client), done: make(chan struct{})}
 }
 
 func (h *Hub) Run() {
 	for {
 		select {
-		case client := <-h.Register:
+		case <-h.done:
 			h.mu.Lock()
-			h.clients[client.UserID] = client
-			h.mu.Unlock()
-
-			h.broadcastUserStatus(client.UserID, 1, client.UserID)
-
-		case client := <-h.Unregister:
-			h.mu.Lock()
-			// Only unregister if this exact connection is the registered one,
-			// and only broadcast offline once (ReadPump also unregisters on close).
-			current, ok := h.clients[client.UserID]
-			if ok && current == client {
-				delete(h.clients, client.UserID)
-				close(client.Send)
-			}
-			h.mu.Unlock()
-
-			if ok && current == client {
-				h.broadcastUserStatus(client.UserID, 0, "")
-			}
-
-		case message := <-h.broadcast:
-			h.mu.RLock()
-			for _, client := range h.clients {
-				select {
-				case client.Send <- message:
-				default:
+			for _, clients := range h.clients {
+				for client := range clients {
 					close(client.Send)
-					delete(h.clients, client.UserID)
 				}
 			}
-			h.mu.RUnlock()
+			h.clients = make(map[string]map[*Client]struct{})
+			h.mu.Unlock()
+			return
+		case client := <-h.Register:
+			h.mu.Lock()
+			first := len(h.clients[client.UserID]) == 0
+			if first {
+				h.clients[client.UserID] = make(map[*Client]struct{})
+			}
+			h.clients[client.UserID][client] = struct{}{}
+			h.mu.Unlock()
+			if first {
+				h.broadcastUserStatus(client.UserID, 1, client.UserID)
+			}
+		case client := <-h.Unregister:
+			h.mu.Lock()
+			_, present := h.clients[client.UserID][client]
+			if present {
+				delete(h.clients[client.UserID], client)
+				close(client.Send)
+			}
+			offline := present && len(h.clients[client.UserID]) == 0
+			if offline {
+				delete(h.clients, client.UserID)
+			}
+			h.mu.Unlock()
+			if offline {
+				h.broadcastUserStatus(client.UserID, 0, "")
+			}
 		}
 	}
 }
 
+func (h *Hub) Stop() { h.stop.Do(func() { close(h.done) }) }
+
 func (h *Hub) SendToUser(userID string, message []byte) bool {
 	h.mu.RLock()
 	defer h.mu.RUnlock()
-
-	client, ok := h.clients[userID]
-	if !ok {
-		return false
+	delivered := false
+	for client := range h.clients[userID] {
+		select {
+		case client.Send <- message:
+			delivered = true
+		default:
+		}
 	}
-
-	select {
-	case client.Send <- message:
-		return true
-	default:
-		return false
-	}
+	return delivered
 }
 
 func (h *Hub) BroadcastToAll(message []byte) {
 	h.mu.RLock()
 	defer h.mu.RUnlock()
-
-	for _, client := range h.clients {
-		select {
-		case client.Send <- message:
-		default:
-			close(client.Send)
-			delete(h.clients, client.UserID)
+	for _, clients := range h.clients {
+		for client := range clients {
+			select {
+			case client.Send <- message:
+			default:
+			}
 		}
 	}
 }
 
 func (h *Hub) broadcastUserStatus(userID string, isOnline int, excludeUserID string) {
-	payload := UserStatusPayload{
-		UserId:   userID,
-		IsOnline: isOnline,
-	}
-
-	data, err := json.Marshal(map[string]interface{}{
-		"type":    MsgTypeUserStatus,
-		"payload": payload,
-	})
+	data, err := json.Marshal(map[string]any{"type": MsgTypeUserStatus, "payload": UserStatusPayload{UserId: userID, IsOnline: isOnline}})
 	if err != nil {
 		return
 	}
-
 	h.mu.RLock()
 	defer h.mu.RUnlock()
-
-	for uid, client := range h.clients {
-		if uid == excludeUserID {
-			continue
-		}
-		select {
-		case client.Send <- data:
-		default:
-			close(client.Send)
-			delete(h.clients, uid)
+	for uid, clients := range h.clients {
+		if uid != excludeUserID {
+			for client := range clients {
+				select {
+				case client.Send <- data:
+				default:
+				}
+			}
 		}
 	}
 }
@@ -130,25 +112,22 @@ func (h *Hub) broadcastUserStatus(userID string, isOnline int, excludeUserID str
 func (h *Hub) IsUserOnline(userID string) bool {
 	h.mu.RLock()
 	defer h.mu.RUnlock()
-
-	_, ok := h.clients[userID]
-	return ok
+	return len(h.clients[userID]) > 0
 }
-
 func (h *Hub) GetClientByUserID(userID string) *Client {
 	h.mu.RLock()
 	defer h.mu.RUnlock()
-
-	return h.clients[userID]
+	for client := range h.clients[userID] {
+		return client
+	}
+	return nil
 }
-
 func (h *Hub) GetOnlineUsers() []string {
 	h.mu.RLock()
 	defer h.mu.RUnlock()
-
-	users := make([]string, 0, len(h.clients))
-	for userID := range h.clients {
-		users = append(users, userID)
+	users := []string{}
+	for id := range h.clients {
+		users = append(users, id)
 	}
 	return users
 }

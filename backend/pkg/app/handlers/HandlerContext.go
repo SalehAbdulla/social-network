@@ -3,9 +3,9 @@ package handlers
 import (
 	"encoding/json"
 	"net/http"
+	"social-network/backend/pkg/app/service"
 	"social-network/backend/pkg/config"
 	"social-network/backend/pkg/payload"
-	"social-network/backend/pkg/app/service"
 	pkgwebsocket "social-network/backend/pkg/websocket"
 )
 
@@ -13,12 +13,14 @@ var HandlerCtx *HandlerContext
 
 type HandlerContext struct {
 	App                 *config.AppConfig
+	SocialService       *service.SocialService
 	AuthService         service.AuthService
 	PostService         service.PostService
 	CommentService      service.CommentService
 	ReactService        service.ReactionService
 	MessageService      service.MessageService
 	NotificationService service.NotificationService
+	GroupService        *service.GroupService
 	Hub                 *pkgwebsocket.Hub
 }
 

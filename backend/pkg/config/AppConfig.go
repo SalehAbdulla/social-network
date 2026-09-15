@@ -5,7 +5,10 @@ import (
 )
 
 type AppConfig struct {
-	Logger       *slog.Logger
-	InProduction bool
-	LogLevel     string
+	Logger         *slog.Logger
+	InProduction   bool
+	DevDummyUser   bool
+	UploadDir      string
+	FrontendOrigin string
+	LogLevel       string
 }

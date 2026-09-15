@@ -63,6 +63,14 @@ func (re *HandlerContext) GetChatUsers(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if re.Hub != nil {
+		for i := range users {
+			users[i].IsOnline = 0
+			if re.Hub.IsUserOnline(users[i].UserId) {
+				users[i].IsOnline = 1
+			}
+		}
+	}
 	w.WriteHeader(http.StatusOK)
 	json.NewEncoder(w).Encode(payload.SuccessResponse[[]message.ChatUserDTO]{
 		Success: true,

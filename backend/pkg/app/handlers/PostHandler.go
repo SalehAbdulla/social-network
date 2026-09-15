@@ -53,7 +53,7 @@ func (re *HandlerContext) GetPosts(w http.ResponseWriter, r *http.Request) {
 
 	sortBy := strings.TrimSpace(strings.ToLower(r.URL.Query().Get("sortBy")))
 	if sortBy == "" {
-		sortBy = "createdAt"
+		sortBy = "createdat"
 	}
 
 	sortOrder := strings.TrimSpace(strings.ToLower(r.URL.Query().Get("sortOrder")))
@@ -68,7 +68,7 @@ func (re *HandlerContext) GetPosts(w http.ResponseWriter, r *http.Request) {
 	}
 
 	pageSize, err := strconv.Atoi(pageSizeStr)
-	if err != nil || pageSize < 1 {
+	if err != nil || pageSize < 1 || pageSize > 100 {
 		re.HandleError(w, r, realtimeforum.ErrBadRequest)
 		return
 	}
@@ -115,8 +115,11 @@ func (re *HandlerContext) GetPosts(w http.ResponseWriter, r *http.Request) {
 }
 
 type CreatePostRequest struct {
-	Title   string `json:"title"`
-	Content string `json:"content"`
+	Title         string   `json:"title"`
+	Content       string   `json:"content"`
+	Privacy       string   `json:"privacy"`
+	SelectedUsers []string `json:"selectedFollowerIds"`
+	ImageURLs     []string `json:"imageUrls"`
 }
 
 func (re *HandlerContext) DeletePost(w http.ResponseWriter, r *http.Request) {
@@ -182,7 +185,7 @@ func (re *HandlerContext) CreatePost(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if content == "" || len(content) < 10 || len(content) > 500 {
+	if (len(content) < 10 && len(req.ImageURLs) == 0) || len(content) > 500 {
 		re.HandleError(w, r, realtimeforum.ErrContentLength)
 		return
 	}
@@ -192,7 +195,21 @@ func (re *HandlerContext) CreatePost(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	response, err := re.PostService.CreatePost(userID, title, content)
+	if len(req.ImageURLs) > 4 {
+		re.HandleError(w, r, realtimeforum.ErrBadRequest)
+		return
+	}
+	for _, url := range req.ImageURLs {
+		if url == "" {
+			re.HandleError(w, r, realtimeforum.ErrBadRequest)
+			return
+		}
+		if err := re.SocialService.ValidateMedia(userID, url, "image"); err != nil {
+			re.HandleError(w, r, err)
+			return
+		}
+	}
+	response, err := re.PostService.CreatePost(userID, title, content, req.Privacy, req.SelectedUsers, req.ImageURLs...)
 	if err != nil {
 		re.HandleError(w, r, err)
 		return

@@ -4,16 +4,16 @@ import (
 	"encoding/json"
 	"log/slog"
 	"net/http"
-	"strings"
 	realtimeforum "social-network/backend"
 	"social-network/backend/pkg/payload"
+	"strings"
 )
 
 func (re *HandlerContext) parseForm(w http.ResponseWriter, r *http.Request) bool {
-	
+
 	contentType := r.Header.Get("Content-Type")
 	if strings.HasPrefix(contentType, "multipart/form-data") {
-		if err := r.ParseMultipartForm(32 << 20); err != nil { 
+		if err := r.ParseMultipartForm(32 << 20); err != nil {
 			re.HandleError(w, r, realtimeforum.ErrBadRequest)
 			return false
 		}
@@ -34,7 +34,7 @@ func isASCII(s string) bool {
 }
 
 func (re *HandlerContext) HandleError(w http.ResponseWriter, r *http.Request, err error) {
-	
+
 	var statusCode int
 	var level slog.Level
 
@@ -58,7 +58,7 @@ func (re *HandlerContext) HandleError(w http.ResponseWriter, r *http.Request, er
 		statusCode = http.StatusInternalServerError
 		level = slog.LevelError
 	default:
-		
+
 		switch {
 		case err == realtimeforum.ErrInvalidEmail,
 			err == realtimeforum.ErrEmailExists,
@@ -68,6 +68,7 @@ func (re *HandlerContext) HandleError(w http.ResponseWriter, r *http.Request, er
 			err == realtimeforum.ErrPasswordsDontMatch,
 			err == realtimeforum.ErrInvalidPassForm,
 			err == realtimeforum.ErrInvalidAge,
+			err == realtimeforum.ErrInvalidBirthDate,
 			err == realtimeforum.ErrGender,
 			err == realtimeforum.ErrInvalidCredentials,
 			err == realtimeforum.ErrTitleLength,
@@ -84,7 +85,6 @@ func (re *HandlerContext) HandleError(w http.ResponseWriter, r *http.Request, er
 		}
 	}
 
-	
 	re.App.Logger.LogAttrs(r.Context(), level, "request error",
 		slog.String("error", err.Error()),
 		slog.String("method", r.Method),

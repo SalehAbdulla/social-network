@@ -6,6 +6,7 @@ type NotificationDTO struct {
 	ActorNickname  string `json:"actorNickname"`
 	EntityType     string `json:"entityType"`
 	EntityId       int    `json:"entityId"`
+	PostId         int    `json:"postId,omitempty"`
 	IsRead         int    `json:"isRead"`
 	CreatedAt      string `json:"createdAt"`
 }
