@@ -241,8 +241,27 @@ func (re *HandlerContext) socialNotification(actor, target, kind string) {
 	}
 }
 
+// FollowLists serves the followers and following lists of one profile so the
+// frontend can open them from the profile they belong to instead of a page.
 func (re *HandlerContext) FollowLists(w http.ResponseWriter, r *http.Request) {
-	u, err := re.SocialService.Repo.SocialProfile(currentUser(r))
+	id := r.PathValue("userId")
+	if id == "" || id == "me" {
+		id = currentUser(r)
+	}
+	if err := re.SocialService.Repo.DoesUserExists(id); err != nil {
+		re.HandleError(w, r, err)
+		return
+	}
+	visible, err := re.SocialService.CanViewProfile(currentUser(r), id)
+	if err != nil {
+		re.HandleError(w, r, err)
+		return
+	}
+	if !visible {
+		re.HandleError(w, r, backend.ErrForbidden)
+		return
+	}
+	u, err := re.SocialService.Repo.SocialProfile(id)
 	if err != nil {
 		re.HandleError(w, r, err)
 		return
@@ -251,11 +270,22 @@ func (re *HandlerContext) FollowLists(w http.ResponseWriter, r *http.Request) {
 	result := map[string][]models.SocialUser{}
 	for name, ids := range groups {
 		result[name] = []models.SocialUser{}
-		for _, id := range ids {
-			profile, err := re.SocialService.Repo.SocialProfile(id)
+		for _, memberID := range ids {
+			profile, err := re.SocialService.Repo.SocialProfile(memberID)
 			if err != nil {
 				re.HandleError(w, r, err)
 				return
+			}
+			browsable, err := re.SocialService.CanViewProfile(currentUser(r), memberID)
+			if err != nil {
+				re.HandleError(w, r, err)
+				return
+			}
+			if !browsable {
+				// The avatar and nickname identify the entry, the rest stays private.
+				profile.FirstName, profile.LastName, profile.Bio = "", "", ""
+				profile.CoverPhoto, profile.Location = "", ""
+				profile.Followers, profile.Following = []string{}, []string{}
 			}
 			result[name] = append(result[name], profile)
 		}
