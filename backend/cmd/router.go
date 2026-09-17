@@ -49,11 +49,11 @@ func routes() http.Handler {
 		mux.HandleFunc("POST /api/v1/dev/session", handlers.HandlerCtx.DevSession)
 	}
 	for pattern, handler := range map[string]http.HandlerFunc{
-		"GET /api/v1/follows":                  handlers.HandlerCtx.FollowLists,
 		"GET /api/v1/users":                    handlers.HandlerCtx.Discover,
 		"GET /api/v1/users/{userId}":           handlers.HandlerCtx.UserProfile,
 		"PUT /api/v1/users/me":                 handlers.HandlerCtx.UpdateProfile,
 		"GET /api/v1/users/{userId}/posts":     handlers.HandlerCtx.ProfilePosts,
+		"GET /api/v1/users/{userId}/follows":   handlers.HandlerCtx.FollowLists,
 		"PUT /api/v1/users/{userId}/follow":    handlers.HandlerCtx.Follow,
 		"DELETE /api/v1/users/{userId}/follow": handlers.HandlerCtx.Follow,
 		"GET /api/v1/stories":                  handlers.HandlerCtx.Stories,
