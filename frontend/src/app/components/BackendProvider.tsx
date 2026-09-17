@@ -4,6 +4,7 @@ import { createContext, useCallback, useContext, useEffect, useRef, useState } f
 import { usePathname, useRouter } from 'next/navigation';
 import { Menu } from 'lucide-react';
 import { errorMessage, isUnauthorized, request, type SocialUser, type SocketEvent } from '../api/social';
+import { notifyError } from '../lib/notify';
 import Loading from './Loading';
 import Sidebar from './SideBar';
 
@@ -131,8 +132,13 @@ function AuthenticatedBackend({ children }: { children: React.ReactNode }) {
     return () => window.removeEventListener('social:socket', listener);
   }, [refreshUser]);
 
-  if (error) return <div className="m-auto max-w-lg p-8 text-center space-y-4" role="alert">
-    <h1 className="text-xl font-semibold">Couldn&apos;t connect</h1><p>{error}</p>
+  // Session failures are reported with a toast instead of inline error UI.
+  useEffect(() => {
+    if (error) notifyError(error, () => void initialize());
+  }, [error, initialize]);
+
+  if (error) return <div className="m-auto max-w-lg p-8 text-center space-y-4">
+    <h1 className="text-xl font-semibold">Couldn&apos;t connect</h1>
     <button className="rounded-lg bg-blue-600 px-5 py-2 text-white" onClick={() => void initialize()}>Reconnect</button>
   </div>;
   if (!user) return <Loading />;
