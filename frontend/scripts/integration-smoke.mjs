@@ -122,7 +122,7 @@ async function api(page, route, method = 'GET', body) {
 const stamp = String(Date.now());
 let dummy, alex, originalDummy, originalAlex, postId, storyId, mediaURL;
 try {
-  for (const route of ['/', '/post/1', '/post/1/edit', '/profile', '/profile/someone', '/messages', '/messages/someone', '/groups', '/groups/1', '/follows', '/connections', '/discover', '/notifications', '/create-post', '/CreatePost', '/missing-page']) {
+  for (const route of ['/', '/post/1', '/post/1/edit', '/profile', '/profile/someone', '/messages', '/messages/someone', '/groups', '/groups/1', '/connections', '/discover', '/notifications', '/create-post', '/CreatePost', '/missing-page']) {
     const response = await fetch(base + route, { redirect: 'manual' });
     assert.equal(response.status, 307, `Anonymous ${route} must redirect before rendering`);
     assert.equal(new URL(response.headers.get('location'), base).pathname, '/login');
@@ -214,12 +214,21 @@ try {
 
   await navigate(alex, '/discover');
   await until(alex, `document.querySelector('h1')?.textContent === 'Discover People' && document.querySelector('main').innerText.includes('@dummyuser')`, 'discover users');
-  await navigate(dummy, '/follows');
+  await navigate(dummy, '/profile');
+  await until(dummy, `!!document.querySelector('[aria-label="Profile statistics"] button')`, 'own profile statistics');
+  await evaluate(dummy, `[...document.querySelectorAll('[aria-label="Profile statistics"] button')].find(button => button.textContent.includes('followers')).click()`);
+  await until(dummy, `!!document.querySelector('[role="dialog"][aria-label="Followers and following"]')`, 'followers dialog opens from the profile statistics');
   if (!originalAlex.following.includes(originalDummy.userId)) await button(alex, 'Follow');
-  await until(dummy, `document.body.innerText.includes('@alexdemo')`, 'live follower list');
+  await until(dummy, `document.querySelector('[role="dialog"]').innerText.includes('@alexdemo')`, 'live follower list inside the dialog');
+  const profileFollows = await api(dummy, `/users/${originalDummy.userId}/follows`);
+  assert(profileFollows.followers.some(person => person.userId === originalAlex.userId), 'the profile route returns the followers shown in the dialog');
+  await evaluate(dummy, `[...document.querySelectorAll('[role="dialog"] button')].find(button => button.textContent.startsWith('Following')).click()`);
+  await until(dummy, `document.querySelector('[role="dialog"] button[aria-pressed="true"]').textContent.startsWith('Following')`, 'switch to the following tab');
   assert(!(await evaluate(alex, 'document.body.innerText')).includes('Connect'));
   assert(!(await evaluate(dummy, 'document.body.innerText')).includes('Received requests'));
-  console.log('PASS: follow and live follower lists without connection controls');
+  await evaluate(dummy, `document.querySelector('[aria-label="Close followers and following"]').click()`);
+  await until(dummy, `!document.querySelector('[role="dialog"]')`, 'dismiss followers dialog');
+  console.log('PASS: profile statistics open the live followers dialog without connection controls');
 
   await navigate(dummy, `/post/${postId}/edit`);
   await until(dummy, `document.querySelector('h1')?.textContent === 'Edit Post'`, 'edit audience');
