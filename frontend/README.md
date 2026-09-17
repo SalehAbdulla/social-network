@@ -84,13 +84,15 @@ and sign in again in the first window if needed.
 
 Post owners can edit a post's title, content, photos, and audience from its pencil
 button. Creating a group immediately shows it in the list and clears the previous
-search. Followers and following are the only social relationships; the former
-connections URL redirects to `/follows`.
+search. Followers and following are the only social relationships; the profile
+statistics open them in a dialog, and the former connections URL redirects to the
+profile.
 
 The connected screens cover posts, comments, reactions, uploaded images, profiles,
-stories, discovery, followers and following, notifications, and chat with
-typing, read receipts, attachments, editing, and deletion. Follow
-changes update both users over WebSocket. Comment notifications open their post.
+stories, discovery, notifications, and chat with typing, read receipts,
+attachments, editing, and deletion. Follow changes update the profile statistics and
+any open followers dialog for both users over WebSocket. Comment notifications open
+their post.
 
 Demo sessions are available only in development, with `DEV_DUMMY_USER=true` on
 Go and `NEXT_PUBLIC_DEV_USER=true` on Next.js. Login and registration use the
