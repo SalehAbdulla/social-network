@@ -89,6 +89,8 @@ export async function request<T>(path: string, method = 'GET', body?: unknown, s
 }
 
 export async function upload(file: File): Promise<{ url: string; mediaType: 'image' | 'video' }> {
+	if (!file.size) throw new Error('The selected file is empty.');
+	if (!['image/jpeg','image/png','image/gif','image/webp','video/mp4','video/webm'].includes(file.type)) throw new Error('Choose a JPEG, PNG, GIF, WebP, MP4 or WebM file.');
   const limit = file.type.startsWith('image/') ? 10 : 50;
   if (file.size > limit * 1024 * 1024) throw new Error(`Files must be smaller than ${limit} MB.`);
   const form = new FormData();

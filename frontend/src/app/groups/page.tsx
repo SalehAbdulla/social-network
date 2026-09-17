@@ -5,6 +5,7 @@ import { useState } from 'react';
 import toast from 'react-hot-toast';
 import { type Group, errorMessage, request } from '../api/social';
 import { useResource } from '../lib/useResource';
+import GroupInvitations from '../components/GroupInvitations';
 import Loading from '../components/Loading';
 import RequestState from '../components/RequestState';
 import GroupJoinButton from '../components/GroupJoinButton';
@@ -32,6 +33,7 @@ export default function Groups() {
   }
   return <div className="mx-auto max-w-5xl space-y-6 p-6 sm:p-8">
     <div className="flex flex-wrap items-center justify-between gap-3"><div><h1 className="text-3xl font-bold">Groups</h1><p className="mt-1 text-slate-500">Find communities or create one of your own.</p></div><button onClick={() => setShowCreate(!showCreate)} className="rounded-lg bg-blue-600 px-4 py-2 text-white">{showCreate ? 'Close' : 'Create group'}</button></div>
+    <GroupInvitations changed={groups.reload} />
     {showCreate && <form onSubmit={create} className="space-y-4 rounded-xl border border-slate-200 bg-white p-5"><label className="block text-sm font-medium">Title<input name="title" required minLength={3} maxLength={100} className="mt-1 w-full rounded-lg border p-3" /></label><label className="block text-sm font-medium">Description<textarea name="description" maxLength={1000} className="mt-1 w-full rounded-lg border p-3" /></label><button disabled={creating} className="rounded-lg bg-teal-600 px-4 py-2 text-white disabled:opacity-50">{creating ? 'Creating...' : 'Create group'}</button></form>}
     <form onSubmit={event => { event.preventDefault(); setSearch(input); }} className="flex gap-3"><input aria-label="Search groups" value={input} onChange={event => setInput(event.target.value)} placeholder="Search groups" className="min-w-0 flex-1 rounded-lg border border-slate-200 bg-white p-3" /><button className="rounded-lg bg-slate-900 px-5 text-white">Search</button></form>
     {groups.loading && !visibleGroups.length && <Loading />}{groups.error && <RequestState error={groups.error} retry={groups.reload} />}

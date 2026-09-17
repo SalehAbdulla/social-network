@@ -136,9 +136,21 @@ func (db *DB) CanViewMedia(id, viewerID string) (bool, error) {
 			m.userId = ? OR EXISTS(
 				SELECT 1 FROM post p, json_each(p.imageUrls) image
 				WHERE image.value = '/api/v1/media/' || m.mediaId AND `+postVisibility+`
+			) OR EXISTS (
+				SELECT 1 FROM groupContent gc JOIN socialGroupMember gm ON gm.groupId=gc.groupId
+				WHERE gc.mediaUrl='/api/v1/media/' || m.mediaId AND gm.userId=?
+			) OR EXISTS (
+				SELECT 1 FROM story s WHERE s.mediaUrl='/api/v1/media/' || m.mediaId AND s.expiresAt>datetime('now')
+			) OR EXISTS (
+				SELECT 1 FROM user u WHERE u.avatar='/api/v1/media/' || m.mediaId
+			) OR EXISTS (
+				SELECT 1 FROM user u WHERE u.coverPhoto='/api/v1/media/' || m.mediaId AND
+				(u.isPublic=1 OR EXISTS(SELECT 1 FROM follow f WHERE f.followedId=u.userId AND f.followerId=?))
+			) OR EXISTS (
+				SELECT 1 FROM message msg WHERE msg.mediaUrl='/api/v1/media/' || m.mediaId AND (msg.senderId=? OR msg.recipientId=?)
 			)
 		)
-	)`, id, viewerID, viewerID, viewerID, viewerID, viewerID).Scan(&allowed)
+	)`, id, viewerID, viewerID, viewerID, viewerID, viewerID, viewerID, viewerID, viewerID, viewerID).Scan(&allowed)
 	return allowed, err
 }
 

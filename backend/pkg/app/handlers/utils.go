@@ -93,10 +93,15 @@ func (re *HandlerContext) HandleError(w http.ResponseWriter, r *http.Request, er
 		slog.Int("status", statusCode),
 	)
 
+	message := err.Error()
+	if statusCode == http.StatusInternalServerError {
+		message = "internal server error"
+	}
+	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(statusCode)
 	json.NewEncoder(w).Encode(payload.ErrorResponse{
 		Success: false,
-		Error:   err.Error(),
+		Error:   message,
 		Code:    statusCode,
 	})
 }

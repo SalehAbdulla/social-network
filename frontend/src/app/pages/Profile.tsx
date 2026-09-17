@@ -11,7 +11,7 @@ import PostCard from '../components/PostCard';
 import RequestState from '../components/RequestState';
 import Loading from '../components/Loading';
 
-function EditProfile({ profile, close, saved }: { profile: SocialUser; close: () => void; saved: () => void }) {
+export function EditProfile({ profile, close, saved }: { profile: SocialUser; close: () => void; saved: () => void }) {
   const { refreshUser } = useBackend();
   const [form, setForm] = useState(profile);
   const [avatar, setAvatar] = useState<File | null>(null);

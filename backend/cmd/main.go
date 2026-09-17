@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"time"
 
 	_ "github.com/mattn/go-sqlite3"
 
@@ -40,6 +41,9 @@ func main() {
 		app.UploadDir = filepath.Join(backendDir, "uploads")
 	}
 	databasePath := filepath.Join(backendDir, "pkg", "db", "socialnetwork.db")
+	if configured := os.Getenv("DATABASE_PATH"); configured != "" {
+		databasePath = configured
+	}
 	database, err := sql.Open("sqlite3", databasePath+"?_foreign_keys=on&_busy_timeout=5000")
 	if err != nil {
 		app.Logger.Error("failed to open database", "error", err)
@@ -73,8 +77,13 @@ func main() {
 	app.Logger.Info("starting application", "port", config.PORT_NUMBER)
 
 	serve := &http.Server{
-		Addr:    config.PORT_NUMBER,
-		Handler: routes(),
+		Addr:              config.PORT_NUMBER,
+		Handler:           routes(),
+		ReadHeaderTimeout: 5 * time.Second,
+		ReadTimeout:       60 * time.Second,
+		WriteTimeout:      60 * time.Second,
+		IdleTimeout:       120 * time.Second,
+		MaxHeaderBytes:    1 << 20,
 	}
 
 	err = serve.ListenAndServe()

@@ -1,6 +1,16 @@
 package service
 
-import "testing"
+import (
+ "testing"
+ "time"
+)
+
+func TestExpiredSessionIsRevoked(t *testing.T) {
+ sm:=NewSessionManager();sm.CreateSession("user","expired")
+ sm.Expires["expired"]=time.Now().Add(-time.Second)
+ if _,ok:=sm.GetUserIdByToken("expired");ok{t.Fatal("expired token accepted")}
+ if len(sm.TokenToUID)!=0||len(sm.UIDToToken)!=0||len(sm.Presence)!=0||len(sm.Expires)!=0{t.Fatal("expired session state retained")}
+}
 
 func TestSessionManagerCreateSessionEvictsPreviousToken(t *testing.T) {
 	sm := NewSessionManager()

@@ -317,7 +317,13 @@ func TestSocialIntegration(t *testing.T) {
 			t.Fatal("follow must be idempotent")
 		}
 		alerts := decoded[notification.NotificationResponse](t, alex.call("GET", "/api/v1/notifications", nil, 200))
-		if len(alerts.Notifications) != 1 {
+		followAlerts := 0
+		for _, alert := range alerts.Notifications {
+			if alert.EntityType == "follow" {
+				followAlerts++
+			}
+		}
+		if followAlerts != 1 {
 			t.Fatal("following twice must notify only once")
 		}
 		follows := decoded[map[string][]models.SocialUser](t, dummy.call("GET", "/api/v1/follows", nil, 200))

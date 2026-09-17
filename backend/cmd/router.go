@@ -71,7 +71,11 @@ func routes() http.Handler {
 	}
 
 	// Catch-all — return JSON 404 for unknown endpoints
+	for _, method := range []string{"GET", "POST"} {
+		mux.Handle(method+" /api/v1/groups/{groupId}/content/{kind}", pkgmiddleware.AuthMiddleware(http.HandlerFunc(handlers.HandlerCtx.GroupContent)))
+	}
+	mux.Handle("PUT /api/v1/groups/{groupId}/events/{eventId}/rsvp", pkgmiddleware.AuthMiddleware(http.HandlerFunc(handlers.HandlerCtx.GroupRSVP)))
 	mux.HandleFunc("/{path...}", handlers.HandlerCtx.NotFound)
 
-	return RequestLogger(mux)
+	return RequestLogger(Security(mux))
 }
