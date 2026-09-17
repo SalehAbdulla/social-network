@@ -19,7 +19,7 @@ export default function PostForm({ post }: { post?: Post }) {
   const [privacy, setPrivacy] = useState<'public' | 'followers' | 'selected'>(post?.privacy || 'public');
   const [selectedFollowers, setSelectedFollowers] = useState<string[]>(post?.selectedFollowerIds || []);
   const [busy, setBusy] = useState(false);
-  const followers = useResource<FollowLists>('/follows', privacy === 'selected');
+  const followers = useResource<FollowLists>('/users/me/follows', privacy === 'selected');
   async function publish(event: React.FormEvent) {
     event.preventDefault();
     if (busy) return;
@@ -40,10 +40,6 @@ export default function PostForm({ post }: { post?: Post }) {
     {privacy === 'selected' && <fieldset className="rounded-lg border border-slate-200 p-3">
       <legend className="px-1 text-sm font-medium">Choose followers</legend>
       {followers.loading && <p role="status" className="text-sm text-slate-500">Loading followers...</p>}
-      {followers.error && <div role="alert" className="text-sm text-red-600">
-        <p>{followers.error}</p>
-        <button type="button" onClick={followers.reload} className="mt-2 font-medium underline">Try again</button>
-      </div>}
       {followers.data && (followers.data.followers.length ? <div className="grid gap-2 sm:grid-cols-2">
         {followers.data.followers.map(follower => <label key={follower.userId} className="flex min-w-0 cursor-pointer items-center gap-3 rounded-lg border border-slate-200 p-3 text-sm hover:bg-slate-50">
           <input type="checkbox" aria-label={displayName(follower)} checked={selectedFollowers.includes(follower.userId)} onChange={event => {
