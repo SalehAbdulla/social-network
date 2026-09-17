@@ -4,9 +4,18 @@ import api from './axios';
 export const devUserEnabled = process.env.NODE_ENV !== 'production' && process.env.NEXT_PUBLIC_DEV_USER === 'true';
 
 export interface SocialUser {
-  userId: string; nickname: string; firstName: string; lastName: string;
-  bio: string; avatar: string; coverPhoto: string; location: string; isPublic: boolean; createdAt: string;
-  followers: string[]; following: string[];
+  userId: string; 
+  nickname: string; 
+  firstName: string; 
+  lastName: string;
+  bio: string; 
+  avatar: string; 
+  coverPhoto: string; 
+  location: string; 
+  isPublic: boolean; 
+  createdAt: string;
+  followers: string[]; 
+  following: string[];
 }
 export interface Post {
   postId: number; userId: string; nickname: string; title: string; content: string;
