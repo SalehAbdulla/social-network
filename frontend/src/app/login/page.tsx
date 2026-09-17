@@ -2,6 +2,7 @@
 
 import { FormEvent, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import toast from 'react-hot-toast';
 import { assets } from '../../../public/assets';
 import { Star } from 'lucide-react';
 import { authRequest, errorMessage, nicknameAvailability } from '../api/social';
@@ -10,7 +11,6 @@ const Login = () => {
   const router = useRouter();
   const [registering, setRegistering] = useState(false);
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState('');
   const [nickname, setNickname] = useState('');
   const [nicknameState, setNicknameState] = useState<'idle' | 'checking' | 'available' | 'taken' | 'invalid'>('idle');
   const [password, setPassword] = useState('');
@@ -33,7 +33,6 @@ const Login = () => {
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setBusy(true);
-    setError('');
     const values = Object.fromEntries(new FormData(event.currentTarget).entries());
     try {
       if (registering) {
@@ -50,7 +49,7 @@ const Login = () => {
       router.replace('/');
       router.refresh();
     } catch (caught) {
-      setError(errorMessage(caught));
+      toast.error(errorMessage(caught));
     } finally {
       setBusy(false);
     }
@@ -89,9 +88,8 @@ const Login = () => {
             <div className="grid gap-4 sm:grid-cols-2"><Field name="password" label="Password" type="password" minLength={12} required onChange={setPassword} /><Field name="confirmPassword" label="Confirm password" type="password" minLength={12} required onChange={setConfirmPassword} /></div>
             <label className="block text-sm text-slate-700">Gender<select name="gender" required className="mt-1 w-full rounded-lg border border-slate-200 p-2.5"><option value="">Select gender</option><option value="female">Female</option><option value="male">Male</option></select></label>
           </> : <><Field name="identifier" label="Email or nickname" required /><Field name="password" label="Password" type="password" required /><label className="flex items-center gap-2 text-sm text-slate-600"><input name="rememberMe" type="checkbox" />Remember me</label></>}
-          {error && <p className="rounded-lg bg-red-50 p-3 text-sm text-red-700" role="alert">{error}</p>}
           <button disabled={busy} className="w-full rounded-lg bg-blue-600 px-4 py-3 font-medium text-white hover:bg-blue-700 disabled:opacity-50">{busy ? 'Please wait...' : registering ? 'Create account' : 'Sign in'}</button>
-          <button type="button" onClick={() => { setRegistering(!registering); setError(''); }} className="w-full text-sm text-blue-600">{registering ? 'Already have an account? Sign in' : 'Need an account? Register'}</button>
+          <button type="button" onClick={() => setRegistering(!registering)} className="w-full text-sm text-blue-600">{registering ? 'Already have an account? Sign in' : 'Need an account? Register'}</button>
         </form>
       </div>
     </div>
