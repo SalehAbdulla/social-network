@@ -5,7 +5,7 @@ import { useBackend } from '../../../components/BackendProvider';
 import Loading from '../../../components/Loading';
 import RequestState from '../../../components/RequestState';
 import { useResource } from '../../../lib/useResource';
-import { PostForm } from '../../../pages/CreatePost';
+import PostForm from '../../../components/PostForm';
 
 export default function EditPost() {
   const { postId } = useParams<{ postId: string }>();

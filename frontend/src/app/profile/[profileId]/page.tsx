@@ -1,7 +1,2 @@
-import Profile from "../../pages/Profile";
-
-const Page = () => {
-  return <Profile />;
-};
-
-export default Page;
+// A profile is one page for both /profile and /profile/[profileId].
+export { default } from '../page';

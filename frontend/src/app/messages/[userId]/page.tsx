@@ -1,7 +1,2 @@
-import ChatBox from "../../pages/ChatBox";
-
-const Page = () => {
-  return <ChatBox />;
-};
-
-export default Page;
+// The messages inbox is one page for both /messages and /messages/[userId].
+export { default } from '../page';
