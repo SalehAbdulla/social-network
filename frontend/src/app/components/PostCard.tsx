@@ -8,7 +8,6 @@ import { type Post, type Comment, dateLabel, errorMessage, request } from '../ap
 import { useBackend } from './BackendProvider';
 import { useResource } from '../lib/useResource';
 import Avatar from './Avatar';
-import RequestState from './RequestState';
 
 function Comments({ post, onChange }: { post: Post; onChange: () => void }) {
   const { user } = useBackend();
@@ -39,7 +38,6 @@ function Comments({ post, onChange }: { post: Post; onChange: () => void }) {
   }
   return <div className="space-y-4 border-t border-slate-100 pt-4">
     <form onSubmit={submit} className="space-y-2"><label className="block text-sm font-medium" htmlFor={`comment-${post.postId}`}>{editing ? 'Edit comment' : 'Add a comment'}</label><textarea id={`comment-${post.postId}`} required minLength={3} maxLength={300} value={text} onChange={event => setText(event.target.value)} className="w-full rounded-lg border border-slate-200 p-3 text-sm" /><div className="flex gap-3"><button disabled={busy} className="rounded-lg bg-blue-600 px-4 py-2 text-sm text-white disabled:opacity-50">{editing ? 'Save comment' : 'Comment'}</button>{editing && <button type="button" onClick={() => { setEditing(null); setText(''); }}>Cancel</button>}</div></form>
-    {comments.error && <RequestState error={comments.error} retry={comments.reload} />}
     {comments.data?.comments.map(comment => <div key={comment.commentId} className="rounded-lg bg-slate-50 p-3 space-y-2"><div className="flex justify-between gap-2"><Link href={`/profile/${comment.userId}`} className="text-sm font-semibold">@{comment.nickname || user.nickname}</Link><span className="text-xs text-slate-400">{dateLabel(comment.createdAt)}</span></div><p className="whitespace-pre-wrap break-words text-sm">{comment.commentText}</p><div className="flex items-center gap-3 text-xs text-slate-500">
       <button type="button" disabled={busy} aria-label="Upvote comment" aria-pressed={comment.userScore === 1} className={comment.userScore === 1 ? 'text-blue-600' : ''} onClick={() => void react(comment, 1)}><ArrowUp size={15} /></button><span>{comment.score}</span><button type="button" disabled={busy} aria-label="Downvote comment" aria-pressed={comment.userScore === -1} className={comment.userScore === -1 ? 'text-blue-600' : ''} onClick={() => void react(comment, -1)}><ArrowDown size={15} /></button>
       {comment.userId === user.userId && <><button aria-label="Edit comment" onClick={() => { setEditing(comment.commentId); setText(comment.commentText); }}><Pencil size={14} /></button><button disabled={busy} aria-label="Delete comment" onClick={() => void mutate(() => request(`/posts/comments?id=${comment.commentId}`, 'DELETE'))}><Trash2 size={14} /></button></>}
