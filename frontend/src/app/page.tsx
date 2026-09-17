@@ -16,7 +16,6 @@ export default function Feed() {
     <h1 className="text-2xl font-bold text-slate-900">Your feed</h1>
     <StoriesBar />
     {feed.loading && <Loading />}
-    {feed.error && <RequestState error={feed.error} retry={feed.reload} />}
     {feed.data?.posts.map(post => <PostCard key={post.postId} post={post} fetchPosts={feed.reload} />)}
     {feed.data?.posts.length === 0 && <RequestState empty="No posts yet. Share your first post to get started." />}
     {feed.data?.posts.length === 0 && <Link href="/create-post" className="block text-center text-blue-600">Create a post</Link>}
