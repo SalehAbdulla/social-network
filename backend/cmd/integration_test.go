@@ -297,10 +297,15 @@ func TestSocialIntegration(t *testing.T) {
 			t.Fatal("private profile exposed details to a non-follower")
 		}
 		alex.call("GET", "/api/v1/users/dummy-id/posts", nil, 403)
+		alex.call("GET", "/api/v1/users/dummy-id/follows", nil, 403)
 		alex.call("PUT", "/api/v1/users/dummy-id/follow", nil, 200)
 		visible := decoded[models.SocialUser](t, alex.call("GET", "/api/v1/users/dummy-id", nil, 200))
 		if visible.Bio != privateProfile.Bio || len(visible.Followers) != 1 {
 			t.Fatal("follower could not view private profile")
+		}
+		visibleLists := decoded[map[string][]models.SocialUser](t, alex.call("GET", "/api/v1/users/dummy-id/follows", nil, 200))
+		if len(visibleLists["followers"]) != 1 || visibleLists["followers"][0].UserID != "alex-id" || len(visibleLists["following"]) != 0 {
+			t.Fatalf("follower could not read the lists of the private profile: %+v", visibleLists)
 		}
 		dummy.call("PUT", "/api/v1/users/alex-id/follow", nil, 200)
 		privateProfile.IsPublic = true
@@ -326,13 +331,25 @@ func TestSocialIntegration(t *testing.T) {
 		if followAlerts != 1 {
 			t.Fatal("following twice must notify only once")
 		}
-		follows := decoded[map[string][]models.SocialUser](t, dummy.call("GET", "/api/v1/follows", nil, 200))
+		follows := decoded[map[string][]models.SocialUser](t, dummy.call("GET", "/api/v1/users/me/follows", nil, 200))
 		if len(follows) != 2 || len(follows["followers"]) != 1 || len(follows["following"]) != 1 {
 			t.Fatalf("unexpected follow lists: %+v", follows)
 		}
 		if follows["followers"][0].FirstName != "Alex" {
 			t.Fatal("follower list must contain profile details")
 		}
+		// A private list entry keeps its public identity only, like the profile page.
+		privateProfile.IsPublic = false
+		dummy.call("PUT", "/api/v1/users/me", privateProfile, 200)
+		alex.call("DELETE", "/api/v1/users/dummy-id/follow", nil, 200)
+		own := decoded[map[string][]models.SocialUser](t, alex.call("GET", "/api/v1/users/alex-id/follows", nil, 200))
+		if len(own["following"]) != 0 || len(own["followers"]) != 1 || own["followers"][0].Nickname != "dummyuser" || own["followers"][0].Bio != "" {
+			t.Fatalf("private follow list entry leaked profile details: %+v", own)
+		}
+		alex.call("PUT", "/api/v1/users/dummy-id/follow", nil, 200)
+		privateProfile.IsPublic = true
+		dummy.call("PUT", "/api/v1/users/me", privateProfile, 200)
+		dummy.call("GET", "/api/v1/follows", nil, 404)
 		for _, method := range []string{"GET", "POST", "PUT", "DELETE"} {
 			dummy.call(method, "/api/v1/connections/alex-id", nil, 404)
 		}
