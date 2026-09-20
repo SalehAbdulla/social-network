@@ -37,9 +37,10 @@ func (s *SocialService) ValidateMedia(userID, url, kind string) error {
 }
 
 func (s *SocialService) UpdateProfile(u models.SocialUser) (models.SocialUser, error) {
+	u.Location = strings.TrimSpace(u.Location)
 	u.Nickname = strings.ToLower(strings.TrimSpace(u.Nickname))
 	u.FirstName, u.LastName = strings.TrimSpace(u.FirstName), strings.TrimSpace(u.LastName)
-	if !nicknamePattern.MatchString(u.Nickname) || u.FirstName == "" || u.LastName == "" || utf8.RuneCountInString(u.FirstName) > 50 || utf8.RuneCountInString(u.LastName) > 50 || utf8.RuneCountInString(u.Bio) > 1000 || utf8.RuneCountInString(u.Location) > 100 {
+	if !nicknamePattern.MatchString(u.Nickname) || u.FirstName == "" || u.LastName == "" || utf8.RuneCountInString(u.FirstName) > 50 || utf8.RuneCountInString(u.LastName) > 50 || utf8.RuneCountInString(u.Bio) > 1000 || utf8.RuneCountInString(u.Location) > 50 {
 		return u, backend.ErrBadRequest
 	}
 	for _, url := range []string{u.Avatar, u.CoverPhoto} {

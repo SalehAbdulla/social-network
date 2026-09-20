@@ -62,9 +62,9 @@ const UserProfileInfo = ({ user, posts, profileId, setShowEdit }: UserProfileInf
           </div>
           <p className="text-gray-700 text-sm max-w-md mt-4">{user.bio}</p>
           <div className="flex flex-wrap items-center gap-x-6 gap-y-2 text-sm text-gray-500 mt-4">
-            <span className="flex items-center gap-1.5">
-              <MapPin className="w-4 h-4" />
-              {user.location ? user.location : "Add location"}
+            <span className="flex min-w-0 max-w-full items-start gap-1.5">
+              <MapPin className="h-4 w-4 shrink-0" />
+              <span className="min-w-0 [overflow-wrap:anywhere]">{user.location || "Add location"}</span>
             </span>
             <span className="flex items-center gap-1.5">
               <Calendar className="w-4 h-4" />

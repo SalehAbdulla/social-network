@@ -35,7 +35,7 @@ func (db *DB) CreateGroup(ownerID, title, description string, imageURL ...string
 	return db.Group(int(id), ownerID)
 }
 
-func (db *DB) Groups(userID, search string, offset int) ([]models.Group, error) {
+func (db *DB) Groups(userID, search string, offset int, joinedOnly bool) ([]models.Group, error) {
 	pattern := "%" + strings.ReplaceAll(strings.ReplaceAll(strings.ReplaceAll(search, "\\", "\\\\"), "%", "\\%"), "_", "\\_") + "%"
 	rows, err := db.Conn.Query(`SELECT g.groupId,g.ownerId,trim(u.firstName || ' ' || u.lastName),g.title,g.description,g.imageUrl,
         (SELECT COUNT(*) FROM socialGroupMember gm WHERE gm.groupId=g.groupId),
@@ -43,8 +43,9 @@ func (db *DB) Groups(userID, search string, offset int) ([]models.Group, error) 
         EXISTS(SELECT 1 FROM socialGroupMember owner WHERE owner.groupId=g.groupId AND owner.userId=? AND owner.role='owner'),
         EXISTS(SELECT 1 FROM socialGroupRequest pending WHERE pending.groupId=g.groupId AND pending.userId=? AND pending.status='pending'),g.createdAt
         FROM socialGroup g JOIN user u ON u.userId=g.ownerId
-		WHERE g.title LIKE ? ESCAPE '\' OR g.description LIKE ? ESCAPE '\'
-        ORDER BY g.createdAt DESC,g.groupId DESC LIMIT 31 OFFSET ?`, userID, userID, userID, pattern, pattern, offset)
+		WHERE (g.title LIKE ? ESCAPE '\' OR g.description LIKE ? ESCAPE '\')
+        AND (?=0 OR EXISTS(SELECT 1 FROM socialGroupMember joined WHERE joined.groupId=g.groupId AND joined.userId=?))
+        ORDER BY g.createdAt DESC,g.groupId DESC LIMIT 31 OFFSET ?`, userID, userID, userID, pattern, pattern, joinedOnly, userID, offset)
 	if err != nil {
 		return nil, err
 	}

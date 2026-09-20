@@ -32,7 +32,7 @@ export default function ChatComposer({ onSend, onTyping, initialText = '', editi
     <div className="flex items-end gap-2">
       {!editing && <button type="button" aria-label="Attach photo" aria-expanded={attachments} onClick={() => setAttachments(!attachments)} className="chat-icon"><Paperclip size={20} /></button>}
       <button type="button" aria-label="Choose emoji" aria-expanded={emojis} onClick={() => setEmojis(!emojis)} className="chat-icon"><Smile size={20} /></button>
-      <textarea ref={textarea} aria-label="Message" rows={1} maxLength={2000} value={text} disabled={busy} placeholder="Write a message…" className="max-h-32 min-h-11 min-w-0 flex-1 resize-y rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm outline-none focus:border-teal-500" onChange={event => {
+      <textarea ref={textarea} aria-label="Message" rows={1} maxLength={2000} value={text} readOnly={busy} aria-busy={busy} placeholder="Write a message…" className="max-h-32 min-h-11 min-w-0 flex-1 resize-y rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm outline-none focus:border-teal-500" onChange={event => {
         setText(event.target.value);
         if (!event.target.value || Date.now() - typingAt.current > 1500) { onTyping?.(!!event.target.value); typingAt.current = Date.now(); }
       }} onBlur={() => onTyping?.(false)} onKeyDown={event => {

@@ -9,6 +9,7 @@ import { useResource } from '../lib/useResource';
 import { useLiveRefresh } from '../lib/useLiveRefresh';
 import Avatar from './Avatar';
 import ChatComposer from './ChatComposer';
+import MessageActions from './MessageActions';
 import Pagination from './Pagination';
 import Loading from './Loading';
 
@@ -78,7 +79,7 @@ export default function DirectConversation({ partner, person }: { partner: strin
           {message.mediaUrl && (message.mediaType === 'video' ? <video src={message.mediaUrl} controls className="mb-2 max-h-80 rounded-xl" /> : <a href={message.mediaUrl} target="_blank" rel="noreferrer"><img src={message.mediaUrl} alt="Message attachment" className="mb-2 max-h-80 rounded-xl object-contain" /></a>)}
           <p className="whitespace-pre-wrap break-words text-sm leading-relaxed">{message.textMessage}</p>
           <div className={`mt-2 flex items-center justify-end gap-1 text-[10px] ${mine ? 'text-teal-100' : 'text-slate-400'}`}><time>{dateLabel(message.timeStamp)}</time>{message.editedAt && <span>· edited</span>}{mine && (message.isRead ? <CheckCheck size={14} aria-label="Read" /> : <Check size={14} aria-label="Sent" />)}
-            <details className="relative ml-2"><summary aria-label="Message actions" className="cursor-pointer list-none px-1 text-sm">•••</summary><div className="absolute right-0 z-10 mt-2 w-44 rounded-xl border border-slate-200 bg-white p-1 text-xs text-slate-700 shadow-lg">{mine && <><button className="chat-menu" disabled={busy} onClick={() => setEditing(message)}>Edit message</button><button className="chat-menu text-red-600" disabled={busy} onClick={() => void remove(message.messageId, 'everyone')}>Delete for everyone</button></>}<button className="chat-menu" disabled={busy} onClick={() => void remove(message.messageId, 'me')}>Delete for me</button></div></details>
+            <MessageActions label="Message actions">{mine && <><button className="chat-menu" disabled={busy} onClick={() => setEditing(message)}>Edit message</button><button className="chat-menu text-red-600" disabled={busy} onClick={() => void remove(message.messageId, 'everyone')}>Delete for everyone</button></>}<button className="chat-menu" disabled={busy} onClick={() => void remove(message.messageId, 'me')}>Delete for me</button></MessageActions>
           </div>
         </article></div>;
       })}</div><div ref={bottom} />

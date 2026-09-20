@@ -21,6 +21,11 @@ func TestGroupManagementAndChatNames(t *testing.T) {
 	member.login("alex@example.com")
 	owner.call("POST", "/api/v1/dev/session", map[string]string{}, 404)
 	users := decoded[[]message.ChatUserDTO](t, owner.call("GET", "/api/v1/messages/users", nil, 200))
+	if len(users) != 0 {
+		t.Fatalf("users without messages appeared in inbox: %+v", users)
+	}
+	owner.call("POST", "/api/v1/messages", map[string]string{"recipientId": "alex-id", "text": "Hello Alex"}, 201)
+	users = decoded[[]message.ChatUserDTO](t, owner.call("GET", "/api/v1/messages/users", nil, 200))
 	if len(users) != 1 || users[0].FirstName != "Alex" || users[0].LastName != "User" {
 		t.Fatalf("chat names missing: %+v", users)
 	}

@@ -130,7 +130,7 @@ function AuthenticatedBackend({ children }: { children: React.ReactNode }) {
   return <Context.Provider value={{ user, refreshUser, connected: socket?.readyState === WebSocket.OPEN, sendEvent }}><div key={user.userId} className="flex min-h-screen w-full min-w-0">
     <Sidebar isSideBarOpen={isSideBarOpen} setSideBarOpen={setSideBarOpen} isCollapsed={isCollapsed} setIsCollapsed={setIsCollapsed} />
     <main className="relative min-w-0 flex-1">
-      <button aria-label="Open navigation" onClick={() => setSideBarOpen(true)} className="fixed left-4 top-4 z-30 rounded-lg border border-slate-200 bg-white p-2 shadow-sm sm:hidden"><Menu size={20} /></button>
+      <button aria-label="Open navigation" aria-expanded={isSideBarOpen} aria-controls="main-navigation" onClick={() => { setIsCollapsed(false); setSideBarOpen(true); }} className="fixed left-4 top-4 z-30 rounded-lg border border-slate-200 bg-white p-2 shadow-sm sm:hidden"><Menu size={20} /></button>
       {children}
     </main>
   </div></Context.Provider>;

@@ -8,6 +8,7 @@ import { useResource } from '../lib/useResource';
 import { useLiveRefresh } from '../lib/useLiveRefresh';
 import { useBackend } from './BackendProvider';
 import ChatComposer from './ChatComposer';
+import MessageActions from './MessageActions';
 import ImagePicker from './ImagePicker';
 import Loading from './Loading';
 import Pagination from './Pagination';
@@ -49,7 +50,7 @@ function ContentForm({ groupId, kind, item, parentId = 0, saved, cancel }: {
 }
 
 function PostComments({ groupId, parentId, isOwner }: { groupId: string; parentId: number; isOwner: boolean }) {
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useState(true);
   return <div className="border-t border-slate-100 pt-2"><button className="text-xs font-medium text-teal-700" aria-expanded={open} onClick={() => setOpen(!open)}>{open ? 'Hide comments' : 'Comments'}</button>{open && <div className="mt-3"><GroupActivity groupId={groupId} kind="comments" parentId={parentId} isOwner={isOwner} /></div>}</div>;
 }
 
@@ -87,14 +88,15 @@ export default function GroupActivity({ groupId, kind = 'timeline', parentId = 0
       {(page > 1 || (resource.data?.length || 0) > 30) && <div className="mb-5"><Pagination label="Group history" page={page} hasNext={(resource.data?.length || 0) > 30} loading={resource.loading} onChange={setPage} /></div>}
       <div className={kind === 'media' ? 'grid gap-4 sm:grid-cols-2 xl:grid-cols-3' : 'space-y-4'}>{(isChat ? [...items].reverse() : items).map(item => {
         const mine = item.userId === user.userId;
+        const ownMessage = isChat && mine && item.kind === 'messages';
         return <div key={item.id} className={isChat ? `flex ${mine ? 'justify-end' : 'justify-start'}` : ''}>
-          <article className={`min-w-0 space-y-3 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm ${isChat ? `w-fit max-w-[92%] sm:max-w-[80%] ${mine ? 'rounded-br-sm border-teal-200 bg-teal-50' : 'rounded-bl-sm'}` : ''}`}>
-            <div className="flex items-center justify-between gap-3"><span className="text-xs font-semibold text-teal-800">{mine ? 'You' : displayName(item)}</span>{(mine || isOwner) && <details className="relative"><summary aria-label="Group item actions" className="cursor-pointer list-none px-2 text-xs text-slate-400">•••</summary><div className="absolute right-0 z-10 mt-1 w-36 rounded-xl border border-slate-200 bg-white p-1 text-xs shadow-lg">{mine && <button className="chat-menu" onClick={() => { setEditing(item); setComposer(null); }}>Edit</button>}<button disabled={busy} className="chat-menu text-red-600" onClick={() => void mutate(() => request(`/groups/${groupId}/content/${item.kind}/${item.id}?parentId=${item.parentId}`, 'DELETE'))}>Delete</button></div></details>}</div>
+          <article className={`min-w-0 space-y-3 rounded-2xl border p-4 shadow-sm ${ownMessage ? 'border-teal-700 bg-teal-700 text-white' : 'border-slate-200 bg-white text-slate-800'} ${isChat ? `w-fit max-w-[92%] sm:max-w-[80%] ${mine ? 'rounded-br-sm' : 'rounded-bl-sm'}` : ''}`}>
+            <div className="flex items-center justify-between gap-3"><span className={`text-xs font-semibold ${ownMessage ? 'text-teal-100' : 'text-teal-800'}`}>{mine ? 'You' : displayName(item)}</span>{(mine || isOwner) && <MessageActions label="Group item actions">{mine && <button className="chat-menu" onClick={() => { setEditing(item); setComposer(null); }}>Edit</button>}<button disabled={busy} className="chat-menu text-red-600" onClick={() => void mutate(() => request(`/groups/${groupId}/content/${item.kind}/${item.id}?parentId=${item.parentId}`, 'DELETE'))}>Delete</button></MessageActions>}</div>
             {item.kind === 'events' && <div className="flex items-start gap-3"><div className="rounded-xl bg-teal-100 p-3 text-teal-700"><CalendarDays size={24} /></div><div><span className="text-[10px] font-semibold uppercase tracking-wider text-teal-700">Group event</span><h3 className="font-semibold text-slate-900">{item.title}</h3><p className="mt-1 text-xs text-slate-500">{dateLabel(item.startsAt)}</p></div></div>}
-            <p className="whitespace-pre-wrap break-words text-sm leading-relaxed text-slate-700">{item.content}</p>
+            <p className="whitespace-pre-wrap break-words text-sm leading-relaxed">{item.content}</p>
             {item.mediaUrl && <a href={item.mediaUrl} target="_blank" rel="noreferrer" className="block"><img src={item.mediaUrl} alt="Group photo" className="aspect-square max-h-96 w-full rounded-xl bg-slate-100 object-contain" /></a>}
             {item.kind === 'events' && <div className="space-y-3 border-t border-slate-100 pt-3"><p className="text-xs text-slate-500">{item.going} going · {item.notGoing} not going</p><div className="flex flex-wrap gap-2">{['going', 'not_going'].map(status => <button key={status} disabled={busy} aria-pressed={item.rsvp === status} className={`flex items-center gap-1 ${item.rsvp === status ? 'chat-primary' : 'chat-secondary'}`} onClick={() => void mutate(() => request(`/groups/${groupId}/events/${item.id}/rsvp`, 'PUT', { status }))}>{item.rsvp === status && <Check size={14} />}{status === 'going' ? 'Going' : 'Not going'}</button>)}</div></div>}
-            <time className="block text-right text-[10px] text-slate-400">{dateLabel(item.createdAt)}</time>
+            <time className={`block text-right text-[10px] ${ownMessage ? 'text-teal-100' : 'text-slate-400'}`}>{dateLabel(item.createdAt)}</time>
             {item.kind === 'posts' && kind !== 'media' && <PostComments groupId={groupId} parentId={item.id} isOwner={isOwner} />}
           </article>
         </div>;

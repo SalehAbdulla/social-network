@@ -12,7 +12,7 @@ export function useLiveRefresh(reload: () => void, groupId?: string) {
     };
     const listener = (event: Event) => {
       const message = (event as CustomEvent<SocketEvent>).detail;
-      if (message.type === 'connected' || (groupId ? message.type === 'group_changed' && String(message.payload.groupId) === groupId : ['message_changed', 'incoming_msg', 'read_receipt', 'user_status', 'user_offline', 'group_changed', 'social_changed', 'notification'].includes(message.type))) refresh();
+      if (message.type === 'connected' || (groupId ? message.type === 'group_changed' && String(message.payload.groupId) === groupId : ['message_changed', 'incoming_msg', 'read_receipt', 'user_status', 'user_offline', 'group_changed', 'social_changed', 'notification', 'notification_changed'].includes(message.type))) refresh();
     };
     window.addEventListener('social:socket', listener);
     const poll = setInterval(refresh, 15000);

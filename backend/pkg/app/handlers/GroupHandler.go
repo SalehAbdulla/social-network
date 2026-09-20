@@ -22,7 +22,7 @@ func (re *HandlerContext) ListGroups(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	groups, err := re.GroupService.Repo.Groups(currentUser(r), r.URL.Query().Get("q"), offset)
+	groups, err := re.GroupService.Repo.Groups(currentUser(r), r.URL.Query().Get("q"), offset, r.URL.Query().Get("scope") == "joined")
 	if err != nil {
 		re.HandleError(w, r, err)
 		return
@@ -50,6 +50,7 @@ func (re *HandlerContext) CreateGroup(w http.ResponseWriter, r *http.Request) {
 		re.HandleError(w, r, err)
 		return
 	}
+	re.groupChanged(group.GroupID, "created")
 	respond(w, http.StatusCreated, group)
 }
 
@@ -74,6 +75,10 @@ func (re *HandlerContext) JoinGroup(w http.ResponseWriter, r *http.Request) {
 	if err := re.GroupService.RequestJoin(id, currentUser(r)); err != nil {
 		re.HandleError(w, r, err)
 		return
+	}
+	re.groupChanged(id, "request", currentUser(r))
+	if group, err := re.GroupService.Repo.Group(id, currentUser(r)); err == nil {
+		re.notificationsChanged(group.OwnerID)
 	}
 	respond(w, http.StatusOK, nil)
 }
@@ -131,6 +136,7 @@ func (re *HandlerContext) InviteToGroup(w http.ResponseWriter, r *http.Request) 
 		re.HandleError(w, r, err)
 		return
 	}
+	re.notificationsChanged(userID)
 	respond(w, http.StatusOK, nil)
 }
 
@@ -163,6 +169,7 @@ func (re *HandlerContext) DecideGroupInvitation(w http.ResponseWriter, r *http.R
 		re.HandleError(w, r, err)
 		return
 	}
+	re.groupChanged(groupID, "membership", currentUser(r))
 	respond(w, http.StatusOK, models.GroupInvitation{InvitationID: invitationID, GroupID: groupID, UserID: currentUser(r), Status: input.Status})
 }
 
@@ -185,6 +192,13 @@ func (re *HandlerContext) DecideGroupRequest(w http.ResponseWriter, r *http.Requ
 	if err := re.GroupService.Decide(groupID, requestID, currentUser(r), input.Status); err != nil {
 		re.HandleError(w, r, err)
 		return
+	}
+	// Notify the applicant after the decision commits, including declined requests.
+	var applicant string
+	if err := re.GroupService.Repo.Conn.QueryRow("SELECT userId FROM socialGroupRequest WHERE groupId=? AND requestId=?", groupID, requestID).Scan(&applicant); err == nil {
+		re.groupChanged(groupID, "membership", applicant)
+	} else {
+		re.groupChanged(groupID, "membership")
 	}
 	respond(w, http.StatusOK, models.GroupRequest{RequestID: requestID, GroupID: groupID, Status: input.Status})
 }

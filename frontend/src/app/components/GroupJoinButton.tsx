@@ -12,6 +12,7 @@ export default function GroupJoinButton({ group, onRequested }: { group: Group; 
     try {
       await request(`/groups/${group.groupId}/join`, 'POST');
       onRequested();
+      window.dispatchEvent(new CustomEvent('social:group-requested', { detail: { groupId: group.groupId } }));
       toast.success('Join request sent');
     } catch (error) { toast.error(errorMessage(error)); } finally { setBusy(false); }
   }

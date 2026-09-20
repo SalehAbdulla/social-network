@@ -118,6 +118,23 @@ async function api(page, route, method = 'GET', body) {
   const result = await evaluate(page, `(async () => { const response = await fetch('/api/v1' + ${JSON.stringify(route)}, { method: ${JSON.stringify(method)}, headers: { 'Content-Type': 'application/json' }, ${body === undefined ? '' : `body: JSON.stringify(${JSON.stringify(body)}),`} credentials: 'include' }); const result = await response.json(); if (!response.ok || !result.success) throw new Error(JSON.stringify(result)); return result.data; })()`);
   return result;
 }
+async function clickAt(page, selector) {
+  const point = await evaluate(page, `(() => { const element = document.querySelector(${JSON.stringify(selector)}); element.scrollIntoView({block: 'nearest'}); const r = element.getBoundingClientRect(); return {x: r.x + r.width / 2, y: r.y + r.height / 2}; })()`);
+  await command('Input.dispatchMouseEvent', { type: 'mousePressed', button: 'left', clickCount: 1, ...point }, page);
+  await command('Input.dispatchMouseEvent', { type: 'mouseReleased', button: 'left', clickCount: 1, ...point }, page);
+}
+async function checkMessageMenus(page, label) {
+  const selector = `summary[aria-label="${label}"]`;
+  await until(page, `document.querySelectorAll(${JSON.stringify(selector)}).length >= 2`, 'two message menus');
+  await evaluate(page, `document.querySelectorAll(${JSON.stringify(selector)})[0].click()`);
+  await evaluate(page, `document.querySelectorAll(${JSON.stringify(selector)})[1].click()`);
+  assert.equal(await evaluate(page, `document.querySelectorAll('details[data-message-actions][open]').length`), 1, 'Only one menu may be open');
+  await clickAt(page, 'textarea[aria-label="Message"]');
+  assert.equal(await evaluate(page, `document.querySelectorAll('details[data-message-actions][open]').length`), 0, 'Clicking away closes the menu');
+  await evaluate(page, `document.querySelectorAll(${JSON.stringify(selector)})[0].click()`);
+  await command('Input.dispatchKeyEvent', { type: 'keyDown', key: 'Escape', code: 'Escape', windowsVirtualKeyCode: 27 }, page);
+  assert.equal(await evaluate(page, `document.querySelectorAll('details[data-message-actions][open]').length`), 0, 'Escape closes the menu');
+}
 const stamp = String(Date.now());
 let dummy, alex, originalDummy, originalAlex, postId, storyId, mediaURL;
 try {
@@ -183,6 +200,10 @@ try {
   alex = await createPage('alex@example.com');
   await navigate(alex, '/');
   originalAlex = await api(alex, '/users/me');
+  await navigate(alex, '/messages');
+  await until(alex, `document.querySelector('aside[aria-label="Conversations"]').innerText.includes('Your conversations will appear here')`, 'empty inbox excludes unrelated users');
+  assert.equal((await api(alex, '/messages/users')).length, 0);
+  assert(await evaluate(alex, `!!document.querySelector('a[aria-label="New message"]')`));
   await navigate(alex, `/post/${postId}`);
   await until(alex, `!!document.querySelector('button[aria-label="Upvote post"]')`, 'other author post');
   assert(!(await evaluate(alex, `!!document.querySelector('a[aria-label="Edit post"]')`)));
@@ -191,7 +212,7 @@ try {
   assert(!(await evaluate(alex, `!!document.querySelector('input[placeholder="Give your post a title"]')`)));
   await navigate(alex, `/post/${postId}`);
   await until(alex, `!!document.querySelector('article')`, 'Alex post details');
-  await evaluate(alex, `[...document.querySelectorAll('button')].find(button => button.textContent.includes('comments')).click()`);
+  assert(await evaluate(alex, `!!document.querySelector('#comment-${postId}')`), 'Post comments open by default');
   await fill(alex, `#comment-${postId}`, `Browser comment ${stamp}`);
   await button(alex, 'Comment');
   await until(alex, `document.body.innerText.includes(${JSON.stringify(`Browser comment ${stamp}`)}) && document.querySelector('textarea').value === ''`, 'comment creation');
@@ -204,6 +225,8 @@ try {
   }
   assert(await evaluate(alex, `!performance.getEntriesByType('resource').some(entry => entry.name.includes('/api/v1/post'))`), 'Comment voting must not refetch the post or comments');
   console.log('PASS: comment votes toggle in place without refetching or losing the draft');
+  const notificationCount = (await api(dummy, '/notifications/unread-count')).count;
+  await until(dummy, `!!document.querySelector('[aria-label="${notificationCount} unread notifications"]')`, 'notification badge updates without refresh', 10000);
   const notifications = await api(dummy, '/notifications');
   assert(notifications.notifications.some(item => item.entityType === 'comment' && item.actorId === originalAlex.userId));
   await navigate(dummy, '/notifications');
@@ -264,20 +287,33 @@ try {
   await button(dummy, 'Create group');
   await until(dummy, `location.pathname.startsWith('/messages/groups/') && document.body.innerText.includes(${JSON.stringify(`Browser group ${stamp}`)})`, 'create group inside messages');
   const group = (await api(dummy, '/groups')).find(item => item.title === `Browser group ${stamp}`);
-  await navigate(alex, `/messages/groups/${group.groupId}`);
+  await navigate(alex, '/messages/groups');
+  await until(alex, `document.querySelector('aside[aria-label="Conversations"]').innerText.includes('Your joined groups will appear here')`, 'unjoined group is absent from inbox');
+  await button(alex, 'Find groups to join');
+  await until(alex, `!!document.querySelector('aside[aria-label="Conversations"] a[href="/messages/groups/${group.groupId}"]')`, 'explicit group discovery');
+  await evaluate(alex, `document.querySelector('aside[aria-label="Conversations"] a[href="/messages/groups/${group.groupId}"]').click()`);
   await button(alex, 'Request to join');
-  await until(alex, `document.body.innerText.includes('Request pending')`, 'pending request');
+  await until(alex, `document.querySelector('section > header').innerText.includes('Request pending')`, 'pending request updates group header immediately', 3000);
+  const groupNotificationCount = (await api(dummy, '/notifications/unread-count')).count;
+  await until(dummy, `!!document.querySelector('[aria-label="${groupNotificationCount} unread notifications"]')`, 'group notification badge updates live', 10000);
   await button(dummy, 'Group info');
   await until(dummy, `document.body.innerText.includes('alexdemo')`, 'owner receives request');
   await button(dummy, 'Accept');
   await until(dummy, `document.body.innerText.includes('2 members')`, 'owner accepts request');
-  await navigate(alex, `/messages/groups/${group.groupId}`);
-  await until(alex, `!!document.querySelector('[aria-label="Group conversation tabs"]')`, 'group membership');
+  await until(alex, `!!document.querySelector('[aria-label="Group conversation tabs"]')`, 'group membership updates without refresh', 10000);
+  assert((await api(alex, '/groups?scope=joined')).some(item => item.groupId === group.groupId));
   await button(dummy, 'Chat');
   await fill(dummy, 'textarea[aria-label="Message"]', `Group hello ${stamp}`);
   await evaluate(dummy, `document.querySelector('[aria-label="Send message"]').click()`);
   await until(alex, `document.body.innerText.includes(${JSON.stringify(`Group hello ${stamp}`)})`, 'live group message');
   assert((await evaluate(alex, `document.querySelector('section[aria-label^="Group conversation"]').innerText`)).includes('Dummy User'));
+  assert(await evaluate(dummy, `document.activeElement === document.querySelector('textarea[aria-label="Message"]')`), 'Group composer keeps focus after sending');
+  const groupMessageColor = await evaluate(dummy, `getComputedStyle([...document.querySelectorAll('article')].find(item => item.innerText.includes(${JSON.stringify(`Group hello ${stamp}`)}))).backgroundColor`);
+  await fill(dummy, 'textarea[aria-label="Message"]', `Second group message ${stamp}`);
+  await clickAt(dummy, '[aria-label="Send message"]');
+  await until(dummy, `document.querySelector('textarea[aria-label="Message"]').value === ''`, 'second group message sent');
+  assert(await evaluate(dummy, `document.activeElement === document.querySelector('textarea[aria-label="Message"]')`), 'Mouse send restores composer focus');
+  await checkMessageMenus(dummy, 'Group item actions');
   await button(dummy, 'Event');
   await fill(dummy, 'input[name="title"]', `Meetup ${stamp}`);
   await fill(dummy, 'input[name="startsAt"]', '2030-12-01T18:00');
@@ -291,6 +327,7 @@ try {
   await fill(dummy, 'textarea[name="content"]', `Group post ${stamp}`);
   await button(dummy, 'Publish');
   await until(dummy, `document.body.innerText.includes(${JSON.stringify(`Group post ${stamp}`)})`, 'group post stays in conversation');
+  assert(await evaluate(dummy, `[...document.querySelectorAll('button')].some(item => item.textContent === 'Hide comments' && item.getAttribute('aria-expanded') === 'true')`), 'Group post comments open by default');
   await button(dummy, 'Group info');
   await button(dummy, 'Edit group');
   await fill(dummy, 'textarea[name="description"]', 'Updated group description');
@@ -299,11 +336,25 @@ try {
   const groupShot = await command('Page.captureScreenshot', { format: 'png' }, dummy);
   await writeFile(path.join(taskDir, 'group-info.png'), Buffer.from(groupShot.data, 'base64'));
   await button(dummy, 'Chat');
+  await until(dummy, `document.querySelector('section[aria-label^="Group conversation"]').innerText.includes(${JSON.stringify(`Group hello ${stamp}`)})`, 'chat is loaded for screenshot');
   const chatShot = await command('Page.captureScreenshot', { format: 'png' }, dummy);
   await writeFile(path.join(taskDir, 'group-chat.png'), Buffer.from(chatShot.data, 'base64'));
   await command('Emulation.setDeviceMetricsOverride', { width: 390, height: 844, deviceScaleFactor: 1, mobile: true }, dummy);
   await pause(500);
   assert(await evaluate(dummy, 'document.documentElement.scrollWidth <= window.innerWidth'), 'Mobile chat has no horizontal overflow');
+  await clickAt(dummy, '[aria-label="Open navigation"]');
+  await until(dummy, `document.querySelector('[aria-label="Open navigation"]').getAttribute('aria-expanded') === 'true'`, 'mobile sidebar opens');
+  await until(dummy, `(() => { const button = document.querySelector('[aria-label="Close navigation"]'); const r = button.getBoundingClientRect(); return button.contains(document.elementFromPoint(r.x + r.width / 2, r.y + r.height / 2)); })()`, 'Mobile close button is visible and clickable', 3000);
+  await clickAt(dummy, '[aria-label="Close navigation"]');
+  await until(dummy, `document.querySelector('[aria-label="Open navigation"]').getAttribute('aria-expanded') === 'false'`, 'mobile close button dismisses sidebar');
+  await clickAt(dummy, '[aria-label="Open navigation"]');
+  await command('Input.dispatchMouseEvent', { type: 'mousePressed', x: 370, y: 400, button: 'left', clickCount: 1 }, dummy);
+  await command('Input.dispatchMouseEvent', { type: 'mouseReleased', x: 370, y: 400, button: 'left', clickCount: 1 }, dummy);
+  await until(dummy, `document.querySelector('[aria-label="Open navigation"]').getAttribute('aria-expanded') === 'false'`, 'backdrop dismisses sidebar');
+  await clickAt(dummy, '[aria-label="Open navigation"]');
+  await command('Input.dispatchKeyEvent', { type: 'keyDown', key: 'Escape', code: 'Escape', windowsVirtualKeyCode: 27 }, dummy);
+  await until(dummy, `document.querySelector('[aria-label="Open navigation"]').getAttribute('aria-expanded') === 'false'`, 'Escape dismisses sidebar');
+  await until(dummy, `getComputedStyle(document.querySelector('aside[aria-label="Main navigation"]')).visibility === 'hidden' && document.querySelector('aside[aria-label="Main navigation"]').getBoundingClientRect().right <= 0`, 'sidebar is fully offscreen after closing');
   const mobileShot = await command('Page.captureScreenshot', { format: 'png' }, dummy);
   await writeFile(path.join(taskDir, 'mobile-chat.png'), Buffer.from(mobileShot.data, 'base64'));
   await command('Emulation.setDeviceMetricsOverride', { width: 1440, height: 960, deviceScaleFactor: 1, mobile: false }, dummy);
@@ -319,9 +370,15 @@ try {
   await until(dummy, `document.body.innerText.includes('Edit profile')`, 'profile loaded');
   await button(dummy, 'Edit profile');
   await fill(dummy, '[role="dialog"] textarea', `Browser bio ${stamp}`);
+  const locationSelector = '[role="dialog"] label:nth-of-type(4) input';
+  assert.equal(await evaluate(dummy, `document.querySelector(${JSON.stringify(locationSelector)}).maxLength`), 50);
+  await fill(dummy, locationSelector, 'L'.repeat(50));
   await button(dummy, 'Save changes');
   await until(dummy, `!document.querySelector('[role="dialog"]') && document.body.innerText.includes(${JSON.stringify(`Browser bio ${stamp}`)})`, 'profile save');
-  console.log('PASS: story creation and profile editing');
+  await command('Emulation.setDeviceMetricsOverride', { width: 390, height: 844, deviceScaleFactor: 1, mobile: true }, dummy);
+  assert(await evaluate(dummy, `document.documentElement.scrollWidth <= window.innerWidth && [...document.querySelectorAll('p')].find(p => p.textContent.includes('${'L'.repeat(50)}')).scrollWidth <= document.querySelector('main').clientWidth`), 'Long location wraps on mobile');
+  await command('Emulation.setDeviceMetricsOverride', { width: 1440, height: 960, deviceScaleFactor: 1, mobile: false }, dummy);
+  console.log('PASS: story creation, profile editing, location length and mobile wrapping');
 
   await navigate(dummy, `/messages/${originalAlex.userId}`);
   await navigate(alex, `/messages/${originalDummy.userId}`);
@@ -339,6 +396,14 @@ try {
   await until(dummy, `!!document.querySelector('[aria-label="Read"]')`, 'message read receipt', 10000);
   const sentMessages = (await api(dummy, `/messages?partnerId=${originalAlex.userId}`)).messages.filter(message => message.textMessage.includes(`Browser message ${stamp}`));
   assert.equal(sentMessages.length, 1);
+  assert.equal(await evaluate(dummy, `getComputedStyle([...document.querySelectorAll('article')].find(item => item.innerText.includes(${JSON.stringify(`Browser message ${stamp}`)}))).backgroundColor`), groupMessageColor, 'Own group and direct messages use the same bubble color');
+  assert(await evaluate(dummy, `document.activeElement === document.querySelector('textarea[aria-label="Message"]')`), 'Direct composer keeps focus after Enter sends');
+  await until(dummy, `!!document.querySelector('aside[aria-label="Conversations"] a[href="/messages/${originalAlex.userId}"]')`, 'first message adds conversation');
+  await fill(dummy, 'textarea[aria-label="Message"]', `Second direct message ${stamp}`);
+  await clickAt(dummy, '[aria-label="Send message"]');
+  await until(dummy, `document.querySelector('textarea[aria-label="Message"]').value === ''`, 'second direct message sent');
+  assert(await evaluate(dummy, `document.activeElement === document.querySelector('textarea[aria-label="Message"]')`), 'Direct composer keeps focus after mouse sends');
+  await checkMessageMenus(dummy, 'Message actions');
   assert.equal(sentMessages[0].textMessage, `Browser message ${stamp}\nSecond line`);
   await evaluate(dummy, `document.querySelector('summary[aria-label="Message actions"]').click()`);
   await button(dummy, 'Edit message');

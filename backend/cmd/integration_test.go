@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"encoding/base64"
 	"encoding/json"
+	"fmt"
 	"io"
 	"log/slog"
 	"mime/multipart"
@@ -615,6 +616,36 @@ func TestLiveConnectionUpdates(t *testing.T) {
 	readUpdate(alexSocket, "dummy-id")
 	alex.call("PUT", "/api/v1/users/dummy-id/follow", nil, 200)
 	readUpdate(dummySocket, "alex-id")
+
+	readNotificationChange := func(socket *websocket.Conn) {
+		t.Helper()
+		socket.SetReadDeadline(time.Now().Add(3 * time.Second))
+		for {
+			_, data, err := socket.ReadMessage()
+			if err != nil {
+				t.Fatal(err)
+			}
+			for _, line := range bytes.Split(data, []byte("\n")) {
+				var event struct {
+					Type string `json:"type"`
+				}
+				if err := json.Unmarshal(line, &event); err != nil {
+					t.Fatal(err)
+				}
+				if event.Type == "notification_changed" {
+					return
+				}
+			}
+		}
+	}
+	group := decoded[models.Group](t, dummy.call("POST", "/api/v1/groups", map[string]string{"title": "Live notifications"}, 201))
+	base := fmt.Sprintf("/api/v1/groups/%d", group.GroupID)
+	dummy.call("POST", base+"/invite/alex-id", nil, 200)
+	readNotificationChange(alexSocket)
+	alex.call("POST", base+"/join", nil, 200)
+	readNotificationChange(dummySocket)
+	dummy.call("PATCH", "/api/v1/notifications/read-all", nil, 200)
+	readNotificationChange(dummySocket)
 }
 
 func TestDevSessionUnavailableInProduction(t *testing.T) {

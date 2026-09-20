@@ -171,7 +171,7 @@ func (re *HandlerContext) GroupRSVP(w http.ResponseWriter, r *http.Request) {
 	respond(w, 200, nil)
 }
 
-func (re *HandlerContext) groupChanged(groupID int, kind string) {
+func (re *HandlerContext) groupChanged(groupID int, kind string, extraUsers ...string) {
 	if re.Hub == nil {
 		return
 	}
@@ -180,7 +180,14 @@ func (re *HandlerContext) groupChanged(groupID int, kind string) {
 		return
 	}
 	data, _ := json.Marshal(map[string]any{"type": "group_changed", "payload": map[string]any{"groupId": groupID, "kind": kind}})
+	recipients := make(map[string]bool)
 	for _, member := range members {
-		re.Hub.SendToUser(member.UserID, data)
+		recipients[member.UserID] = true
+	}
+	for _, userID := range extraUsers {
+		recipients[userID] = true
+	}
+	for userID := range recipients {
+		re.Hub.SendToUser(userID, data)
 	}
 }

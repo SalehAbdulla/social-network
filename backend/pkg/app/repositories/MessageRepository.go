@@ -91,24 +91,17 @@ func (db *DB) SaveMessage(senderID string, recipientID string, textMessage strin
 
 func (db *DB) GetChatUsers(currentUserID string) ([]models.ChatUser, error) {
 	query := `
-		SELECT
-			u.userId,
-			u.nickName,
-			u.firstName, u.lastName, COALESCE(u.avatar,''),
-			(
-				SELECT MAX(m.createdAt)
-				FROM message m
-				WHERE (m.senderId = u.userId AND m.recipientId = ?) OR (m.senderId = ? AND m.recipientId = u.userId)
-			) AS lastMessageTime
-		FROM user u
-		WHERE u.userId != ?
-		ORDER BY
-			CASE WHEN lastMessageTime IS NULL THEN 1 ELSE 0 END,
-			lastMessageTime DESC,
-			u.nickName ASC
-	`
+        SELECT u.userId,u.nickName,u.firstName,u.lastName,COALESCE(u.avatar,''),MAX(m.createdAt) AS lastMessageTime
+        FROM user u JOIN message m ON
+            (m.senderId=u.userId AND m.recipientId=?) OR (m.senderId=? AND m.recipientId=u.userId)
+        WHERE u.userId<>? AND NOT EXISTS (
+            SELECT 1 FROM hidden_message h WHERE h.messageId=m.messageId AND h.userId=?
+        )
+        GROUP BY u.userId
+        ORDER BY lastMessageTime DESC,u.nickName ASC
+    `
 
-	rows, err := db.Conn.Query(query, currentUserID, currentUserID, currentUserID)
+	rows, err := db.Conn.Query(query, currentUserID, currentUserID, currentUserID, currentUserID)
 	if err != nil {
 		return nil, realtimeforum.ErrInternal
 	}

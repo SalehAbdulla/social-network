@@ -277,7 +277,7 @@ function ProfileHeader({
         )}
 
         {/* Location / Joined */}
-        <p className="text-sm text-slate-400">
+        <p className="min-w-0 text-sm text-slate-400 [overflow-wrap:anywhere]">
           {profile.location && `${profile.location} • `}
           Joined {dateLabel(profile.createdAt)}
         </p>

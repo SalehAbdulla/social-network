@@ -102,6 +102,7 @@ func (re *HandlerContext) MarkAsRead(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	re.notificationsChanged(userID)
 	w.WriteHeader(http.StatusOK)
 	json.NewEncoder(w).Encode(payload.SuccessResponse[map[string]interface{}]{
 		Success: true,
@@ -125,6 +126,7 @@ func (re *HandlerContext) MarkAllAsRead(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
+	re.notificationsChanged(userID)
 	w.WriteHeader(http.StatusOK)
 	json.NewEncoder(w).Encode(payload.SuccessResponse[map[string]interface{}]{
 		Success: true,
@@ -133,4 +135,13 @@ func (re *HandlerContext) MarkAllAsRead(w http.ResponseWriter, r *http.Request) 
 		},
 		Message: "All notifications marked as read",
 	})
+}
+
+// Send only after the notification change commits so clients can fetch the new count.
+func (re *HandlerContext) notificationsChanged(userID string) {
+	if re.Hub == nil {
+		return
+	}
+	data, _ := json.Marshal(map[string]any{"type": "notification_changed", "payload": map[string]any{}})
+	re.Hub.SendToUser(userID, data)
 }
