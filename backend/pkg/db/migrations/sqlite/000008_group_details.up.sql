@@ -1,0 +1,1 @@
+ALTER TABLE socialGroup ADD COLUMN imageUrl TEXT NOT NULL DEFAULT '';

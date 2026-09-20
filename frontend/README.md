@@ -4,7 +4,7 @@ The Next.js frontend calls the Go backend through the same origin. API requests
 to `/api/v1/*`, uploaded media, and the `/ws` WebSocket are proxied to `BACKEND_URL`.
 The browser sends the backend's HTTP-only session cookie with these requests.
 
-## Run locally with the demo users
+## Run locally
 
 The root `./run.sh` keeps the existing startup behavior outside WSL. Inside WSL,
 it automatically delegates to `scripts/run-wsl.sh` for the features below.
@@ -25,7 +25,7 @@ on PATH.
 Its automatic install skips the registry's audit request; use `npm audit`
 separately when you want a vulnerability report.
 
-From `backend`, start the demo backend in one terminal:
+From `backend`, start the backend in one terminal:
 
 ```powershell
 .\dev.cmd
@@ -33,15 +33,11 @@ From `backend`, start the demo backend in one terminal:
 
 On Ubuntu / WSL, use `sh ./dev.sh` instead.
 
-This creates Dummy User and Alex Demo if they do not already exist, enables demo
-sessions, and starts Go on port 5174. Existing accounts and their data are kept.
-Go and a C compiler are required; the script detects GCC at
-`C:\msys64\mingw64\bin` on Windows.
+The backend starts on port 5174. Register an account through the frontend; startup does not create demo users. Go and a C compiler are required; the script detects GCC at `C:\msys64\mingw64\bin` on Windows.
 
 In `frontend/.env`, keep your existing keys and add:
 
 ```dotenv
-NEXT_PUBLIC_DEV_USER=true
 BACKEND_URL=http://127.0.0.1:5174
 ```
 
@@ -71,32 +67,23 @@ Lightning CSS. The project enables optional dependencies in `.npmrc`; keep the
 lockfile, which includes both Windows and Linux packages. Reinstall dependencies
 when switching the operating system used to run this shared checkout.
 
-Open **http://localhost:4000** and sign in with `dummy@example.com` and
-`DummyUser123!`. Once signed in, use the **Development user** selector at the
-bottom of the sidebar to switch to Alex Demo. Anonymous page visits and expired
-sessions redirect to login, including in demo mode. Restart Next.js after
-changing its environment settings. If Go restarts, sign in again.
+Open **http://localhost:4000**, register, and sign in. Anonymous visits and expired sessions redirect to login. Use separate browser profiles for different accounts. The backend keeps one session per account, and restarting Go requires signing in again.
 
-Use separate browser profiles or a private window to interact as both users.
-The backend allows one session per account; a fresh login for the same account
-invalidates its previous session. Select a different demo user in each window
-and sign in again in the first window if needed.
+Messages contains People and Groups conversation tabs. Each group opens inside the inbox with Chat, Posts, Events, Media, and Group info tabs. Events appear as cards in the group chat with Going / Not going responses. Owners can update the group name, description and photo, approve requests, remove members, transfer ownership, or delete the group. Members can invite people, leave, and manage their own posts, photos, comments, messages and events. Owners can also delete group content.
 
-Post owners can edit a post's title, content, photos, and audience from its pencil
-button. Creating a group immediately shows it in the list and clears the previous
-search. Followers and following are the only social relationships; the profile
-statistics open them in a dialog, and the former connections URL redirects to the
-profile.
+Post titles are optional. Images are checked before upload and previewed in bounded square frames without stretching. JPEG, PNG, GIF and WebP are accepted, up to four images and 10 MB per image; PDFs are rejected. Pagination controls show the current page and prevent repeated rapid requests. Chat typing and live refreshes are throttled.
 
-The connected screens cover posts, comments, reactions, uploaded images, profiles,
-stories, discovery, notifications, and chat with typing, read receipts,
-attachments, editing, and deletion. Follow changes update the profile statistics and
-any open followers dialog for both users over WebSocket. Comment notifications open
-their post.
+## Docker
 
-Demo sessions are available only in development, with `DEV_DUMMY_USER=true` on
-Go and `NEXT_PUBLIC_DEV_USER=true` on Next.js. Login and registration use the
-backend's session authentication regardless of whether demo switching is enabled.
+From the repository root:
+
+```sh
+docker compose up --build -d
+docker compose logs -f
+docker compose down
+```
+
+The `frontend` and `backend` services each have their own image and container. Open `http://localhost:4000`; the frontend proxies HTTP and WebSocket traffic to `backend:5174`. The backend port stays internal. SQLite and uploaded images persist in the named `social-data` volume. `docker compose down` retains it. For an HTTPS deployment, set `APP_ENV=production` and `FRONTEND_ORIGIN` to your HTTPS origin.
 
 ## Checks
 

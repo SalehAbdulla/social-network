@@ -94,6 +94,7 @@ func (db *DB) GetChatUsers(currentUserID string) ([]models.ChatUser, error) {
 		SELECT
 			u.userId,
 			u.nickName,
+			u.firstName, u.lastName, COALESCE(u.avatar,''),
 			(
 				SELECT MAX(m.createdAt)
 				FROM message m
@@ -116,7 +117,7 @@ func (db *DB) GetChatUsers(currentUserID string) ([]models.ChatUser, error) {
 	var users []models.ChatUser
 	for rows.Next() {
 		var user models.ChatUser
-		if err := rows.Scan(&user.UserId, &user.Nickname, &user.LastMessageTime); err != nil {
+		if err := rows.Scan(&user.UserId, &user.Nickname, &user.FirstName, &user.LastName, &user.Avatar, &user.LastMessageTime); err != nil {
 			return nil, realtimeforum.ErrInternal
 		}
 		users = append(users, user)

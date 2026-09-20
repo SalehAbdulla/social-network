@@ -1,6 +1,7 @@
 package models
 
 type Group struct {
+	ImageURL      string `json:"imageUrl"`
 	GroupID       int    `json:"groupId"`
 	OwnerID       string `json:"ownerId"`
 	OwnerName     string `json:"ownerName"`

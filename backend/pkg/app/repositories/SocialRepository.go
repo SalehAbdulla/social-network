@@ -142,6 +142,8 @@ func (db *DB) CanViewMedia(id, viewerID string) (bool, error) {
 			) OR EXISTS (
 				SELECT 1 FROM story s WHERE s.mediaUrl='/api/v1/media/' || m.mediaId AND s.expiresAt>datetime('now')
 			) OR EXISTS (
+				SELECT 1 FROM socialGroup g WHERE g.imageUrl='/api/v1/media/' || m.mediaId
+			) OR EXISTS (
 				SELECT 1 FROM user u WHERE u.avatar='/api/v1/media/' || m.mediaId
 			) OR EXISTS (
 				SELECT 1 FROM user u WHERE u.coverPhoto='/api/v1/media/' || m.mediaId AND

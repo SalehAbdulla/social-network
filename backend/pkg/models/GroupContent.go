@@ -1,6 +1,8 @@
 package models
 
 type GroupContent struct {
+	FirstName string `json:"firstName"`
+	LastName  string `json:"lastName"`
 	ID        int    `json:"id"`
 	GroupID   int    `json:"groupId"`
 	UserID    string `json:"userId"`

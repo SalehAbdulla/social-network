@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
+import Pagination from '../components/Pagination';
 import { useParams } from 'next/navigation';
 import toast from 'react-hot-toast';
 
@@ -109,14 +110,6 @@ export default function Profile() {
     setOffset(0);
   }
 
-  function handlePreviousPage() {
-    setOffset(Math.max(0, offset - POSTS_PER_PAGE));
-  }
-
-  function handleNextPage() {
-    setOffset(offset + POSTS_PER_PAGE);
-  }
-
   return (
     <div className="mx-auto max-w-3xl space-y-6 p-6">
       {/* Profile loading state */}
@@ -173,15 +166,7 @@ export default function Profile() {
               )}
 
               {/* Pagination */}
-              <Pagination
-                offset={offset}
-                hasNextPage={
-                  !!posts.data &&
-                  posts.data.length >= POSTS_PER_PAGE
-                }
-                onPrevious={handlePreviousPage}
-                onNext={handleNextPage}
-              />
+              <Pagination page={offset / POSTS_PER_PAGE + 1} loading={posts.loading} hasNext={posts.data?.length === POSTS_PER_PAGE} onChange={page => setOffset((page - 1) * POSTS_PER_PAGE)} />
             </>
           )}
 
@@ -447,44 +432,6 @@ function MediaGrid({ posts }: MediaGridProps) {
           />
         </Link>
       ))}
-    </div>
-  );
-}
-
-type PaginationProps = {
-  offset: number;
-  hasNextPage: boolean;
-  onPrevious: () => void;
-  onNext: () => void;
-};
-
-function Pagination({
-  offset,
-  hasNextPage,
-  onPrevious,
-  onNext,
-}: PaginationProps) {
-  const isFirstPage = offset === 0;
-
-  return (
-    <div className="flex justify-between text-sm">
-      <button
-        type="button"
-        disabled={isFirstPage}
-        onClick={onPrevious}
-        className="disabled:opacity-40"
-      >
-        Previous
-      </button>
-
-      <button
-        type="button"
-        disabled={!hasNextPage}
-        onClick={onNext}
-        className="disabled:opacity-40"
-      >
-        Next
-      </button>
     </div>
   );
 }

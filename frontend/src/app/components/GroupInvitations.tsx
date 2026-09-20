@@ -3,8 +3,10 @@ import { useState } from 'react';
 import toast from 'react-hot-toast';
 import { type GroupInvitation, errorMessage, request } from '../api/social';
 import { useResource } from '../lib/useResource';
+import { useLiveRefresh } from '../lib/useLiveRefresh';
 export default function GroupInvitations({ changed }: { changed: () => void }) {
  const invitations = useResource<GroupInvitation[]>('/groups/invitations');
+ useLiveRefresh(invitations.reload);
  const [busy,setBusy]=useState(false);
  async function decide(item: GroupInvitation,status: string) {
   setBusy(true);

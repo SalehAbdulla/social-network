@@ -1,4 +1,5 @@
 'use client';
+import Pagination from '../components/Pagination';
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import toast from 'react-hot-toast';
@@ -8,8 +9,8 @@ import RequestState from '../components/RequestState';
 import Loading from '../components/Loading';
 
 function notificationPath(item: Notification) {
-  if (item.entityType === 'group_invitation') return '/groups';
-  if (item.entityType.startsWith('group_')) return `/groups/${item.entityId}`;
+  if (item.entityType === 'group_invitation') return '/messages/groups';
+  if (item.entityType.startsWith('group_')) return `/messages/groups/${item.entityId}`;
   if (item.entityType === 'message') return `/messages/${item.actorId}`;
   if (item.entityType === 'comment') return item.postId ? `/post/${item.postId}` : '/profile';
   return `/profile/${item.actorId}`;
@@ -29,6 +30,6 @@ export default function Notifications() {
     {notifications.loading && <Loading />}
     {notifications.data?.notifications.map(item => <div key={item.notificationId} className={`rounded-xl border p-5 space-y-2 ${item.isRead ? 'border-slate-100 bg-white' : 'border-blue-100 bg-blue-50'}`}><p><Link href={`/profile/${item.actorId}`} className="font-semibold">@{item.actorNickname}</Link> {item.entityType === 'group_invitation' ? 'invited you to a group.' : item.entityType === 'group_request' ? 'requested to join your group.' : item.entityType === 'group_event' ? 'created a group event.' : item.entityType === 'message' ? 'sent you a message.' : item.entityType === 'comment' ? 'commented on your post.' : item.entityType === 'follow' ? 'followed you.' : 'updated a connection request.'}</p><p className="text-xs text-slate-400">{dateLabel(item.createdAt)}</p><div className="flex gap-4 text-sm"><Link href={notificationPath(item)} className="text-blue-600">View</Link>{!item.isRead && <button disabled={busy} onClick={() => void mark(`/notifications/${item.notificationId}/read`)}>Mark as read</button>}</div></div>)}
     {notifications.data?.notifications.length === 0 && <RequestState empty="You're all caught up." />}
-    <div className="flex justify-between text-sm"><button disabled={offset === 0} className="disabled:opacity-40" onClick={() => setOffset(Math.max(0, offset - 20))}>Previous</button><button disabled={!notifications.data || offset + 20 >= notifications.data.totalElements} className="disabled:opacity-40" onClick={() => setOffset(offset + 20)}>Next</button></div>
+    <Pagination page={offset / 20 + 1} hasNext={!!notifications.data && offset + 20 < notifications.data.totalElements} loading={notifications.loading} onChange={page => setOffset((page - 1) * 20)} />
   </div>;
 }

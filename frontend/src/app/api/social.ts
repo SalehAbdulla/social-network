@@ -1,8 +1,6 @@
 import axios from 'axios';
 import api from './axios';
 
-export const devUserEnabled = process.env.NODE_ENV !== 'production' && process.env.NEXT_PUBLIC_DEV_USER === 'true';
-
 export interface SocialUser {
   userId: string; 
   nickname: string; 
@@ -31,7 +29,7 @@ export interface Story {
   storyId: number; userId: string; nickname: string; avatar: string; content: string;
   mediaUrl: string; mediaType: 'text' | 'image' | 'video'; backgroundColor: string; createdAt: string; expiresAt: string;
 }
-export interface ChatUser { userId: string; nickname: string; isOnline: number; lastMessageTime: string }
+export interface ChatUser { userId: string; nickname: string; firstName: string; lastName: string; avatar: string; isOnline: number; lastMessageTime: string }
 export interface ChatMessage {
   messageId: number; senderId: string; recipientId: string; textMessage: string; timeStamp: string;
   isRead: number; mediaUrl: string; mediaType: string; editedAt: string;
@@ -40,7 +38,7 @@ export interface Notification {
   notificationId: number; actorId: string; actorNickname: string; entityType: string; entityId: number; postId?: number; isRead: number; createdAt: string;
 }
 export type FollowLists = Record<'followers' | 'following', SocialUser[]>;
-export interface Group { groupId: number; ownerId: string; ownerName: string; title: string; description: string; memberCount: number; isMember: boolean; isOwner: boolean; joinRequested: boolean; createdAt: string }
+export interface Group { groupId: number; ownerId: string; ownerName: string; imageUrl: string; title: string; description: string; memberCount: number; isMember: boolean; isOwner: boolean; joinRequested: boolean; createdAt: string }
 export interface GroupMember { userId: string; nickname: string; firstName: string; lastName: string; avatar: string; role: string; joinedAt: string }
 export interface GroupRequest { requestId: number; groupId: number; userId: string; nickname: string; status: string; createdAt: string }
 export interface GroupInvitation { invitationId: number; groupId: number; userId: string; nickname: string; groupTitle: string; status: string; createdAt: string }
@@ -107,7 +105,7 @@ export async function upload(file: File): Promise<{ url: string; mediaType: 'ima
   return request('/media', 'POST', form);
 }
 
-export function displayName(user: SocialUser) { return `${user.firstName} ${user.lastName}`.trim() || user.nickname; }
+export function displayName(user: { firstName: string; lastName: string; nickname?: string }) { return `${user.firstName} ${user.lastName}`.trim() || user.nickname || 'Member'; }
 export function dateLabel(value: string) {
   // SQLite timestamps are UTC and do not include a zone suffix.
   const date = new Date(value.includes('T') ? value : value.replace(' ', 'T') + 'Z');

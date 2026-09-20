@@ -1,4 +1,5 @@
 'use client';
+import Pagination from '../components/Pagination';
 import { useState } from 'react';
 import Link from 'next/link';
 import toast from 'react-hot-toast';
@@ -27,6 +28,6 @@ export default function Discover() {
       return <div key={person.userId} className="rounded-xl bg-white p-5 shadow-sm space-y-4"><Link href={`/profile/${person.userId}`} className="flex items-center gap-3"><Avatar name={displayName(person)} avatarUrl={person.avatar} /><div><h2 className="font-semibold">{displayName(person)}</h2><p className="text-sm text-slate-500">@{person.nickname}</p></div></Link><p className="min-h-10 text-sm text-slate-600">{person.bio || person.location || 'Say hello and start a conversation.'}</p><div className="flex flex-wrap gap-2 text-sm"><button disabled={!!busy} className="rounded-lg bg-blue-50 px-3 py-2 text-blue-700 disabled:opacity-50" onClick={() => void change(person.userId, `/users/${person.userId}/follow`, following ? 'DELETE' : 'PUT')}>{following ? 'Unfollow' : 'Follow'}</button><Link href={`/messages/${person.userId}`} className="rounded-lg border border-slate-200 px-3 py-2">Message</Link></div></div>;
     })}</div>
     {users.data?.length === 0 && <RequestState empty="No people matched your search." />}
-    <div className="flex justify-between"><button disabled={offset === 0} onClick={() => setOffset(Math.max(0, offset - 30))} className="disabled:opacity-40">Previous</button><button disabled={!users.data || users.data.length < 30} onClick={() => setOffset(offset + 30)} className="disabled:opacity-40">Next</button></div>
+    <Pagination page={offset / 30 + 1} hasNext={users.data?.length === 30} loading={users.loading} onChange={page => setOffset((page - 1) * 30)} />
   </div>;
 }

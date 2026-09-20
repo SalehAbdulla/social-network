@@ -8,13 +8,17 @@ import (
 	"social-network/backend/pkg/models"
 )
 
-func (db *DB) CreateGroup(ownerID, title, description string) (models.Group, error) {
+func (db *DB) CreateGroup(ownerID, title, description string, imageURL ...string) (models.Group, error) {
 	tx, err := db.Conn.Begin()
 	if err != nil {
 		return models.Group{}, err
 	}
 	defer tx.Rollback()
-	result, err := tx.Exec("INSERT INTO socialGroup (ownerId,title,description) VALUES (?,?,?)", ownerID, title, description)
+	image := ""
+	if len(imageURL) > 0 {
+		image = imageURL[0]
+	}
+	result, err := tx.Exec("INSERT INTO socialGroup (ownerId,title,description,imageUrl) VALUES (?,?,?,?)", ownerID, title, description, image)
 	if err != nil {
 		return models.Group{}, err
 	}
@@ -33,14 +37,14 @@ func (db *DB) CreateGroup(ownerID, title, description string) (models.Group, err
 
 func (db *DB) Groups(userID, search string, offset int) ([]models.Group, error) {
 	pattern := "%" + strings.ReplaceAll(strings.ReplaceAll(strings.ReplaceAll(search, "\\", "\\\\"), "%", "\\%"), "_", "\\_") + "%"
-	rows, err := db.Conn.Query(`SELECT g.groupId,g.ownerId,trim(u.firstName || ' ' || u.lastName),g.title,g.description,
+	rows, err := db.Conn.Query(`SELECT g.groupId,g.ownerId,trim(u.firstName || ' ' || u.lastName),g.title,g.description,g.imageUrl,
         (SELECT COUNT(*) FROM socialGroupMember gm WHERE gm.groupId=g.groupId),
         EXISTS(SELECT 1 FROM socialGroupMember mine WHERE mine.groupId=g.groupId AND mine.userId=?),
         EXISTS(SELECT 1 FROM socialGroupMember owner WHERE owner.groupId=g.groupId AND owner.userId=? AND owner.role='owner'),
         EXISTS(SELECT 1 FROM socialGroupRequest pending WHERE pending.groupId=g.groupId AND pending.userId=? AND pending.status='pending'),g.createdAt
         FROM socialGroup g JOIN user u ON u.userId=g.ownerId
 		WHERE g.title LIKE ? ESCAPE '\' OR g.description LIKE ? ESCAPE '\'
-        ORDER BY g.createdAt DESC,g.groupId DESC LIMIT 30 OFFSET ?`, userID, userID, userID, pattern, pattern, offset)
+        ORDER BY g.createdAt DESC,g.groupId DESC LIMIT 31 OFFSET ?`, userID, userID, userID, pattern, pattern, offset)
 	if err != nil {
 		return nil, err
 	}
@@ -48,7 +52,7 @@ func (db *DB) Groups(userID, search string, offset int) ([]models.Group, error) 
 	groups := []models.Group{}
 	for rows.Next() {
 		var group models.Group
-		if err := rows.Scan(&group.GroupID, &group.OwnerID, &group.OwnerName, &group.Title, &group.Description, &group.MemberCount, &group.IsMember, &group.IsOwner, &group.JoinRequested, &group.CreatedAt); err != nil {
+		if err := rows.Scan(&group.GroupID, &group.OwnerID, &group.OwnerName, &group.Title, &group.Description, &group.ImageURL, &group.MemberCount, &group.IsMember, &group.IsOwner, &group.JoinRequested, &group.CreatedAt); err != nil {
 			return nil, err
 		}
 		groups = append(groups, group)
@@ -58,13 +62,13 @@ func (db *DB) Groups(userID, search string, offset int) ([]models.Group, error) 
 
 func (db *DB) Group(groupID int, userID string) (models.Group, error) {
 	var group models.Group
-	err := db.Conn.QueryRow(`SELECT g.groupId,g.ownerId,trim(u.firstName || ' ' || u.lastName),g.title,g.description,
+	err := db.Conn.QueryRow(`SELECT g.groupId,g.ownerId,trim(u.firstName || ' ' || u.lastName),g.title,g.description,g.imageUrl,
         (SELECT COUNT(*) FROM socialGroupMember gm WHERE gm.groupId=g.groupId),
         EXISTS(SELECT 1 FROM socialGroupMember mine WHERE mine.groupId=g.groupId AND mine.userId=?),
         EXISTS(SELECT 1 FROM socialGroupMember owner WHERE owner.groupId=g.groupId AND owner.userId=? AND owner.role='owner'),
         EXISTS(SELECT 1 FROM socialGroupRequest pending WHERE pending.groupId=g.groupId AND pending.userId=? AND pending.status='pending'),g.createdAt
         FROM socialGroup g JOIN user u ON u.userId=g.ownerId WHERE g.groupId=?`, userID, userID, userID, groupID).
-		Scan(&group.GroupID, &group.OwnerID, &group.OwnerName, &group.Title, &group.Description, &group.MemberCount, &group.IsMember, &group.IsOwner, &group.JoinRequested, &group.CreatedAt)
+		Scan(&group.GroupID, &group.OwnerID, &group.OwnerName, &group.Title, &group.Description, &group.ImageURL, &group.MemberCount, &group.IsMember, &group.IsOwner, &group.JoinRequested, &group.CreatedAt)
 	if err == sql.ErrNoRows {
 		return group, backend.ErrNotFound
 	}

@@ -1,35 +1,33 @@
 'use client';
 
 import Link from 'next/link';
-import { usePathname, useRouter } from 'next/navigation';
-import { Bell, CirclePlus, Compass, House, MessageSquare, UserRound, UsersRound, ChevronLeft, ChevronRight, LogOut } from 'lucide-react';
+import { usePathname } from 'next/navigation';
+import { Bell, CirclePlus, Compass, House, MessageSquare, UserRound, ChevronLeft, ChevronRight, LogOut } from 'lucide-react';
 import toast from 'react-hot-toast';
-import { devUserEnabled, displayName, errorMessage, request } from '../api/social';
+import { displayName, errorMessage, request } from '../api/social';
 import { useBackend } from './BackendProvider';
 import { useResource } from '../lib/useResource';
 import { useEffect, useState } from 'react';
 import Avatar from './Avatar';
+import { useLiveRefresh } from '../lib/useLiveRefresh';
 
 export default function Sidebar({ isSideBarOpen, setSideBarOpen, isCollapsed, setIsCollapsed }: {
   isSideBarOpen: boolean; setSideBarOpen: (open: boolean) => void;
   isCollapsed: boolean; setIsCollapsed: (collapsed: boolean) => void;
 }) {
-  const { user, switchUser, devEmail } = useBackend();
+  const { user } = useBackend();
   const pathname = usePathname();
-  const router = useRouter();
-  const [switching, setSwitching] = useState(false);
   const [loggingOut, setLoggingOut] = useState(false);
   const count = useResource<{ count: number }>('/notifications/unread-count');
   const reload = count.reload;
+  useLiveRefresh(reload);
   useEffect(() => {
-    const timer = setInterval(reload, 30000);
-    window.addEventListener('social:socket', reload);
     window.addEventListener('social:notifications', reload);
-    return () => { clearInterval(timer); window.removeEventListener('social:socket', reload); window.removeEventListener('social:notifications', reload); };
+    return () => { window.removeEventListener('social:notifications', reload); };
   }, [reload]);
   const links = [
     { href: '/', label: 'Feed', icon: House }, { href: '/messages', label: 'Messages', icon: MessageSquare },
-    { href: '/groups', label: 'Groups', icon: UsersRound }, { href: '/discover', label: 'Discover', icon: Compass },
+    { href: '/discover', label: 'Discover', icon: Compass },
     { href: '/notifications', label: 'Notifications', icon: Bell }, { href: '/profile', label: 'Profile', icon: UserRound },
   ];
   async function logout() {
@@ -52,9 +50,7 @@ export default function Sidebar({ isSideBarOpen, setSideBarOpen, isCollapsed, se
     <Link href="/create-post" title="Create post" className="mt-6 flex items-center justify-center gap-2 rounded-lg bg-linear-to-r from-blue-600 to-teal-600 p-3 text-white"><CirclePlus size={20} />{!isCollapsed && 'Create Post'}</Link>
     <div className="mt-auto shrink-0 border-t border-slate-100 pt-4 space-y-3">
       <Link href="/profile" className="flex items-center gap-2"><Avatar name={displayName(user)} avatarUrl={user.avatar} />{!isCollapsed && <div className="min-w-0"><p className="truncate font-medium">{displayName(user)}</p><p className="truncate text-xs text-slate-500">@{user.nickname}</p></div>}</Link>
-      {devUserEnabled && !isCollapsed && <label className="block text-xs text-slate-500">Development user<select aria-label="Development user" disabled={switching} value={devEmail} onChange={async event => {
-        setSwitching(true); try { await switchUser(event.target.value); router.push("/"); } catch (error) { toast.error(errorMessage(error)); } finally { setSwitching(false); }
-      }} className="mt-1 w-full rounded-lg border border-slate-200 p-2 text-slate-700"><option value="dummy@example.com">Dummy User</option><option value="alex@example.com">Alex Demo</option></select></label>}
+
       <button disabled={loggingOut} onClick={() => void logout()} className="flex w-full items-center gap-2 rounded-lg px-2 py-2 text-sm text-slate-600 hover:bg-slate-50 disabled:opacity-50"><LogOut size={18} />{!isCollapsed && (loggingOut ? 'Signing out...' : 'Sign out')}</button>
     </div>
     </div>

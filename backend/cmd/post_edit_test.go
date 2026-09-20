@@ -15,8 +15,8 @@ import (
 func TestPostEditingIntegration(t *testing.T) {
 	server, repo := integrationServer(t, true, false)
 	owner, follower, guest := newIntegrationClient(t, server), newIntegrationClient(t, server), newIntegrationClient(t, server)
-	owner.call("POST", "/api/v1/dev/session", map[string]string{}, 200)
-	follower.call("POST", "/api/v1/dev/session", map[string]string{"email": "alex@example.com"}, 200)
+	owner.login("dummy@example.com")
+	follower.login("alex@example.com")
 	original := decoded[posts.PostDTO](t, owner.call("POST", "/api/v1/posts", map[string]any{
 		"title": "Original post", "content": "This is the original content.", "privacy": "public",
 	}, 201))
@@ -98,7 +98,7 @@ func TestPostEditingIntegration(t *testing.T) {
 func TestLegacyConnectionNotificationsAreHidden(t *testing.T) {
 	server, repo := integrationServer(t, true, false)
 	user := newIntegrationClient(t, server)
-	user.call("POST", "/api/v1/dev/session", map[string]string{}, 200)
+	user.login("dummy@example.com")
 	if _, err := repo.CreateNotification("dummy-id", "alex-id", "connection", 0); err != nil {
 		t.Fatal(err)
 	}

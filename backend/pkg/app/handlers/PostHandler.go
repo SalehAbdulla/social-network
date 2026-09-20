@@ -200,7 +200,7 @@ func (re *HandlerContext) postInput(w http.ResponseWriter, r *http.Request, user
 	title := strings.TrimSpace(req.Title)
 	content := strings.TrimSpace(req.Content)
 
-	if title == "" || len(title) < 3 || len(title) > 30 {
+	if (title != "" && len(title) < 3) || len(title) > 30 {
 		re.HandleError(w, r, realtimeforum.ErrTitleLength)
 		return req, false
 	}

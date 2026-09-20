@@ -32,13 +32,20 @@ func (re *HandlerContext) ListGroups(w http.ResponseWriter, r *http.Request) {
 
 func (re *HandlerContext) CreateGroup(w http.ResponseWriter, r *http.Request) {
 	var input struct {
+		ImageURL    string `json:"imageUrl"`
 		Title       string `json:"title"`
 		Description string `json:"description"`
 	}
 	if !re.decode(w, r, &input) {
 		return
 	}
-	group, err := re.GroupService.Create(currentUser(r), input.Title, input.Description)
+	if input.ImageURL != "" {
+		if err := re.SocialService.ValidateMedia(currentUser(r), input.ImageURL, "image"); err != nil {
+			re.HandleError(w, r, err)
+			return
+		}
+	}
+	group, err := re.GroupService.Create(currentUser(r), input.Title, input.Description, input.ImageURL)
 	if err != nil {
 		re.HandleError(w, r, err)
 		return

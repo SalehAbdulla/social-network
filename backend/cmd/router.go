@@ -37,6 +37,11 @@ func routes() http.Handler {
 	mux.Handle("GET /api/v1/groups", pkgmiddleware.AuthMiddleware(http.HandlerFunc(handlers.HandlerCtx.ListGroups)))
 	mux.Handle("POST /api/v1/groups", pkgmiddleware.AuthMiddleware(http.HandlerFunc(handlers.HandlerCtx.CreateGroup)))
 	mux.Handle("GET /api/v1/groups/{groupId}", pkgmiddleware.AuthMiddleware(http.HandlerFunc(handlers.HandlerCtx.GetGroup)))
+	for _, method := range []string{"PUT", "DELETE"} {
+		mux.Handle(method+" /api/v1/groups/{groupId}", pkgmiddleware.AuthMiddleware(http.HandlerFunc(handlers.HandlerCtx.ManageGroup)))
+		mux.Handle(method+" /api/v1/groups/{groupId}/members/{userId}", pkgmiddleware.AuthMiddleware(http.HandlerFunc(handlers.HandlerCtx.ManageGroupMember)))
+		mux.Handle(method+" /api/v1/groups/{groupId}/content/{kind}/{id}", pkgmiddleware.AuthMiddleware(http.HandlerFunc(handlers.HandlerCtx.GroupContent)))
+	}
 	mux.Handle("POST /api/v1/groups/{groupId}/join", pkgmiddleware.AuthMiddleware(http.HandlerFunc(handlers.HandlerCtx.JoinGroup)))
 	mux.Handle("POST /api/v1/groups/{groupId}/invite/{userId}", pkgmiddleware.AuthMiddleware(http.HandlerFunc(handlers.HandlerCtx.InviteToGroup)))
 	mux.Handle("GET /api/v1/groups/{groupId}/members", pkgmiddleware.AuthMiddleware(http.HandlerFunc(handlers.HandlerCtx.GetGroupMembers)))
@@ -45,9 +50,6 @@ func routes() http.Handler {
 	mux.Handle("GET /api/v1/groups/invitations", pkgmiddleware.AuthMiddleware(http.HandlerFunc(handlers.HandlerCtx.GetGroupInvitations)))
 	mux.Handle("PUT /api/v1/groups/{groupId}/invitations/{invitationId}", pkgmiddleware.AuthMiddleware(http.HandlerFunc(handlers.HandlerCtx.DecideGroupInvitation)))
 
-	if handlers.HandlerCtx.App.DevDummyUser && !handlers.HandlerCtx.App.InProduction {
-		mux.HandleFunc("POST /api/v1/dev/session", handlers.HandlerCtx.DevSession)
-	}
 	for pattern, handler := range map[string]http.HandlerFunc{
 		"GET /api/v1/users":                    handlers.HandlerCtx.Discover,
 		"GET /api/v1/users/{userId}":           handlers.HandlerCtx.UserProfile,

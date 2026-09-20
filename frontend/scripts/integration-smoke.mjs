@@ -88,21 +88,20 @@ async function createPage(email = 'dummy@example.com') {
   const { sessionId } = await command('Target.attachToTarget', { targetId, flatten: true });
   await command('Runtime.enable', {}, sessionId);
   await command('Page.enable', {}, sessionId);
+  await command('Emulation.setDeviceMetricsOverride', { width: 1440, height: 960, deviceScaleFactor: 1, mobile: false }, sessionId);
   await command('Network.enable', {}, sessionId);
-  await command('Page.addScriptToEvaluateOnNewDocument', {
-    source: `if (location.origin === ${JSON.stringify(base)} && !localStorage.getItem('social:dev-user')) localStorage.setItem('social:dev-user', ${JSON.stringify(email)});`,
-  }, sessionId);
+
   // Keep the smoke test offline except for the local application.
   await command('Fetch.enable', { patterns: [{ urlPattern: '*' }] }, sessionId);
   await command('Page.navigate', { url: base + '/login' }, sessionId);
   await until(sessionId, `!!document.querySelector('input[name="identifier"]')`, 'login form');
   // Tests explicitly authenticate; page visits must never create a session.
-  if (email) await api(sessionId, '/dev/session', 'POST', { email });
+  if (email) await evaluate(sessionId, `(async () => { const response = await fetch('/api/v1/auth/login', { method: 'POST', body: new URLSearchParams({identifier: ${JSON.stringify(email)}, password: 'DummyUser123!'}) }); if (!response.ok) throw new Error('Login failed'); })()`);
   return sessionId;
 }
 async function navigate(page, route) {
   await command('Page.navigate', { url: base + route }, page);
-  await until(page, `location.pathname === ${JSON.stringify(route)} && !!document.querySelector('select[aria-label="Development user"]')`, `load ${route}`);
+  await until(page, `location.pathname === ${JSON.stringify(route)} && !!document.querySelector('aside[aria-label="Main navigation"]')`, `load ${route}`);
 }
 async function fill(page, selector, value) {
   await evaluate(page, `(() => { const element = document.querySelector(${JSON.stringify(selector)}); if (!element) throw new Error('Input not found'); Object.getOwnPropertyDescriptor(Object.getPrototypeOf(element), 'value').set.call(element, ${JSON.stringify(value)}); element.dispatchEvent(new Event('input', { bubbles: true })); element.dispatchEvent(new Event('change', { bubbles: true })); })()`);
@@ -151,6 +150,7 @@ try {
   const document = await command('DOM.getDocument', {}, dummy);
   const fileNode = await command('DOM.querySelector', { nodeId: document.root.nodeId, selector: 'input[type="file"]' }, dummy);
   await command('DOM.setFileInputFiles', { nodeId: fileNode.nodeId, files: [fixture] }, dummy);
+  await until(dummy, `!!document.querySelector('img[alt="Preview of pixel.png"]')`, 'image preview');
   await button(dummy, 'Publish Post');
   await until(dummy, `location.pathname === '/' && document.body.innerText.includes(${JSON.stringify(`Browser ${stamp}`)})`, 'publish post');
   const created = (await api(dummy, '/posts')).posts.find(post => post.title === `Browser ${stamp}`);
@@ -162,7 +162,7 @@ try {
   console.log('PASS: post creation, image upload, detail page and reaction persist');
 
   await evaluate(dummy, `document.querySelector('a[aria-label="Edit post"]').click()`);
-  await until(dummy, `document.querySelector('h1')?.textContent === 'Edit Post' && !!document.querySelector('img[alt="Post photo 1"]')`, 'prefilled post editor');
+  await until(dummy, `document.querySelector('h1')?.textContent === 'Edit Post' && !!document.querySelector('img[alt="Photo 1"]')`, 'prefilled post editor');
   assert.equal(await evaluate(dummy, `document.querySelector('input[placeholder="Give your post a title"]').value`), created.title);
   await fill(dummy, 'input[placeholder="Give your post a title"]', 'Cancelled edit');
   await evaluate(dummy, `[...document.querySelectorAll('main a')].find(link => link.textContent === 'Cancel').click()`);
@@ -182,8 +182,6 @@ try {
 
   alex = await createPage('alex@example.com');
   await navigate(alex, '/');
-  await fill(alex, 'select[aria-label="Development user"]', 'alex@example.com');
-  await until(alex, `document.querySelector('select[aria-label="Development user"]')?.value === 'alex@example.com' && document.body.innerText.includes('@alexdemo')`, 'switch demo user');
   originalAlex = await api(alex, '/users/me');
   await navigate(alex, `/post/${postId}`);
   await until(alex, `!!document.querySelector('button[aria-label="Upvote post"]')`, 'other author post');
@@ -257,40 +255,59 @@ try {
   await until(dummy, stats(beforeFollow.followers.length), 'owner sees restored count');
   console.log('PASS: profile follow/unfollow and live database counts');
 
-  await navigate(dummy, '/groups');
-  await fill(dummy, 'input[aria-label="Search groups"]', 'does-not-match-new-group');
-  await button(dummy, 'Search');
-  await until(dummy, `document.body.innerText.includes('No groups found.')`, 'filtered group list');
-  await button(dummy, 'Create group');
+  await navigate(dummy, '/messages/groups');
+  assert(!(await evaluate(dummy, `document.querySelector('aside[aria-label="Main navigation"]').innerText`)).includes('Groups'));
+  assert(!(await evaluate(dummy, `document.body.innerText`)).includes('Development user'));
+  await evaluate(dummy, `document.querySelector('[aria-label="Create group"]').click()`);
   await fill(dummy, 'input[name="title"]', `Browser group ${stamp}`);
   await fill(dummy, 'textarea[name="description"]', 'Browser group join workflow');
-  holdGroupRefresh = true;
   await button(dummy, 'Create group');
-  await until(dummy, `!document.querySelector('input[name="title"]') && document.body.innerText.includes(${JSON.stringify(`Browser group ${stamp}`)})`, 'create group');
-  assert.equal(await evaluate(dummy, `document.querySelector('input[aria-label="Search groups"]').value`), '');
-  assert(!(await evaluate(dummy, 'document.body.innerText')).includes('No groups found.'));
-  holdGroupRefresh = false;
-  for (const event of heldGroupRequests.splice(0)) await command('Fetch.continueRequest', { requestId: event.params.requestId }, event.sessionId);
-  console.log('PASS: created group appears before list refresh and clears the previous search');
+  await until(dummy, `location.pathname.startsWith('/messages/groups/') && document.body.innerText.includes(${JSON.stringify(`Browser group ${stamp}`)})`, 'create group inside messages');
   const group = (await api(dummy, '/groups')).find(item => item.title === `Browser group ${stamp}`);
-  await navigate(alex, '/groups');
-  await until(alex, `!!document.querySelector('a[href="/groups/${group.groupId}"]')`, 'group listing');
-  await evaluate(alex, `document.querySelector('a[href="/groups/${group.groupId}"]').closest('article').querySelector('button').click()`);
-  await until(alex, `document.querySelector('a[href="/groups/${group.groupId}"]').closest('article').innerText.includes('Request pending')`, 'join request feedback');
-  await navigate(alex, `/groups/${group.groupId}`);
-  await until(alex, `document.body.innerText.includes('Request pending')`, 'pending request persists on group details');
-  await navigate(dummy, `/groups/${group.groupId}`);
-  await until(dummy, `document.body.innerText.includes('@alexdemo')`, 'owner receives join request');
-  await button(dummy, 'Accept');
-  await until(dummy, `document.body.innerText.includes('2 members')`, 'owner accepts join request');
-  await navigate(alex, `/groups/${group.groupId}`);
-  await until(alex, `document.body.innerText.includes('2 members') && !document.body.innerText.includes('Request pending')`, 'membership persists');
-  const detailsGroup = await api(dummy, '/groups', 'POST', { title: `Details group ${stamp}` });
-  await navigate(alex, `/groups/${detailsGroup.groupId}`);
-  await until(alex, `document.body.innerText.includes('Request to join')`, 'detail join button');
+  await navigate(alex, `/messages/groups/${group.groupId}`);
   await button(alex, 'Request to join');
-  await until(alex, `document.body.innerText.includes('Request pending')`, 'request from group details');
-  console.log('PASS: group creation, join from listing and details, persistent pending state and owner acceptance');
+  await until(alex, `document.body.innerText.includes('Request pending')`, 'pending request');
+  await button(dummy, 'Group info');
+  await until(dummy, `document.body.innerText.includes('alexdemo')`, 'owner receives request');
+  await button(dummy, 'Accept');
+  await until(dummy, `document.body.innerText.includes('2 members')`, 'owner accepts request');
+  await navigate(alex, `/messages/groups/${group.groupId}`);
+  await until(alex, `!!document.querySelector('[aria-label="Group conversation tabs"]')`, 'group membership');
+  await button(dummy, 'Chat');
+  await fill(dummy, 'textarea[aria-label="Message"]', `Group hello ${stamp}`);
+  await evaluate(dummy, `document.querySelector('[aria-label="Send message"]').click()`);
+  await until(alex, `document.body.innerText.includes(${JSON.stringify(`Group hello ${stamp}`)})`, 'live group message');
+  assert((await evaluate(alex, `document.querySelector('section[aria-label^="Group conversation"]').innerText`)).includes('Dummy User'));
+  await button(dummy, 'Event');
+  await fill(dummy, 'input[name="title"]', `Meetup ${stamp}`);
+  await fill(dummy, 'input[name="startsAt"]', '2030-12-01T18:00');
+  await fill(dummy, 'textarea[name="content"]', 'Meet at the park');
+  await button(dummy, 'Create event');
+  await until(alex, `document.body.innerText.includes(${JSON.stringify(`Meetup ${stamp}`)})`, 'event appears in chat');
+  await button(alex, 'Going');
+  await until(dummy, `document.body.innerText.includes('1 going')`, 'live RSVP');
+  await button(dummy, 'Posts');
+  await button(dummy, 'Post');
+  await fill(dummy, 'textarea[name="content"]', `Group post ${stamp}`);
+  await button(dummy, 'Publish');
+  await until(dummy, `document.body.innerText.includes(${JSON.stringify(`Group post ${stamp}`)})`, 'group post stays in conversation');
+  await button(dummy, 'Group info');
+  await button(dummy, 'Edit group');
+  await fill(dummy, 'textarea[name="description"]', 'Updated group description');
+  await button(dummy, 'Save group');
+  await until(dummy, `!document.querySelector('textarea[name="description"]') && document.body.innerText.includes('Updated group description')`, 'group edit');
+  const groupShot = await command('Page.captureScreenshot', { format: 'png' }, dummy);
+  await writeFile(path.join(taskDir, 'group-info.png'), Buffer.from(groupShot.data, 'base64'));
+  await button(dummy, 'Chat');
+  const chatShot = await command('Page.captureScreenshot', { format: 'png' }, dummy);
+  await writeFile(path.join(taskDir, 'group-chat.png'), Buffer.from(chatShot.data, 'base64'));
+  await command('Emulation.setDeviceMetricsOverride', { width: 390, height: 844, deviceScaleFactor: 1, mobile: true }, dummy);
+  await pause(500);
+  assert(await evaluate(dummy, 'document.documentElement.scrollWidth <= window.innerWidth'), 'Mobile chat has no horizontal overflow');
+  const mobileShot = await command('Page.captureScreenshot', { format: 'png' }, dummy);
+  await writeFile(path.join(taskDir, 'mobile-chat.png'), Buffer.from(mobileShot.data, 'base64'));
+  await command('Emulation.setDeviceMetricsOverride', { width: 1440, height: 960, deviceScaleFactor: 1, mobile: false }, dummy);
+  console.log('PASS: groups inside conversations, join approval, group chat, events, RSVP, posts, editing and mobile layout');
 
   await navigate(dummy, '/');
   await evaluate(dummy, `[...document.querySelectorAll('button')].find(button => button.textContent.includes('Create story')).click()`);
@@ -308,10 +325,10 @@ try {
 
   await navigate(dummy, `/messages/${originalAlex.userId}`);
   await navigate(alex, `/messages/${originalDummy.userId}`);
-  await until(dummy, `document.body.innerText.includes('Live updates connected')`, 'dummy WebSocket');
-  await until(alex, `document.body.innerText.includes('Live updates connected')`, 'Alex WebSocket');
+  await until(dummy, `!!document.querySelector('[title="Connected"]')`, 'dummy WebSocket');
+  await until(alex, `!!document.querySelector('[title="Connected"]')`, 'Alex WebSocket');
   await fill(dummy, 'textarea[aria-label="Message"]', `Browser message ${stamp}`);
-  await until(alex, `document.body.innerText.includes('is typing')`, 'live typing', 10000);
+  await until(alex, `document.body.innerText.includes('Typing')`, 'live typing', 10000);
   await evaluate(dummy, `document.querySelector('textarea[aria-label="Message"]').focus()`);
   await enter(dummy, true);
   assert.equal(await evaluate(dummy, `document.querySelector('textarea[aria-label="Message"]').value`), `Browser message ${stamp}\n`);
@@ -319,24 +336,27 @@ try {
   await command('Input.insertText', { text: 'Second line' }, dummy);
   await enter(dummy);
   await until(alex, `document.body.innerText.includes(${JSON.stringify(`Browser message ${stamp}`)})`, 'live message receipt', 10000);
-  await until(dummy, `document.body.innerText.includes('read')`, 'message read receipt', 10000);
+  await until(dummy, `!!document.querySelector('[aria-label="Read"]')`, 'message read receipt', 10000);
   const sentMessages = (await api(dummy, `/messages?partnerId=${originalAlex.userId}`)).messages.filter(message => message.textMessage.includes(`Browser message ${stamp}`));
   assert.equal(sentMessages.length, 1);
   assert.equal(sentMessages[0].textMessage, `Browser message ${stamp}\nSecond line`);
-  await button(dummy, 'Edit');
+  await evaluate(dummy, `document.querySelector('summary[aria-label="Message actions"]').click()`);
+  await button(dummy, 'Edit message');
   await fill(dummy, 'textarea[aria-label="Message"]', `Edited browser message ${stamp}`);
-  await button(dummy, 'Save');
+  await evaluate(dummy, `document.querySelector('[aria-label="Save message"]').click()`);
   await until(alex, `document.body.innerText.includes(${JSON.stringify(`Edited browser message ${stamp}`)})`, 'live message edit', 10000);
+  await evaluate(alex, `document.querySelector('summary[aria-label="Message actions"]').click()`);
   await button(alex, 'Delete for me');
   await until(alex, `!document.body.innerText.includes(${JSON.stringify(`Edited browser message ${stamp}`)})`, 'delete for recipient');
   assert(await evaluate(dummy, `document.body.innerText.includes(${JSON.stringify(`Edited browser message ${stamp}`)})`));
+  await evaluate(dummy, `document.querySelector('summary[aria-label="Message actions"]').open || document.querySelector('summary[aria-label="Message actions"]').parentElement.setAttribute('open', '')`);
   await button(dummy, 'Delete for everyone');
   await until(dummy, `!document.body.innerText.includes(${JSON.stringify(`Edited browser message ${stamp}`)})`, 'delete for everyone');
   console.log('PASS: live typing, messages, read receipts, edits and scoped deletion');
 
   await api(dummy, '/auth/logout', 'POST');
   await fill(dummy, 'textarea[aria-label="Message"]', 'This unauthorized message must not be sent');
-  await button(dummy, 'Send');
+  await evaluate(dummy, `document.querySelector('[aria-label="Send message"]').click()`);
   await until(dummy, `location.pathname === '/login' && !!document.querySelector('input[name="identifier"]')`, 'expired session redirects to login');
   await fill(dummy, 'input[name="identifier"]', 'dummy@example.com');
   await fill(dummy, 'input[name="password"]', 'DummyUser123!');

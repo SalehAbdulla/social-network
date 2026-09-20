@@ -16,11 +16,11 @@ func (db *DB) GroupContentExists(groupID, id int, kind string) error {
 }
 
 func (db *DB) ListGroupContent(groupID int, userID, kind string, parentID, offset int) ([]models.GroupContent, error) {
-	rows, err := db.Conn.Query(`SELECT c.id,c.groupId,c.userId,u.nickName,c.kind,COALESCE(c.parentId,0),c.title,c.content,c.mediaUrl,c.startsAt,c.createdAt,
+	rows, err := db.Conn.Query(`SELECT c.id,c.groupId,c.userId,u.nickName,u.firstName,u.lastName,c.kind,COALESCE(c.parentId,0),c.title,c.content,c.mediaUrl,c.startsAt,c.createdAt,
  COALESCE((SELECT status FROM groupRSVP WHERE eventId=c.id AND userId=?),''),
  (SELECT COUNT(*) FROM groupRSVP WHERE eventId=c.id AND status='going'),
  (SELECT COUNT(*) FROM groupRSVP WHERE eventId=c.id AND status='not_going')
- FROM groupContent c JOIN user u ON u.userId=c.userId WHERE c.groupId=? AND c.kind=? AND COALESCE(c.parentId,0)=? ORDER BY c.id DESC LIMIT 30 OFFSET ?`, userID, groupID, kind, parentID, offset)
+ FROM groupContent c JOIN user u ON u.userId=c.userId WHERE c.groupId=? AND (c.kind=? OR (?='timeline' AND c.kind IN ('messages','events')) OR (?='media' AND c.mediaUrl<>'')) AND (?='media' OR COALESCE(c.parentId,0)=?) ORDER BY c.id DESC LIMIT 31 OFFSET ?`, userID, groupID, kind, kind, kind, kind, parentID, offset)
 	if err != nil {
 		return nil, err
 	}
@@ -28,7 +28,7 @@ func (db *DB) ListGroupContent(groupID int, userID, kind string, parentID, offse
 	items := []models.GroupContent{}
 	for rows.Next() {
 		var c models.GroupContent
-		if err = rows.Scan(&c.ID, &c.GroupID, &c.UserID, &c.Nickname, &c.Kind, &c.ParentID, &c.Title, &c.Content, &c.MediaURL, &c.StartsAt, &c.CreatedAt, &c.RSVP, &c.Going, &c.NotGoing); err != nil {
+		if err = rows.Scan(&c.ID, &c.GroupID, &c.UserID, &c.Nickname, &c.FirstName, &c.LastName, &c.Kind, &c.ParentID, &c.Title, &c.Content, &c.MediaURL, &c.StartsAt, &c.CreatedAt, &c.RSVP, &c.Going, &c.NotGoing); err != nil {
 			return nil, err
 		}
 		items = append(items, c)

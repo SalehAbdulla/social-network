@@ -10,13 +10,10 @@ import (
 	"unicode/utf8"
 
 	backend "social-network/backend"
-	"social-network/backend/pkg/app/service"
 	"social-network/backend/pkg/middleware"
 	"social-network/backend/pkg/models"
 	"social-network/backend/pkg/payload"
 	"social-network/backend/pkg/payload/posts"
-
-	"github.com/google/uuid"
 )
 
 func respond(w http.ResponseWriter, status int, data any) {
@@ -50,54 +47,6 @@ func (re *HandlerContext) allowedOrigin(r *http.Request) bool {
 		return false
 	}
 	return u.Host == r.Host || origin == re.App.FrontendOrigin
-}
-
-// DevSession is registered only when explicitly enabled outside production.
-// It creates a normal session; protected routes still require their session cookie.
-func (re *HandlerContext) DevSession(w http.ResponseWriter, r *http.Request) {
-	if !re.App.DevDummyUser || re.App.InProduction {
-		re.NotFound(w, r)
-		return
-	}
-	if !re.allowedOrigin(r) {
-		re.HandleError(w, r, backend.ErrForbidden)
-		return
-	}
-	var req struct {
-		Email string `json:"email"`
-	}
-	if !re.decode(w, r, &req) {
-		return
-	}
-	if req.Email == "" {
-		req.Email = "dummy@example.com"
-	}
-	if req.Email != "dummy@example.com" && req.Email != "alex@example.com" {
-		re.HandleError(w, r, backend.ErrBadRequest)
-		return
-	}
-	id, _, err := re.SocialService.Repo.GetUserCredentials(req.Email)
-	if err != nil {
-		re.HandleError(w, r, err)
-		return
-	}
-	profile, err := re.SocialService.Repo.SocialProfile(id)
-	if err != nil {
-		re.HandleError(w, r, err)
-		return
-	}
-	token := ""
-	if cookie, err := r.Cookie("session_token"); err == nil {
-		if uid, ok := service.DefaultSessionManager.GetUserIdByToken(cookie.Value); ok && uid == id {
-			token = cookie.Value
-		}
-	}
-	if token == "" {
-		token = uuid.NewString()
-		service.DefaultSessionManager.CreateSession(id, token)
-	}
-	http.SetCookie(w, &http.Cookie{Name: "session_token", Value: token, Path: "/", HttpOnly: true, SameSite: http.SameSiteLaxMode})
-	respond(w, http.StatusOK, profile)
 }
 
 func currentUser(r *http.Request) string {

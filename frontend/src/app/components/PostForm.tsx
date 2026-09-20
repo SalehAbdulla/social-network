@@ -7,6 +7,7 @@ import toast from 'react-hot-toast';
 import { type FollowLists, type Post, displayName, errorMessage, request, upload } from '../api/social';
 import { useBackend } from './BackendProvider';
 import Avatar from './Avatar';
+import ImagePicker from './ImagePicker';
 import { useResource } from '../lib/useResource';
 
 export default function PostForm({ post }: { post?: Post }) {
@@ -34,7 +35,7 @@ export default function PostForm({ post }: { post?: Post }) {
     } catch (error) { toast.error(errorMessage(error)); } finally { setBusy(false); }
   }
   return <div className="mx-auto max-w-2xl p-6 sm:p-8 space-y-6"><h1 className="text-3xl font-bold">{post ? 'Edit Post' : 'Create Post'}</h1><form onSubmit={publish} className="rounded-xl bg-white p-6 shadow-sm space-y-5"><div className="flex items-center gap-3"><Avatar name={displayName(user)} avatarUrl={user.avatar} /><div><p className="font-medium">{displayName(user)}</p><p className="text-sm text-slate-500">@{user.nickname}</p></div></div>
-    <label className="block text-sm font-medium">Title<input required minLength={3} maxLength={30} value={title} onChange={event => setTitle(event.target.value)} className="mt-2 w-full rounded-lg border border-slate-200 p-3" placeholder="Give your post a title" /></label>
+    <label className="block text-sm font-medium">Title (optional)<input minLength={3} maxLength={30} value={title} onChange={event => setTitle(event.target.value)} className="mt-2 w-full rounded-lg border border-slate-200 p-3" placeholder="Give your post a title" /></label>
     <label className="block text-sm font-medium">Your post<textarea required={!images.length && !existingImages.length} minLength={images.length || existingImages.length ? 0 : 10} maxLength={500} rows={6} value={content} onChange={event => setContent(event.target.value)} className="mt-2 w-full rounded-lg border border-slate-200 p-3" placeholder="What's happening?" /></label>
     <label className="block text-sm font-medium">Post privacy<select value={privacy} onChange={event => setPrivacy(event.target.value as typeof privacy)} className="mt-2 block w-full rounded-lg border border-slate-200 p-3"><option value="public">Public</option><option value="followers">Followers only</option><option value="selected">Selected followers</option></select></label>
     {privacy === 'selected' && <fieldset className="rounded-lg border border-slate-200 p-3">
@@ -54,9 +55,7 @@ export default function PostForm({ post }: { post?: Post }) {
         </label>)}
       </div> : <p className="text-sm text-slate-500">You do not have any followers yet.</p>)}
     </fieldset>}
-    <label className="block text-sm text-slate-600">Photos (up to 4, 10 MB each)<input type="file" accept="image/jpeg,image/png,image/gif,image/webp" multiple onChange={event => { const files = Array.from(event.target.files || []); if (files.length + existingImages.length > 4) toast.error('Choose up to four photos in total'); else setImages(files); }} className="mt-2 block w-full rounded-lg border border-slate-200 p-2" /></label>
-    {existingImages.map((url, index) => <div key={url} className="flex items-center justify-between gap-3 text-sm"><img src={url} alt={`Post photo ${index + 1}`} className="h-20 w-20 rounded-lg object-cover" /><button type="button" onClick={() => setExistingImages(current => current.filter(image => image !== url))}>Remove photo {index + 1}</button></div>)}
-    {images.map((file, index) => <div key={`${file.name}-${index}`} className="flex justify-between text-sm"><span>{file.name}</span><button type="button" onClick={() => setImages(images.filter((_, i) => i !== index))}>Remove</button></div>)}
+    <ImagePicker files={images} onChange={setImages} existing={existingImages} onRemoveExisting={url => setExistingImages(current => current.filter(image => image !== url))} disabled={busy} />
     <div className="flex items-center gap-4"><button disabled={busy || (privacy === 'selected' && !followers.data)} className="rounded-lg bg-gradient-to-r from-blue-600 to-teal-600 px-6 py-3 text-white disabled:opacity-50">{busy ? (post ? 'Saving...' : 'Publishing...') : (post ? 'Save changes' : 'Publish Post')}</button>{post && <Link href={`/post/${post.postId}`} className="text-sm text-slate-600">Cancel</Link>}</div>
   </form></div>;
 }

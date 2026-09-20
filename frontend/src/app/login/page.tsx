@@ -12,23 +12,23 @@ const Login = () => {
   const [registering, setRegistering] = useState(false);
   const [busy, setBusy] = useState(false);
   const [nickname, setNickname] = useState('');
-  const [nicknameState, setNicknameState] = useState<'idle' | 'checking' | 'available' | 'taken' | 'invalid'>('idle');
+  const [nicknameResult, setNicknameResult] = useState<{ nickname: string; status: 'idle' | 'available' | 'taken' }>({ nickname: '', status: 'idle' });
+  const normalizedNickname = nickname.trim().toLowerCase();
+  const validNickname = /^[a-z0-9_]{2,33}$/.test(normalizedNickname);
+  const nicknameState = !normalizedNickname ? 'idle' : !validNickname ? 'invalid' : nicknameResult.nickname === normalizedNickname ? nicknameResult.status : 'checking';
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
 
   useEffect(() => {
-    if (!registering) return;
-    const normalized = nickname.trim().toLowerCase();
-    if (!/^[a-z0-9_]{2,33}$/.test(normalized)) {
-      setNicknameState(normalized ? 'invalid' : 'idle');
-      return;
-    }
-    setNicknameState('checking');
+    if (!registering || !validNickname) return;
+    let cancelled = false;
     const timer = window.setTimeout(() => {
-      void nicknameAvailability(normalized).then(available => setNicknameState(available ? 'available' : 'taken')).catch(() => setNicknameState('idle'));
+      void nicknameAvailability(normalizedNickname).then(available => {
+        if (!cancelled) setNicknameResult({ nickname: normalizedNickname, status: available ? 'available' : 'taken' });
+      }).catch(() => { if (!cancelled) setNicknameResult({ nickname: normalizedNickname, status: 'idle' }); });
     }, 350);
-    return () => window.clearTimeout(timer);
-  }, [nickname, registering]);
+    return () => { cancelled = true; window.clearTimeout(timer); };
+  }, [normalizedNickname, validNickname, registering]);
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();

@@ -1,6 +1,10 @@
 package handlers
 
 import (
+	"image"
+	_ "image/gif"
+	_ "image/jpeg"
+	_ "image/png"
 	"io"
 	"net/http"
 	"os"
@@ -46,6 +50,18 @@ func (re *HandlerContext) UploadMedia(w http.ResponseWriter, r *http.Request) {
 	if _, err = file.Seek(0, io.SeekStart); err != nil {
 		re.HandleError(w, r, backend.ErrInternal)
 		return
+	}
+	// Check real image metadata, rather than trusting an extension or MIME header.
+	if strings.HasPrefix(mime, "image/") && mime != "image/webp" {
+		config, _, decodeErr := image.DecodeConfig(file)
+		if decodeErr != nil || config.Width < 1 || config.Height < 1 || int64(config.Width)*int64(config.Height) > 40000000 {
+			re.HandleError(w, r, backend.ErrBadRequest)
+			return
+		}
+		if _, err = file.Seek(0, io.SeekStart); err != nil {
+			re.HandleError(w, r, backend.ErrInternal)
+			return
+		}
 	}
 	if err = os.MkdirAll(re.App.UploadDir, 0755); err != nil {
 		re.HandleError(w, r, backend.ErrInternal)

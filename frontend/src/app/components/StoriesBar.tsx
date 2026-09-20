@@ -5,6 +5,7 @@ import toast from 'react-hot-toast';
 import { type Story, errorMessage, request, upload } from '../api/social';
 import { useResource } from '../lib/useResource';
 import { useBackend } from './BackendProvider';
+import Pagination from './Pagination';
 
 export function CreateStory({ close, saved }: { close: () => void; saved: () => void }) {
   const [text, setText] = useState('');
@@ -50,9 +51,9 @@ export default function StoriesBar() {
   return <section className="space-y-3"><div className="no-scrollbar flex gap-4 overflow-x-auto pb-2">
     <button onClick={() => setCreating(true)} className="flex aspect-[3/4] h-40 min-w-30 shrink-0 flex-col items-center justify-center rounded-lg border-2 border-dashed border-blue-200 bg-linear-to-b from-blue-50 to-white text-sm text-slate-700 shadow-sm transition hover:shadow-md"><span className="mb-3 flex size-10 items-center justify-center rounded-full bg-blue-600 text-white"><Plus size={20} /></span><span className="font-medium">Create story</span></button>
     {stories.data?.map(story => <StoryCard key={story.storyId} story={story} currentUserId={user.userId} onView={setViewing} onDelete={async () => { await request(`/stories/${story.storyId}`, 'DELETE'); reload(); if (viewing?.storyId === story.storyId) setViewing(null); }} />)}
-  </div>{(offset > 0 || stories.data?.length === 30) && <div className="flex justify-between text-sm"><button disabled={offset === 0} onClick={() => setOffset(Math.max(0, offset - 30))}>Previous stories</button><button disabled={stories.data?.length !== 30} onClick={() => setOffset(offset + 30)}>More stories</button></div>}
+  </div>{(offset > 0 || stories.data?.length === 30) && <Pagination label="Stories pagination" page={offset / 30 + 1} hasNext={stories.data?.length === 30} loading={stories.loading} onChange={page => setOffset((page - 1) * 30)} />}
     {creating && <CreateStory close={() => setCreating(false)} saved={reload} />}
-    {viewing && <StoryViewer story={viewing} canDelete={viewing.userId === user.userId} close={() => setViewing(null)} onPrevious={showPreviousStory} onNext={showNextStory} hasPrevious={stories.data?.findIndex(story => story.storyId === viewing.storyId) ? true : false} hasNext={stories.data ? stories.data.findIndex(story => story.storyId === viewing.storyId) < stories.data.length - 1 : false} deleting={deleting} onDelete={async () => { setDeleting(true); try { await request(`/stories/${viewing.storyId}`, 'DELETE'); setViewing(null); reload(); } catch (error) { toast.error(errorMessage(error)); } finally { setDeleting(false); } }} />}
+    {viewing && <StoryViewer key={viewing.storyId} story={viewing} canDelete={viewing.userId === user.userId} close={() => setViewing(null)} onPrevious={showPreviousStory} onNext={showNextStory} hasPrevious={stories.data?.findIndex(story => story.storyId === viewing.storyId) ? true : false} hasNext={stories.data ? stories.data.findIndex(story => story.storyId === viewing.storyId) < stories.data.length - 1 : false} deleting={deleting} onDelete={async () => { setDeleting(true); try { await request(`/stories/${viewing.storyId}`, 'DELETE'); setViewing(null); reload(); } catch (error) { toast.error(errorMessage(error)); } finally { setDeleting(false); } }} />}
   </section>;
 }
 
@@ -77,7 +78,6 @@ function StoryCard({ story, currentUserId, onView, onDelete }: { story: Story; c
 function StoryViewer({ story, canDelete, close, onPrevious, onNext, hasPrevious, hasNext, deleting, onDelete }: { story: Story; canDelete: boolean; close: () => void; onPrevious: () => void; onNext: () => void; hasPrevious: boolean; hasNext: boolean; deleting: boolean; onDelete: () => Promise<void> }) {
   const [progress, setProgress] = useState(0);
   useEffect(() => {
-    setProgress(0);
     if (story.mediaType === 'video') return;
     const interval = window.setInterval(() => setProgress(value => Math.min(value + 1, 100)), 100);
     const timeout = window.setTimeout(onNext, 10000);

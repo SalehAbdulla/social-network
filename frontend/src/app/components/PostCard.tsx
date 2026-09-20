@@ -8,6 +8,7 @@ import { type Post, type Comment, dateLabel, errorMessage, request } from '../ap
 import { useBackend } from './BackendProvider';
 import { useResource } from '../lib/useResource';
 import Avatar from './Avatar';
+import Pagination from './Pagination';
 
 function Comments({ post, onChange }: { post: Post; onChange: () => void }) {
   const { user } = useBackend();
@@ -43,7 +44,7 @@ function Comments({ post, onChange }: { post: Post; onChange: () => void }) {
       {comment.userId === user.userId && <><button aria-label="Edit comment" onClick={() => { setEditing(comment.commentId); setText(comment.commentText); }}><Pencil size={14} /></button><button disabled={busy} aria-label="Delete comment" onClick={() => void mutate(() => request(`/posts/comments?id=${comment.commentId}`, 'DELETE'))}><Trash2 size={14} /></button></>}
     </div></div>)}
     {comments.data?.comments.length === 0 && <p className="text-sm text-slate-500">Be the first to comment.</p>}
-    <div className="flex justify-between text-sm"><button disabled={page === 1} onClick={() => setPage(page - 1)} className="disabled:opacity-30">Previous comments</button><button disabled={!comments.data || comments.data.lastPage} onClick={() => setPage(page + 1)} className="disabled:opacity-30">More comments</button></div>
+    <Pagination label="Comments pagination" page={page} hasNext={!!comments.data && !comments.data.lastPage} loading={comments.loading} onChange={setPage} />
   </div>;
 }
 export default function PostCard({ post, fetchPosts }: { post: Post; fetchPosts: () => void }) {
@@ -59,8 +60,8 @@ export default function PostCard({ post, fetchPosts }: { post: Post; fetchPosts:
   }
   return <article className="rounded-xl border border-slate-100 bg-white p-5 shadow-sm space-y-4">
     <div className="flex items-center justify-between"><Link href={`/profile/${post.userId}`} className="flex items-center gap-3"><Avatar name={post.nickname} /><div><p className="font-semibold">@{post.nickname}</p><p className="text-xs text-slate-400">{dateLabel(post.createdAt)}</p></div></Link>{post.userId === user.userId && <div className="flex items-center gap-3"><Link href={`/post/${post.postId}/edit`} aria-label="Edit post" title="Edit post" className="text-slate-400 hover:text-blue-600"><Pencil size={18} /></Link><button disabled={busy} aria-label="Delete post" className="text-slate-400 hover:text-red-600" onClick={async () => { setBusy(true); try { await request(`/posts?id=${post.postId}`, 'DELETE'); fetchPosts(); } catch (error) { toast.error(errorMessage(error)); } finally { setBusy(false); } }}><Trash2 size={18} /></button></div>}</div>
-    <Link href={`/post/${post.postId}`} className="block text-lg font-semibold">{post.title}</Link><p className="whitespace-pre-wrap break-words text-slate-700">{post.content}</p><span className="inline-block rounded-full bg-slate-100 px-2 py-1 text-xs capitalize text-slate-600">{post.privacy === 'selected' ? 'Selected followers' : post.privacy === 'followers' ? 'Followers only' : 'Public'}</span>
-    {!!post.imageUrls?.length && <div className={`grid gap-2 ${post.imageUrls.length > 1 ? 'grid-cols-2' : ''}`}>{post.imageUrls.map(url => <a key={url} href={url} target="_blank" rel="noreferrer"><img src={url} alt="Post attachment" className="max-h-96 w-full rounded-lg object-cover" /></a>)}</div>}
+    {post.title && <Link href={`/post/${post.postId}`} className="block text-lg font-semibold">{post.title}</Link>}<p className="whitespace-pre-wrap break-words text-slate-700">{post.content}</p><span className="inline-block rounded-full bg-slate-100 px-2 py-1 text-xs capitalize text-slate-600">{post.privacy === 'selected' ? 'Selected followers' : post.privacy === 'followers' ? 'Followers only' : 'Public'}</span>
+    {!!post.imageUrls?.length && <div className={`grid gap-2 ${post.imageUrls.length > 1 ? 'grid-cols-2' : ''}`}>{post.imageUrls.map(url => <a key={url} href={url} target="_blank" rel="noreferrer"><img src={url} alt="Post attachment" className="aspect-square max-h-[540px] w-full rounded-lg bg-slate-50 object-contain" /></a>)}</div>}
     <div className="flex items-center gap-4 border-t border-slate-100 pt-3 text-sm text-slate-500"><button disabled={busy} aria-label="Upvote post" onClick={() => void react(1)} className={vote.userScore === 1 ? 'text-blue-600' : ''}><ArrowUp size={20} /></button><span>{vote.score}</span><button disabled={busy} aria-label="Downvote post" onClick={() => void react(-1)} className={vote.userScore === -1 ? 'text-blue-600' : ''}><ArrowDown size={20} /></button><button onClick={() => setShowComments(!showComments)} className="flex items-center gap-1"><MessageCircle size={19} />{post.commentsCounter} comments</button><button aria-label="Share post" className="ml-auto" onClick={async () => { try { await navigator.clipboard.writeText(`${location.origin}/post/${post.postId}`); toast.success('Post link copied'); } catch { toast.error('Could not copy the link'); } }}><Share2 size={18} /></button></div>
     {showComments && <Comments post={post} onChange={fetchPosts} />}
   </article>;

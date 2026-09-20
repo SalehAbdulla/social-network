@@ -120,6 +120,9 @@ func (m MessageServiceImpl) GetChatUsers(currentUserID string) ([]message.ChatUs
 		}
 
 		dtos[i] = message.ChatUserDTO{
+			FirstName:       cu.FirstName,
+			LastName:        cu.LastName,
+			Avatar:          cu.Avatar,
 			UserId:          cu.UserId,
 			Nickname:        cu.Nickname,
 			IsOnline:        isOnline,

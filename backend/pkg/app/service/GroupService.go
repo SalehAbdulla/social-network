@@ -11,13 +11,13 @@ import (
 
 type GroupService struct{ Repo *repositories.DB }
 
-func (s *GroupService) Create(ownerID, title, description string) (models.Group, error) {
+func (s *GroupService) Create(ownerID, title, description string, imageURL ...string) (models.Group, error) {
 	title = strings.TrimSpace(title)
 	description = strings.TrimSpace(description)
 	if utf8.RuneCountInString(title) < 3 || utf8.RuneCountInString(title) > 100 || utf8.RuneCountInString(description) > 1000 {
 		return models.Group{}, backend.ErrBadRequest
 	}
-	return s.Repo.CreateGroup(ownerID, title, description)
+	return s.Repo.CreateGroup(ownerID, title, description, imageURL...)
 }
 
 func (s *GroupService) RequireMember(groupID int, userID string) error {

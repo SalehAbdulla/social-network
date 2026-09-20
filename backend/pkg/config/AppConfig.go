@@ -7,7 +7,6 @@ import (
 type AppConfig struct {
 	Logger         *slog.Logger
 	InProduction   bool
-	DevDummyUser   bool
 	UploadDir      string
 	FrontendOrigin string
 	LogLevel       string

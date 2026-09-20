@@ -22,9 +22,39 @@ func (re *HandlerContext) GroupContent(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	kind := r.PathValue("kind")
-	if kind != "posts" && kind != "comments" && kind != "events" && kind != "messages" {
+	if kind != "posts" && kind != "comments" && kind != "events" && kind != "messages" && !(r.Method == http.MethodGet && (kind == "timeline" || kind == "media")) {
 		re.HandleError(w, r, backend.ErrNotFound)
 		return
+	}
+	contentID := 0
+	var existing models.GroupContent
+	if r.PathValue("id") != "" {
+		var err error
+		contentID, err = strconv.Atoi(r.PathValue("id"))
+		if err != nil || contentID < 1 {
+			re.HandleError(w, r, backend.ErrBadRequest)
+			return
+		}
+		group, err := re.GroupService.Repo.Group(groupID, userID)
+		if err != nil {
+			re.HandleError(w, r, err)
+			return
+		}
+		existing, err = re.GroupService.Repo.EditableGroupContent(groupID, contentID, kind, userID, group.IsOwner && r.Method == http.MethodDelete)
+		if err != nil {
+			re.HandleError(w, r, err)
+			return
+		}
+		if r.Method == http.MethodDelete {
+			_, err = re.GroupService.Repo.Conn.Exec("DELETE FROM groupContent WHERE groupId=? AND id=?", groupID, contentID)
+			if err != nil {
+				re.HandleError(w, r, err)
+				return
+			}
+			re.groupChanged(groupID, kind)
+			respond(w, 200, nil)
+			return
+		}
 	}
 	parentID := 0
 	if kind == "comments" {
@@ -67,7 +97,7 @@ func (re *HandlerContext) GroupContent(w http.ResponseWriter, r *http.Request) {
 		re.HandleError(w, r, backend.ErrBadRequest)
 		return
 	}
-	if input.MediaURL != "" {
+	if input.MediaURL != "" && input.MediaURL != existing.MediaURL {
 		if err := re.SocialService.ValidateMedia(userID, input.MediaURL, "image"); err != nil {
 			re.HandleError(w, r, err)
 			return
@@ -84,6 +114,16 @@ func (re *HandlerContext) GroupContent(w http.ResponseWriter, r *http.Request) {
 		input.StartsAt = ""
 	}
 	c := models.GroupContent{GroupID: groupID, UserID: userID, Kind: kind, ParentID: parentID, Title: input.Title, Content: input.Content, MediaURL: input.MediaURL, StartsAt: input.StartsAt}
+	if contentID > 0 {
+		_, err := re.GroupService.Repo.Conn.Exec("UPDATE groupContent SET title=?,content=?,mediaUrl=?,startsAt=? WHERE groupId=? AND id=?", c.Title, c.Content, c.MediaURL, c.StartsAt, groupID, contentID)
+		if err != nil {
+			re.HandleError(w, r, err)
+			return
+		}
+		re.groupChanged(groupID, kind)
+		respond(w, 200, nil)
+		return
+	}
 	id, err := re.GroupService.Repo.AddGroupContent(c)
 	if err != nil {
 		re.HandleError(w, r, err)

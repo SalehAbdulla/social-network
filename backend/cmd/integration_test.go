@@ -44,8 +44,8 @@ type integrationClient struct {
 func TestPrivateProfilePublicPostVisibility(t *testing.T) {
 	server, _ := integrationServer(t, true, false)
 	dummy, alex := newIntegrationClient(t, server), newIntegrationClient(t, server)
-	dummy.call("POST", "/api/v1/dev/session", map[string]string{}, 200)
-	alex.call("POST", "/api/v1/dev/session", map[string]string{"email": "alex@example.com"}, 200)
+	dummy.login("dummy@example.com")
+	alex.login("alex@example.com")
 
 	post := decoded[posts.PostDTO](t, dummy.call("POST", "/api/v1/posts", map[string]any{
 		"title":   "Public profile post",
@@ -72,8 +72,8 @@ func TestPrivateProfilePublicPostVisibility(t *testing.T) {
 func TestPostPrivacyIntegration(t *testing.T) {
 	server, repo := integrationServer(t, true, false)
 	dummy, alex := newIntegrationClient(t, server), newIntegrationClient(t, server)
-	dummy.call("POST", "/api/v1/dev/session", map[string]string{}, 200)
-	alex.call("POST", "/api/v1/dev/session", map[string]string{"email": "alex@example.com"}, 200)
+	dummy.login("dummy@example.com")
+	alex.login("alex@example.com")
 
 	public := decoded[posts.PostDTO](t, dummy.call("POST", "/api/v1/posts", map[string]any{
 		"title": "Public privacy post", "content": "Everyone can read this post.", "privacy": "public",
@@ -124,6 +124,12 @@ func TestPostPrivacyIntegration(t *testing.T) {
 	carol := newIntegrationClient(t, server)
 	carol.client.Jar.SetCookies(serverURL, []*http.Cookie{{Name: "session_token", Value: "carol-token", Path: "/"}})
 	carol.call("GET", "/api/v1/post?id="+strconv.Itoa(selected.PostId), nil, 404)
+}
+
+func (c integrationClient) login(email string) json.RawMessage {
+	c.t.Helper()
+	c.call("POST", "/api/v1/auth/login", url.Values{"identifier": {email}, "password": {"DummyUser123!"}}, 200)
+	return c.call("GET", "/api/v1/users/me", nil, 200)
 }
 
 func (c integrationClient) call(method, path string, body any, status int) json.RawMessage {
@@ -191,7 +197,7 @@ func integrationServer(t *testing.T, dev, production bool) (*httptest.Server, *r
 			t.Fatal(err)
 		}
 	}
-	app = config.AppConfig{Logger: slog.New(slog.NewTextHandler(io.Discard, nil)), DevDummyUser: dev, InProduction: production, UploadDir: t.TempDir(), FrontendOrigin: "http://localhost:4000"}
+	app = config.AppConfig{Logger: slog.New(slog.NewTextHandler(io.Discard, nil)), InProduction: production, UploadDir: t.TempDir(), FrontendOrigin: "http://localhost:4000"}
 	auth := service.NewAuthService(repo)
 	reactions := service.NewReactionService(repo)
 	hc := handlers.NewHandlerContext(&app, auth, service.NewPostService(repo, reactions), service.NewCommentService(repo), reactions, service.NewMessageService(repo, repo), service.NewNotificationService(repo))
@@ -216,14 +222,14 @@ func TestSocialIntegration(t *testing.T) {
 	server, repo := integrationServer(t, true, false)
 	dummy, alex := newIntegrationClient(t, server), newIntegrationClient(t, server)
 	dummy.call("GET", "/api/v1/posts", nil, 401)
-	dummy.call("POST", "/api/v1/dev/session", map[string]string{"email": "someone@example.com"}, 400)
-	user := decoded[models.SocialUser](t, dummy.call("POST", "/api/v1/dev/session", map[string]string{}, 200))
+	dummy.call("POST", "/api/v1/dev/session", map[string]string{"email": "someone@example.com"}, 404)
+	user := decoded[models.SocialUser](t, dummy.login("dummy@example.com"))
 	if user.UserID != "dummy-id" {
-		t.Fatal("incorrect development account")
+		t.Fatal("incorrect authenticated account")
 	}
-	alex.call("POST", "/api/v1/dev/session", map[string]string{"email": "alex@example.com"}, 200)
+	alex.login("alex@example.com")
 	// Repeat bootstrap keeps the same valid session and account identity.
-	dummy.call("POST", "/api/v1/dev/session", map[string]string{}, 200)
+	dummy.login("dummy@example.com")
 	dummy.call("GET", "/api/v1/auth/me", nil, 200)
 	dummy.call("GET", "/api/v1/posts", nil, 200)
 	availability := decoded[map[string]bool](t, dummy.call("GET", "/api/v1/auth/nickname-availability?nickname=dummyuser", nil, 200))
@@ -553,8 +559,8 @@ func TestDevSessionUnavailableByDefault(t *testing.T) {
 func TestLiveConnectionUpdates(t *testing.T) {
 	server, _ := integrationServer(t, true, false)
 	dummy, alex := newIntegrationClient(t, server), newIntegrationClient(t, server)
-	dummy.call("POST", "/api/v1/dev/session", map[string]string{"email": "dummy@example.com"}, 200)
-	alex.call("POST", "/api/v1/dev/session", map[string]string{"email": "alex@example.com"}, 200)
+	dummy.login("dummy@example.com")
+	alex.login("alex@example.com")
 
 	connect := func(client integrationClient, userID string) *websocket.Conn {
 		t.Helper()

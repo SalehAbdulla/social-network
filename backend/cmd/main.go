@@ -22,7 +22,6 @@ var app config.AppConfig
 
 func main() {
 	app.InProduction = os.Getenv("APP_ENV") == "production"
-	app.DevDummyUser = !app.InProduction && os.Getenv("DEV_DUMMY_USER") == "true"
 	app.UploadDir = os.Getenv("UPLOAD_DIR")
 	app.FrontendOrigin = os.Getenv("FRONTEND_ORIGIN")
 	if app.FrontendOrigin == "" {
