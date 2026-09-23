@@ -1,7 +1,7 @@
 # Social Network Project TODO
 
 Legend: `[x]` verified working on `main` @ `16a755b` · `[ ]` open · **P0** blocks a mandatory
-spec line · **P1** required before release · **P2** polish.
+spec line · **P1** required before release · **P2** polish · **P3** nice to have.
 
 Baseline checks: `go test ./...` passes, `go vet ./...` is clean, both Docker images build
 through `compose.yaml`, and migrations `000001`–`000008` are applied at boot by
@@ -17,6 +17,41 @@ presence.
 Known spec-level gaps, detailed below: the follow-request workflow (P0-1), media on
 comments (P0-2), chat permission rules (P0-3), notification-vs-message distinction (P0-4),
 register-form field parity (P0-5), and durable sessions (P0-6).
+
+## Working prompt
+
+Paste this into a fresh session before starting any item below. The point is a solid plan
+first, implementation second.
+
+> Read the repository before writing anything: `README.md`, `DEPLOYMENT.md`, this `TODO.md`,
+> then every file named in the task. Do not guess at behaviour — open the code and quote the
+> lines you are relying on.
+>
+> Then write a solid plan and show it to me:
+>
+> 1. Restate the task and its acceptance criteria in your own words.
+> 2. List every file you will change or add, and why.
+> 3. Give the exact API contract: route, method, request and response JSON, status codes.
+>    For any schema change, give the migration including its `down`.
+> 4. Name the existing conventions you will follow: the handler → service → repository
+>    layering, `respond` / `HandleError`, `react-hot-toast` for user-facing errors,
+>    `MediaHandler`-style input validation, and the Tailwind design tokens in
+>    `frontend/src/app/globals.css`.
+> 5. Call out what you are unsure about, the alternatives you rejected, and anything that
+>    could break existing data or the privacy rules.
+> 6. Give the test plan: the Go tests, the browser smoke steps in
+>    `frontend/scripts/integration-smoke.mjs`, and the exact commands you will run
+>    (`go build ./...`, `go vet ./...`, `go test ./...`, `npm run lint`, `npm run build`).
+>
+> Stop there and wait for my approval.
+>
+> Once approved, implement it in small steps and run the relevant check after each step
+> rather than only at the end. If the plan turns out to be wrong mid-implementation, stop
+> and tell me instead of improvising. Never weaken a privacy rule or delete a test to make
+> something pass.
+>
+> When finished: run the checks, show me the output, and update this file — tick the items
+> and add a one-line note about what changed.
 
 ## P0 — Spec-critical gaps
 
@@ -325,6 +360,131 @@ Reference: `GroupHandler.go`, `GroupManagementHandler.go`, `GroupContentHandler.
   `scripts/run-wsl.sh` for duplicated launcher logic and merge what overlaps.
 - [ ] **P2** Delete the generated `.next-smoke` directory from the working tree and document
   `NEXT_DIST_DIR` as the supported way to get a second build directory.
+
+## Nice to have
+
+Polish and product ideas. None of these block the spec; pick them up once P0–P2 are clear.
+Ordered roughly by value for effort.
+
+### Composer and preview
+
+- [ ] **P3** Live post preview in `PostForm.tsx`: render the draft exactly as `PostCard` does
+  (avatar, handle, timestamp, title, content, image grid, privacy chip), side by side with
+  the form on `lg:` and behind a toggle on mobile.
+- [ ] **P3** Preview step before publishing, so the author sees the post the way the chosen
+  audience will before committing.
+- [ ] **P3** Audience banner in the preview: "Visible to your followers", or the selected
+  names for `privacy === 'selected'`, plus a note when the post will be hidden from a
+  private-profile follower.
+- [ ] **P3** Instagram-style modal composer launched from the sidebar and the feed, keeping
+  `/create-post` as a deep link (currently the only entry point is
+  `Sidebar.tsx:79` → `create-post/page.tsx`).
+- [ ] **P3** Draft autosave to `localStorage` so a refresh does not lose a long post.
+- [ ] **P3** Show why publishing is blocked ("Add 4 more characters", "Choose a follower")
+  instead of a silently disabled button.
+- [ ] **P3** Sticky publish button and keyboard shortcut (Ctrl/Cmd + Enter) to publish.
+
+### Media and validation
+
+- [ ] **P3** Fix the WebP gap: `MediaHandler.go:55` skips `image.DecodeConfig` when the MIME
+  is `image/webp`, so WebP dimensions and the 40 MP ceiling are never enforced. Decode with
+  `golang.org/x/image/webp`, or re-encode WebP on ingest.
+- [ ] **P3** Enforce minimum dimensions and aspect ratios per purpose: square avatar at least
+  200×200, cover at least 800×300, post media between 1:2 and 2:1.
+- [ ] **P3** Client-side downscale before upload (canvas, ~1600 px on the long edge, quality
+  ~0.85), skipping animated GIFs so they stay animated. This cuts upload time and storage
+  for phone photos, which are the common case.
+- [ ] **P3** Show each selected file's dimensions and size in `ImagePicker` before upload, so
+  a rejection is never a surprise.
+- [ ] **P3** Accept HEIC/HEIF and AVIF on the file input and convert on the client, or reject
+  them with a message that names the format.
+- [ ] **P3** Single source of truth for the limits (10 MB image, 50 MB video, 40 MP,
+  4 attachments) shared by `ImagePicker.tsx`, `MediaHandler.go` and the docs, instead of the
+  three copies that exist today.
+- [ ] **P3** Return a specific server error ("Image is 12.4 MB, the limit is 10 MB") rather
+  than the generic `ErrBadRequest`, and show it verbatim in the toast.
+- [ ] **P3** Client-side cropping for avatars, covers and post images (square, 4:5, 16:9).
+- [ ] **P3** Generate derivatives on upload (`_thumb`, `_large`) and serve them with `srcset`
+  so the feed stops downloading full-resolution originals.
+- [ ] **P3** Lightbox viewer with keyboard navigation and swipe, instead of opening the raw
+  file in a new tab (`PostCard.tsx:64` uses `target="_blank"`).
+
+### Instagram-like UI
+
+- [ ] **P3** Adopt an Instagram-style shell: slim top app bar with search and the notification
+  bell, plus a bottom tab bar on mobile, replacing the off-canvas drawer in `SideBar.tsx`.
+  Keep the current sidebar as the `lg:` variant so nothing is lost.
+- [ ] **P3** Media-first feed cards: full-bleed media that is square by default, with a row of
+  icons (heart, comment, share, save) instead of the up/down vote arrows and text buttons in
+  `PostCard.tsx:65`. Keep `POST /api/v1/reactions` underneath so no backend change is needed.
+- [ ] **P3** Double-tap to like with a heart burst, wired to the existing reaction endpoint,
+  with optimistic state instead of the current refetch.
+- [ ] **P3** Story ring with the brand gradient around avatars in `StoriesBar`, plus a
+  seen/unseen state driven by `story` rows.
+- [ ] **P3** Comment sheet: a bottom drawer on mobile instead of the always-open inline list
+  in `PostCard.tsx:41`.
+- [ ] **P3** Instagram-style profile header — avatar on the left, posts/followers/following
+  stats on the right — and a 3-column square grid replacing `MediaGrid`'s two-column
+  `h-48` tiles (`profile/page.tsx:412`).
+- [ ] **P3** Skeleton loaders for the feed, profile grid and chat, replacing the spinner in
+  `Loading.tsx`.
+- [ ] **P3** Infinite scroll for the feed and the grid, keeping `Pagination` as the
+  accessible fallback.
+- [ ] **P3** Sticky feed header with a "new posts" pill that appears when posts arrive over
+  the socket, instead of a full reload.
+- [ ] **P3** Move the remaining hardcoded Tailwind values into the `@theme` block in
+  `frontend/src/app/globals.css` (radius, shadow, spacing, `--color-ring`) so restyling is a
+  one-file change. The `chat-*` component classes there are the model to follow.
+- [ ] **P3** Dark mode from a `prefers-color-scheme` token set, with the toggle persisted.
+- [ ] **P3** "People you may know" rail on the feed, built from `GET /api/v1/users`.
+- [ ] **P3** Empty-state illustrations for the feed, notifications, messages and groups
+  instead of plain text.
+
+### Product extras
+
+- [ ] **P3** Bookmarks / saved posts with a Saved tab (small migration plus a private list).
+- [ ] **P3** Hashtags and @mentions: linkify them in posts, comments and chat, plus a hashtag
+  results page. Do this after P0-2, since `CommentHandler.go:114` currently rejects
+  non-ASCII comments.
+- [ ] **P3** Reposts and quote posts in the feed.
+- [ ] **P3** Unified search across posts, groups and users in one results page, with recent
+  searches kept locally.
+- [ ] **P3** Mute and block a user, enforced in the feed, profile, chat and notifications.
+- [ ] **P3** Story replies and a "seen by" list; archive expired stories instead of letting
+  the row disappear.
+- [ ] **P3** Chat extras: message reactions, an image lightbox, voice notes, and a shared
+  media tab per conversation.
+- [ ] **P3** Activity digest — a weekly summary email or in-app card of followers, comments
+  and group activity.
+- [ ] **P3** Web push notifications through a service worker for backgrounded tabs.
+- [ ] **P3** Post analytics for the author: reach per privacy level, reactions over time.
+
+### Performance and quality
+
+- [ ] **P3** Use `next/image` for `Avatar` and post media (the `remotePatterns` block in
+  `next.config.ts` already exists) instead of raw `<img>` tags, to get responsive sizing and
+  lazy loading for free.
+- [ ] **P3** Virtualise long comment and chat lists, which currently render every loaded item.
+- [ ] **P3** Deduplicate requests: `/users/me` and `/users/me/follows` are fetched separately
+  by several components on the same page (`PostForm.tsx:23`, `SideBar.tsx:47`).
+- [ ] **P3** Add a Lighthouse / Core Web Vitals budget and enforce it in CI.
+- [ ] **P3** Add bundle-size reporting to the frontend build.
+- [ ] **P3** Add indexes for the queries introduced by the follow-request and comment-media
+  work, and review the feed query with `EXPLAIN QUERY PLAN`.
+- [ ] **P3** Add a component gallery (Storybook or a `/dev/components` route) so the
+  Instagram-style redesign can be reviewed without clicking through whole flows.
+
+### Developer experience
+
+- [ ] **P3** Extend `backend/cmd/seed/main.go` with realistic demo data — users, follows,
+  posts with media, groups, conversations — and document a single `make seed` command.
+- [ ] **P3** Generate an OpenAPI document or an HTTP collection from `backend/cmd/router.go`
+  so the API can be exercised without the UI.
+- [ ] **P3** Add per-branch preview deployments.
+- [ ] **P3** Add a `make` (or `just`) file wrapping the commands already spread across
+  `run.sh`, `DEPLOYMENT.md` and this file.
+- [ ] **P3** Document the WebSocket message protocol (`backend/pkg/websocket/types.go`) in
+  `backend/README.md`: event names, payload shapes and direction of travel.
 
 ## Definition of done
 
