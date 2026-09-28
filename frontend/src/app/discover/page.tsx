@@ -7,6 +7,7 @@ import { usePagedList } from '../lib/usePagedList';
 import { useBackend } from '../components/BackendProvider';
 import Avatar from '../components/Avatar';
 import LoadMore from '../components/LoadMore';
+import MessageAction from '../components/MessageAction';
 import RequestState from '../components/RequestState';
 import { CardGridSkeleton } from '../components/Skeletons';
 import { useLiveRefresh } from '../lib/useLiveRefresh';
@@ -36,7 +37,7 @@ export default function Discover() {
     {people.loading && <CardGridSkeleton />}
     <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">{people.items.map(person => {
       const following = user.following.includes(person.userId);
-      return <div key={person.userId} className="rounded-xl bg-white p-5 shadow-sm space-y-4"><Link href={`/profile/${person.userId}`} className="flex items-center gap-3"><Avatar name={displayName(person)} avatarUrl={person.avatar} /><div><h2 className="font-semibold">{displayName(person)}</h2><p className="text-sm text-slate-500">@{person.nickname}</p></div></Link><p className="min-h-10 text-sm text-slate-600">{person.bio || person.location || 'Say hello and start a conversation.'}</p><div className="flex flex-wrap gap-2 text-sm"><button disabled={!!busy || (person.pendingIncoming && !following)} title={person.pendingOutgoing ? 'Cancel follow request' : person.pendingIncoming ? 'Review this request in Notifications' : undefined} className="rounded-lg bg-blue-50 px-3 py-2 text-blue-700 disabled:opacity-50" onClick={() => void change(person.userId, `/users/${person.userId}/follow`, following || person.pendingOutgoing ? 'DELETE' : 'PUT')}>{following ? 'Unfollow' : person.pendingOutgoing ? 'Requested' : 'Follow'}</button><Link href={`/messages/${person.userId}`} className="rounded-lg border border-slate-200 px-3 py-2">Message</Link></div></div>;
+      return <div key={person.userId} className="rounded-xl bg-white p-5 shadow-sm space-y-4"><Link href={`/profile/${person.userId}`} className="flex items-center gap-3"><Avatar name={displayName(person)} avatarUrl={person.avatar} /><div><h2 className="font-semibold">{displayName(person)}</h2><p className="text-sm text-slate-500">@{person.nickname}</p></div></Link><p className="min-h-10 text-sm text-slate-600">{person.bio || person.location || 'Say hello and start a conversation.'}</p><div className="flex flex-wrap gap-2 text-sm"><button disabled={!!busy || (person.pendingIncoming && !following)} title={person.pendingOutgoing ? 'Cancel follow request' : person.pendingIncoming ? 'Review this request in Notifications' : undefined} className="rounded-lg bg-blue-50 px-3 py-2 text-blue-700 disabled:opacity-50" onClick={() => void change(person.userId, `/users/${person.userId}/follow`, following || person.pendingOutgoing ? 'DELETE' : 'PUT')}>{following ? 'Unfollow' : person.pendingOutgoing ? 'Requested' : 'Follow'}</button><MessageAction userId={person.userId} allowed={person.canMessage === true} className="rounded-lg border border-slate-200 px-3 py-2" /></div></div>;
     })}</div>
     {people.settled && !people.error && people.items.length === 0 && <RequestState empty="No people matched your search." />}
     {people.items.length > 0 && <LoadMore loading={people.loadingMore} hasMore={people.hasMore} onLoadMore={people.loadMore} label="Load more people" />}
