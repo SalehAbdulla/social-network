@@ -90,6 +90,29 @@ func main() {
 	hc.GroupService = &service.GroupService{Repo: dbConn}
 	handlers.SetHandlerContext(hc)
 
+	// Uploads that nothing references any more — a deleted post, comment, story
+	// or message, or an upload that was never attached — are swept at boot and
+	// then hourly, the same shape as the session cleanup above. The grace window
+	// is what keeps a file that was just uploaded but not yet attached safe.
+	go func() {
+		prune := func() {
+			result, err := hc.PruneOrphanedMedia(handlers.MediaGrace)
+			if err != nil {
+				app.Logger.Error("media cleanup failed", "error", err)
+				return
+			}
+			if result.Rows > 0 || result.Files > 0 {
+				app.Logger.Info("orphaned media removed", "rows", result.Rows, "files", result.Files)
+			}
+		}
+		prune()
+		ticker := time.NewTicker(time.Hour)
+		defer ticker.Stop()
+		for range ticker.C {
+			prune()
+		}
+	}()
+
 	wsHub := pkgwebsocket.NewHub()
 	hc.SetHub(wsHub)
 	go wsHub.Run()
