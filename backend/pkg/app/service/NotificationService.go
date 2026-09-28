@@ -3,6 +3,7 @@ package service
 import (
 	realtimeforum "social-network/backend"
 	db "social-network/backend/pkg/app/repositories"
+	"social-network/backend/pkg/models"
 	"social-network/backend/pkg/payload/notification"
 )
 
@@ -58,7 +59,7 @@ func (n NotificationServiceImpl) GetUnreadCount(userID string, types []string) (
 }
 
 func (n NotificationServiceImpl) CreateNotification(userID, actorID, entityType string, entityID int) (notification.NotificationDTO, error) {
-	if entityType != "comment" && entityType != "message" && entityType != "follow" && entityType != "follow_request" {
+	if !models.IsNotificationEntityType(entityType) {
 		return notification.NotificationDTO{}, realtimeforum.ErrBadRequest
 	}
 
