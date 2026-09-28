@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import toast from 'react-hot-toast';
 import { assets } from '../../../public/assets';
 import { Star } from 'lucide-react';
+import ThemeToggle from '../components/ThemeToggle';
 import { authRequest, errorMessage, nicknameAvailability } from '../api/social';
 
 const Login = () => {
@@ -58,7 +59,8 @@ const Login = () => {
   return (
     <div className='min-h-screen flex flex-col md:flex-row'>
       {/*BackGround Image*/}
-      <img src={assets.bgImage.src} alt="" className='absolute top-0 left-0 -z-1 w-full h-full object-cover'/>
+      <img src={assets.bgImage.src} alt="" className='absolute top-0 left-0 -z-1 w-full h-full object-cover dark:opacity-30'/>
+      <div className='fixed right-4 top-4 z-20'><ThemeToggle /></div>
       {/* left side : Branding  */}
       <div className='flex-1 flex flex-col items-start justify-between p-6 md:p-10 lg:pl-40'>
       <img src={assets.logo.src} alt="" className='h-16 object-contain' />
@@ -79,7 +81,7 @@ const Login = () => {
       </div>
       {/* Right side: authentication form */}
       <div className='flex-1 flex items-center justify-center p-6 sm:p-10'>
-        <form onSubmit={submit} className="w-full max-w-md space-y-5 rounded-2xl bg-white/95 p-6 shadow-lg sm:p-8">
+        <form onSubmit={submit} className="glass-strong w-full max-w-md space-y-5 rounded-2xl bg-white/90 p-6 sm:p-8 dark:bg-card/80">
           <div><h2 className="text-2xl font-bold text-brand-deep">{registering ? 'Create your account' : 'Welcome back'}</h2><p className="mt-1 text-sm text-slate-500">{registering ? 'Join the community and start connecting.' : 'Sign in to continue to your network.'}</p></div>
           {registering ? <>
             <div className="grid gap-4 sm:grid-cols-2"><Field name="firstName" label="First name" required /><Field name="lastName" label="Last name" required /></div>
