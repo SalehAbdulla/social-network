@@ -66,7 +66,11 @@ func TestFollowRequests(t *testing.T) {
 	owner, requester, stranger := newIntegrationClient(t, server), newIntegrationClient(t, server), newIntegrationClient(t, server)
 	owner.login("dummy@example.com")
 	requester.login("alex@example.com")
-	if err := repo.InsertUser("carol-id", "carol", "Carol", "Demo", "carol@example.com", "hash", "2000-01-01", 2000, "female"); err != nil {
+	if err := repo.InsertUser(models.Registration{
+		UserID: "carol-id", Nickname: "carol", FirstName: "Carol", LastName: "Demo",
+		Email: "carol@example.com", PasswordHash: "hash", BirthDate: "2000-01-01", BirthYear: 2000,
+		Gender: "female", IsPublic: true,
+	}); err != nil {
 		t.Fatal(err)
 	}
 	service.DefaultSessionManager.CreateSession("carol-id", "carol-token")
