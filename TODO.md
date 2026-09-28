@@ -607,8 +607,17 @@ Reference: `GroupHandler.go`, `GroupManagementHandler.go`, `GroupContentHandler.
   workflow leaves it out for now.
 - [ ] **P2** Mirror `.github/workflows/ci.yml` for the school's GitLab if that is where the
   project is graded.
-- [ ] **P1** Run and record a real backup → wipe → restore drill of the `social-data` volume
-  using `sqlite3 .backup`, and verify uploaded media is included.
+- [x] **P1** Run and record a real backup → wipe → restore drill of the `social-data` volume
+  using `sqlite3 .backup`, and verify uploaded media is included. Closed 2026-09-28:
+  `scripts/backup-restore-drill.sh` now performs the whole cycle against a throwaway directory
+  and asserts it — build, register an account, upload a photo, attach it to a post, back up the
+  live database with `sqlite3 .backup` plus the upload directory, stop the server, delete the
+  data directory, restore both halves, restart, and check that the pre-wipe session cookie still
+  authenticates, the account and post come back, the photo is served byte-for-byte, and the row
+  and file counts match the pre-wipe ones (1 user, 1 post, 1 media row, 1 session, 1 file). It
+  passed on the first run. `DEPLOYMENT.md` records the drill, the exact commands, the result and
+  the Docker-on-a-volume equivalent — with the caveat that the Docker half is reviewed but was
+  not executed, because the environment had no Docker daemon.
 - [ ] **P2** Verify `docker compose config` and a full `docker compose up --build` on a clean
   host; record the first-run steps and the expected log lines in `DEPLOYMENT.md`.
 - [ ] **P2** Add health/readiness endpoints and container healthchecks (`compose.yaml`
