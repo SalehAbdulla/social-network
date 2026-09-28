@@ -7,6 +7,7 @@ import (
 	"social-network/backend/pkg/middleware"
 	"social-network/backend/pkg/payload"
 	"social-network/backend/pkg/payload/user"
+	"strconv"
 	"strings"
 )
 
@@ -83,10 +84,26 @@ func (re *HandlerContext) Login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// The account is throttled, not the address: behind the proxy every request
+	// looks like it comes from the same peer.
+	if re.LoginLimiter != nil {
+		if wait := re.LoginLimiter.RetryAfter(identifier); wait > 0 {
+			w.Header().Set("Retry-After", strconv.Itoa(int(wait.Seconds())+1))
+			re.HandleError(w, r, realtimeforum.ErrTooManyRequests)
+			return
+		}
+	}
+
 	userID, token, err := re.AuthService.Login(identifier, password)
 	if err != nil {
+		if re.LoginLimiter != nil {
+			re.LoginLimiter.Fail(identifier)
+		}
 		re.HandleError(w, r, err)
 		return
+	}
+	if re.LoginLimiter != nil {
+		re.LoginLimiter.Reset(identifier)
 	}
 
 	cookie := &http.Cookie{
