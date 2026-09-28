@@ -86,13 +86,16 @@ func TestOptionalPostTitleAndRejectedUploads(t *testing.T) {
 	}
 	client.call("PUT", fmt.Sprintf("/api/v1/posts/%d", post.PostId), map[string]string{"title": "", "content": "Still without a title."}, 200)
 	for _, fixture := range []struct {
-		name string
-		data []byte
+		name   string
+		data   []byte
+		status int
 	}{
-		{"renamed.jpg", []byte("%PDF-1.7\nNot an image")},
-		{"broken.png", []byte("\x89PNG\r\n\x1a\ninvalid")},
-		{"empty.jpg", nil},
-		{"oversized.gif", append([]byte("GIF89a"), make([]byte, 10<<20)...)},
+		{"renamed.jpg", []byte("%PDF-1.7\nNot an image"), 400},
+		{"broken.png", []byte("\x89PNG\r\n\x1a\ninvalid"), 400},
+		{"empty.jpg", nil, 400},
+		// Past the image ceiling the request is well formed but too big, so it is
+		// answered 413 rather than 400.
+		{"oversized.gif", append([]byte("GIF89a"), make([]byte, 10<<20)...), 413},
 	} {
 		t.Run(fixture.name, func(t *testing.T) {
 			var body bytes.Buffer
@@ -113,8 +116,8 @@ func TestOptionalPostTitleAndRejectedUploads(t *testing.T) {
 			}
 			defer response.Body.Close()
 			data, _ := io.ReadAll(response.Body)
-			if response.StatusCode != 400 {
-				t.Fatalf("expected rejected upload, got %d: %s", response.StatusCode, data)
+			if response.StatusCode != fixture.status {
+				t.Fatalf("expected %d for %s, got %d: %s", fixture.status, fixture.name, response.StatusCode, data)
 			}
 			var envelope map[string]any
 			if json.Unmarshal(data, &envelope) != nil {
