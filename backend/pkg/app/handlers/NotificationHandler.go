@@ -5,15 +5,75 @@ import (
 	"net/http"
 	realtimeforum "social-network/backend"
 	"social-network/backend/pkg/middleware"
+	"social-network/backend/pkg/models"
 	"social-network/backend/pkg/payload"
 	"social-network/backend/pkg/payload/notification"
 	"strconv"
+	"strings"
 )
+
+// notificationTypes resolves `?types=` and `?exclude=` into the entity types a
+// request may see. Values are the entity type names, e.g. `?types=message` or
+// `?exclude=message`, so one badge can count everything except private messages
+// while the other counts only those. An unknown name is rejected instead of
+// ignored: a silently dropped filter would render the wrong badge. `exclude`
+// wins over `types`, and neither parameter means "every type".
+func notificationTypes(r *http.Request) ([]string, error) {
+	include := strings.TrimSpace(r.URL.Query().Get("types"))
+	exclude := strings.TrimSpace(r.URL.Query().Get("exclude"))
+	if include == "" && exclude == "" {
+		return nil, nil
+	}
+
+	known := map[string]bool{}
+	for _, entityType := range models.NotificationEntityTypes() {
+		known[entityType] = true
+	}
+
+	selected := map[string]bool{}
+	if include == "" {
+		for entityType := range known {
+			selected[entityType] = true
+		}
+	} else {
+		for _, name := range strings.Split(include, ",") {
+			name = strings.TrimSpace(name)
+			if !known[name] {
+				return nil, realtimeforum.ErrBadRequest
+			}
+			selected[name] = true
+		}
+	}
+	for _, name := range strings.Split(exclude, ",") {
+		name = strings.TrimSpace(name)
+		if name == "" {
+			continue
+		}
+		if !known[name] {
+			return nil, realtimeforum.ErrBadRequest
+		}
+		delete(selected, name)
+	}
+
+	types := make([]string, 0, len(selected))
+	for _, entityType := range models.NotificationEntityTypes() {
+		if selected[entityType] {
+			types = append(types, entityType)
+		}
+	}
+	return types, nil
+}
 
 func (re *HandlerContext) GetNotifications(w http.ResponseWriter, r *http.Request) {
 	userID, ok := middleware.UserIDFromContext(r.Context())
 	if !ok || userID == "" {
 		re.HandleError(w, r, realtimeforum.ErrUnauthorized)
+		return
+	}
+
+	types, err := notificationTypes(r)
+	if err != nil {
+		re.HandleError(w, r, err)
 		return
 	}
 
@@ -41,7 +101,7 @@ func (re *HandlerContext) GetNotifications(w http.ResponseWriter, r *http.Reques
 
 	unreadOnly := r.URL.Query().Get("unread") == "true"
 
-	response, err := re.NotificationService.GetNotifications(userID, offset, limit, unreadOnly)
+	response, err := re.NotificationService.GetNotifications(userID, offset, limit, unreadOnly, types)
 	if err != nil {
 		re.HandleError(w, r, err)
 		return
@@ -62,7 +122,13 @@ func (re *HandlerContext) GetUnreadCount(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	count, err := re.NotificationService.GetUnreadCount(userID)
+	types, err := notificationTypes(r)
+	if err != nil {
+		re.HandleError(w, r, err)
+		return
+	}
+
+	count, err := re.NotificationService.GetUnreadCount(userID, types)
 	if err != nil {
 		re.HandleError(w, r, err)
 		return
