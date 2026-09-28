@@ -1,10 +1,10 @@
 # Social Network Project TODO
 
-Legend: `[x]` verified working on `main` @ `16a755b` unless an item notes local verification · `[ ]` open · **P0** blocks a mandatory
+Legend: `[x]` verified working on `main` @ `cb91348` unless an item notes local verification · `[ ]` open · **P0** blocks a mandatory
 spec line · **P1** required before release · **P2** polish · **P3** nice to have.
 
 Baseline checks: `go test ./...` passes, `go vet ./...` is clean, both Docker images build
-through `compose.yaml`, and migrations `000001`–`000008` are applied at boot by
+through `compose.yaml`, and migrations `000001`–`000009` are applied at boot by
 `backend/pkg/db/sqlite/sqlite.go`.
 
 Working today: auth (register/login/logout, bcrypt, cookie sessions), public/private
@@ -14,9 +14,11 @@ notifications with WebSocket push and a sidebar badge, media uploads
 (JPEG/PNG/GIF/WebP/MP4/WebM), stories, and realtime chat with typing, read receipts and
 presence.
 
-Known spec-level gaps, detailed below: media on comments (P0-2), chat permission rules
-(P0-3), notification-vs-message distinction (P0-4),
-register-form field parity (P0-5), and durable sessions (P0-6).
+Known spec-level gaps, detailed below: media on comments (P0-2), notification-vs-message
+distinction (P0-4), and register-form field parity (P0-5).
+Closed on 2026-09-28: chat permission rules (P0-3) and durable sessions (P0-6); see
+"Work in flight and handoff" at the end of this file for what is still in someone else's
+hands.
 
 ## Working prompt
 
@@ -126,28 +128,47 @@ blocked too.
 - [ ] **P1** Tests: comment with an image, invalid media URL rejected, foreign media URL
   rejected, comment media removed with the comment.
 
-### P0-3 · Private chat ignores the follow rule
+### P0-3 · Private chat ignored the follow rule (implemented 2026-09-28; verified locally)
 
 Spec: messages are only possible between users where at least one follows the other, and a
 message is delivered instantly when the recipient follows the sender or has a public
-profile. `SocialService.ValidateTarget`
-(`backend/pkg/app/service/SocialService.go:57`) only checks that the target exists and is
-not the sender, so today anyone can DM anyone, and
-`ChatMutationHandler.go:61` notifies any online recipient.
+profile. `SocialService.ValidateTarget` used to only check that the target exists and is not
+the sender, so anyone could DM anyone.
 
-- [ ] **P0** Add `SocialService.CanMessage(actor, target)`: allowed when a `follow` row
+Policy: `CanMessage` allows the pair when the recipient `isPublic = 1` or a `follow` row
+exists in either direction. It is enforced on send (`POST /api/v1/messages`), on read
+(`GET /api/v1/messages?partnerId=`, `POST /api/v1/messages/read`), on the WebSocket
+`private_msg` frame (`WebSocketHandler.handlePrivateMessage`), in `MessageService.SendMessage`
+and in `MessageRepository.GetChatUsers`, so the inbox and direct URLs agree with the send
+rule. A blocked pair answers 403; a missing target stays 404 and self stays 400.
+
+Migration story for rows that predate the rule: nothing is deleted. Non-permitted threads are
+hidden from the inbox and from direct reads, and reappear as soon as either user follows the
+other again. The rejected alternative was to keep grandfathered history readable; that would
+contradict the inbox filter, since the conversation list is the only way to open a thread.
+
+Verified: `go build ./...`, `go vet ./...`, `go test ./...` (new
+`backend/cmd/chat_permission_test.go`: both follow directions, stranger → public allowed,
+stranger → private rejected on REST and on the socket, inbox hiding, message rows surviving
+the hiding), and a browser-smoke addition asserting 403 + a clean inbox.
+
+- [x] **P0** Add `SocialService.CanMessage(actor, target)`: allowed when a `follow` row
   exists in either direction, or when the target is `isPublic = 1`.
-- [ ] **P0** Enforce it in `ChatMutationHandler.SendChatMessage` (line 38), `ReadChat`
+- [x] **P0** Enforce it in `ChatMutationHandler.SendChatMessage` (line 38), `ReadChat`
   (line 132), `MessageService.SendMessage`, and `MessageRepository.GetChatUsers` so
   non-permitted threads never appear in the inbox.
-- [ ] **P0** Enforce the same rule for WebSocket delivery in
+- [x] **P0** Enforce the same rule for WebSocket delivery in
   `WebSocketHandler.handlePrivateMessage` (`backend/pkg/app/handlers/WebSocketHandler.go:94`).
-- [ ] **P0** Decide the migration story for existing `message` rows that predate the rule
+- [x] **P0** Decide the migration story for existing `message` rows that predate the rule
   (keep them readable, or hide the threads) and document it.
 - [ ] **P1** Frontend: disable the "Message" action with an explanation when messaging is
   not allowed — `frontend/src/app/profile/page.tsx:341` and
-  `frontend/src/app/discover/page.tsx`.
-- [ ] **P1** Tests: mutual follow allowed, one-way follow allowed, stranger → public profile
+  `frontend/src/app/discover/page.tsx`. **Handed off**: both files are being rewritten on the
+  pagination branch, so the change is two conditions on the existing `Message` links plus the
+  `canMessage` flag that `GET /api/v1/users/{userId}` now returns (typed as an optional
+  `canMessage` in `frontend/src/app/api/social.ts`). Until then a blocked attempt fails with
+  the backend's 403 toast, which is correct but less friendly.
+- [x] **P1** Tests: mutual follow allowed, one-way follow allowed, stranger → public profile
   allowed, stranger → private profile rejected, WS push rejected for the same case.
 
 ### P0-4 · Notifications are not visually distinct from messages
@@ -184,26 +205,43 @@ Nickname is mandatory, and the profile silently defaults to public.
 - [ ] **P1** Test: registering with only the mandatory fields succeeds, and a supplied
   avatar/bio shows up on the profile.
 
-### P0-6 · Sessions are in-memory; the `session` table is dead code
+### P0-6 · Sessions were in-memory; the `session` table was dead code (implemented 2026-09-28; verified locally)
 
-`backend/pkg/app/service/SessionManager.go` keeps tokens in Go maps and
-`000001_create_users_table.up.sql` creates a `session` table that nothing reads or writes, so
-a backend restart signs everyone out (`DEPLOYMENT.md:20`) and the app cannot scale past one
-instance.
+`backend/pkg/app/service/SessionManager.go` used to keep tokens in Go maps while
+`000001_create_users_table.up.sql` created a `session` table that nothing read or wrote, so
+a backend restart signed everyone out (`DEPLOYMENT.md:20`) and the app could not scale past
+one instance.
 
-- [ ] **P0** Persist sessions in the `session` table (token, `userId`, `expiresAt`, plus
+Policy: the maps are now a cache in front of the table. A lookup checks the cache, then falls
+back to `SELECT ... FROM session`, so a cold process resolves a token written by a previous
+one. A database failure degrades to cache-only instead of failing the request. `CreateSession`
+revokes the user's other rows in the same transaction, which keeps the "logging in revokes the
+previous token" rule across restarts. Lifetime is the earlier of 14 days idle and a 30-day
+absolute cap; the activity write is throttled to once a minute, and `main.go` prunes expired
+rows at startup and then hourly. Presence stays deliberately separate: it is a process-local
+60 s window that is never consulted for authentication, the chat online dot comes from
+`Hub.IsUserOnline`, and revoking a session clears presence because logout means offline.
+
+Verified: `go build ./...`, `go vet ./...`, `go test ./...`. New tests:
+`backend/cmd/session_test.go` (a login survives a simulated restart with a cold cache, an
+expired row is rejected and deleted, logout removes the row, the second login revokes the
+first row, cleanup spares a live row), `pkg/app/service/SessionManager_test.go` (sliding-expiry
+math) and `pkg/db/sqlite/migrations_test.go` (up → down → up over all nine migrations, plus a
+check that 000009 carries existing tokens over).
+
+- [x] **P0** Persist sessions in the `session` table (token, `userId`, `expiresAt`, plus
   `createdAt`/`lastSeenAt` if sliding expiry is wanted).
-- [ ] **P0** Point `CreateSession` / `GetUserIdByToken` / `DeleteSession` at the database,
+- [x] **P0** Point `CreateSession` / `GetUserIdByToken` / `DeleteSession` at the database,
   keeping the in-memory map as a cache, and preserve the "logging in revokes the previous
   token" behaviour (`SessionManager.go:32`).
-- [ ] **P0** Add periodic cleanup of expired rows.
-- [ ] **P0** Separate presence (`Presence` / `IsUserOnline`, 60 s window) from session
+- [x] **P0** Add periodic cleanup of expired rows.
+- [x] **P0** Separate presence (`Presence` / `IsUserOnline`, 60 s window) from session
   lifetime so the chat "online" dot cannot be confused with auth state.
-- [ ] **P1** Add sliding expiry (refresh on activity, absolute cap at 30 days) and an idle
+- [x] **P1** Add sliding expiry (refresh on activity, absolute cap at 30 days) and an idle
   timeout.
-- [ ] **P1** Tests: session survives a simulated restart, an expired token is rejected,
+- [x] **P1** Tests: session survives a simulated restart, an expired token is rejected,
   logout deletes the row.
-- [ ] **P1** Update `DEPLOYMENT.md` and `backend/README.md`, which currently document the
+- [x] **P1** Update `DEPLOYMENT.md` and `backend/README.md`, which currently document the
   in-memory limitation as accepted.
 
 ## Groups
@@ -239,16 +277,16 @@ Reference: `GroupHandler.go`, `GroupManagementHandler.go`, `GroupContentHandler.
 - [x] Per-peer rate limits (20/min login+register, 1200/min general), 1 MiB JSON body cap,
   51 MiB upload cap, `Content-Type` detection on uploads.
 - [x] No Clerk code remains in `frontend/src` (grep returns zero hits).
-- [ ] **P0** Remove the query-string token fallback in `WebSocketHandler.ServeWs`
+- [x] **P0** Remove the query-string token fallback in `WebSocketHandler.ServeWs`
   (`backend/pkg/app/handlers/WebSocketHandler.go:30`) — the cookie is already forwarded by
   the Next.js rewrites and query tokens leak into logs and history.
-- [ ] **P0** Tighten `allowedOrigin` (`backend/pkg/app/handlers/SocialHandler.go:40`): it
+- [x] **P0** Tighten `allowedOrigin` (`backend/pkg/app/handlers/SocialHandler.go:40`): it
   returns `true` when the `Origin` header is absent, so non-browser clients can open a
   socket. Require the header for upgrades.
-- [ ] **P1** Clear the stale auth documentation: `frontend/.env.example` ("Keep your
+- [x] **P1** Clear the stale auth documentation: `frontend/.env.example` ("Keep your
   existing Clerk keys"), the same line in `frontend/README.md`, and the Clerk entries that
   used to be in this file.
-- [ ] **P1** Drop `NEXT_PUBLIC_DEV_USER` from `frontend/.env.local` and the matching warning
+- [x] **P1** Drop `NEXT_PUBLIC_DEV_USER` from `frontend/.env.local` and the matching warning
   in `DEPLOYMENT.md:20` — no code reads it any more.
 - [ ] **P1** Document and test the security headers set in `backend/cmd/security.go`
   (CSP, HSTS, `X-Content-Type-Options`) by asserting them on an API response.
@@ -293,9 +331,11 @@ Reference: `GroupHandler.go`, `GroupManagementHandler.go`, `GroupContentHandler.
 - [ ] **P2** Optimistic updates for follow/unfollow and reactions to avoid a full refetch
   on every click.
 - [ ] **P2** Localise `dateLabel` and relative timestamps.
-- [ ] **P2** Add infinite scroll or a "load more" affordance to the feed alongside the
-  existing `Pagination` component.
-- [ ] **P2** Confirm pagination is applied to stories and profile media, not just posts.
+- [x] **P2** Infinite-scroll ("load more") affordance for the feed: `LoadMore.tsx` +
+  `usePagedList.ts`, and every other paged surface (comments, stories, profile, discover,
+  notifications, group content, chat history, group list). `Pagination.tsx` is gone.
+- [x] **P2** Pagination covers stories and profile media, not just posts: both now grow from
+  the same hook, and the stories strip pages horizontally.
 
 ## Deployment and Documentation
 
@@ -307,7 +347,7 @@ Reference: `GroupHandler.go`, `GroupManagementHandler.go`, `GroupContentHandler.
   `PORT`, `LOG_LEVEL`, rate limits, body limits, and backup/rollback guidance.
 - [x] Local developer launcher: `run.sh` plus `scripts/run-wsl.sh`, with port-conflict
   checks and child-process cleanup.
-- [ ] **P1** Add a root `.env.example` (`APP_ENV`, `FRONTEND_ORIGIN`) — `DEPLOYMENT.md:9`
+- [x] **P1** Add a root `.env.example` (`APP_ENV`, `FRONTEND_ORIGIN`) — `DEPLOYMENT.md:9`
   instructs the reader to create a root `.env` that is not scaffolded anywhere.
 - [ ] **P1** Rewrite the top-level `README.md`: it is still the verbatim assignment text and
   never describes what was built, the stack, the folder layout, or how to run it.
@@ -340,9 +380,12 @@ Reference: `GroupHandler.go`, `GroupManagementHandler.go`, `GroupContentHandler.
   exercised indirectly through `cmd/*_test.go`.
 - [ ] **P1** Cover every P0 flow with tests: follow requests, comment media, chat permission
   rules, register field parity, notification type separation, and session persistence.
+  Progress 2026-09-28: follow requests, the chat permission rules and session persistence are
+  covered in Go; the other three still have none.
 - [ ] **P1** Extend the browser smoke suite to the follow-request and comment-image journeys.
-- [ ] **P1** Add a migration test that runs `up` → `down` → `up` over all nine migrations on
-  a scratch database.
+- [x] **P1** Add a migration test that runs `up` → `down` → `up` over all nine migrations on
+  a scratch database. `backend/pkg/db/sqlite/migrations_test.go` does exactly that and also
+  checks that 000009 keeps existing session rows.
 - [ ] **P2** Add a WebSocket test for private-message delivery plus rejection of a
   non-permitted sender.
 - [ ] **P2** Load smoke: 50 concurrent WebSocket clients and sustained request throughput
@@ -353,12 +396,15 @@ Reference: `GroupHandler.go`, `GroupManagementHandler.go`, `GroupContentHandler.
 
 ## Housekeeping and Cleanup
 
-- [ ] **P0** Untrack the live SQLite database. `backend/pkg/db/socialnetwork.db` is committed
+- [x] **P0** Untrack the live SQLite database. `backend/pkg/db/socialnetwork.db` is committed
   and shows as modified in `git status`; add it to `.gitignore` (which currently only
   ignores `realTimeForum.db`) and `git rm --cached`.
-- [ ] **P1** Delete dead code: `frontend/src/app/components/MenuItems.tsx` (never imported)
+- [x] **P1** Delete dead code: `frontend/src/app/components/MenuItems.tsx` (never imported)
   and the unused `menuItemsData` / `dummy*Data` exports in `frontend/public/assets.ts`.
-- [ ] **P1** Remove the stale Clerk and `NEXT_PUBLIC_DEV_USER` references listed under
+  `MenuItems.tsx`, `menuItemsData` and the lucide import it needed are gone. The `dummy*`
+  fixtures stay for now because `dummyStoriesData` is still imported by `StoryCard` and
+  `StoryCarousel`; they go with the empty-state work above.
+- [x] **P1** Remove the stale Clerk and `NEXT_PUBLIC_DEV_USER` references listed under
   Authentication and Security.
 - [ ] **P1** Keep this file current. The previous revision marked shipped features (group
   chat, group events, both Docker images) as unchecked while omitting the real gaps, which
@@ -438,10 +484,12 @@ Ordered roughly by value for effort.
 - [ ] **P3** Instagram-style profile header — avatar on the left, posts/followers/following
   stats on the right — and a 3-column square grid replacing `MediaGrid`'s two-column
   `h-48` tiles (`profile/page.tsx:412`).
-- [ ] **P3** Skeleton loaders for the feed, profile grid and chat, replacing the spinner in
-  `Loading.tsx`.
-- [ ] **P3** Infinite scroll for the feed and the grid, keeping `Pagination` as the
-  accessible fallback.
+- [x] **P3** Skeleton loaders for the feed and the profile list (`Skeletons.tsx`,
+  `PostListSkeleton`, `CardGridSkeleton`, `RowsSkeleton`); `Loading.tsx` is now a small
+  centred spinner that honours its `height` instead of stretching to the viewport.
+- [x] **P3** Infinite scroll for the feed and the grid: `LoadMore.tsx` observes a sentinel and
+  keeps a real button for keyboard and screen-reader users. The remaining work is
+  virtualising very long lists (see the performance section).
 - [ ] **P3** Sticky feed header with a "new posts" pill that appears when posts arrive over
   the socket, instead of a full reload.
 - [ ] **P3** Move the remaining hardcoded Tailwind values into the `@theme` block in
@@ -497,6 +545,38 @@ Ordered roughly by value for effort.
   `run.sh`, `DEPLOYMENT.md` and this file.
 - [ ] **P3** Document the WebSocket message protocol (`backend/pkg/websocket/types.go`) in
   `backend/README.md`: event names, payload shapes and direction of travel.
+
+## Work in flight and handoff
+
+The paginated-feed rework recorded below is now complete and validated (`npm run build` clean,
+`npm run test:integration` green on 2026-09-28): `LoadMore.tsx`, `Skeletons.tsx` and
+`usePagedList.ts` are the new list primitives, and `Pagination.tsx` is deleted. Treat the list
+files as settled unless a task explicitly targets them.
+
+A second agent is reworking the paginated feed UI in the same working tree (new
+`LoadMore.tsx`, `Skeletons.tsx` and `usePagedList.ts`; `Pagination.tsx` deleted; `page.tsx`,
+`PostCard.tsx`, `messages/page.tsx`, `notifications/page.tsx`, `profile/page.tsx`,
+`discover/page.tsx`, `StoriesBar.tsx`, `GroupActivity.tsx` and `DirectConversation.tsx`
+touched). The work recorded above deliberately avoids those files:
+
+- P0-2 (comment media) and P0-4 (notification vs message styling) both need `PostCard.tsx`,
+  the notifications page and `SideBar.tsx`, so both are untouched and still open.
+- P0-3 is complete on the backend; the only missing piece is the frontend guard, handed off
+  with the exact change list in that section.
+- Any bullet that mentions keeping `Pagination` as a fallback was written before that
+  component was deleted, so re-read it before acting on it.
+
+Changed in the 2026-09-28 session, for review: `backend/pkg/db/migrations/sqlite/000009_*`,
+`backend/pkg/app/repositories/SessionRepository.go`,
+`backend/pkg/app/service/SessionManager.go` (+ its test),
+`backend/cmd/session_test.go`, `backend/pkg/db/sqlite/migrations_test.go`,
+`backend/pkg/models/{Session,Social}.go`, `backend/pkg/app/repositories/{Social,Message}Repository.go`,
+`backend/pkg/app/service/{Social,Message,Auth}Service.go`,
+`backend/pkg/app/handlers/{ChatMutation,WebSocket,Social}Handler.go`, `backend/cmd/main.go`,
+`backend/cmd/chat_permission_test.go`, `frontend/src/app/api/social.ts`,
+`frontend/scripts/integration-smoke.mjs`, `frontend/public/assets.ts`, `frontend/.env.example`,
+`frontend/.env.local`, `frontend/README.md`, `.gitignore`, `.env.example`, `DEPLOYMENT.md`,
+`backend/README.md`.
 
 ## Definition of done
 
