@@ -8,6 +8,7 @@ import (
 	"social-network/backend/pkg/models"
 	"social-network/backend/pkg/payload"
 	"social-network/backend/pkg/payload/notification"
+	pkgwebsocket "social-network/backend/pkg/websocket"
 	"strconv"
 	"strings"
 )
@@ -201,6 +202,39 @@ func (re *HandlerContext) MarkAllAsRead(w http.ResponseWriter, r *http.Request) 
 		},
 		Message: "All notifications marked as read",
 	})
+}
+
+// notifyUser creates a notification through the service and pushes the created
+// row over the hub, so the badge and the list update from the same payload the
+// comment, message, follow and group paths all send. A failure is logged rather
+// than returned: the action that triggered it has already committed, and the
+// notification is only the signal that something happened.
+func (re *HandlerContext) notifyUser(recipientID, actorID, entityType string, entityID int) {
+	if recipientID == "" || recipientID == actorID {
+		return
+	}
+	created, err := re.NotificationService.CreateNotification(recipientID, actorID, entityType, entityID)
+	if err != nil {
+		re.App.Logger.Error("notification failed",
+			"error", err,
+			"entity_type", entityType,
+			"recipient", recipientID,
+		)
+		return
+	}
+	re.pushNotification(recipientID, created)
+}
+
+// pushNotification hands one created notification to its recipient, when connected.
+func (re *HandlerContext) pushNotification(recipientID string, created notification.NotificationDTO) {
+	if re.Hub == nil {
+		return
+	}
+	data, err := json.Marshal(map[string]any{"type": pkgwebsocket.MsgTypeNotification, "payload": created})
+	if err != nil {
+		return
+	}
+	re.Hub.SendToUser(recipientID, data)
 }
 
 // Send only after the notification change commits so clients can fetch the new count.
