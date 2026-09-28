@@ -15,6 +15,9 @@ type SocialUser struct {
 	Following       []string `json:"following"`
 	PendingIncoming bool     `json:"pendingIncoming"`
 	PendingOutgoing bool     `json:"pendingOutgoing"`
+	// CanMessage is viewer-relative: true when the viewer may start a private
+	// chat with this user (public profile or a follow in either direction).
+	CanMessage bool `json:"canMessage"`
 }
 
 type FollowRequest struct {
