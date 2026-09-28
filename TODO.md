@@ -473,8 +473,12 @@ Reference: `GroupHandler.go`, `GroupManagementHandler.go`, `GroupContentHandler.
   served with `nosniff`, HTML/PDF refused, and a sweep after deleting each of a post, a
   comment, a story and a message, plus the never-attached upload, the stray file and an
   expired story), the 413 fixture in `cmd/group_management_test.go`, and a browser step in
-  `frontend/scripts/integration-smoke.mjs` that posts the same cases through the Next rewrite.
-  Documented in `DEPLOYMENT.md`.
+  `frontend/scripts/integration-smoke.mjs` that posts the empty-file and lying-extension cases
+  through the Next rewrite. The two size ceilings deliberately stay out of the browser: this
+  harness intercepts every request with `Fetch.enable`, and a body in the tens of megabytes
+  wedges the harness before its reply reaches the script (seen at 11 MB, then again at 50 MB),
+  while the rewrite itself was measured forwarding 50 MB into a 413 in 0.11s by hand — the
+  missing coverage is harness reach, not application behaviour. Documented in `DEPLOYMENT.md`.
 - [x] **P1** Audit the `postVisibility` SQL fragment over every read path: feed, single post,
   profile posts, likes tab, comments and direct media. All six were already covered by the one
   fragment, and the audit found the one surface that was not: **reactions**. `UpsertReaction`
@@ -544,12 +548,16 @@ Reference: `GroupHandler.go`, `GroupManagementHandler.go`, `GroupContentHandler.
   end on `teal-700`/`red-600` (5.5:1 and 4.8:1). Recorded rather than fixed: `UserCard.tsx` and
   `StoryItem.tsx` carry the same white-on-`blue-500` problem but are imported nowhere, so they
   are dead code (see the housekeeping list).
-- [ ] **P1** Responsive review at 320 / 375 / 768 / 1440 px for messages, group chat,
-  profile, notifications, and the new follow-request screens. Not done in the
-  accessibility session: it needs a real browser and the Chrome dependency was unavailable
-  there, so it would have been a claim rather than a check. The group-chat step in
-  `frontend/scripts/integration-smoke.mjs` already drives a mobile viewport — extend that
-  pattern per surface instead of starting from scratch.
+- [x] **P1** Responsive review at 320 / 375 / 768 / 1440 px for messages, group chat,
+  profile, notifications, and the new follow-request screens. Closed 2026-09-28 as an
+  automated check rather than a one-off look: the browser suite now drives five surfaces
+  (messages, group chat, profile, notifications, discover) through all four widths and
+  asserts `document.documentElement.scrollWidth <= window.innerWidth`, reporting the widest
+  node when it fails, so the review stays reviewed. It immediately found a real bug: at 768px
+  `/discover` overflowed to 807px because a card's generated handle (`@browserminimal…`) had no
+  break opportunity and its flex row had no `min-w-0`; the handle now truncates and the bio
+  wraps, and the suite is green afterwards. The follow-request surface is covered through the
+  notifications page and the profile header, which is where it renders.
 - [ ] **P2** Replace the `dummyUserData` / `dummyMessagesData` fallbacks in
   `frontend/public/assets.ts` with real empty states, then delete the unused exports.
 - [ ] **P2** Optimistic updates for follow/unfollow and reactions to avoid a full refetch
@@ -867,6 +875,27 @@ component classes) are the ones to build on.
   with the exact change list in that section. `canMessage` is still only a type in
   `frontend/src/app/api/social.ts`, so nothing reads the flag yet.
 - No P0 items are open. What is left is the P1/P2/P3 list above.
+
+Changed in the browser-verification and responsive-check session (2026-09-28), for review:
+`frontend/scripts/integration-smoke.mjs`, `frontend/src/app/discover/page.tsx`.
+
+The browser suite ran end to end for the first time in this environment — 24 steps pass with
+no runtime exceptions — using the Chrome for Testing build already cached on the machine
+(`CHROME_PATH="$HOME/Library/Caches/ms-playwright/chromium-1234/chrome-mac-arm64/Google Chrome
+for Testing.app/Contents/MacOS/Google Chrome for Testing" npm run test:integration`). That run
+is what validates the message-gate assertions, the badge live-region markup and the contrast
+changes from the two earlier sessions, none of which had browser evidence until now.
+
+Two things came out of it. The upload step lost its size-ceiling cases: with `Fetch.enable`
+intercepting every request, an 11 MB body wedged the harness (a 50 MB one too), while curl
+through the same rewrite answered 413 in 0.11s — so the ceilings stay covered by
+`cmd/media_upload_test.go`, and the step's comment records why. And the responsive review is
+now automated inside the suite, which immediately caught a real overflow: `/discover` at 768px
+pushed the page to 807px because a generated handle had no break opportunity, so the card now
+truncates the handle and wraps the bio.
+
+Evidence: `npm run test:integration` green (24 PASS, exit 0), `npx tsc --noEmit` clean and
+`npm run lint` at 0 errors after the layout fix.
 
 Changed in the backup-drill and repository-test session (2026-09-28), for review:
 `scripts/backup-restore-drill.sh`, `DEPLOYMENT.md`,
