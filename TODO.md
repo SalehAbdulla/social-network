@@ -4,21 +4,21 @@ Legend: `[x]` verified working on `main` @ `cb91348` unless an item notes local 
 spec line · **P1** required before release · **P2** polish · **P3** nice to have.
 
 Baseline checks: `go test ./...` passes, `go vet ./...` is clean, both Docker images build
-through `compose.yaml`, and migrations `000001`–`000009` are applied at boot by
+through `compose.yaml`, and migrations `000001`–`000010` are applied at boot by
 `backend/pkg/db/sqlite/sqlite.go`.
 
 Working today: auth (register/login/logout, bcrypt, cookie sessions), public/private
-profiles, followers/following lists, posts with three privacy levels, reactions, comments,
-groups (create/browse/invite/request/accept/post/comment/event+RSVP/chat/transfer/leave),
-notifications with WebSocket push and a sidebar badge, media uploads
+profiles, followers/following lists, posts with three privacy levels, reactions, comments
+with images, groups (create/browse/invite/request/accept/post/comment/event+RSVP/chat/
+transfer/leave), notifications with WebSocket push and a sidebar badge, media uploads
 (JPEG/PNG/GIF/WebP/MP4/WebM), stories, and realtime chat with typing, read receipts and
 presence.
 
-Known spec-level gaps, detailed below: media on comments (P0-2), notification-vs-message
-distinction (P0-4), and register-form field parity (P0-5).
-Closed on 2026-09-28: chat permission rules (P0-3) and durable sessions (P0-6); see
-"Work in flight and handoff" at the end of this file for what is still in someone else's
-hands.
+Known spec-level gaps, detailed below: notification-vs-message distinction (P0-4) and
+register-form field parity (P0-5).
+Closed on 2026-09-28: comment media (P0-2), the chat permission rules (P0-3) and durable
+sessions (P0-6); see "Work in flight and handoff" at the end of this file for what is still
+in someone else's hands.
 
 ## Working prompt
 
@@ -104,29 +104,53 @@ Acceptance: following a private profile produces a notification, the requester s
 "Requested" instead of a follower, the follower list only changes after acceptance, and a
 public profile is still followed instantly.
 
-### P0-2 · Comments cannot carry an image or GIF
+### P0-2 · Comments cannot carry an image or GIF (implemented 2026-09-28; verified locally)
 
 Spec: "While creating a post or a comment, the user can include an image or GIF." The
-`comment` table has no media column, `CommentRepository.CreateComment` takes only text, and
-the composer in `frontend/src/app/components/PostCard.tsx:23-24` posts `URLSearchParams`.
-Related: `CommentHandler.go:114` rejects any non-ASCII comment, so comment emoji are
-blocked too.
+`comment` table had no media column, `CommentRepository.CreateComment` took only text, and
+the composer in `frontend/src/app/components/PostCard.tsx` posted `URLSearchParams`. The
+ASCII-only gate in `CommentHandler.go` also rejected any emoji comment.
 
-- [ ] **P0** Migration `000009_comment_media.up.sql` / `.down.sql`:
+Policy: a comment carries up to four of the commenter's own uploads in a JSON array in
+`comment.imageUrls`, mirroring `post.imageUrls`. Every URL is checked with
+`SocialService.ValidateMedia(userID, url, "image")`, so another member's upload is a 403 and
+a foreign URL is a 400. The endpoint reads a JSON body and still accepts the legacy form
+encoding, so older clients and the existing tests keep working. Text length is counted in
+runes, which is what makes an emoji comment legal; the ASCII gate stays for post titles and
+content. Comment photos are readable by exactly the audience that can read their post:
+`CanViewMedia` gained a comment branch, so deleting a comment revokes the photo for everyone
+except its uploader (rows and files are deliberately left alone — see the orphaned-media
+item under Reliability).
+
+Verified: `go build ./...`, `go vet ./...`, `go test ./...`; `npm run lint` (0 errors);
+`npm run build`; the full browser smoke suite. New coverage:
+`backend/cmd/comment_media_test.go` (own-photo accepted, foreign photo 403, non-media URL
+400, five photos 400, emoji stored and preserved through an edit, follower reads the photo,
+stranger 403, photo hidden after the comment is deleted, merged profile media list, private
+profile hides the tab, legacy form comment still 201) and two new browser steps in
+`frontend/scripts/integration-smoke.mjs` (comment photo renders and is served; the profile
+media tab lists it). Artifacts: `backend/tmp/integration-1790600922303`.
+
+- [x] **P0** Migration `000010_comment_media.up.sql` / `.down.sql`:
   `ALTER TABLE comment ADD COLUMN imageUrls TEXT NOT NULL DEFAULT '[]'`, mirroring
-  `post.imageUrls` from `000002_social_features.up.sql`.
-- [ ] **P0** Thread media through `CommentRepository.CreateComment`/`GetComments`, the
-  `comment` domain model, and the `comment.CommentDTO` / `CommentResponse` payloads.
-- [ ] **P0** `CreateComments` (`backend/pkg/app/handlers/CommentHandler.go:85`): accept
-  `imageUrls` (JSON body instead of form values), validate each with
-  `SocialService.ValidateMedia(userID, url, "image")`, cap the count, and loosen the
-  ASCII-only gate at line 114 so emoji are allowed.
-- [ ] **P0** Frontend: `ImagePicker` in the comment composer, JSON post body, and render
-  the images in the comment list and the profile media grid.
-- [ ] **P1** Extend `CommentService.DeleteComment` and the `comment_cleanup` trigger so
-  attached media rows are cleaned up with the comment.
-- [ ] **P1** Tests: comment with an image, invalid media URL rejected, foreign media URL
-  rejected, comment media removed with the comment.
+  `post.imageUrls` from `000002_social_features.up.sql`, plus a `comment_userId` index for
+  the profile media query. _The task text said `000009`; that number is taken by
+  `000009_session_lifecycle` from P0-6, so the new migration is `000010`._
+- [x] **P0** Threaded media through `CommentRepository.CreateComment`/`GetComments`, the
+  `comment` domain model, and the `comment.CommentDTO` payload.
+- [x] **P0** `CreateComments` (`backend/pkg/app/handlers/CommentHandler.go`): accepts
+  `imageUrls` in a JSON body (form encoding still works), validates each with
+  `SocialService.ValidateMedia(userID, url, "image")`, caps the count at four, and counts
+  runes so emoji are allowed.
+- [x] **P0** Frontend: `ImagePicker` in the comment composer, JSON post body, rendered the
+  images in the comment list, and the profile media grid now reads
+  `GET /api/v1/users/{userId}/media`, which merges post and comment photos.
+- [x] **P1** Media access follows the comment: `CanViewMedia` resolves comment photos
+  through `postVisibility` and `CommentService.DeleteComment` therefore revokes them. The
+  `media` rows and files are intentionally left in place — the same upload can be referenced
+  by another row, and file removal is part of the orphaned-media item under Reliability.
+- [x] **P1** Tests: comment with an image, invalid media URL rejected, foreign media URL
+  rejected, comment media removed with the comment, plus the browser journey.
 
 ### P0-3 · Private chat ignored the follow rule (implemented 2026-09-28; verified locally)
 
@@ -226,8 +250,9 @@ Verified: `go build ./...`, `go vet ./...`, `go test ./...`. New tests:
 `backend/cmd/session_test.go` (a login survives a simulated restart with a cold cache, an
 expired row is rejected and deleted, logout removes the row, the second login revokes the
 first row, cleanup spares a live row), `pkg/app/service/SessionManager_test.go` (sliding-expiry
-math) and `pkg/db/sqlite/migrations_test.go` (up → down → up over all nine migrations, plus a
-check that 000009 carries existing tokens over).
+math) and `pkg/db/sqlite/migrations_test.go` (up → down → up over every migration — nine when
+this landed, ten now that 000010 exists — plus a check that 000009 carries existing tokens
+over).
 
 - [x] **P0** Persist sessions in the `session` table (token, `userId`, `expiresAt`, plus
   `createdAt`/`lastSeenAt` if sliding expiry is wanted).
@@ -318,7 +343,10 @@ Reference: `GroupHandler.go`, `GroupManagementHandler.go`, `GroupContentHandler.
   Follow-request smoke investigation: an existing selected audience entry still grants
   post/media access after unfollow; audit whether that access should require a current follow.
 - [ ] **P1** Add error, empty and loading states for the new P0 flows (follow requests,
-  comment media) following the toast convention.
+  comment media) following the toast convention. Progress 2026-09-28: the comment composer
+  reports upload and validation failures with `react-hot-toast`, its list already had a
+  spinner plus `LoadMore`, and the profile media tab now has a skeleton and a "No photos yet."
+  empty state; the follow-request half is unchanged.
 - [ ] **P1** Reconnect/offline UX: `BackendProvider.tsx:94` retries the socket every 3 s with
   no visible state — surface the existing `connected` context value in the UI.
 - [ ] **P1** Accessibility pass: apply the drawer's focus trap and Escape handling to
@@ -380,12 +408,16 @@ Reference: `GroupHandler.go`, `GroupManagementHandler.go`, `GroupContentHandler.
   exercised indirectly through `cmd/*_test.go`.
 - [ ] **P1** Cover every P0 flow with tests: follow requests, comment media, chat permission
   rules, register field parity, notification type separation, and session persistence.
-  Progress 2026-09-28: follow requests, the chat permission rules and session persistence are
-  covered in Go; the other three still have none.
+  Progress 2026-09-28: follow requests, comment media, the chat permission rules and session
+  persistence are covered in Go; register field parity and the notification split still have
+  none.
 - [ ] **P1** Extend the browser smoke suite to the follow-request and comment-image journeys.
-- [x] **P1** Add a migration test that runs `up` → `down` → `up` over all nine migrations on
-  a scratch database. `backend/pkg/db/sqlite/migrations_test.go` does exactly that and also
-  checks that 000009 keeps existing session rows.
+  Progress 2026-09-28: the comment-image journey is now a browser step; the follow-request
+  journey is not.
+- [x] **P1** Add a migration test that runs `up` → `down` → `up` over all ten migrations on
+  a scratch database. `backend/pkg/db/sqlite/migrations_test.go` does exactly that, checks
+  that 000009 keeps existing session rows, and asserts the 000010 comment media column
+  survives the round trip.
 - [ ] **P2** Add a WebSocket test for private-message delivery plus rejection of a
   non-permitted sender.
 - [ ] **P2** Load smoke: 50 concurrent WebSocket clients and sustained request throughput
@@ -530,7 +562,9 @@ Ordered roughly by value for effort.
 - [ ] **P3** Add a Lighthouse / Core Web Vitals budget and enforce it in CI.
 - [ ] **P3** Add bundle-size reporting to the frontend build.
 - [ ] **P3** Add indexes for the queries introduced by the follow-request and comment-media
-  work, and review the feed query with `EXPLAIN QUERY PLAN`.
+  work, and review the feed query with `EXPLAIN QUERY PLAN`. Progress 2026-09-28: 000010 adds
+  `comment_userId` for the profile media query; the follow-request side and the feed review
+  are still open.
 - [ ] **P3** Add a component gallery (Storybook or a `/dev/components` route) so the
   Instagram-style redesign can be reviewed without clicking through whole flows.
 
@@ -548,25 +582,36 @@ Ordered roughly by value for effort.
 
 ## Work in flight and handoff
 
-The paginated-feed rework recorded below is now complete and validated (`npm run build` clean,
-`npm run test:integration` green on 2026-09-28): `LoadMore.tsx`, `Skeletons.tsx` and
-`usePagedList.ts` are the new list primitives, and `Pagination.tsx` is deleted. Treat the list
-files as settled unless a task explicitly targets them.
+The paginated-feed rework is **committed on `main`** (`950bbdf`…`e6594fe`) and validated
+(`npm run build` clean, `npm run test:integration` green on 2026-09-28): `LoadMore.tsx`,
+`Skeletons.tsx` and `usePagedList.ts` are the new list primitives, and `Pagination.tsx` is
+gone (grep for it returns nothing). Treat the list files as settled unless a task explicitly
+targets them, and ignore any older bullet that mentions keeping `Pagination` as a fallback.
 
-A second agent is reworking the paginated feed UI in the same working tree (new
-`LoadMore.tsx`, `Skeletons.tsx` and `usePagedList.ts`; `Pagination.tsx` deleted; `page.tsx`,
-`PostCard.tsx`, `messages/page.tsx`, `notifications/page.tsx`, `profile/page.tsx`,
-`discover/page.tsx`, `StoriesBar.tsx`, `GroupActivity.tsx` and `DirectConversation.tsx`
-touched). The work recorded above deliberately avoids those files:
+A second agent currently has an **uncommitted** theme/dark-mode rework in this same working
+tree: new `frontend/src/app/components/ThemeProvider.tsx`, `ThemeToggle.tsx` and
+`frontend/src/app/lib/theme.ts`, plus edits to `BackendProvider.tsx`, `SideBar.tsx`,
+`layout.tsx`, `globals.css` and `login/page.tsx`. Leave those files to them.
 
-- P0-2 (comment media) and P0-4 (notification vs message styling) both need `PostCard.tsx`,
-  the notifications page and `SideBar.tsx`, so both are untouched and still open.
+- P0-2 (comment media) is complete; it touched `PostCard.tsx` and `profile/page.tsx`, which
+  are also part of the theme change set, so re-check both files before staging either change.
+- P0-4 (notification vs message styling) still needs `PostCard.tsx`, the notifications page
+  and `SideBar.tsx`, and is still open.
 - P0-3 is complete on the backend; the only missing piece is the frontend guard, handed off
-  with the exact change list in that section.
-- Any bullet that mentions keeping `Pagination` as a fallback was written before that
-  component was deleted, so re-read it before acting on it.
+  with the exact change list in that section. `canMessage` is still only a type in
+  `frontend/src/app/api/social.ts`, so nothing reads the flag yet.
+- Register field parity (P0-5) is also still open and would touch `login/page.tsx`, which is
+  in the theme change set.
 
-Changed in the 2026-09-28 session, for review: `backend/pkg/db/migrations/sqlite/000009_*`,
+Changed in the P0-2 session (2026-09-28), for review:
+`backend/pkg/db/migrations/sqlite/000010_comment_media.{up,down}.sql`, `backend/pkg/models/{Comment,MediaItem}.go`,
+`backend/pkg/payload/comment/CommentDTO.go`, `backend/pkg/app/repositories/{CommentRepository,SocialRepository}.go`,
+`backend/pkg/app/service/CommentService.go`, `backend/pkg/app/handlers/{CommentHandler,SocialHandler}.go`,
+`backend/cmd/router.go`, `backend/cmd/comment_media_test.go`, `backend/pkg/db/sqlite/migrations_test.go`,
+`frontend/src/app/api/social.ts`, `frontend/src/app/components/PostCard.tsx`,
+`frontend/src/app/profile/page.tsx`, `frontend/scripts/integration-smoke.mjs`.
+
+Changed in the previous session, for review: `backend/pkg/db/migrations/sqlite/000009_*`,
 `backend/pkg/app/repositories/SessionRepository.go`,
 `backend/pkg/app/service/SessionManager.go` (+ its test),
 `backend/cmd/session_test.go`, `backend/pkg/db/sqlite/migrations_test.go`,
