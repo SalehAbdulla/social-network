@@ -16,6 +16,21 @@ type PostRepository interface {
 	DeletePost(postId int, userId string) error
 }
 
+// postVisibility decides who may read a post. The three levels differ on purpose:
+//
+//   - `public` needs the owner's profile to be public, or a follow. A private
+//     profile hides even its public posts from strangers (see DEPLOYMENT.md).
+//   - `followers` ("almost private" in the spec) is a LIVE relation: the row in
+//     `follow` has to exist when the post is read.
+//   - `selected` ("private": only the followers chosen by the creator) is an
+//     explicit grant. `post_selected_follower` records who the author picked at
+//     write time, so unfollowing later does not silently revoke a post the author
+//     shared with them; the author's lever is editing the post, which rewrites the
+//     list from their current followers (PostRepository.ValidateSelectedFollowers).
+//
+// The same fragment backs the feed, a single post, profile posts and likes,
+// profile media, comment access and direct media access, so those six surfaces
+// cannot drift apart.
 const postVisibility = `(p.userId = ? OR (p.privacy = 'public' AND (EXISTS (SELECT 1 FROM user u WHERE u.userId = p.userId AND u.isPublic = 1) OR EXISTS (SELECT 1 FROM follow f WHERE f.followerId = ? AND f.followedId = p.userId))) OR (p.privacy = 'followers' AND EXISTS (SELECT 1 FROM follow f WHERE f.followerId = ? AND f.followedId = p.userId)) OR (p.privacy = 'selected' AND EXISTS (SELECT 1 FROM post_selected_follower psf WHERE psf.postId = p.postId AND psf.userId = ?)))`
 
 func (db *DB) GetPosts(pageNumber int, pageSize int, sortBy string, sortOrder string, viewerID string) ([]models.Post, int, error) {
@@ -153,6 +168,17 @@ func (db *DB) GetPostByID(postId int, viewerID string) (models.Post, error) {
 func (db *DB) CanViewPost(postID int, viewerID string) (bool, error) {
 	var allowed bool
 	err := db.Conn.QueryRow("SELECT EXISTS(SELECT 1 FROM post p WHERE p.postId = ? AND "+postVisibility+")", postID, viewerID, viewerID, viewerID, viewerID).Scan(&allowed)
+	return allowed, err
+}
+
+// CanViewComment reports whether the viewer may read a comment, which means they
+// may read the post it belongs to. Reactions and any future comment surface use
+// it so a comment cannot be reached through a post the viewer cannot open.
+func (db *DB) CanViewComment(commentID int, viewerID string) (bool, error) {
+	var allowed bool
+	err := db.Conn.QueryRow(`SELECT EXISTS(
+		SELECT 1 FROM comment c JOIN post p ON p.postId = c.postId
+		WHERE c.commentId = ? AND `+postVisibility+`)`, commentID, viewerID, viewerID, viewerID, viewerID).Scan(&allowed)
 	return allowed, err
 }
 
