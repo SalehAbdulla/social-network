@@ -15,6 +15,7 @@ import {
 } from '../api/social';
 
 import { useResource } from '../lib/useResource';
+import { useDialogFocus } from '../lib/useDialogFocus';
 import { useBackend } from './BackendProvider';
 
 import Avatar from './Avatar';
@@ -44,6 +45,10 @@ export default function FollowListModal({
   close,
 }: FollowListModalProps) {
   const { user, refreshUser } = useBackend();
+
+  // The drawer's keyboard contract for the other real overlay in the app: focus
+  // moves to the close button, Tab cycles inside, Escape closes it.
+  const dialog = useDialogFocus<HTMLDivElement>(close);
 
   const [tab, setTab] = useState<FollowListTab>(initialTab);
   const [busyId, setBusyId] = useState('');
@@ -97,6 +102,8 @@ export default function FollowListModal({
 
   return (
     <div
+      ref={dialog}
+      tabIndex={-1}
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
       role="dialog"
       aria-modal="true"
