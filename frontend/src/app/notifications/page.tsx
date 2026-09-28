@@ -16,6 +16,10 @@ const NOTIFICATIONS_PER_PAGE = 20;
 
 function notificationPath(item: Notification) {
   if (item.entityType === 'group_invitation') return '/messages/groups';
+  // A join request is answered on the group's info tab and an event lives on its
+  // events tab, so both land where the reader has to act.
+  if (item.entityType === 'group_request') return `/messages/groups/${item.entityId}?tab=info`;
+  if (item.entityType === 'group_event') return `/messages/groups/${item.entityId}?tab=events`;
   if (item.entityType.startsWith('group_')) return `/messages/groups/${item.entityId}`;
   if (item.entityType === 'message') return `/messages/${item.actorId}`;
   if (item.entityType === 'comment') return item.postId ? `/post/${item.postId}` : '/profile';
