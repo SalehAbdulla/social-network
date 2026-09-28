@@ -60,6 +60,12 @@ func (re *HandlerContext) HandleError(w http.ResponseWriter, r *http.Request, er
 	case realtimeforum.ErrTooManyRequests:
 		statusCode = http.StatusTooManyRequests
 		level = slog.LevelWarn
+	case realtimeforum.ErrUploadTooLarge, realtimeforum.ErrImageTooLarge:
+		statusCode = http.StatusRequestEntityTooLarge
+		level = slog.LevelWarn
+	case realtimeforum.ErrEmptyUpload:
+		statusCode = http.StatusBadRequest
+		level = slog.LevelWarn
 	case realtimeforum.ErrInternal:
 		statusCode = http.StatusInternalServerError
 		level = slog.LevelError
