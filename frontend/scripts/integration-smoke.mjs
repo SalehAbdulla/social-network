@@ -226,6 +226,30 @@ try {
   const refetchedWhileVoting = await evaluate(alex, `performance.getEntriesByType('resource').map(entry => entry.name).filter(name => name.includes('/api/v1/post'))`);
   assert.deepEqual(refetchedWhileVoting, [], `Comment voting must not refetch the post or comments: ${JSON.stringify(refetchedWhileVoting)}`);
   console.log('PASS: comment votes toggle in place without refetching or losing the draft');
+
+  // A comment can carry an uploaded photo, exactly like a post.
+  const commentPhotoFixture = path.join(taskDir, 'comment-photo.png');
+  await writeFile(commentPhotoFixture, Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aD1sAAAAASUVORK5CYII=', 'base64'));
+  const commentDocument = await command('DOM.getDocument', {}, alex);
+  const commentPicker = await command('DOM.querySelector', { nodeId: commentDocument.root.nodeId, selector: 'input[aria-label="Add photos"]' }, alex);
+  await command('DOM.setFileInputFiles', { nodeId: commentPicker.nodeId, files: [commentPhotoFixture] }, alex);
+  await until(alex, `!!document.querySelector('img[alt="Preview of comment-photo.png"]')`, 'comment photo preview');
+  await fill(alex, `#comment-${postId}`, `Browser comment with a photo ${stamp}`);
+  await button(alex, 'Comment');
+  await until(alex, `!!document.querySelector('img[alt="Comment attachment"]')`, 'comment photo renders');
+  const photoComment = (await api(alex, `/posts/comments?postId=${postId}`)).comments.find(item => item.commentText === `Browser comment with a photo ${stamp}`);
+  assert(photoComment && photoComment.imageUrls.length === 1, `the comment kept its photo: ${JSON.stringify(photoComment)}`);
+  const commentPhoto = photoComment.imageUrls[0];
+  assert(await evaluate(alex, `(async () => (await fetch(${JSON.stringify(commentPhoto)})).ok)()`), 'the uploaded comment photo is served');
+  console.log('PASS: a comment carries an uploaded photo, renders it and stores its URL');
+
+  // The profile media tab lists comment photos next to post photos.
+  await navigate(alex, '/profile');
+  await until(alex, `!!document.querySelector('[aria-label="Profile statistics"]')`, 'own profile');
+  await evaluate(alex, `[...document.querySelectorAll('button')].find(item => item.textContent.trim() === 'media').click()`);
+  await until(alex, `[...document.querySelectorAll('a[href="/post/${postId}"] img')].some(image => image.getAttribute('src') === ${JSON.stringify(commentPhoto)})`, 'comment photo in the profile media tab');
+  console.log('PASS: the profile media tab lists the comment photo');
+
   const notificationCount = (await api(dummy, '/notifications/unread-count')).count;
   await until(dummy, `!!document.querySelector('[aria-label="${notificationCount} unread notifications"]')`, 'notification badge updates without refresh', 10000);
   const notifications = await api(dummy, '/notifications');
@@ -252,6 +276,9 @@ try {
   await until(dummy, `!document.querySelector('[role="dialog"]')`, 'dismiss followers dialog');
   console.log('PASS: profile statistics open the live followers dialog without connection controls');
 
+  // Counts the comments the post already carries, so the audience edit below is
+  // asserted to preserve them rather than to match a hardcoded number.
+  const commentsBeforeAudienceEdit = (await api(dummy, `/post?id=${postId}`)).commentsCounter;
   await navigate(dummy, `/post/${postId}/edit`);
   await until(dummy, `document.querySelector('h1')?.textContent === 'Edit Post'`, 'edit audience');
   await fill(dummy, 'main select', 'selected');
@@ -263,7 +290,7 @@ try {
   const restricted = await api(dummy, `/post?id=${postId}`);
   assert.equal(restricted.privacy, 'selected');
   assert.deepEqual(restricted.selectedFollowerIds, [originalAlex.userId]);
-  assert.equal(restricted.commentsCounter, 1);
+  assert.equal(restricted.commentsCounter, commentsBeforeAudienceEdit);
   console.log('PASS: editing selected followers preserves comments and saves the correct audience');
 
   await navigate(dummy, '/profile');
