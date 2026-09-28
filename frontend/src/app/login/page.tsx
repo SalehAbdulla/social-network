@@ -6,12 +6,14 @@ import toast from 'react-hot-toast';
 import { assets } from '../../../public/assets';
 import { Star } from 'lucide-react';
 import ThemeToggle from '../components/ThemeToggle';
-import { authRequest, errorMessage, nicknameAvailability } from '../api/social';
+import { authRequest, errorMessage, nicknameAvailability, request, upload, type SocialUser } from '../api/social';
+import ImagePicker from '../components/ImagePicker';
 
 const Login = () => {
   const router = useRouter();
   const [registering, setRegistering] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [avatar, setAvatar] = useState<File[]>([]);
   const [nickname, setNickname] = useState('');
   const [nicknameResult, setNicknameResult] = useState<{ nickname: string; status: 'idle' | 'available' | 'taken' }>({ nickname: '', status: 'idle' });
   const normalizedNickname = nickname.trim().toLowerCase();
@@ -31,15 +33,31 @@ const Login = () => {
     return () => { cancelled = true; window.clearTimeout(timer); };
   }, [normalizedNickname, validNickname, registering]);
 
+  // The photo cannot be uploaded before signing up, because POST /media needs
+  // the session that the register call creates. A failure here must not lose the
+  // account, so it only warns.
+  async function attachAvatar(file?: File) {
+    if (!file) return;
+    try {
+      const uploaded = await upload(file);
+      const profile = await request<SocialUser>('/users/me');
+      await request('/users/me', 'PUT', { ...profile, avatar: uploaded.url });
+    } catch {
+      toast.error('Your account was created, but the profile photo could not be saved.');
+    }
+  }
+
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setBusy(true);
     const values = Object.fromEntries(new FormData(event.currentTarget).entries());
     try {
       if (registering) {
-        if (nicknameState !== 'available') throw new Error(nicknameState === 'taken' ? 'This nickname is already reserved.' : 'Enter an available nickname.');
+        // A blank nickname is fine: the backend generates a handle for it.
+        if (normalizedNickname && nicknameState !== 'available') throw new Error(nicknameState === 'taken' ? 'This nickname is already reserved.' : 'Enter an available nickname.');
         if (password !== confirmPassword) throw new Error('Passwords do not match.');
         await authRequest('/auth/register', Object.fromEntries(Object.entries(values).map(([key, value]) => [key, String(value)])));
+        await attachAvatar(avatar[0]);
       } else {
         await authRequest('/auth/login', {
           identifier: String(values.identifier || ''),
@@ -85,10 +103,13 @@ const Login = () => {
           <div><h2 className="text-2xl font-bold text-brand-deep">{registering ? 'Create your account' : 'Welcome back'}</h2><p className="mt-1 text-sm text-slate-500">{registering ? 'Join the community and start connecting.' : 'Sign in to continue to your network.'}</p></div>
           {registering ? <>
             <div className="grid gap-4 sm:grid-cols-2"><Field name="firstName" label="First name" required /><Field name="lastName" label="Last name" required /></div>
-            <div className="grid gap-4 sm:grid-cols-2"><label className="block text-sm text-slate-700">Nickname<input name="nickName" value={nickname} onChange={event => setNickname(event.target.value)} required minLength={2} maxLength={33} pattern="[a-zA-Z0-9_]+" className="mt-1 w-full rounded-lg border border-slate-200 p-2.5" />{nicknameState === 'checking' && <span className="text-xs text-slate-500">Checking availability...</span>}{nicknameState === 'available' && <span className="text-xs text-teal-700">Nickname is available.</span>}{(nicknameState === 'taken' || nicknameState === 'invalid') && <span className="text-xs text-red-700">{nicknameState === 'taken' ? 'Nickname is already reserved.' : 'Use 2-33 letters, numbers, or underscores.'}</span>}</label><Field name="birthDate" label="Date of birth" type="date" min={dateYearsAgo(100)} max={dateYearsAgo(13)} required /></div>
+            <div className="grid gap-4 sm:grid-cols-2"><label className="block text-sm text-slate-700">Nickname <span className="text-slate-400">(optional)</span><input name="nickName" value={nickname} onChange={event => setNickname(event.target.value)} minLength={2} maxLength={33} pattern="[a-zA-Z0-9_]+" className="mt-1 w-full rounded-lg border border-slate-200 p-2.5" />{!normalizedNickname && <span className="text-xs text-slate-500">Leave it blank and we will pick a handle for you.</span>}{nicknameState === 'checking' && <span className="text-xs text-slate-500">Checking availability...</span>}{nicknameState === 'available' && <span className="text-xs text-teal-700">Nickname is available.</span>}{(nicknameState === 'taken' || nicknameState === 'invalid') && <span className="text-xs text-red-700">{nicknameState === 'taken' ? 'Nickname is already reserved.' : 'Use 2-33 letters, numbers, or underscores.'}</span>}</label><Field name="birthDate" label="Date of birth" type="date" min={dateYearsAgo(100)} max={dateYearsAgo(13)} required /></div>
             <Field name="email" label="Email" type="email" required />
             <div className="grid gap-4 sm:grid-cols-2"><Field name="password" label="Password" type="password" minLength={12} required onChange={setPassword} /><Field name="confirmPassword" label="Confirm password" type="password" minLength={12} required onChange={setConfirmPassword} /></div>
             <label className="block text-sm text-slate-700">Gender<select name="gender" required className="mt-1 w-full rounded-lg border border-slate-200 p-2.5"><option value="">Select gender</option><option value="female">Female</option><option value="male">Male</option></select></label>
+            <label className="block text-sm text-slate-700">About me <span className="text-slate-400">(optional)</span><textarea name="aboutMe" rows={3} maxLength={1000} placeholder="A line about yourself" className="mt-1 w-full rounded-lg border border-slate-200 p-2.5" /></label>
+            <label className="block text-sm text-slate-700">Profile visibility<select name="isPublic" defaultValue="true" className="mt-1 w-full rounded-lg border border-slate-200 p-2.5"><option value="true">Public - anyone can find me</option><option value="false">Private - only my followers</option></select></label>
+            <div><span className="block text-sm text-slate-700">Profile photo <span className="text-slate-400">(optional)</span></span><div className="mt-1"><ImagePicker files={avatar} onChange={setAvatar} max={1} disabled={busy} /></div></div>
           </> : <><Field name="identifier" label="Email or nickname" required /><Field name="password" label="Password" type="password" required /><label className="flex items-center gap-2 text-sm text-slate-600"><input name="rememberMe" type="checkbox" />Remember me</label></>}
           <button disabled={busy} className="w-full rounded-lg bg-blue-600 px-4 py-3 font-medium text-white hover:bg-blue-700 disabled:opacity-50">{busy ? 'Please wait...' : registering ? 'Create account' : 'Sign in'}</button>
           <button type="button" onClick={() => setRegistering(!registering)} className="w-full text-sm text-blue-600">{registering ? 'Already have an account? Sign in' : 'Need an account? Register'}</button>
