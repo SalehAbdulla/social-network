@@ -57,6 +57,27 @@ func main() {
 		os.Exit(1)
 	}
 
+	// Sessions outlive the process, so a restart no longer signs everyone out.
+	service.DefaultSessionManager.UseStore(dbConn)
+	go func() {
+		cleanup := func() {
+			removed, err := service.DefaultSessionManager.CleanupExpired()
+			if err != nil {
+				app.Logger.Error("session cleanup failed", "error", err)
+				return
+			}
+			if removed > 0 {
+				app.Logger.Info("expired sessions removed", "count", removed)
+			}
+		}
+		cleanup()
+		ticker := time.NewTicker(time.Hour)
+		defer ticker.Stop()
+		for range ticker.C {
+			cleanup()
+		}
+	}()
+
 	authService := service.NewAuthService(dbConn)
 	reactService := service.NewReactionService(dbConn)
 	postService := service.NewPostService(dbConn, reactService)
