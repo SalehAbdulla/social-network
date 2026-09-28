@@ -6,7 +6,10 @@ type Comment struct {
 	UserId      string `json:"userId"`
 	Nickname    string `json:"nickname"`
 	CommentText string `json:"commentText"`
-	Score       int    `json:"score"`
-	UserScore   int    `json:"userScore"`
-	CreatedAt   string `json:"createdAt"`
+	// ImageURLs is the raw JSON array held in comment.imageUrls, exactly like
+	// models.Post.ImageURLs. The DTO mapping decodes it.
+	ImageURLs string `json:"-"`
+	Score     int    `json:"score"`
+	UserScore int    `json:"userScore"`
+	CreatedAt string `json:"createdAt"`
 }
