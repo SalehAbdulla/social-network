@@ -45,13 +45,22 @@ export default function Sidebar({ isSideBarOpen, setSideBarOpen, isCollapsed, se
       if (previousFocus?.isConnected) previousFocus.focus();
     };
   }, [isSideBarOpen, setSideBarOpen]);
-  const count = useResource<{ count: number }>('/notifications/unread-count');
-  const reload = count.reload;
-  useLiveRefresh(reload);
+  // The bell and the Messages entry report different things: the spec wants new
+  // notifications and new private messages displayed differently, so the bell
+  // counts everything except messages and the Messages entry counts only those.
+  const count = useResource<{ count: number }>('/notifications/unread-count?exclude=message');
+  const messages = useResource<{ count: number }>('/notifications/unread-count?types=message');
+  const reloadCount = count.reload;
+  const reloadMessages = messages.reload;
+  useLiveRefresh(reloadCount);
+  useLiveRefresh(reloadMessages);
   useEffect(() => {
+    // The notifications page dispatches this after a row is read, so both
+    // indicators settle together instead of waiting for the next poll.
+    const reload = () => { reloadCount(); reloadMessages(); };
     window.addEventListener('social:notifications', reload);
     return () => { window.removeEventListener('social:notifications', reload); };
-  }, [reload]);
+  }, [reloadCount, reloadMessages]);
   const links = [
     { href: '/', label: 'Feed', icon: House }, { href: '/messages', label: 'Messages', icon: MessageSquare },
     { href: '/discover', label: 'Discover', icon: Compass },
@@ -76,6 +85,7 @@ export default function Sidebar({ isSideBarOpen, setSideBarOpen, isCollapsed, se
     <nav className="space-y-2">{links.map(({ href, label, icon: Icon }) => <Link key={href} href={href} title={label} onClick={() => setSideBarOpen(false)} className={`flex items-center gap-3 rounded-xl px-3 py-3 ${pathname === href || (href !== '/' && pathname.startsWith(href + '/')) ? 'bg-blue-50 text-blue-700' : 'text-slate-600 hover:bg-slate-50'}`}>
       <Icon size={21} className="shrink-0" />{!isCollapsed && <span>{label}</span>}
       {href === '/notifications' && !!count.data?.count && <span aria-label={`${count.data.count} unread notifications`} aria-live="polite" className="rounded-full bg-red-500 px-1.5 text-xs text-white">{count.data.count}</span>}
+      {href === '/messages' && !!messages.data?.count && <span aria-label={`${messages.data.count} unread messages`} aria-live="polite" className="flex items-center gap-1 rounded-full bg-teal-600 px-1.5 text-xs text-white"><MessageSquare size={11} aria-hidden="true" />{messages.data.count}</span>}
     </Link>)}</nav>
     <Link href="/create-post" title="Create post" onClick={() => setSideBarOpen(false)} className="mt-6 flex items-center justify-center gap-2 rounded-lg bg-linear-to-r from-blue-600 to-teal-600 p-3 text-white"><CirclePlus size={20} />{!isCollapsed && 'Create Post'}</Link>
     <div className="mt-auto shrink-0 border-t border-border pt-4 space-y-3">
