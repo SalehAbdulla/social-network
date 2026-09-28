@@ -161,6 +161,38 @@ func (re *HandlerContext) ProfilePosts(w http.ResponseWriter, r *http.Request) {
 	respond(w, http.StatusOK, items)
 }
 
+// ProfileMedia backs the profile media tab: the photos a user published in posts
+// and the ones they attached to comments, merged newest first.
+func (re *HandlerContext) ProfileMedia(w http.ResponseWriter, r *http.Request) {
+	offset, ok := re.offset(w, r)
+	if !ok {
+		return
+	}
+	id := r.PathValue("userId")
+	if id == "me" {
+		id = currentUser(r)
+	}
+	if err := re.SocialService.Repo.DoesUserExists(id); err != nil {
+		re.HandleError(w, r, err)
+		return
+	}
+	visible, err := re.SocialService.CanViewProfile(currentUser(r), id)
+	if err != nil {
+		re.HandleError(w, r, err)
+		return
+	}
+	if !visible {
+		re.HandleError(w, r, backend.ErrForbidden)
+		return
+	}
+	items, err := re.SocialService.Repo.ProfileMedia(id, offset, currentUser(r))
+	if err != nil {
+		re.HandleError(w, r, err)
+		return
+	}
+	respond(w, http.StatusOK, items)
+}
+
 func (re *HandlerContext) Follow(w http.ResponseWriter, r *http.Request) {
 	actor, target := currentUser(r), r.PathValue("userId")
 	if r.Method == http.MethodDelete {
