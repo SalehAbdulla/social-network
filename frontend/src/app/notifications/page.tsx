@@ -123,14 +123,14 @@ export default function Notifications() {
           <button disabled={!!deciding} onClick={() => void decide(person.userId, false)} className="rounded-lg border border-border px-3 py-2 text-text disabled:opacity-50">Decline</button>
         </div>
       </div>)}
-      {pending.settled && pending.items.length === 0 && <RequestState empty="No pending follow requests." />}
+      {pending.settled && !pending.error && pending.items.length === 0 && <RequestState empty="No pending follow requests." />}
       {pending.items.length > 0 && <LoadMore loading={pending.loadingMore} hasMore={pending.hasMore} onLoadMore={pending.loadMore} label="Load more requests" endLabel={null} className="py-2" />}
     </section>
     <div className="space-y-3">
       <h2 className="text-lg font-semibold text-text">Activity</h2>
       {notifications.loading && <RowsSkeleton />}
       {notifications.items.map(item => <NotificationCard key={item.notificationId} item={item} busy={busy} mark={mark} />)}
-      {notifications.settled && notifications.items.length === 0 && <RequestState empty="You're all caught up." />}
+      {notifications.settled && !notifications.error && notifications.items.length === 0 && <RequestState empty="You're all caught up." />}
       {notifications.items.length > 0 && <LoadMore loading={notifications.loadingMore} hasMore={notifications.hasMore} onLoadMore={notifications.loadMore} label="Load more notifications" />}
     </div>
   </div>;
