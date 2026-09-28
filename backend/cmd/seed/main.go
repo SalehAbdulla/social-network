@@ -17,6 +17,7 @@ import (
 	"social-network/backend/pkg/app/repositories"
 	"social-network/backend/pkg/config"
 	sqlitedb "social-network/backend/pkg/db/sqlite"
+	"social-network/backend/pkg/models"
 )
 
 const (
@@ -79,7 +80,10 @@ func seedUser(database *repositories.DB, email, nickname, firstName, lastName st
 	}
 
 	userID = uuid.NewString()
-	if err := database.InsertUser(userID, nickname, firstName, lastName, email, string(hashedPassword), "2000-01-01", 2000, "male"); err != nil {
+	if err := database.InsertUser(models.Registration{
+		UserID: userID, Nickname: nickname, FirstName: firstName, LastName: lastName, Email: email,
+		PasswordHash: string(hashedPassword), BirthDate: "2000-01-01", BirthYear: 2000, Gender: "male", IsPublic: true,
+	}); err != nil {
 		return "", false, fmt.Errorf("create dummy user: %w", err)
 	}
 	return userID, true, nil
