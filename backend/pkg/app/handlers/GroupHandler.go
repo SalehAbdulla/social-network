@@ -72,14 +72,16 @@ func (re *HandlerContext) JoinGroup(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	if err := re.GroupService.RequestJoin(id, currentUser(r)); err != nil {
+	if created, err := re.GroupService.RequestJoin(id, currentUser(r)); err != nil {
 		re.HandleError(w, r, err)
 		return
+	} else if created {
+		// The owner is the only one who can act on it, so they get the row.
+		if group, err := re.GroupService.Repo.Group(id, currentUser(r)); err == nil {
+			re.notifyUser(group.OwnerID, currentUser(r), "group_request", id)
+		}
 	}
 	re.groupChanged(id, "request", currentUser(r))
-	if group, err := re.GroupService.Repo.Group(id, currentUser(r)); err == nil {
-		re.notificationsChanged(group.OwnerID)
-	}
 	respond(w, http.StatusOK, nil)
 }
 
@@ -132,11 +134,12 @@ func (re *HandlerContext) InviteToGroup(w http.ResponseWriter, r *http.Request) 
 		re.HandleError(w, r, backend.ErrBadRequest)
 		return
 	}
-	if err := re.GroupService.Invite(groupID, currentUser(r), userID); err != nil {
+	if created, err := re.GroupService.Invite(groupID, currentUser(r), userID); err != nil {
 		re.HandleError(w, r, err)
 		return
+	} else if created {
+		re.notifyUser(userID, currentUser(r), "group_invitation", groupID)
 	}
-	re.notificationsChanged(userID)
 	respond(w, http.StatusOK, nil)
 }
 
