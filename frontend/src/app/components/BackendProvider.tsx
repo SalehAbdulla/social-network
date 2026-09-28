@@ -35,6 +35,7 @@ function AuthenticatedBackend({ children }: { children: React.ReactNode }) {
   const [socket, setSocket] = useState<WebSocket | null>(null);
   const [isSideBarOpen, setSideBarOpen] = useState(false);
   const [isCollapsed, setIsCollapsed] = useState(false);
+  const [reconnecting, setReconnecting] = useState(false);
   const sessionRevision = useRef(0);
 
   const redirectToLogin = useCallback(() => {
@@ -74,9 +75,14 @@ function AuthenticatedBackend({ children }: { children: React.ReactNode }) {
     let retry: ReturnType<typeof setTimeout>;
     let current: WebSocket;
     const connect = () => {
+      // Only a connection that had been open can drop, so a cold start does not
+      // flash the banner before the first handshake completes.
+      let opened = false;
       current = new WebSocket(`${location.protocol === 'https:' ? 'wss:' : 'ws:'}//${location.host}/ws`);
       current.onopen = () => {
         if (stopped) { current.close(); return; }
+        opened = true;
+        setReconnecting(false);
         setSocket(current);
         window.dispatchEvent(new CustomEvent('social:socket', { detail: { type: 'connected', payload: {} } }));
       };
@@ -91,6 +97,7 @@ function AuthenticatedBackend({ children }: { children: React.ReactNode }) {
       current.onclose = () => {
         if (stopped) return;
         setSocket(null);
+        if (opened) setReconnecting(true);
         retry = setTimeout(connect, 3000);
       };
     };
@@ -131,6 +138,7 @@ function AuthenticatedBackend({ children }: { children: React.ReactNode }) {
     <Sidebar isSideBarOpen={isSideBarOpen} setSideBarOpen={setSideBarOpen} isCollapsed={isCollapsed} setIsCollapsed={setIsCollapsed} />
     <main className="relative min-w-0 flex-1">
       <button aria-label="Open navigation" aria-expanded={isSideBarOpen} aria-controls="main-navigation" onClick={() => { setIsCollapsed(false); setSideBarOpen(true); }} className="glass-track fixed left-4 top-4 z-30 rounded-lg p-2 sm:hidden"><Menu size={20} /></button>
+      {reconnecting && <p role="status" aria-live="polite" className="sticky top-0 z-20 bg-amber-100 px-4 py-2 text-center text-xs font-medium text-amber-900">Reconnecting… new messages and notifications may be delayed.</p>}
       {children}
     </main>
   </div></Context.Provider>;
