@@ -56,6 +56,6 @@ export default function PostForm({ post }: { post?: Post }) {
       </div> : <p className="text-sm text-slate-500">You do not have any followers yet.</p>)}
     </fieldset>}
     <ImagePicker files={images} onChange={setImages} existing={existingImages} onRemoveExisting={url => setExistingImages(current => current.filter(image => image !== url))} disabled={busy} />
-    <div className="flex items-center gap-4"><button disabled={busy || (privacy === 'selected' && !followers.data)} className="rounded-lg bg-gradient-to-r from-blue-600 to-teal-600 px-6 py-3 text-white disabled:opacity-50">{busy ? (post ? 'Saving...' : 'Publishing...') : (post ? 'Save changes' : 'Publish Post')}</button>{post && <Link href={`/post/${post.postId}`} className="text-sm text-slate-600">Cancel</Link>}</div>
+    <div className="flex items-center gap-4"><button disabled={busy || (privacy === 'selected' && !followers.data)} className="rounded-lg bg-gradient-to-r from-blue-600 to-teal-700 px-6 py-3 text-white disabled:opacity-50">{busy ? (post ? 'Saving...' : 'Publishing...') : (post ? 'Save changes' : 'Publish Post')}</button>{post && <Link href={`/post/${post.postId}`} className="text-sm text-slate-600">Cancel</Link>}</div>
   </form></div>;
 }
