@@ -9,6 +9,9 @@ type MessageRepository interface {
 	GetChatUsers(currentUserID string) ([]models.ChatUser, error)
 	GetMessages(conversationPartnerID string, currentUserID string, offset int, limit int) ([]models.Message, int, error)
 	SaveMessage(senderID string, recipientID string, textMessage string, media ...string) (models.Message, error)
+	// CanMessage is implemented alongside the social queries; the message
+	// service uses it to enforce the chat rule in one place.
+	CanMessage(actor, target string) (bool, error)
 }
 
 func (db *DB) GetMessages(conversationPartnerID string, currentUserID string, offset int, limit int) ([]models.Message, int, error) {
@@ -90,18 +93,23 @@ func (db *DB) SaveMessage(senderID string, recipientID string, textMessage strin
 }
 
 func (db *DB) GetChatUsers(currentUserID string) ([]models.ChatUser, error) {
+	// Threads whose participants no longer satisfy the chat rule are hidden, not
+	// deleted: the rows stay in `message` and reappear as soon as either user
+	// follows the other again.
 	query := `
         SELECT u.userId,u.nickName,u.firstName,u.lastName,COALESCE(u.avatar,''),MAX(m.createdAt) AS lastMessageTime
         FROM user u JOIN message m ON
             (m.senderId=u.userId AND m.recipientId=?) OR (m.senderId=? AND m.recipientId=u.userId)
         WHERE u.userId<>? AND NOT EXISTS (
             SELECT 1 FROM hidden_message h WHERE h.messageId=m.messageId AND h.userId=?
-        )
+        ) AND (u.isPublic=1 OR EXISTS (
+            SELECT 1 FROM follow f WHERE (f.followerId=? AND f.followedId=u.userId) OR (f.followerId=u.userId AND f.followedId=?)
+        ))
         GROUP BY u.userId
         ORDER BY lastMessageTime DESC,u.nickName ASC
     `
 
-	rows, err := db.Conn.Query(query, currentUserID, currentUserID, currentUserID, currentUserID)
+	rows, err := db.Conn.Query(query, currentUserID, currentUserID, currentUserID, currentUserID, currentUserID, currentUserID)
 	if err != nil {
 		return nil, realtimeforum.ErrInternal
 	}
