@@ -11,6 +11,7 @@ import (
 	pkgwebsocket "social-network/backend/pkg/websocket"
 	"strconv"
 	"strings"
+	"unicode/utf8"
 )
 
 func (re *HandlerContext) GetComments(w http.ResponseWriter, r *http.Request) {
@@ -82,6 +83,15 @@ func (re *HandlerContext) GetComments(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// A comment may carry a small gallery, matching the four-photo cap on posts.
+const maxCommentImages = 4
+
+type createCommentRequest struct {
+	PostID    int      `json:"postId"`
+	Content   string   `json:"content"`
+	ImageURLs []string `json:"imageUrls"`
+}
+
 func (re *HandlerContext) CreateComments(w http.ResponseWriter, r *http.Request) {
 	userID, ok := middleware.UserIDFromContext(r.Context())
 	if !ok || userID == "" {
@@ -89,38 +99,18 @@ func (re *HandlerContext) CreateComments(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	if !re.parseForm(w, r) {
+	req, valid := re.commentInput(w, r, userID)
+	if !valid {
 		return
 	}
+	postId := req.PostID
 
-	postIdStr := strings.TrimSpace(r.FormValue("postId"))
-	if postIdStr == "" {
-		re.HandleError(w, r, realtimeforum.ErrMissingPostId)
-		return
-	}
-
-	postId, err := strconv.Atoi(postIdStr)
-	if err != nil {
-		re.HandleError(w, r, realtimeforum.ErrBadRequest)
-		return
-	}
-
-	content := strings.TrimSpace(r.FormValue("content"))
-	if content == "" || len(content) < 3 || len(content) > 300 {
-		re.HandleError(w, r, realtimeforum.ErrCommentLength)
-		return
-	}
-
-	if !isASCII(content) {
-		re.HandleError(w, r, realtimeforum.ErrNonASCII)
-		return
-	}
 	if _, err := re.PostService.GetPostByID(postId, userID); err != nil {
 		re.HandleError(w, r, err)
 		return
 	}
 
-	response, err := re.CommentService.CreateComment(userID, postId, content)
+	response, err := re.CommentService.CreateComment(userID, postId, req.Content, req.ImageURLs)
 	if err != nil {
 		re.HandleError(w, r, err)
 		return
@@ -165,6 +155,66 @@ func (re *HandlerContext) CreateComments(w http.ResponseWriter, r *http.Request)
 		Data:    response,
 		Message: "Comment created successfully",
 	})
+}
+
+// commentInput reads a comment from a JSON body, falling back to the legacy
+// form encoding so older clients keep working. Text length is counted in runes,
+// which is what lets an emoji comment pass; the old byte-counted ASCII gate is
+// gone because the spec allows an image or GIF on a comment.
+func (re *HandlerContext) commentInput(w http.ResponseWriter, r *http.Request, userID string) (createCommentRequest, bool) {
+	var req createCommentRequest
+	if !re.parseForm(w, r) {
+		return req, false
+	}
+
+	if strings.HasPrefix(r.Header.Get("Content-Type"), "application/json") {
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			re.HandleError(w, r, realtimeforum.ErrBadRequest)
+			return req, false
+		}
+		if req.PostID < 1 {
+			re.HandleError(w, r, realtimeforum.ErrMissingPostId)
+			return req, false
+		}
+	} else {
+		postIDStr := strings.TrimSpace(r.FormValue("postId"))
+		if postIDStr == "" {
+			re.HandleError(w, r, realtimeforum.ErrMissingPostId)
+			return req, false
+		}
+		postID, err := strconv.Atoi(postIDStr)
+		if err != nil {
+			re.HandleError(w, r, realtimeforum.ErrBadRequest)
+			return req, false
+		}
+		req.PostID = postID
+		req.Content = r.FormValue("content")
+		// Repeated `imageUrls` fields carry the gallery in form mode.
+		req.ImageURLs = r.Form["imageUrls"]
+	}
+
+	content := strings.TrimSpace(req.Content)
+	if content == "" || utf8.RuneCountInString(content) < 3 || utf8.RuneCountInString(content) > 300 {
+		re.HandleError(w, r, realtimeforum.ErrCommentLength)
+		return req, false
+	}
+
+	if len(req.ImageURLs) > maxCommentImages {
+		re.HandleError(w, r, realtimeforum.ErrBadRequest)
+		return req, false
+	}
+	for _, url := range req.ImageURLs {
+		if url == "" {
+			re.HandleError(w, r, realtimeforum.ErrBadRequest)
+			return req, false
+		}
+		if err := re.SocialService.ValidateMedia(userID, url, "image"); err != nil {
+			re.HandleError(w, r, err)
+			return req, false
+		}
+	}
+	req.Content = content
+	return req, true
 }
 
 func (re *HandlerContext) DeleteComment(w http.ResponseWriter, r *http.Request) {
