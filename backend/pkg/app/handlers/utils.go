@@ -39,6 +39,9 @@ func (re *HandlerContext) HandleError(w http.ResponseWriter, r *http.Request, er
 	var level slog.Level
 
 	switch err {
+	case realtimeforum.ErrAlreadyFollowing, realtimeforum.ErrFollowPending, realtimeforum.ErrReverseFollowPending:
+		statusCode = http.StatusConflict
+		level = slog.LevelWarn
 	case realtimeforum.ErrBadRequest:
 		statusCode = http.StatusBadRequest
 		level = slog.LevelWarn

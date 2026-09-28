@@ -1,6 +1,6 @@
 # Social Network Project TODO
 
-Legend: `[x]` verified working on `main` @ `16a755b` · `[ ]` open · **P0** blocks a mandatory
+Legend: `[x]` verified working on `main` @ `16a755b` unless an item notes local verification · `[ ]` open · **P0** blocks a mandatory
 spec line · **P1** required before release · **P2** polish · **P3** nice to have.
 
 Baseline checks: `go test ./...` passes, `go vet ./...` is clean, both Docker images build
@@ -14,8 +14,8 @@ notifications with WebSocket push and a sidebar badge, media uploads
 (JPEG/PNG/GIF/WebP/MP4/WebM), stories, and realtime chat with typing, read receipts and
 presence.
 
-Known spec-level gaps, detailed below: the follow-request workflow (P0-1), media on
-comments (P0-2), chat permission rules (P0-3), notification-vs-message distinction (P0-4),
+Known spec-level gaps, detailed below: media on comments (P0-2), chat permission rules
+(P0-3), notification-vs-message distinction (P0-4),
 register-form field parity (P0-5), and durable sessions (P0-6).
 
 ## Working prompt
@@ -55,38 +55,48 @@ first, implementation second.
 
 ## P0 — Spec-critical gaps
 
-### P0-1 · Follow-request workflow (absent)
+### P0-1 · Follow-request workflow (implemented; verified locally)
 
 Spec: following is a request the recipient accepts or declines, and a public profile
-bypasses that. Today `SocialRepository.FollowUser`
-(`backend/pkg/app/repositories/SocialRepository.go:98`) inserts straight into `follow`
-regardless of `isPublic`, and the `connection` table from `000002_social_features.up.sql`
-(`status IN ('pending','accepted')`) is referenced by no Go file.
+bypasses that. Implemented 2026-09-27: private requests use the existing `connection`
+table; public profiles are followed immediately. No migration or existing-follower changes.
 
-- [ ] **P0** Rework `FollowUser`: target `isPublic = 1` → insert into `follow`; private
+Policy: duplicate follows, duplicate pending requests and reverse pending requests return
+409. Reverse requests require explicit acceptance or decline in Notifications. Acceptance
+atomically removes the request and inserts the directional follow; decline/cancel removes
+the request without granting access. Resolved request notifications are removed. Changing
+a profile to public does not auto-accept pending requests. Pending flags are viewer-relative.
+
+Verified: `go build ./...`, `go vet ./...`, `go test ./...` in WSL; `npm run build`;
+`npm run lint` (0 errors, 27 existing warnings); full browser smoke suite, including
+request/decline/cancel/accept and follower-only media access. Windows Application Control
+blocks the installed GCC linker, so browser validation used a temporary WSL-backend adapter
+with Windows Next.js/Chrome. Artifacts: `backend/tmp/integration-1790521877966`.
+
+- [x] **P0** Rework `FollowUser`: target `isPublic = 1` → insert into `follow`; private
   target → insert `connection(requesterId, recipientId, 'pending')`.
-- [ ] **P0** Add pending-in/pending-out flags to `models.SocialUser` and populate them in
+- [x] **P0** Add pending-in/pending-out flags to `models.SocialUser` and populate them in
   `SocialRepository.SocialProfile` so the UI can render Follow / Requested / Following.
-- [ ] **P0** New routes in `backend/cmd/router.go`: `GET /api/v1/follow-requests`
+- [x] **P0** New routes in `backend/cmd/router.go`: `GET /api/v1/follow-requests`
   (incoming pending), `PUT /api/v1/follow-requests/{userId}` (accept → promote to
   `follow`), `DELETE /api/v1/follow-requests/{userId}` (decline → drop the row).
-- [ ] **P0** Repository methods plus `SocialService` validation: no self-requests, reject
+- [x] **P0** Repository methods plus `SocialService` validation: no self-requests, reject
   when already following, already pending, or a reverse request exists (auto-accept that
   case or require an explicit decision — document the choice).
-- [ ] **P0** Add `follow_request` to the three `entityType IN (...)` allow-lists in
+- [x] **P0** Add `follow_request` to the `entityType IN (...)` allow-lists in
   `backend/pkg/app/repositories/NotificationRepository.go` (count, unread count, list) and
   raise the notification when a request is sent.
-- [ ] **P0** Push it over the hub via `re.socialNotification` (`SocialHandler.go:181`),
+- [x] **P0** Push it over the hub via `re.socialNotification`,
   which already handles the `follow` type.
-- [ ] **P0** Frontend: pending-request surface (new page or a section in
+- [x] **P0** Frontend: pending-request surface (a section in
   `frontend/src/app/notifications/page.tsx`) with accept/decline actions.
-- [ ] **P0** Frontend: three-state follow button in `frontend/src/app/profile/page.tsx:86`
-  (`handleToggleFollow`) and `frontend/src/app/discover/page.tsx:27`, which currently use a
-  plain `isFollowing` boolean.
-- [ ] **P1** Keep `DELETE /users/{userId}/follow` working for unfollow, and make it cancel
+- [x] **P0** Frontend: Follow / Requested / Unfollow in `frontend/src/app/profile/page.tsx`,
+  `frontend/src/app/discover/page.tsx` and `FollowListModal.tsx`; click Requested to cancel.
+- [x] **P1** Keep `DELETE /users/{userId}/follow` working for unfollow, and make it cancel
   an outstanding request instead of erroring.
-- [ ] **P1** Test `backend/cmd/follow_request_test.go`: public auto-follow, private pending,
-  accept, decline, duplicate request, self-request, and the notification rows.
+- [x] **P1** Test `backend/cmd/follow_request_test.go`: public auto-follow, private pending,
+  accept, decline, cancel, duplicates, self/reverse requests, authorization, viewer flags,
+  notification rows/counts/WS push, concurrent requests and acceptance rollback.
 
 Acceptance: following a private profile produces a notification, the requester sees
 "Requested" instead of a follower, the follower list only changes after acceptance, and a
@@ -267,6 +277,8 @@ Reference: `GroupHandler.go`, `GroupManagementHandler.go`, `GroupContentHandler.
 - [ ] **P1** Verify the `postVisibility` SQL fragment
   (`SocialRepository.go:113,150` and the `CommentRepository` equivalent) covers every read
   path: feed, single post, profile posts, likes tab, comments, and direct media access.
+  Follow-request smoke investigation: an existing selected audience entry still grants
+  post/media access after unfollow; audit whether that access should require a current follow.
 - [ ] **P1** Add error, empty and loading states for the new P0 flows (follow requests,
   comment media) following the toast convention.
 - [ ] **P1** Reconnect/offline UX: `BackendProvider.tsx:94` retries the socket every 3 s with

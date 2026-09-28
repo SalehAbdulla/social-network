@@ -67,6 +67,8 @@ func TestPrivateProfilePublicPostVisibility(t *testing.T) {
 	}
 
 	alex.call("PUT", "/api/v1/users/dummy-id/follow", nil, 200)
+	alex.call("GET", "/api/v1/post?id="+strconv.Itoa(post.PostId), nil, 404)
+	dummy.call("PUT", "/api/v1/follow-requests/alex-id", nil, 200)
 	alex.call("GET", "/api/v1/post?id="+strconv.Itoa(post.PostId), nil, 200)
 }
 
@@ -306,6 +308,8 @@ func TestSocialIntegration(t *testing.T) {
 		alex.call("GET", "/api/v1/users/dummy-id/posts", nil, 403)
 		alex.call("GET", "/api/v1/users/dummy-id/follows", nil, 403)
 		alex.call("PUT", "/api/v1/users/dummy-id/follow", nil, 200)
+		alex.call("GET", "/api/v1/users/dummy-id/posts", nil, 403)
+		dummy.call("PUT", "/api/v1/follow-requests/alex-id", nil, 200)
 		visible := decoded[models.SocialUser](t, alex.call("GET", "/api/v1/users/dummy-id", nil, 200))
 		if visible.Bio != privateProfile.Bio || len(visible.Followers) != 1 {
 			t.Fatal("follower could not view private profile")
@@ -322,8 +326,8 @@ func TestSocialIntegration(t *testing.T) {
 			t.Fatalf("unexpected discovery: %+v", users)
 		}
 		dummy.call("PUT", "/api/v1/users/dummy-id/follow", nil, 400)
-		dummy.call("PUT", "/api/v1/users/alex-id/follow", nil, 200)
-		dummy.call("PUT", "/api/v1/users/alex-id/follow", nil, 200)
+		dummy.call("PUT", "/api/v1/users/alex-id/follow", nil, 409)
+		dummy.call("PUT", "/api/v1/users/alex-id/follow", nil, 409)
 		profile := decoded[models.SocialUser](t, dummy.call("GET", "/api/v1/users/me", nil, 200))
 		if len(profile.Following) != 1 {
 			t.Fatal("follow must be idempotent")

@@ -14,7 +14,10 @@ export interface SocialUser {
   createdAt: string;
   followers: string[]; 
   following: string[];
+  pendingIncoming: boolean;
+  pendingOutgoing: boolean;
 }
+export interface FollowRequest { userId: string; nickname: string; createdAt: string }
 export interface Post {
   postId: number; userId: string; nickname: string; title: string; content: string;
   imageUrls: string[]; privacy: 'public' | 'followers' | 'selected'; selectedFollowerIds?: string[];

@@ -278,6 +278,43 @@ try {
   await until(dummy, stats(beforeFollow.followers.length), 'owner sees restored count');
   console.log('PASS: profile follow/unfollow and live database counts');
 
+  // A pending follow must not grant access to the private profile or its media.
+  // The previous journey explicitly selected Alex; use follower-based access here.
+  await api(dummy, `/posts/${postId}`, 'PUT', { ...restricted, privacy: 'followers', selectedFollowerIds: [] });
+  await api(alex, `/users/${originalDummy.userId}/follow`, 'DELETE');
+  const privateOwner = await api(dummy, '/users/me');
+  await api(dummy, '/users/me', 'PUT', { ...privateOwner, isPublic: false });
+  await navigate(dummy, '/notifications');
+  await navigate(alex, `/profile/${originalDummy.userId}`);
+  await button(alex, 'Follow');
+  await until(alex, `!!document.querySelector('button[title="Cancel follow request"]')`, 'private profile shows Requested');
+  assert.equal((await api(dummy, '/users/me')).followers.includes(originalAlex.userId), false);
+  assert.equal(await evaluate(alex, `(async () => (await fetch('/api/v1/media/${mediaURL.split('/').pop()}', { cache: 'no-store' })).status)()`), 403);
+  await until(dummy, `document.querySelector('section[aria-label="Follow requests"]').innerText.includes('@alexdemo')`, 'request arrives live');
+  await button(dummy, 'Decline');
+  await until(alex, `!document.querySelector('button[title="Cancel follow request"]') && [...document.querySelectorAll('button')].some(b => b.textContent === 'Follow')`, 'decline restores Follow');
+
+  await navigate(alex, '/discover');
+  await fill(alex, 'input[aria-label="Search people"]', 'dummyuser');
+  await button(alex, 'Search');
+  await until(alex, `document.querySelector('main').innerText.includes('@dummyuser')`, 'find private user');
+  await button(alex, 'Follow');
+  await until(alex, `!!document.querySelector('button[title="Cancel follow request"]')`, 'discovery shows Requested');
+  await button(alex, 'Requested');
+  await until(dummy, `document.querySelector('section[aria-label="Follow requests"]').innerText.includes('No pending follow requests.')`, 'cancel removes incoming request');
+  await until(alex, `!document.querySelector('button[title="Cancel follow request"]')`, 'cancel restores discovery button');
+
+  await button(alex, 'Follow');
+  await navigate(alex, `/profile/${originalDummy.userId}`);
+  await until(alex, `!!document.querySelector('button[title="Cancel follow request"]')`, 'pending survives navigation');
+  await until(dummy, `document.querySelector('section[aria-label="Follow requests"]').innerText.includes('@alexdemo')`, 'second request arrives');
+  await button(dummy, 'Accept');
+  await until(alex, `document.body.innerText.includes('Unfollow') && document.body.innerText.includes(${JSON.stringify(`Updated ${stamp}`)})`, 'accept unlocks private profile live');
+  assert.equal((await api(dummy, '/users/me')).followers.includes(originalAlex.userId), true);
+  assert.equal(await evaluate(alex, `(async () => (await fetch('/api/v1/media/${mediaURL.split('/').pop()}', { cache: 'no-store' })).status)()`), 200);
+  await api(dummy, '/users/me', 'PUT', { ...privateOwner, isPublic: originalDummy.isPublic });
+  console.log('PASS: private follow request, live notification, decline, cancel and accept with media privacy');
+
   await navigate(dummy, '/messages/groups');
   assert(!(await evaluate(dummy, `document.querySelector('aside[aria-label="Main navigation"]').innerText`)).includes('Groups'));
   assert(!(await evaluate(dummy, `document.body.innerText`)).includes('Development user'));

@@ -72,7 +72,7 @@ func (re *HandlerContext) UserProfile(w http.ResponseWriter, r *http.Request) {
 	if id == "" || id == "me" {
 		id = currentUser(r)
 	}
-	u, err := re.SocialService.Repo.SocialProfile(id)
+	u, err := re.SocialService.Repo.SocialProfile(id, currentUser(r))
 	if err != nil {
 		re.HandleError(w, r, err)
 		return
@@ -160,21 +160,49 @@ func (re *HandlerContext) ProfilePosts(w http.ResponseWriter, r *http.Request) {
 
 func (re *HandlerContext) Follow(w http.ResponseWriter, r *http.Request) {
 	actor, target := currentUser(r), r.PathValue("userId")
-	if err := re.SocialService.ValidateTarget(actor, target); err != nil {
-		re.HandleError(w, r, err)
+	if r.Method == http.MethodDelete {
+		if err := re.SocialService.Unfollow(actor, target); err != nil {
+			re.HandleError(w, r, err)
+			return
+		}
+		re.chatEvent(actor, target, "social_changed", map[string]string{"actorId": actor, "targetId": target})
+		respond(w, http.StatusOK, nil)
 		return
 	}
-	changed, err := re.SocialService.Repo.FollowUser(actor, target, r.Method == http.MethodPut)
+	status, err := re.SocialService.Follow(actor, target)
 	if err != nil {
 		re.HandleError(w, r, err)
 		return
 	}
-	if changed {
-		if r.Method == http.MethodPut {
-			re.socialNotification(actor, target, "follow")
-		}
-		re.chatEvent(actor, target, "social_changed", map[string]string{"actorId": actor, "targetId": target})
+	kind := "follow"
+	if status == "pending" {
+		kind = "follow_request"
 	}
+	re.socialNotification(actor, target, kind)
+	re.chatEvent(actor, target, "social_changed", map[string]string{"actorId": actor, "targetId": target})
+	respond(w, http.StatusOK, map[string]string{"status": status})
+}
+
+func (re *HandlerContext) FollowRequests(w http.ResponseWriter, r *http.Request) {
+	offset, ok := re.offset(w, r)
+	if !ok {
+		return
+	}
+	items, err := re.SocialService.FollowRequests(currentUser(r), offset)
+	if err != nil {
+		re.HandleError(w, r, err)
+		return
+	}
+	respond(w, http.StatusOK, items)
+}
+
+func (re *HandlerContext) DecideFollowRequest(w http.ResponseWriter, r *http.Request) {
+	recipient, requester := currentUser(r), r.PathValue("userId")
+	if err := re.SocialService.DecideFollowRequest(recipient, requester, r.Method == http.MethodPut); err != nil {
+		re.HandleError(w, r, err)
+		return
+	}
+	re.chatEvent(recipient, requester, "social_changed", map[string]string{"actorId": recipient, "targetId": requester})
 	respond(w, http.StatusOK, nil)
 }
 
@@ -220,7 +248,7 @@ func (re *HandlerContext) FollowLists(w http.ResponseWriter, r *http.Request) {
 	for name, ids := range groups {
 		result[name] = []models.SocialUser{}
 		for _, memberID := range ids {
-			profile, err := re.SocialService.Repo.SocialProfile(memberID)
+			profile, err := re.SocialService.Repo.SocialProfile(memberID, currentUser(r))
 			if err != nil {
 				re.HandleError(w, r, err)
 				return

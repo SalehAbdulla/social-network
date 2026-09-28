@@ -91,7 +91,7 @@ export default function Profile() {
     try {
       await request(
         `/users/${profileId}/follow`,
-        isFollowing ? 'DELETE' : 'PUT',
+        isFollowing || profile.data?.pendingOutgoing ? 'DELETE' : 'PUT',
       );
 
       await refreshUser();
@@ -250,6 +250,8 @@ function ProfileHeader({
             </button>
           ) : (
             <ProfileActions
+              pendingOutgoing={profile.pendingOutgoing}
+              pendingIncoming={profile.pendingIncoming}
               isFollowing={isFollowing}
               isFollowingBusy={isFollowingBusy}
               profileId={profile.userId}
@@ -311,6 +313,8 @@ function ProfileHeader({
 }
 
 type ProfileActionsProps = {
+  pendingOutgoing: boolean;
+  pendingIncoming: boolean;
   profileId: string;
   isFollowing: boolean;
   isFollowingBusy: boolean;
@@ -318,6 +322,8 @@ type ProfileActionsProps = {
 };
 
 function ProfileActions({
+  pendingOutgoing,
+  pendingIncoming,
   profileId,
   isFollowing,
   isFollowingBusy,
@@ -325,9 +331,11 @@ function ProfileActions({
 }: ProfileActionsProps) {
   return (
     <div className="flex flex-wrap gap-2">
+      {pendingIncoming && <Link href="/notifications" className="rounded-lg border border-border px-4 py-2 text-brand-1">Review follow request</Link>}
       <button
         type="button"
-        disabled={isFollowingBusy}
+        disabled={isFollowingBusy || (pendingIncoming && !isFollowing)}
+        title={pendingOutgoing ? 'Cancel follow request' : isFollowing ? 'Unfollow' : undefined}
         onClick={onToggleFollow}
         className="rounded-lg border border-blue-200 px-4 py-2 text-blue-700 disabled:opacity-50"
       >
@@ -335,7 +343,7 @@ function ProfileActions({
           ? 'Updating...'
           : isFollowing
             ? 'Unfollow'
-            : 'Follow'}
+            : pendingOutgoing ? 'Requested' : 'Follow'}
       </button>
 
       <Link
