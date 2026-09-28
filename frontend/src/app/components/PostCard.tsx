@@ -4,10 +4,11 @@ import { useState } from 'react';
 import Link from 'next/link';
 import { ArrowDown, ArrowUp, MessageCircle, Share2, Trash2, Pencil } from 'lucide-react';
 import toast from 'react-hot-toast';
-import { type Post, type Comment, dateLabel, errorMessage, request } from '../api/social';
+import { type Post, type Comment, dateLabel, errorMessage, request, upload } from '../api/social';
 import { useBackend } from './BackendProvider';
 import { usePagedList } from '../lib/usePagedList';
 import Avatar from './Avatar';
+import ImagePicker from './ImagePicker';
 import LoadMore from './LoadMore';
 import Loading from './Loading';
 
@@ -30,6 +31,7 @@ function Comments({ post, onCountChange }: { post: Post; onCountChange: (delta: 
   });
 
   const [text, setText] = useState('');
+  const [images, setImages] = useState<File[]>([]);
   const [editing, setEditing] = useState<number | null>(null);
   const [busy, setBusy] = useState(false);
   async function submit(event: React.FormEvent) {
@@ -40,12 +42,15 @@ function Comments({ post, onCountChange }: { post: Post; onCountChange: (delta: 
         await request(`/posts/comments/${id}`, 'PUT', { content: text });
         comments.update(items => items.map(item => item.commentId === id ? { ...item, commentText: text } : item));
       } else {
-        await request('/posts/comments', 'POST', new URLSearchParams({ postId: String(post.postId), content: text }));
+        // The composer holds files; only the uploaded URLs travel with the comment.
+        const imageUrls: string[] = [];
+        for (const file of images) imageUrls.push((await upload(file)).url);
+        await request('/posts/comments', 'POST', { postId: post.postId, content: text, imageUrls });
         // Newest-first ordering, so a new comment belongs on the first page.
         comments.reload();
         onCountChange(1);
       }
-      setText(''); setEditing(null);
+      setText(''); setEditing(null); setImages([]);
     } catch (error) { toast.error(errorMessage(error)); } finally { setBusy(false); }
   }
   // Comment mutations patch the loaded rows instead of re-reading a page, which
@@ -63,9 +68,11 @@ function Comments({ post, onCountChange }: { post: Post; onCountChange: (delta: 
     } catch (error) { toast.error(errorMessage(error)); } finally { setBusy(false); }
   }
   return <div className="space-y-4 border-t border-slate-100 pt-4">
-    <form onSubmit={submit} className="space-y-2"><label className="block text-sm font-medium" htmlFor={`comment-${post.postId}`}>{editing ? 'Edit comment' : 'Add a comment'}</label><textarea id={`comment-${post.postId}`} required minLength={3} maxLength={300} value={text} onChange={event => setText(event.target.value)} className="w-full rounded-lg border border-slate-200 p-3 text-sm" /><div className="flex gap-3"><button disabled={busy} className="rounded-lg bg-blue-600 px-4 py-2 text-sm text-white disabled:opacity-50">{editing ? 'Save comment' : 'Comment'}</button>{editing && <button type="button" onClick={() => { setEditing(null); setText(''); }}>Cancel</button>}</div></form>
+    <form onSubmit={submit} className="space-y-2"><label className="block text-sm font-medium" htmlFor={`comment-${post.postId}`}>{editing ? 'Edit comment' : 'Add a comment'}</label><textarea id={`comment-${post.postId}`} required minLength={3} maxLength={300} value={text} onChange={event => setText(event.target.value)} className="w-full rounded-lg border border-slate-200 p-3 text-sm" />
+      {!editing && <ImagePicker files={images} onChange={setImages} max={4} disabled={busy} />}
+      <div className="flex gap-3"><button disabled={busy} className="rounded-lg bg-blue-600 px-4 py-2 text-sm text-white disabled:opacity-50">{editing ? 'Save comment' : 'Comment'}</button>{editing && <button type="button" onClick={() => { setEditing(null); setText(''); }}>Cancel</button>}</div></form>
     {comments.loading && <Loading height={56} label="Loading comments" />}
-    {comments.items.map(comment => <div key={comment.commentId} className="rounded-xl bg-slate-50 p-3 space-y-2"><div className="flex justify-between gap-2"><Link href={`/profile/${comment.userId}`} className="text-sm font-semibold">@{comment.nickname || user.nickname}</Link><span className="text-xs text-slate-400">{dateLabel(comment.createdAt)}</span></div><p className="whitespace-pre-wrap break-words text-sm">{comment.commentText}</p><div className="flex items-center gap-3 text-xs text-slate-500">
+    {comments.items.map(comment => <div key={comment.commentId} className="rounded-xl bg-slate-50 p-3 space-y-2"><div className="flex justify-between gap-2"><Link href={`/profile/${comment.userId}`} className="text-sm font-semibold">@{comment.nickname || user.nickname}</Link><span className="text-xs text-slate-400">{dateLabel(comment.createdAt)}</span></div><p className="whitespace-pre-wrap break-words text-sm">{comment.commentText}</p>{!!comment.imageUrls?.length && <div className={`grid gap-2 ${comment.imageUrls.length > 1 ? 'grid-cols-2' : ''}`}>{comment.imageUrls.map(url => <a key={url} href={url} target="_blank" rel="noreferrer"><img src={url} alt="Comment attachment" className="aspect-square max-h-72 w-full rounded-lg bg-white object-contain" /></a>)}</div>}<div className="flex items-center gap-3 text-xs text-slate-500">
       <button type="button" disabled={busy} aria-label="Upvote comment" aria-pressed={comment.userScore === 1} className={comment.userScore === 1 ? 'text-blue-600' : ''} onClick={() => void react(comment, 1)}><ArrowUp size={15} /></button><span>{comment.score}</span><button type="button" disabled={busy} aria-label="Downvote comment" aria-pressed={comment.userScore === -1} className={comment.userScore === -1 ? 'text-blue-600' : ''} onClick={() => void react(comment, -1)}><ArrowDown size={15} /></button>
       {comment.userId === user.userId && <><button aria-label="Edit comment" onClick={() => { setEditing(comment.commentId); setText(comment.commentText); }}><Pencil size={14} /></button><button disabled={busy} aria-label="Delete comment" onClick={() => void mutate(() => request(`/posts/comments?id=${comment.commentId}`, 'DELETE'), () => { comments.update(items => items.filter(item => item.commentId !== comment.commentId)); onCountChange(-1); })}><Trash2 size={14} /></button></>}
     </div></div>)}
