@@ -27,6 +27,7 @@ import FollowListModal, {
 } from '../components/FollowListModal';
 import Loading from '../components/Loading';
 import LoadMore from '../components/LoadMore';
+import MessageAction from '../components/MessageAction';
 import PostCard from '../components/PostCard';
 import RequestState from '../components/RequestState';
 import { PostListSkeleton } from '../components/Skeletons';
@@ -286,6 +287,7 @@ function ProfileHeader({
             <ProfileActions
               pendingOutgoing={profile.pendingOutgoing}
               pendingIncoming={profile.pendingIncoming}
+              canMessage={profile.canMessage === true}
               isFollowing={isFollowing}
               isFollowingBusy={isFollowingBusy}
               profileId={profile.userId}
@@ -349,6 +351,7 @@ function ProfileHeader({
 type ProfileActionsProps = {
   pendingOutgoing: boolean;
   pendingIncoming: boolean;
+  canMessage: boolean;
   profileId: string;
   isFollowing: boolean;
   isFollowingBusy: boolean;
@@ -358,6 +361,7 @@ type ProfileActionsProps = {
 function ProfileActions({
   pendingOutgoing,
   pendingIncoming,
+  canMessage,
   profileId,
   isFollowing,
   isFollowingBusy,
@@ -380,12 +384,11 @@ function ProfileActions({
             : pendingOutgoing ? 'Requested' : 'Follow'}
       </button>
 
-      <Link
-        href={`/messages/${profileId}`}
+      <MessageAction
+        userId={profileId}
+        allowed={canMessage}
         className="rounded-lg bg-blue-600 px-4 py-2 text-white"
-      >
-        Message
-      </Link>
+      />
     </div>
   );
 }
