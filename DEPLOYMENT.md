@@ -17,7 +17,7 @@ Put an HTTPS reverse proxy in front of port 4000, preserve the Host and Origin h
 | `PORT` | Listening port, default 5174 |
 | `LOG_LEVEL` | Logging verbosity |
 
-The frontend container listens on port 4000. `NEXT_PUBLIC_DEV_USER` must remain unset for production builds. Sessions currently live in backend memory, expire after 30 days, and are revoked by logout or a subsequent login; backend restarts require users to log in again. Run one backend instance with SQLite. Scale only after introducing a shared session store and database strategy.
+The frontend container listens on port 4000. Sessions are stored in the `session` table, so they survive a backend restart. A session expires after 14 days without activity or 30 days after login, whichever comes first, and is revoked by logout or a subsequent login; expired rows are pruned at startup and then hourly. Session state is therefore shared through the database, but SQLite still serialises writers: run one backend instance and move to a server database before scaling out.
 
 Application request limits are 20 login/register attempts and 1,200 other requests per minute per direct peer. Because Next.js proxies requests, deploy additional per-client rate limiting at the public reverse proxy. Do not trust arbitrary client-supplied forwarding headers. API bodies are limited to 1 MiB except uploads (51 MiB); configure the proxy to allow that upload size and a suitable upload timeout.
 
