@@ -628,6 +628,36 @@ func TestLiveConnectionUpdates(t *testing.T) {
 	alex.call("PUT", "/api/v1/users/dummy-id/follow", nil, 200)
 	readUpdate(dummySocket, "alex-id")
 
+	// The group flows push the created notification itself, the same shape the
+	// comment, message and follow paths send, so a client no longer has to refetch
+	// to learn what happened.
+	readNotification := func(socket *websocket.Conn) notification.NotificationDTO {
+		t.Helper()
+		socket.SetReadDeadline(time.Now().Add(3 * time.Second))
+		for {
+			_, data, err := socket.ReadMessage()
+			if err != nil {
+				t.Fatal(err)
+			}
+			for _, line := range bytes.Split(data, []byte("\n")) {
+				var event struct {
+					Type    string          `json:"type"`
+					Payload json.RawMessage `json:"payload"`
+				}
+				if err := json.Unmarshal(line, &event); err != nil {
+					t.Fatal(err)
+				}
+				if event.Type == "notification" {
+					var created notification.NotificationDTO
+					if err := json.Unmarshal(event.Payload, &created); err != nil {
+						t.Fatal(err)
+					}
+					return created
+				}
+			}
+		}
+	}
+	// Marking everything read still announces a change without a row.
 	readNotificationChange := func(socket *websocket.Conn) {
 		t.Helper()
 		socket.SetReadDeadline(time.Now().Add(3 * time.Second))
@@ -652,9 +682,15 @@ func TestLiveConnectionUpdates(t *testing.T) {
 	group := decoded[models.Group](t, dummy.call("POST", "/api/v1/groups", map[string]string{"title": "Live notifications"}, 201))
 	base := fmt.Sprintf("/api/v1/groups/%d", group.GroupID)
 	dummy.call("POST", base+"/invite/alex-id", nil, 200)
-	readNotificationChange(alexSocket)
+	invited := readNotification(alexSocket)
+	if invited.EntityType != "group_invitation" || invited.EntityId != group.GroupID || invited.ActorId != "dummy-id" {
+		t.Fatalf("unexpected invitation frame: %+v", invited)
+	}
 	alex.call("POST", base+"/join", nil, 200)
-	readNotificationChange(dummySocket)
+	requested := readNotification(dummySocket)
+	if requested.EntityType != "group_request" || requested.EntityId != group.GroupID || requested.ActorId != "alex-id" {
+		t.Fatalf("unexpected join request frame: %+v", requested)
+	}
 	dummy.call("PATCH", "/api/v1/notifications/read-all", nil, 200)
 	readNotificationChange(dummySocket)
 }
