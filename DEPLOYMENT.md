@@ -27,10 +27,26 @@ API responses carry `X-Content-Type-Options: nosniff`, `Referrer-Policy: same-or
 
 API bodies are limited to 1 MiB except uploads (51 MiB); configure the proxy to allow that upload size and a suitable upload timeout.
 
+Uploads are stricter than that body limit. A JPEG, PNG, GIF or WebP image may be at most 10 MB and a video at most 50 MB, and an image may not exceed 40 megapixels. The type is taken from the bytes, never from the filename or the client's `Content-Type`: a `photo.png` holding GIF bytes is stored and served as `image/gif`, and an HTML or PDF payload wearing an image extension is refused with `400` because the sniffed type is not on the allowed list. An empty file is a `400` too, while anything over a size ceiling is answered `413`, which says the request was well formed and simply too large; both bodies carry a message naming the limit so the client can show it. Uploaded media is referenced by URL from posts, comments, stories, messages, group content, avatars, cover photos and group images, and nothing unlinks it when the referencing row is deleted, so a collector removes media rows nothing points at together with their files, and lets an upload that was never attached expire. It runs at startup and then hourly with a 24-hour grace window (an upload is always followed by the request that attaches it, so the window only has to outlast a slow form), and logs how many rows and files it reclaimed. Expired stories release their media too, because a story past `expiresAt` can never be served again. Expect storage for a deleted post, comment, story or message to be reclaimed within a day.
+
 Back up the database using SQLite's backup API or stop the backend before copying `/data`; include uploads in the same backup. Test restoring a backup before release. Back up before applying new migrations. Do not delete the volume to upgrade: rebuild and restart the images. Roll back the application only with a compatible schema or a tested backup restore.
 
 ## Release checks
 
-Run `go test ./...` and `go vet ./...` from backend; run `npm ci`, `npm run lint`, `npm run build`, and `npm run test:integration` from frontend. Browser tests require Chrome (`CHROME_PATH` overrides its executable path). They create an isolated database under backend/tmp and leave logs/screenshots there. Run `npm audit` and `govulncheck ./...` for dependency advisories, and `docker compose config` plus `docker compose build` to verify containers on a Docker host.
+`.github/workflows/ci.yml` runs this list on every push and pull request, so it doubles as the pipeline: Go `build`, `vet`, `test` and `govulncheck` for the backend; `npm ci`, `npm run lint`, `npx tsc --noEmit`, `npm run build` and a reported `npm audit` for the frontend; then `docker compose config` and `docker compose build`. By hand:
+
+```sh
+cd backend  && go build ./... && go vet ./... && go test ./...
+cd frontend && npm ci && npm run lint && npx tsc --noEmit && npm run build
+cd frontend && npm run test:integration
+```
+
+Browser tests require Chrome (`CHROME_PATH` overrides its executable path). They create an isolated database under backend/tmp and leave logs/screenshots there. They are not part of CI yet: they need a Chrome path on the runner and several minutes, which the workflow keeps separate for now.
+
+### Dependency advisories
+
+`govulncheck ./...` reports three standard-library findings (`crypto/tls`, `net/http` in an unencrypted HTTP/2 protocol check, and `encoding/asn1` recursion), all fixed in **go1.26.6**. Both the Dockerfile base image (`golang:1.26-bookworm`) and CI install a current 1.26 patch, so rebuilding with an up-to-date toolchain clears them; pinning an older Go patch would keep them, which is why the workflow floats the patch version and CI runs `govulncheck` as a blocking step.
+
+`npm audit` reports four high and one critical advisory, every one of them inside Next.js tooling, and the only fix it offers is `npm install next@16.3.6`, which is outside the pinned range — the bump is tracked in `TODO.md`. None is reachable in this deployment: the two Next.js RCEs need a Windows-hosted server (production runs on Linux) and the image-optimisation API with AVIF input, and no component uses `next/image`, so that endpoint is never called; `sharp` is the optimiser's native library and is unused for the same reason; `postcss` and `js-yaml` run only at build time over our own checked-in CSS and config; `nanoid`'s advisory needs a caller that passes a size of zero. CI reports the audit rather than failing on it so a new advisory stays visible without hiding a real break, and `next/image` should not be adopted before the framework bump.
 
 Security reference: [OWASP session management guidance](https://cheatsheetseries.owasp.org/cheatsheets/Session_Management_Cheat_Sheet.html).
