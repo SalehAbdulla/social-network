@@ -6,6 +6,7 @@ import { useParams } from 'next/navigation';
 import toast from 'react-hot-toast';
 
 import {
+  type MediaItem,
   type Post,
   type SocialUser,
   type SocketEvent,
@@ -64,6 +65,18 @@ export default function Profile() {
     enabled: !!profile.data && canViewProfile,
   });
 
+  // The media tab lists post and comment photos together, so it reads its own
+  // endpoint instead of deriving the grid from the posts above.
+  const media = usePagedList<MediaItem, MediaItem[]>({
+    key: `/users/${profileId}/media`,
+    // No query in the key, so the first page parameter carries the `?` itself.
+    pageQuery: page => `?offset=${(page - 1) * POSTS_PER_PAGE}`,
+    pageSize: POSTS_PER_PAGE,
+    normalize: raw => ({ items: raw }),
+    keyOf: item => `${item.postId}-${item.url}`,
+    enabled: !!profile.data && canViewProfile && activeTab === 'media',
+  });
+
 
   const [isEditing, setIsEditing] = useState(false);
   const [followListTab, setFollowListTab] = useState<FollowListTab | null>(null);
@@ -79,6 +92,7 @@ export default function Profile() {
       if (eventType === 'social_changed' || eventType === 'connected') {
         profile.reload();
         posts.reload();
+        media.reload();
       }
     };
 
@@ -87,7 +101,7 @@ export default function Profile() {
     return () => {
       window.removeEventListener('social:socket', handleSocketEvent);
     };
-  }, [profile.reload, posts.reload]);
+  }, [profile.reload, posts.reload, media.reload]);
 
   async function handleToggleFollow() {
     if (isFollowingBusy) return;
@@ -147,37 +161,46 @@ export default function Profile() {
                 onChange={handleTabChange}
               />
 
-              {/* Posts */}
-              {posts.loading && <PostListSkeleton />}
+              {/* Posts and media */}
+              {(activeTab === 'media' ? media.loading : posts.loading) && <PostListSkeleton />}
 
-              {!posts.loading && (activeTab === 'media' ? (
-                <MediaGrid posts={posts.items} />
+              {activeTab === 'media' ? (
+                <MediaGrid items={media.items} />
               ) : (
                 <PostList
                   posts={posts.items}
                   onRemoved={postId => posts.update(items => items.filter(item => item.postId !== postId))}
                 />
-              ))}
+              )}
 
               {/* Empty state */}
-              {posts.settled && !posts.error && posts.items.length === 0 && (
-                <RequestState
-                  empty={
-                    activeTab === 'likes'
-                      ? 'No liked posts yet.'
-                      : 'No posts yet.'
-                  }
-                />
-              )}
+              {activeTab === 'media'
+                ? media.settled && !media.error && media.items.length === 0 && (
+                    <RequestState empty="No photos yet." />
+                  )
+                : posts.settled && !posts.error && posts.items.length === 0 && (
+                    <RequestState
+                      empty={activeTab === 'likes' ? 'No liked posts yet.' : 'No posts yet.'}
+                    />
+                  )}
 
-              {posts.items.length > 0 && (
-                <LoadMore
-                  loading={posts.loadingMore}
-                  hasMore={posts.hasMore}
-                  onLoadMore={posts.loadMore}
-                  label="Load more posts"
-                />
-              )}
+              {activeTab === 'media'
+                ? media.items.length > 0 && (
+                    <LoadMore
+                      loading={media.loadingMore}
+                      hasMore={media.hasMore}
+                      onLoadMore={media.loadMore}
+                      label="Load more photos"
+                    />
+                  )
+                : posts.items.length > 0 && (
+                    <LoadMore
+                      loading={posts.loadingMore}
+                      hasMore={posts.hasMore}
+                      onLoadMore={posts.loadMore}
+                      label="Load more posts"
+                    />
+                  )}
             </>
           )}
 
@@ -232,7 +255,7 @@ function ProfileHeader({
   return (
     <section className="overflow-hidden rounded-xl bg-white shadow-sm">
       {/* Cover */}
-      <div className="h-44 bg-linear-to-r from-blue-200 to-teal-100">
+      <div className="h-44 bg-linear-to-r from-brand-1/30 to-brand-2/25">
         {profile.coverPhoto && (
           <img
             src={profile.coverPhoto}
@@ -426,21 +449,13 @@ function PostList({
 }
 
 type MediaGridProps = {
-  posts: Post[];
+  items: MediaItem[];
 };
 
-function MediaGrid({ posts }: MediaGridProps) {
-  const media = posts.flatMap((post) =>
-    (post.imageUrls || []).map((url) => ({
-      url,
-      postId: post.postId,
-      title: post.title,
-    })),
-  );
-
+function MediaGrid({ items }: MediaGridProps) {
   return (
     <div className="grid grid-cols-2 gap-3">
-      {media.map((item) => (
+      {items.map((item) => (
         <Link
           key={`${item.postId}-${item.url}`}
           href={`/post/${item.postId}`}
