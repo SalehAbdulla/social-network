@@ -3,14 +3,144 @@
 
 @import "tailwindcss";
 
+/* Class-based dark mode. The `dark` class is put on <html> by the inline script
+   in layout.tsx before the first paint, and kept in sync by ThemeProvider. */
+@custom-variant dark (&:where(.dark, .dark *));
+
+/* ---------------------------------------------------------------------------
+   Theme tokens
+   Raw values live here and in `.dark` below, so each theme is restyled in one
+   block. `@theme inline` maps them onto Tailwind's colour namespace, which is
+   what makes utilities such as `bg-card`, `text-muted` or `border-border` flip
+   at runtime instead of being frozen at build time.
+--------------------------------------------------------------------------- */
+:root {
+  color-scheme: light;
+
+  --ui-brand-1: #2563eb;
+  --ui-brand-2: #0d9488;
+  --ui-brand-ink: #0f3057;
+  --ui-brand-deep: #0b1f3a;
+
+  --ui-bg: #eef2f7;
+  --ui-bg-grad-1: #eef4ff;
+  --ui-bg-grad-2: #e7f7f5;
+
+  --ui-card: #ffffff;
+  --ui-card-2: #f8fafc;
+  --ui-surface-2: #f1f5f9;
+  --ui-text: #162033;
+  --ui-muted: #5b6b83;
+  --ui-border: #e3e9f2;
+  --ui-ring: rgba(37, 99, 235, 0.18);
+
+  --ui-accent: #059669;
+  --ui-danger: #dc2626;
+  --ui-warn: #d97706;
+
+  /* Glass surfaces: a translucent tint, the blur applied to whatever sits
+     behind it, a specular 1px edge and an inset highlight on the rim. */
+  --ui-glass: rgba(255, 255, 255, 0.55);
+  --ui-glass-strong: rgba(255, 255, 255, 0.78);
+  --ui-glass-border: rgba(255, 255, 255, 0.72);
+  --ui-glass-highlight: rgba(255, 255, 255, 0.9);
+  --ui-glass-shadow: 0 12px 32px -16px rgba(15, 48, 87, 0.35);
+  --ui-glass-blur: 18px;
+  /* Track tint and inset for switch grooves: a plain translucent white
+     disappears against the light sidebar. */
+  --ui-glass-track: rgba(226, 232, 240, 0.75);
+  --ui-glass-inset: rgba(15, 48, 87, 0.18);
+
+  --ui-chat-bg: #f3f7f6;
+  --ui-chat-dots: #cfddd7;
+}
+
+.dark {
+  color-scheme: dark;
+
+  --ui-brand-1: #60a5fa;
+  --ui-brand-2: #2dd4bf;
+  --ui-brand-ink: #dbe7ff;
+  --ui-brand-deep: #eef4ff;
+
+  --ui-bg: #070b15;
+  --ui-bg-grad-1: #0b1326;
+  --ui-bg-grad-2: #06201f;
+
+  --ui-card: #101a2b;
+  --ui-card-2: #0c1524;
+  --ui-surface-2: #17243c;
+  --ui-text: #e7eefc;
+  --ui-muted: #93a4bf;
+  --ui-border: #24314b;
+  --ui-ring: rgba(96, 165, 250, 0.35);
+
+  --ui-accent: #34d399;
+  --ui-danger: #f87171;
+  --ui-warn: #fbbf24;
+
+  --ui-glass: rgba(255, 255, 255, 0.06);
+  --ui-glass-strong: rgba(255, 255, 255, 0.13);
+  --ui-glass-border: rgba(255, 255, 255, 0.16);
+  --ui-glass-highlight: rgba(255, 255, 255, 0.22);
+  --ui-glass-shadow: 0 18px 44px -20px rgba(0, 0, 0, 0.9);
+  --ui-glass-blur: 18px;
+  --ui-glass-track: rgba(255, 255, 255, 0.1);
+  --ui-glass-inset: rgba(0, 0, 0, 0.5);
+
+  --ui-chat-bg: #0a1220;
+  --ui-chat-dots: #1e2c44;
+}
+
+@theme inline {
+  --color-brand-1: var(--ui-brand-1);
+  --color-brand-2: var(--ui-brand-2);
+  --color-brand-ink: var(--ui-brand-ink);
+  --color-brand-deep: var(--ui-brand-deep);
+
+  --color-bg: var(--ui-bg);
+  --color-bg-grad-1: var(--ui-bg-grad-1);
+  --color-bg-grad-2: var(--ui-bg-grad-2);
+
+  --color-card: var(--ui-card);
+  --color-card-2: var(--ui-card-2);
+  --color-surface-2: var(--ui-surface-2);
+  --color-text: var(--ui-text);
+  --color-muted: var(--ui-muted);
+  --color-border: var(--ui-border);
+  --color-ring: var(--ui-ring);
+
+  --color-accent: var(--ui-accent);
+  --color-danger: var(--ui-danger);
+  --color-warn: var(--ui-warn);
+}
+
 @layer components {
-  .chat-primary { @apply rounded-xl bg-teal-700 px-4 py-2.5 text-sm font-medium text-white transition hover:bg-teal-800 disabled:cursor-not-allowed disabled:opacity-40; }
-  .chat-secondary { @apply rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-600 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40; }
-  .chat-icon { @apply flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-slate-500 transition hover:bg-slate-100; }
-  .chat-label { @apply block text-sm font-medium text-slate-700; }
-  .chat-field { @apply mt-2 block w-full rounded-xl border border-slate-200 bg-white p-3 text-sm font-normal text-slate-800 outline-none focus:border-teal-500 focus:ring-2 focus:ring-teal-100; }
-  .chat-menu { @apply block w-full rounded-lg px-3 py-2 text-left hover:bg-slate-50 disabled:opacity-40; }
-  .chat-background { background-color: #f3f7f6; background-image: radial-gradient(#cfddd7 0.7px, transparent 0.7px); background-size: 18px 18px; }
+  .chat-primary { @apply rounded-xl bg-teal-700 px-4 py-2.5 text-sm font-medium text-white transition hover:bg-teal-800 disabled:cursor-not-allowed disabled:opacity-40 dark:bg-teal-500 dark:text-teal-950 dark:hover:bg-teal-400; }
+  .chat-secondary { @apply rounded-xl border border-border bg-card px-3 py-2 text-sm font-medium text-muted transition hover:bg-surface-2 disabled:cursor-not-allowed disabled:opacity-40; }
+  .chat-icon { @apply flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-muted transition hover:bg-surface-2; }
+  .chat-label { @apply block text-sm font-medium text-text; }
+  .chat-field { @apply mt-2 block w-full rounded-xl border border-border bg-card p-3 text-sm font-normal text-text outline-none placeholder:text-muted focus:border-brand-2 focus:ring-2 focus:ring-ring; }
+  .chat-menu { @apply block w-full rounded-lg px-3 py-2 text-left text-text hover:bg-surface-2 disabled:opacity-40; }
+  .chat-background { background-color: var(--ui-chat-bg); background-image: radial-gradient(var(--ui-chat-dots) 0.7px, transparent 0.7px); background-size: 18px 18px; }
+
+  /* Frosted glass. Use `glass` over patterned backgrounds and `glass-strong`
+     for controls and panels that need their content to stay legible. */
+  .glass, .glass-strong {
+    -webkit-backdrop-filter: blur(var(--ui-glass-blur)) saturate(180%);
+    backdrop-filter: blur(var(--ui-glass-blur)) saturate(180%);
+    box-shadow: inset 0 1px 0 var(--ui-glass-highlight), var(--ui-glass-shadow);
+  }
+  .glass { border: 1px solid var(--ui-glass-border); background-color: var(--ui-glass); }
+  .glass-strong { border: 1px solid var(--ui-glass-border); background-color: var(--ui-glass-strong); }
+  /* A recessed groove for switch tracks and small chrome buttons. */
+  .glass-track {
+    border: 1px solid var(--ui-glass-border);
+    background-color: var(--ui-glass-track);
+    -webkit-backdrop-filter: blur(var(--ui-glass-blur)) saturate(180%);
+    backdrop-filter: blur(var(--ui-glass-blur)) saturate(180%);
+    box-shadow: inset 0 1px 3px var(--ui-glass-inset), inset 0 1px 0 var(--ui-glass-highlight), var(--ui-glass-shadow);
+  }
 }
 
 button, summary, a, input, textarea, select { @apply focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-600; }
@@ -25,26 +155,6 @@ button:not(:disabled) { cursor: pointer; }
 }
 
 @theme {
-  --color-brand-1: #2563eb;
-  --color-brand-2: #0d9488;
-  --color-brand-ink: #0f3057;
-  --color-brand-deep: #0b1f3a;
-
-  --color-bg: #eef2f7;
-  --color-bg-grad-1: #eef4ff;
-  --color-bg-grad-2: #e7f7f5;
-
-  --color-card: #ffffff;
-  --color-card-2: #f8fafc;
-  --color-text: #162033;
-  --color-muted: #5b6b83;
-  --color-border: #e3e9f2;
-  --color-ring: rgba(37, 99, 235, 0.18);
-
-  --color-accent: #059669;
-  --color-danger: #dc2626;
-  --color-warn: #d97706;
-
   --radius-DEFAULT: 16px;
   --radius-sm: 11px;
 
@@ -52,3 +162,99 @@ button:not(:disabled) { cursor: pointer; }
   --shadow-md: 0 10px 30px -8px rgba(15, 48, 87, 0.18), 0 4px 10px -6px rgba(15, 48, 87, 0.12);
   --shadow-lg: 0 24px 50px -18px rgba(15, 48, 87, 0.32);
 }
+
+/* Where blurring is unavailable, or the reader asked for less transparency,
+   glass falls back to an opaque surface so text keeps its contrast. */
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  .glass { background-color: var(--ui-card-2); }
+  .glass-strong { background-color: var(--ui-card); }
+  .glass-track { background-color: var(--ui-surface-2); }
+}
+
+@media (prefers-reduced-transparency: reduce) {
+  .glass { background-color: var(--ui-card-2); }
+  .glass-strong { background-color: var(--ui-card); }
+  .glass-track { background-color: var(--ui-surface-2); }
+}
+
+/* ---------------------------------------------------------------------------
+   Dark-mode bridge for the legacy palette utilities.
+   Screens written before the token set spell colours out with Tailwind's own
+   palette (bg-white, text-slate-500, border-slate-200, ...). Instead of
+   rewriting every file at once, the ones still in use are remapped here onto
+   the dark tokens. Delete a rule once nothing uses the class it targets; new
+   code should reach for bg-card, text-text, text-muted and border-border.
+--------------------------------------------------------------------------- */
+@layer utilities {
+  /* Surfaces */
+  .dark .bg-white { background-color: var(--ui-card); }
+  .dark .bg-white\/95 { background-color: color-mix(in srgb, var(--ui-card) 95%, transparent); }
+  .dark .bg-white\/70 { background-color: color-mix(in srgb, var(--ui-card) 70%, transparent); }
+  .dark .bg-gray-100 { background-color: var(--ui-bg); }
+  .dark .bg-gray-50,
+  .dark .bg-slate-50,
+  .dark .bg-slate-100 { background-color: var(--ui-surface-2); }
+  .dark .bg-slate-200,
+  .dark .bg-slate-200\/70 { background-color: var(--ui-border); }
+  .dark .bg-slate-950\/40 { background-color: rgb(2 4 10 / 0.7); }
+  /* Tints used for chips and callouts */
+  .dark .bg-blue-50 { background-color: color-mix(in srgb, var(--ui-brand-1) 16%, transparent); }
+  .dark .bg-teal-50 { background-color: color-mix(in srgb, var(--ui-brand-2) 16%, transparent); }
+  .dark .bg-teal-100 { background-color: color-mix(in srgb, var(--ui-brand-2) 24%, transparent); }
+  .dark .bg-red-50 { background-color: color-mix(in srgb, var(--ui-danger) 16%, transparent); }
+  /* Hover states on those surfaces */
+  .dark .hover\:bg-white:hover { background-color: var(--ui-card); }
+  .dark .hover\:bg-gray-50:hover,
+  .dark .hover\:bg-gray-100:hover,
+  .dark .hover\:bg-slate-50:hover,
+  .dark .hover\:bg-slate-100:hover { background-color: var(--ui-surface-2); }
+  .dark .hover\:bg-red-50:hover { background-color: color-mix(in srgb, var(--ui-danger) 22%, transparent); }
+  /* Text */
+  .dark .text-slate-900,
+  .dark .text-slate-800,
+  .dark .text-slate-700,
+  .dark .text-gray-900,
+  .dark .text-gray-700 { color: var(--ui-text); }
+  .dark .text-slate-600,
+  .dark .text-slate-500,
+  .dark .text-slate-400,
+  .dark .text-gray-600,
+  .dark .text-gray-500 { color: var(--ui-muted); }
+  .dark .text-blue-700,
+  .dark .text-blue-600,
+  .dark .text-blue-500 { color: var(--ui-brand-1); }
+  .dark .text-teal-800,
+  .dark .text-teal-700,
+  .dark .text-teal-600 { color: var(--ui-brand-2); }
+  .dark .text-red-700,
+  .dark .text-red-600,
+  .dark .text-red-500 { color: var(--ui-danger); }
+  .dark .hover\:text-slate-800:hover { color: var(--ui-text); }
+  .dark .hover\:text-blue-700:hover,
+  .dark .hover\:text-blue-600:hover { color: var(--ui-brand-1); }
+  .dark .hover\:text-teal-800:hover,
+  .dark .hover\:text-teal-700:hover { color: var(--ui-brand-2); }
+  .dark .hover\:text-red-600:hover { color: var(--ui-danger); }
+  /* Borders, dividers and rings */
+  .dark .border-slate-300,
+  .dark .border-slate-200,
+  .dark .border-slate-100,
+  .dark .border-gray-300,
+  .dark .border-gray-200 { border-color: var(--ui-border); }
+  .dark .divide-slate-100 > :not(:last-child) { border-color: var(--ui-border); }
+  .dark .ring-gray-100 { --tw-ring-color: var(--ui-border); }
+  .dark .border-blue-200,
+  .dark .border-blue-100 { border-color: color-mix(in srgb, var(--ui-brand-1) 40%, transparent); }
+  .dark .border-teal-200,
+  .dark .border-teal-100 { border-color: color-mix(in srgb, var(--ui-brand-2) 40%, transparent); }
+  .dark .border-red-100 { border-color: color-mix(in srgb, var(--ui-danger) 40%, transparent); }
+  .dark .hover\:border-teal-300:hover,
+  .dark .hover\:border-teal-200:hover { border-color: color-mix(in srgb, var(--ui-brand-2) 55%, transparent); }
+  .dark .focus\:border-teal-500:focus { border-color: var(--ui-brand-2); }
+  /* Gradient stops that were light tints */
+  .dark .from-blue-50 { --tw-gradient-from: color-mix(in srgb, var(--ui-brand-1) 14%, transparent); }
+  .dark .from-blue-200 { --tw-gradient-from: color-mix(in srgb, var(--ui-brand-1) 30%, transparent); }
+  .dark .to-teal-100 { --tw-gradient-to: color-mix(in srgb, var(--ui-brand-2) 26%, transparent); }
+  .dark .to-white { --tw-gradient-to: var(--ui-card); }
+}
+
