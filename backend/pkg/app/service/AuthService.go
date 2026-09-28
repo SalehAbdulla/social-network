@@ -57,7 +57,10 @@ func (s AuthServiceImpl) Register(req user.RegisterRequestDTO) (string, string, 
 	}
 
 	token := uuid.NewString()
-	s.sessionManager.CreateSession(userID, token)
+	if err := s.sessionManager.CreateSession(userID, token); err != nil {
+		slog.Error("failed to persist session", "user_id", userID, "error", err)
+		return "", "", realtimeforum.ErrInternal
+	}
 
 	return userID, token, nil
 }
@@ -84,7 +87,10 @@ func (s AuthServiceImpl) Login(identifier, password string) (string, string, err
 	}
 
 	token := uuid.NewString()
-	s.sessionManager.CreateSession(userID, token)
+	if err := s.sessionManager.CreateSession(userID, token); err != nil {
+		slog.Error("failed to persist session", "user_id", userID, "error", err)
+		return "", "", realtimeforum.ErrInternal
+	}
 
 	return userID, token, nil
 }
