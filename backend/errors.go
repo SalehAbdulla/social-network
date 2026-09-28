@@ -29,4 +29,10 @@ var (
 	ErrMissingPostId        = errors.New("post not found")
 	ErrNonASCII             = errors.New("only English letters, numbers, and punctuation are allowed")
 	ErrTooManyRequests      = errors.New("too many attempts, please wait a moment")
+	// Upload limits answer 413, not 400: the request was well formed, it was
+	// simply too big to accept. The messages name the limit so the client can
+	// show something better than "bad request".
+	ErrEmptyUpload    = errors.New("the selected file is empty")
+	ErrUploadTooLarge = errors.New("the file is larger than the 50 MB limit")
+	ErrImageTooLarge  = errors.New("the image is larger than the 10 MB limit")
 )
