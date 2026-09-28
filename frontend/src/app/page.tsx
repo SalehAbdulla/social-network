@@ -1,25 +1,47 @@
 'use client';
 
-import { useState } from 'react';
 import Link from 'next/link';
+import { PenSquare, RefreshCw } from 'lucide-react';
 import { type Page, type Post } from './api/social';
-import { useResource } from './lib/useResource';
+import { usePagedList } from './lib/usePagedList';
 import StoriesBar from './components/StoriesBar';
 import PostCard from './components/PostCard';
 import RequestState from './components/RequestState';
-import Loading from './components/Loading';
-import Pagination from './components/Pagination';
+import LoadMore from './components/LoadMore';
+import { PostListSkeleton } from './components/Skeletons';
+
+const FEED_PAGE_SIZE = 10;
+// Everything except the page number is the identity of this list: if it ever
+// changes (a filter, a new sort) `usePagedList` restarts from page 1.
+const FEED_KEY = `/posts?size=${FEED_PAGE_SIZE}&sortBy=createdat&sortOrder=desc`;
 
 export default function Feed() {
-  const [page, setPage] = useState(1);
-  const feed = useResource<Page<Post>>(`/posts?page=${page}&size=10&sortBy=createdat&sortOrder=desc`);
+  const feed = usePagedList<Post, Page<Post>>({
+    key: FEED_KEY,
+    pageQuery: page => `&page=${page}`,
+    pageSize: FEED_PAGE_SIZE,
+    normalize: raw => ({ items: raw.posts, hasMore: !raw.lastPage }),
+    keyOf: post => post.postId,
+  });
+
   return <div className="mx-auto max-w-3xl space-y-6 p-4 py-8 sm:p-8">
-    <h1 className="text-2xl font-bold text-slate-900">Your feed</h1>
+    <header className="flex flex-wrap items-end justify-between gap-3">
+      <div>
+        <h1 className="text-2xl font-bold tracking-tight text-slate-900">Your feed</h1>
+        <p className="text-sm text-slate-500">The latest posts from the people you follow, newest first.</p>
+      </div>
+      <Link href="/create-post" className="chat-primary inline-flex items-center gap-2"><PenSquare size={16} />New post</Link>
+    </header>
     <StoriesBar />
-    {feed.loading && <Loading />}
-    {feed.data?.posts.map(post => <PostCard key={post.postId} post={post} fetchPosts={feed.reload} />)}
-    {feed.data?.posts.length === 0 && <RequestState empty="No posts yet. Share your first post to get started." />}
-    {feed.data?.posts.length === 0 && <Link href="/create-post" className="block text-center text-blue-600">Create a post</Link>}
-    <Pagination page={page} totalPages={feed.data?.totalPages} hasNext={!!feed.data && !feed.data.lastPage} loading={feed.loading} onChange={setPage} />
+    {feed.refreshing && <p role="status" className="flex items-center justify-center gap-2 text-xs font-medium text-slate-400"><RefreshCw size={13} className="animate-spin" aria-hidden="true" />Refreshing your feed…</p>}
+    {feed.loading
+      ? <PostListSkeleton />
+      : <>
+        {feed.items.map(post => <PostCard key={post.postId} post={post} onPostRemoved={postId => feed.update(items => items.filter(item => item.postId !== postId))} />)}
+        {feed.settled && !feed.error && feed.items.length === 0 && <RequestState empty="No posts yet. Share your first post to get started." />}
+        {feed.settled && !feed.error && feed.items.length === 0 && <Link href="/create-post" className="block text-center text-blue-600">Create a post</Link>}
+        {feed.items.length > 0 && <LoadMore loading={feed.loadingMore} hasMore={feed.hasMore} onLoadMore={feed.loadMore} label={`Load${feed.items.length > FEED_PAGE_SIZE ? ' more' : ' older'} posts`} />}
+      </>}
   </div>;
 }
+
