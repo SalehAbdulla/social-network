@@ -223,7 +223,8 @@ try {
     await until(alex, `document.querySelector('[aria-label="Upvote comment"]').nextElementSibling.textContent === '${score}' && !document.querySelector('[aria-label="Upvote comment"]').disabled`, `comment score ${score}`);
     assert(await evaluate(alex, `window.commentRow === document.querySelector('[aria-label="Upvote comment"]').parentElement.parentElement && document.querySelector('textarea').value === 'Draft preserved while voting'`));
   }
-  assert(await evaluate(alex, `!performance.getEntriesByType('resource').some(entry => entry.name.includes('/api/v1/post'))`), 'Comment voting must not refetch the post or comments');
+  const refetchedWhileVoting = await evaluate(alex, `performance.getEntriesByType('resource').map(entry => entry.name).filter(name => name.includes('/api/v1/post'))`);
+  assert.deepEqual(refetchedWhileVoting, [], `Comment voting must not refetch the post or comments: ${JSON.stringify(refetchedWhileVoting)}`);
   console.log('PASS: comment votes toggle in place without refetching or losing the draft');
   const notificationCount = (await api(dummy, '/notifications/unread-count')).count;
   await until(dummy, `!!document.querySelector('[aria-label="${notificationCount} unread notifications"]')`, 'notification badge updates without refresh', 10000);
