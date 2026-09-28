@@ -2,7 +2,6 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
-import Pagination from '../components/Pagination';
 import { useParams } from 'next/navigation';
 import toast from 'react-hot-toast';
 
@@ -17,6 +16,7 @@ import {
 } from '../api/social';
 
 import { useBackend } from '../components/BackendProvider';
+import { usePagedList } from '../lib/usePagedList';
 import { useResource } from '../lib/useResource';
 
 import Avatar from '../components/Avatar';
@@ -25,8 +25,10 @@ import FollowListModal, {
   type FollowListTab,
 } from '../components/FollowListModal';
 import Loading from '../components/Loading';
+import LoadMore from '../components/LoadMore';
 import PostCard from '../components/PostCard';
 import RequestState from '../components/RequestState';
+import { PostListSkeleton } from '../components/Skeletons';
 
 const POSTS_PER_PAGE = 20;
 
@@ -51,12 +53,16 @@ export default function Profile() {
 
 
   const [activeTab, setActiveTab] = useState<ProfileTab>('posts');
-  const [offset, setOffset] = useState(0);
 
-  const posts = useResource<Post[]>(
-    `/users/${profileId}/posts?liked=${activeTab === 'likes'}&offset=${offset}`,
-    !!profile.data && canViewProfile,
-  );
+  const posts = usePagedList<Post, Post[]>({
+    // The tab is part of the identity, so switching tabs restarts from offset 0.
+    key: `/users/${profileId}/posts?liked=${activeTab === 'likes'}`,
+    pageQuery: page => `&offset=${(page - 1) * POSTS_PER_PAGE}`,
+    pageSize: POSTS_PER_PAGE,
+    normalize: raw => ({ items: raw }),
+    keyOf: post => post.postId,
+    enabled: !!profile.data && canViewProfile,
+  });
 
 
   const [isEditing, setIsEditing] = useState(false);
@@ -107,7 +113,6 @@ export default function Profile() {
 
   function handleTabChange(tab: ProfileTab) {
     setActiveTab(tab);
-    setOffset(0);
   }
 
   return (
@@ -143,19 +148,19 @@ export default function Profile() {
               />
 
               {/* Posts */}
-              {posts.loading && <Loading />}
+              {posts.loading && <PostListSkeleton />}
 
-              {activeTab === 'media' ? (
-                <MediaGrid posts={posts.data ?? []} />
+              {!posts.loading && (activeTab === 'media' ? (
+                <MediaGrid posts={posts.items} />
               ) : (
                 <PostList
-                  posts={posts.data ?? []}
-                  reload={posts.reload}
+                  posts={posts.items}
+                  onRemoved={postId => posts.update(items => items.filter(item => item.postId !== postId))}
                 />
-              )}
+              ))}
 
               {/* Empty state */}
-              {posts.data?.length === 0 && (
+              {posts.settled && !posts.error && posts.items.length === 0 && (
                 <RequestState
                   empty={
                     activeTab === 'likes'
@@ -165,8 +170,14 @@ export default function Profile() {
                 />
               )}
 
-              {/* Pagination */}
-              <Pagination page={offset / POSTS_PER_PAGE + 1} loading={posts.loading} hasNext={posts.data?.length === POSTS_PER_PAGE} onChange={page => setOffset((page - 1) * POSTS_PER_PAGE)} />
+              {posts.items.length > 0 && (
+                <LoadMore
+                  loading={posts.loadingMore}
+                  hasMore={posts.hasMore}
+                  onLoadMore={posts.loadMore}
+                  label="Load more posts"
+                />
+              )}
             </>
           )}
 
@@ -393,12 +404,13 @@ function ProfileTabs({
 
 type PostListProps = {
   posts: Post[];
-  reload: () => void;
+  /** Drops a deleted post from the loaded pages without re-reading them. */
+  onRemoved: (postId: number) => void;
 };
 
 function PostList({
   posts,
-  reload,
+  onRemoved,
 }: PostListProps) {
   return (
     <div className="space-y-4">
@@ -406,7 +418,7 @@ function PostList({
         <PostCard
           key={post.postId}
           post={post}
-          fetchPosts={reload}
+          onPostRemoved={onRemoved}
         />
       ))}
     </div>
