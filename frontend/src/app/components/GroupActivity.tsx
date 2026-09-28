@@ -4,14 +4,16 @@ import { useEffect, useRef, useState } from 'react';
 import { CalendarDays, Check, Plus, X } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { dateLabel, displayName, errorMessage, request, upload } from '../api/social';
-import { useResource } from '../lib/useResource';
+import { usePagedList } from '../lib/usePagedList';
 import { useLiveRefresh } from '../lib/useLiveRefresh';
 import { useBackend } from './BackendProvider';
 import ChatComposer from './ChatComposer';
 import MessageActions from './MessageActions';
 import ImagePicker from './ImagePicker';
 import Loading from './Loading';
-import Pagination from './Pagination';
+import LoadMore from './LoadMore';
+
+const GROUP_PAGE_SIZE = 30;
 
 interface Content {
   id: number; userId: string; firstName: string; lastName: string; nickname: string; kind: string;
@@ -56,21 +58,28 @@ function PostComments({ groupId, parentId, isOwner }: { groupId: string; parentI
 
 export default function GroupActivity({ groupId, kind = 'timeline', parentId = 0, isOwner = false }: { groupId: string; kind?: string; parentId?: number; isOwner?: boolean }) {
   const { user } = useBackend();
-  const [page, setPage] = useState(1);
   const [composer, setComposer] = useState<string | null>(null);
   const [editing, setEditing] = useState<Content | null>(null);
   const [busy, setBusy] = useState(false);
   const path = `/groups/${groupId}/content/${kind}?parentId=${parentId}`;
-  const resource = useResource<Content[]>(`${path}&offset=${(page - 1) * 30}`);
-  useLiveRefresh(resource.reload, groupId);
+  const resource = usePagedList<Content, Content[]>({
+    key: path,
+    pageQuery: page => `&offset=${(page - 1) * GROUP_PAGE_SIZE}`,
+    pageSize: GROUP_PAGE_SIZE,
+    normalize: raw => ({ items: raw }),
+    keyOf: item => item.id,
+  });
+  // A background refresh folds the newest page in, so a scrolled-up reader keeps
+  // the history they already opened.
+  useLiveRefresh(resource.refresh, groupId);
   const bottom = useRef<HTMLDivElement>(null);
   const nearBottom = useRef(true);
-  const items = (resource.data || []).slice(0, 30);
+  const items = resource.items;
   const isChat = kind === 'timeline';
   useEffect(() => {
-    if (isChat && page === 1 && nearBottom.current) bottom.current?.scrollIntoView({ block: 'nearest' });
-  }, [resource.data, isChat, page]);
-  function saved() { setComposer(null); setEditing(null); setPage(1); nearBottom.current = true; resource.reload(); }
+    if (isChat && nearBottom.current) bottom.current?.scrollIntoView({ block: 'nearest' });
+  }, [resource.items, isChat]);
+  function saved() { setComposer(null); setEditing(null); nearBottom.current = true; resource.reload(); }
   async function mutate(action: () => Promise<unknown>) {
     if (busy) return; setBusy(true);
     try { await action(); resource.reload(); } catch (error) { toast.error(errorMessage(error)); } finally { setBusy(false); }
@@ -84,8 +93,9 @@ export default function GroupActivity({ groupId, kind = 'timeline', parentId = 0
       {(composer || editing) && <div className="mb-5"><ContentForm key={editing?.id || composer} groupId={groupId} kind={editing?.kind || composer || 'posts'} item={editing || undefined} parentId={editing?.parentId || parentId} saved={saved} cancel={() => { setComposer(null); setEditing(null); }} /></div>}
       {resource.loading && <Loading height={80} />}
       {resource.error && <button className="chat-secondary" onClick={resource.reload}>Retry loading</button>}
-      {!resource.loading && resource.data?.length === 0 && <p className="py-8 text-center text-sm text-slate-500">{isChat ? 'Say hello, share a photo, or plan your first event.' : `No ${kind} yet.`}</p>}
-      {(page > 1 || (resource.data?.length || 0) > 30) && <div className="mb-5"><Pagination label="Group history" page={page} hasNext={(resource.data?.length || 0) > 30} loading={resource.loading} onChange={setPage} /></div>}
+      {resource.settled && resource.items.length === 0 && <p className="py-8 text-center text-sm text-slate-500">{isChat ? 'Say hello, share a photo, or plan your first event.' : `No ${kind} yet.`}</p>}
+      {/* The chat shows the newest item last, so older pages load at the top. */}
+      {isChat && <LoadMore loading={resource.loadingMore} hasMore={resource.hasMore} onLoadMore={resource.loadMore} label="Load earlier messages" endLabel={null} className="py-2" />}
       <div className={kind === 'media' ? 'grid gap-4 sm:grid-cols-2 xl:grid-cols-3' : 'space-y-4'}>{(isChat ? [...items].reverse() : items).map(item => {
         const mine = item.userId === user.userId;
         const ownMessage = isChat && mine && item.kind === 'messages';
@@ -100,7 +110,7 @@ export default function GroupActivity({ groupId, kind = 'timeline', parentId = 0
             {item.kind === 'posts' && kind !== 'media' && <PostComments groupId={groupId} parentId={item.id} isOwner={isOwner} />}
           </article>
         </div>;
-      })}</div><div ref={bottom} />
+      })}</div>{!isChat && <LoadMore loading={resource.loadingMore} hasMore={resource.hasMore} onLoadMore={resource.loadMore} label={kind === 'comments' ? 'Load more comments' : 'Load more'} endLabel={null} />}<div ref={bottom} />
     </div>
     {isChat && <ChatComposer onSend={async (text, file) => {
       const media = file ? await upload(file) : null;
