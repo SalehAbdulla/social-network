@@ -16,6 +16,9 @@ export interface SocialUser {
   following: string[];
   pendingIncoming: boolean;
   pendingOutgoing: boolean;
+  // Viewer-relative: the backend only allows a private chat when at least one of
+  // the two users follows the other, or the other profile is public.
+  canMessage?: boolean;
 }
 export interface FollowRequest { userId: string; nickname: string; createdAt: string }
 export interface Post {
