@@ -236,6 +236,41 @@ func (db *DB) ProfilePostIDs(userID string, liked bool, offset int, viewerID str
 	return db.stringList("SELECT CAST(p.postId AS TEXT) FROM post p WHERE p.userId=? AND "+postVisibility+" ORDER BY p.createdAt DESC, p.postId DESC LIMIT 20 OFFSET ?", userID, viewerID, viewerID, viewerID, viewerID, offset)
 }
 
+// ProfileMedia merges the photos a user published in posts with the ones they
+// attached to comments, newest first, applying the same postPrivacy rules the
+// feed uses. It backs the profile media tab.
+func (db *DB) ProfileMedia(userID string, offset int, viewerID string) ([]models.MediaItem, error) {
+	rows, err := db.Conn.Query(`
+		SELECT image.value, media.postId, media.title, media.createdAt FROM (
+			SELECT p.postId AS postId, p.title AS title, p.imageUrls AS imageUrls, p.createdAt AS createdAt
+			FROM post p WHERE p.userId = ? AND `+postVisibility+`
+			UNION ALL
+			SELECT c.postId AS postId, c.content AS title, c.imageUrls AS imageUrls, c.createdAt AS createdAt
+			FROM comment c JOIN post p ON p.postId = c.postId WHERE c.userId = ? AND `+postVisibility+`
+		) media, json_each(media.imageUrls) image
+		WHERE image.value <> ''
+		ORDER BY media.createdAt DESC, media.postId DESC
+		LIMIT 20 OFFSET ?`,
+		userID, viewerID, viewerID, viewerID, viewerID,
+		userID, viewerID, viewerID, viewerID, viewerID,
+		offset,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	items := []models.MediaItem{}
+	for rows.Next() {
+		var item models.MediaItem
+		if err := rows.Scan(&item.Url, &item.PostId, &item.Title, &item.CreatedAt); err != nil {
+			return nil, err
+		}
+		items = append(items, item)
+	}
+	return items, rows.Err()
+}
+
 func (db *DB) AddMedia(id, userID, contentType string) error {
 	_, err := db.Conn.Exec("INSERT INTO media (mediaId,userId,contentType) VALUES (?,?,?)", id, userID, contentType)
 	return err
@@ -271,9 +306,13 @@ func (db *DB) CanViewMedia(id, viewerID string) (bool, error) {
 				(u.isPublic=1 OR EXISTS(SELECT 1 FROM follow f WHERE f.followedId=u.userId AND f.followerId=?))
 			) OR EXISTS (
 				SELECT 1 FROM message msg WHERE msg.mediaUrl='/api/v1/media/' || m.mediaId AND (msg.senderId=? OR msg.recipientId=?)
+			) OR EXISTS (
+				-- A comment photo is readable exactly when the post it hangs off is.
+				SELECT 1 FROM comment c JOIN post p ON p.postId = c.postId, json_each(c.imageUrls) image
+				WHERE image.value = '/api/v1/media/' || m.mediaId AND `+postVisibility+`
 			)
 		)
-	)`, id, viewerID, viewerID, viewerID, viewerID, viewerID, viewerID, viewerID, viewerID, viewerID).Scan(&allowed)
+	)`, id, viewerID, viewerID, viewerID, viewerID, viewerID, viewerID, viewerID, viewerID, viewerID, viewerID, viewerID, viewerID, viewerID).Scan(&allowed)
 	return allowed, err
 }
 
