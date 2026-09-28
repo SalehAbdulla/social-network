@@ -76,23 +76,22 @@ func (db *DB) Group(groupID int, userID string) (models.Group, error) {
 	return group, err
 }
 
-func (db *DB) AddGroupRequest(groupID int, userID string) error {
+// AddGroupRequest records a join request and reports whether a new or re-opened
+// one landed, so the caller knows when to tell the owner. The notification is
+// not written here: notifications go through the service, which also pushes them.
+func (db *DB) AddGroupRequest(groupID int, userID string) (bool, error) {
 	tx, err := db.Conn.Begin()
 	if err != nil {
-		return err
+		return false, err
 	}
 	defer tx.Rollback()
 	result, err := tx.Exec(`INSERT INTO socialGroupRequest (groupId,userId) VALUES (?,?)
         ON CONFLICT(groupId,userId) DO UPDATE SET status='pending',createdAt=CURRENT_TIMESTAMP WHERE status<>'pending'`, groupID, userID)
 	if err != nil {
-		return err
+		return false, err
 	}
-	if count, _ := result.RowsAffected(); count > 0 {
-		if _, err = tx.Exec(`INSERT INTO notification(userId,actorId,entityType,entityId,message) SELECT ownerId,?,'group_request',groupId,'' FROM socialGroup WHERE groupId=?`, userID, groupID); err != nil {
-			return err
-		}
-	}
-	return tx.Commit()
+	count, _ := result.RowsAffected()
+	return count > 0, tx.Commit()
 }
 
 func (db *DB) GroupMembers(groupID int) ([]models.GroupMember, error) {
@@ -156,48 +155,46 @@ func (db *DB) GroupRequestDecision(groupID, requestID int, status string) error 
 	return tx.Commit()
 }
 
-func (db *DB) AddGroupInvitation(groupID int, inviterID, inviteeID string) error {
+// AddGroupInvitation records an invitation and reports whether a new or
+// re-opened one landed, so the caller knows when to tell the invitee.
+func (db *DB) AddGroupInvitation(groupID int, inviterID, inviteeID string) (bool, error) {
 	tx, err := db.Conn.Begin()
 	if err != nil {
-		return err
+		return false, err
 	}
 	defer tx.Rollback()
 
 	var isOwner, isMember bool
 	if err := tx.QueryRow("SELECT EXISTS(SELECT 1 FROM socialGroup WHERE groupId=? AND ownerId=?)", groupID, inviterID).Scan(&isOwner); err != nil {
-		return err
+		return false, err
 	}
 	if !isOwner {
 		if err := tx.QueryRow("SELECT EXISTS(SELECT 1 FROM socialGroupMember WHERE groupId=? AND userId=?)", groupID, inviterID).Scan(&isMember); err != nil {
-			return err
+			return false, err
 		}
 		if !isMember {
-			return backend.ErrForbidden
+			return false, backend.ErrForbidden
 		}
 	}
 	if inviteeID == inviterID {
-		return backend.ErrBadRequest
+		return false, backend.ErrBadRequest
 	}
 	if inviteeID == "" {
-		return backend.ErrBadRequest
+		return false, backend.ErrBadRequest
 	}
 	if err := tx.QueryRow("SELECT EXISTS(SELECT 1 FROM socialGroupMember WHERE groupId=? AND userId=?)", groupID, inviteeID).Scan(&isMember); err != nil {
-		return err
+		return false, err
 	}
 	if isMember {
-		return backend.ErrBadRequest
+		return false, backend.ErrBadRequest
 	}
 	result, err := tx.Exec(`INSERT INTO socialGroupInvitation (groupId,userId) VALUES (?,?)
 		ON CONFLICT(groupId,userId) DO UPDATE SET status='pending',createdAt=CURRENT_TIMESTAMP WHERE status<>'pending'`, groupID, inviteeID)
 	if err != nil {
-		return err
+		return false, err
 	}
-	if count, _ := result.RowsAffected(); count > 0 {
-		if _, err = tx.Exec(`INSERT INTO notification(userId,actorId,entityType,entityId,message) VALUES(?,?,'group_invitation',?,'')`, inviteeID, inviterID, groupID); err != nil {
-			return err
-		}
-	}
-	return tx.Commit()
+	count, _ := result.RowsAffected()
+	return count > 0, tx.Commit()
 }
 
 func (db *DB) GroupInvitations(userID string) ([]models.GroupInvitation, error) {
