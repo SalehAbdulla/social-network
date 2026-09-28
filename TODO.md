@@ -10,15 +10,15 @@ through `compose.yaml`, and migrations `000001`–`000010` are applied at boot b
 Working today: auth (register/login/logout, bcrypt, cookie sessions), public/private
 profiles, followers/following lists, posts with three privacy levels, reactions, comments
 with images, groups (create/browse/invite/request/accept/post/comment/event+RSVP/chat/
-transfer/leave), notifications with WebSocket push and a sidebar badge, media uploads
+transfer/leave), notifications with WebSocket push and separate notification and message
+badges, media uploads
 (JPEG/PNG/GIF/WebP/MP4/WebM), stories, and realtime chat with typing, read receipts and
 presence.
 
-Known spec-level gaps, detailed below: notification-vs-message distinction (P0-4) and
-register-form field parity (P0-5).
-Closed on 2026-09-28: comment media (P0-2), the chat permission rules (P0-3) and durable
-sessions (P0-6); see "Work in flight and handoff" at the end of this file for what is still
-in someone else's hands.
+Known spec-level gap, detailed below: register-form field parity (P0-5).
+Closed on 2026-09-28: comment media (P0-2), the chat permission rules (P0-3), the
+notification/message split (P0-4) and durable sessions (P0-6); see "Work in flight and
+handoff" at the end of this file for what is still in someone else's hands.
 
 ## Working prompt
 
@@ -186,29 +186,54 @@ the hiding), and a browser-smoke addition asserting 403 + a clean inbox.
 - [x] **P0** Decide the migration story for existing `message` rows that predate the rule
   (keep them readable, or hide the threads) and document it.
 - [ ] **P1** Frontend: disable the "Message" action with an explanation when messaging is
-  not allowed — `frontend/src/app/profile/page.tsx:341` and
-  `frontend/src/app/discover/page.tsx`. **Handed off**: both files are being rewritten on the
-  pagination branch, so the change is two conditions on the existing `Message` links plus the
-  `canMessage` flag that `GET /api/v1/users/{userId}` now returns (typed as an optional
-  `canMessage` in `frontend/src/app/api/social.ts`). Until then a blocked attempt fails with
-  the backend's 403 toast, which is correct but less friendly.
+  not allowed — `frontend/src/app/profile/page.tsx` and `frontend/src/app/discover/page.tsx`.
+  The blocker is gone (the pagination rework that owned both files is committed), so this is
+  two conditions on the existing `Message` links plus the viewer-relative `canMessage` flag
+  that `GET /api/v1/users/{userId}` returns (typed as an optional `canMessage` in
+  `frontend/src/app/api/social.ts`). Until then a blocked attempt fails with the backend's 403
+  toast, which is correct but less friendly.
 - [x] **P1** Tests: mutual follow allowed, one-way follow allowed, stranger → public profile
   allowed, stranger → private profile rejected, WS push rejected for the same case.
 
-### P0-4 · Notifications are not visually distinct from messages
+### P0-4 · Notifications are not visually distinct from messages (implemented 2026-09-28; verified locally)
 
 Spec: "New notifications are different from new private messages and should be displayed in
-a different way!" Today one red badge counts both (`frontend/src/app/components/SideBar.tsx:77`
-over an `entityType IN (...)` list that includes `message`), and `notifications/page.tsx:31`
-renders message rows with markup identical to follow/group rows.
+a different way!" One red badge used to count both (`SideBar.tsx` over an `entityType IN (...)`
+list that included `message`), the Messages entry had no indicator at all, and the
+notifications page rendered message rows with markup identical to follow/group rows.
 
-- [ ] **P0** Split the indicators: bell badge for social/group notifications, a separate
+Policy: the two counts are disjoint and the API keeps them apart. `GET
+/api/v1/notifications` and `GET /api/v1/notifications/unread-count` accept `?types=` and
+`?exclude=` taking **entity type names** (`comment`, `message`, `follow`, `follow_request`,
+`group_invitation`, `group_request`, `group_event`): the bell badge asks for
+`?exclude=message`, the Messages badge for `?types=message`. An unknown name is a 400 rather
+than a silently ignored filter, `exclude` wins over `types`, both parameters are optional
+(no parameters keeps the old behaviour of every type), and an empty result set is expressed
+as a false SQL predicate because `IN ()` is invalid. The allow-list lives once in
+`models.NotificationEntityTypes`, and the SQL builds its `IN (?,…)` from that list instead of
+repeating a literal. On the frontend the bell keeps its red pill, the Messages entry gains a
+teal pill carrying a `MessageSquare` glyph, and message rows become their own card with a
+"Private message" caption and an "Open chat" call to action. "Mark all as read" still clears
+message rows too, because the page lists them.
+
+Verified: `go build ./...`, `go vet ./...`, `go test ./...`; `npm run lint` (0 errors);
+`npm run build`; the full browser smoke suite. New coverage:
+`backend/cmd/notification_types_test.go` (unfiltered count of both kinds, exclusion, single
+and multiple types, `exclude` beating `types`, an emptied set, unknown and plural names
+rejected on both endpoints, filtered lists with matching `totalElements`, reading the chat
+zeroing only the message count) and two browser steps in
+`frontend/scripts/integration-smoke.mjs` (an unread chat moves the Messages badge while the
+bell badge stays put; the notifications page shows the "Open chat" card and opening the chat
+clears the badge). Artifacts: `backend/tmp/integration-1790613918588`.
+
+- [x] **P0** Split the indicators: bell badge for social/group notifications, a separate
   message indicator on the Messages entry, with different colours and icons.
-- [ ] **P0** Restyle `entityType === 'message'` rows on the notifications page as a
+- [x] **P0** Restyle `entityType === 'message'` rows on the notifications page as a
   distinct card (different accent, "Open chat" call to action).
-- [ ] **P1** Add a `?types=` / `exclude=messages` filter to `GET /api/v1/notifications` and
-  to `NotificationRepository.GetUnreadCount` so the bell badge can exclude messages.
-- [ ] **P1** Test asserting the bell count excludes `message` rows and the message count
+- [x] **P1** Add a `?types=` / `exclude=messages` filter to `GET /api/v1/notifications` and
+  to `NotificationRepository.GetUnreadCount` so the bell badge can exclude messages. The
+  parameter values are the entity type names, so the exclusion is spelled `exclude=message`.
+- [x] **P1** Test asserting the bell count excludes `message` rows and the message count
   excludes everything else.
 
 ### P0-5 · Register form does not match the required field list
@@ -408,12 +433,11 @@ Reference: `GroupHandler.go`, `GroupManagementHandler.go`, `GroupContentHandler.
   exercised indirectly through `cmd/*_test.go`.
 - [ ] **P1** Cover every P0 flow with tests: follow requests, comment media, chat permission
   rules, register field parity, notification type separation, and session persistence.
-  Progress 2026-09-28: follow requests, comment media, the chat permission rules and session
-  persistence are covered in Go; register field parity and the notification split still have
-  none.
+  Progress 2026-09-28: follow requests, comment media, the chat permission rules, notification
+  type separation and session persistence are covered in Go; register field parity has none.
 - [ ] **P1** Extend the browser smoke suite to the follow-request and comment-image journeys.
-  Progress 2026-09-28: the comment-image journey is now a browser step; the follow-request
-  journey is not.
+  Progress 2026-09-28: the comment-image journey and the notification/message badge split are
+  now browser steps; the follow-request journey is not.
 - [x] **P1** Add a migration test that runs `up` → `down` → `up` over all ten migrations on
   a scratch database. `backend/pkg/db/sqlite/migrations_test.go` does exactly that, checks
   that 000009 keeps existing session rows, and asserts the 000010 comment media column
@@ -588,20 +612,26 @@ The paginated-feed rework is **committed on `main`** (`950bbdf`…`e6594fe`) and
 gone (grep for it returns nothing). Treat the list files as settled unless a task explicitly
 targets them, and ignore any older bullet that mentions keeping `Pagination` as a fallback.
 
-A second agent currently has an **uncommitted** theme/dark-mode rework in this same working
-tree: new `frontend/src/app/components/ThemeProvider.tsx`, `ThemeToggle.tsx` and
-`frontend/src/app/lib/theme.ts`, plus edits to `BackendProvider.tsx`, `SideBar.tsx`,
-`layout.tsx`, `globals.css` and `login/page.tsx`. Leave those files to them.
+The theme/dark-mode rework that shared this tree is **committed too** (`19b694c`…`04e7110`):
+`ThemeProvider.tsx`, `ThemeToggle.tsx` and `lib/theme.ts` are new, and `BackendProvider.tsx`,
+`SideBar.tsx`, `layout.tsx`, `globals.css` and `login/page.tsx` were touched. Its tokens
+(`bg-card`, `border-border`, `text-muted`, `bg-surface-2`, `text-brand-1`, the `chat-*`
+component classes) are the ones to build on.
 
-- P0-2 (comment media) is complete; it touched `PostCard.tsx` and `profile/page.tsx`, which
-  are also part of the theme change set, so re-check both files before staging either change.
-- P0-4 (notification vs message styling) still needs `PostCard.tsx`, the notifications page
-  and `SideBar.tsx`, and is still open.
+- P0-4 (notification vs message split) is complete; it touched `SideBar.tsx` and
+  `notifications/page.tsx`.
+- P0-2 (comment media) is complete; it touched `PostCard.tsx` and `profile/page.tsx`.
 - P0-3 is complete on the backend; the only missing piece is the frontend guard, handed off
   with the exact change list in that section. `canMessage` is still only a type in
   `frontend/src/app/api/social.ts`, so nothing reads the flag yet.
-- Register field parity (P0-5) is also still open and would touch `login/page.tsx`, which is
-  in the theme change set.
+- Register field parity (P0-5) is now the only open P0 item.
+
+Changed in the P0-4 session (2026-09-28), for review: `backend/pkg/models/Notification.go`,
+`backend/pkg/app/repositories/NotificationRepository.go`,
+`backend/pkg/app/service/NotificationService.go`,
+`backend/pkg/app/handlers/NotificationHandler.go`, `backend/cmd/notification_types_test.go`,
+`frontend/src/app/components/SideBar.tsx`, `frontend/src/app/notifications/page.tsx`,
+`frontend/scripts/integration-smoke.mjs`.
 
 Changed in the P0-2 session (2026-09-28), for review:
 `backend/pkg/db/migrations/sqlite/000010_comment_media.{up,down}.sql`, `backend/pkg/models/{Comment,MediaItem}.go`,
