@@ -81,7 +81,7 @@ export default function FollowListModal({
     try {
       await request(
         `/users/${personId}/follow`,
-        user.following.includes(personId) ? 'DELETE' : 'PUT',
+        user.following.includes(personId) || list.find(person => person.userId === personId)?.pendingOutgoing ? 'DELETE' : 'PUT',
       );
 
       await refreshUser();
@@ -210,11 +210,12 @@ function FollowRow({
       {!isOwnEntry && (
         <button
           type="button"
-          disabled={isBusy}
+          disabled={isBusy || (person.pendingIncoming && !isFollowing)}
+          title={person.pendingOutgoing ? 'Cancel follow request' : person.pendingIncoming ? 'Review this request in Notifications' : undefined}
           onClick={onToggleFollow}
           className="shrink-0 rounded-lg border border-blue-200 px-3 py-2 text-sm text-blue-700 disabled:opacity-50"
         >
-          {isFollowing ? 'Unfollow' : 'Follow'}
+          {isFollowing ? 'Unfollow' : person.pendingOutgoing ? 'Requested' : 'Follow'}
         </button>
       )}
     </div>

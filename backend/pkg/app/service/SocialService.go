@@ -61,6 +61,34 @@ func (s *SocialService) ValidateTarget(actor, target string) error {
 	return s.Repo.DoesUserExists(target)
 }
 
+func (s *SocialService) Follow(actor, target string) (string, error) {
+	if err := s.ValidateTarget(actor, target); err != nil {
+		return "", err
+	}
+	return s.Repo.FollowUser(actor, target)
+}
+
+func (s *SocialService) Unfollow(actor, target string) error {
+	if err := s.ValidateTarget(actor, target); err != nil {
+		return err
+	}
+	return s.Repo.UnfollowUser(actor, target)
+}
+
+func (s *SocialService) FollowRequests(recipient string, offset int) ([]models.FollowRequest, error) {
+	if offset < 0 {
+		return nil, backend.ErrBadRequest
+	}
+	return s.Repo.FollowRequests(recipient, offset)
+}
+
+func (s *SocialService) DecideFollowRequest(recipient, requester string, accept bool) error {
+	if err := s.ValidateTarget(recipient, requester); err != nil {
+		return err
+	}
+	return s.Repo.DecideFollowRequest(recipient, requester, accept)
+}
+
 func (s *SocialService) CanViewProfile(viewerID, profileID string) (bool, error) {
 	return s.Repo.CanViewPrivateProfile(viewerID, profileID)
 }

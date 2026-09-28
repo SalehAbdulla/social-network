@@ -26,7 +26,7 @@ func (db *DB) stringList(query string, args ...any) ([]string, error) {
 	return values, rows.Err()
 }
 
-func (db *DB) SocialProfile(id string) (models.SocialUser, error) {
+func (db *DB) SocialProfile(id string, viewers ...string) (models.SocialUser, error) {
 	u := models.SocialUser{}
 	err := db.Conn.QueryRow(`SELECT userId, nickName, firstName, lastName, COALESCE(aboutMe,''), COALESCE(avatar,''), coverPhoto, location, isPublic, createdAt FROM user WHERE userId = ?`, id).
 		Scan(&u.UserID, &u.Nickname, &u.FirstName, &u.LastName, &u.Bio, &u.Avatar, &u.CoverPhoto, &u.Location, &u.IsPublic, &u.CreatedAt)
@@ -50,7 +50,13 @@ func (db *DB) SocialProfile(id string) (models.SocialUser, error) {
 			return u, err
 		}
 	}
-	return u, nil
+	if len(viewers) > 0 && viewers[0] != id {
+		err = db.Conn.QueryRow(`SELECT
+			EXISTS(SELECT 1 FROM connection WHERE requesterId=? AND recipientId=? AND status='pending'),
+			EXISTS(SELECT 1 FROM connection WHERE requesterId=? AND recipientId=? AND status='pending')`,
+			id, viewers[0], viewers[0], id).Scan(&u.PendingIncoming, &u.PendingOutgoing)
+	}
+	return u, err
 }
 
 func (db *DB) CanViewPrivateProfile(viewerID, profileID string) (bool, error) {
@@ -73,7 +79,7 @@ func (db *DB) DiscoverUsers(currentID, search string, offset int) ([]models.Soci
 	}
 	users := []models.SocialUser{}
 	for _, id := range ids {
-		u, err := db.SocialProfile(id)
+		u, err := db.SocialProfile(id, currentID)
 		if err != nil {
 			return nil, err
 		}
@@ -95,17 +101,106 @@ func (db *DB) UpdateSocialProfile(u models.SocialUser) error {
 	return err
 }
 
-func (db *DB) FollowUser(actor, target string, follow bool) (bool, error) {
-	query := "INSERT INTO follow (followerId, followedId) VALUES (?, ?) ON CONFLICT DO NOTHING"
-	if !follow {
-		query = "DELETE FROM follow WHERE followerId = ? AND followedId = ?"
-	}
-	result, err := db.Conn.Exec(query, actor, target)
+func (db *DB) FollowUser(actor, target string) (string, error) {
+	tx, err := db.Conn.Begin()
 	if err != nil {
-		return false, err
+		return "", err
 	}
-	n, err := result.RowsAffected()
-	return n > 0, err
+	defer tx.Rollback()
+	// Acquire the write lock before checking state, including for opposite requests.
+	if _, err = tx.Exec("UPDATE user SET isPublic=isPublic WHERE userId=?", target); err != nil {
+		return "", err
+	}
+	var public, following, pending, reverse bool
+	err = tx.QueryRow(`SELECT isPublic,
+		EXISTS(SELECT 1 FROM follow WHERE followerId=? AND followedId=?),
+		EXISTS(SELECT 1 FROM connection WHERE requesterId=? AND recipientId=? AND status='pending'),
+		EXISTS(SELECT 1 FROM connection WHERE requesterId=? AND recipientId=? AND status='pending')
+		FROM user WHERE userId=?`, actor, target, actor, target, target, actor, target).
+		Scan(&public, &following, &pending, &reverse)
+	if errors.Is(err, sql.ErrNoRows) {
+		return "", backend.ErrNotFound
+	}
+	if err != nil {
+		return "", err
+	}
+	if following {
+		return "", backend.ErrAlreadyFollowing
+	}
+	if pending {
+		return "", backend.ErrFollowPending
+	}
+	if reverse {
+		return "", backend.ErrReverseFollowPending
+	}
+	status := "following"
+	if public {
+		_, err = tx.Exec("INSERT INTO follow(followerId,followedId) VALUES (?,?)", actor, target)
+	} else {
+		status = "pending"
+		_, err = tx.Exec("INSERT INTO connection(requesterId,recipientId,status) VALUES (?,?,'pending')", actor, target)
+	}
+	if err != nil {
+		return "", err
+	}
+	return status, tx.Commit()
+}
+
+func (db *DB) UnfollowUser(actor, target string) error {
+	tx, err := db.Conn.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	if _, err = tx.Exec("DELETE FROM follow WHERE followerId=? AND followedId=?", actor, target); err != nil {
+		return err
+	}
+	if _, err = tx.Exec("DELETE FROM connection WHERE requesterId=? AND recipientId=? AND status='pending'", actor, target); err != nil {
+		return err
+	}
+	if _, err = tx.Exec("DELETE FROM notification WHERE userId=? AND actorId=? AND entityType='follow_request'", target, actor); err != nil {
+		return err
+	}
+	return tx.Commit()
+}
+
+func (db *DB) FollowRequests(recipient string, offset int) ([]models.FollowRequest, error) {
+	rows, err := db.Conn.Query(`SELECT c.requesterId,u.nickName,c.createdAt FROM connection c
+		JOIN user u ON u.userId=c.requesterId WHERE c.recipientId=? AND c.status='pending'
+		ORDER BY c.createdAt DESC,c.requesterId LIMIT 30 OFFSET ?`, recipient, offset)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []models.FollowRequest{}
+	for rows.Next() {
+		var item models.FollowRequest
+		if err := rows.Scan(&item.UserID, &item.Nickname, &item.CreatedAt); err != nil {
+			return nil, err
+		}
+		items = append(items, item)
+	}
+	return items, rows.Err()
+}
+
+func (db *DB) DecideFollowRequest(recipient, requester string, accept bool) error {
+	tx, err := db.Conn.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	if err = affected(tx.Exec("DELETE FROM connection WHERE requesterId=? AND recipientId=? AND status='pending'", requester, recipient)); err != nil {
+		return err
+	}
+	if accept {
+		if _, err = tx.Exec("INSERT INTO follow(followerId,followedId) VALUES (?,?)", requester, recipient); err != nil {
+			return err
+		}
+	}
+	if _, err = tx.Exec("DELETE FROM notification WHERE userId=? AND actorId=? AND entityType='follow_request'", recipient, requester); err != nil {
+		return err
+	}
+	return tx.Commit()
 }
 
 func (db *DB) ProfilePostIDs(userID string, liked bool, offset int, viewerID string) ([]string, error) {
