@@ -4,6 +4,30 @@ The Next.js frontend calls the Go backend through the same origin. API requests
 to `/api/v1/*`, uploaded media, and the `/ws` WebSocket are proxied to `BACKEND_URL`.
 The browser sends the backend's HTTP-only session cookie with these requests.
 
+## Same-origin proxy
+
+Two mechanisms keep the browser on the Next.js port (4000):
+
+- **Rewrites.** `next.config.ts` maps `/api/v1/:path*` and `/ws` onto
+  `${BACKEND_URL}/api/v1/:path*` and `${BACKEND_URL}/ws`. `BACKEND_URL` defaults to
+  `http://127.0.0.1:5174` and is compiled into the build — the Docker image passes
+  `http://backend:5174` as a build argument — so moving the backend means rebuilding the
+  frontend image rather than setting a runtime variable. `experimental.proxyClientMaxBodySize`
+  is raised to `52mb` so a request up to the backend's 51 MiB body ceiling can pass through
+  the middleware layer unchanged.
+- **Page gate.** `src/proxy.ts` runs as middleware over the matcher
+  `['/((?!api/|_next/|ws$).*)']`, which deliberately excludes `/api/*`, `/ws` and the build
+  assets: the middleware therefore never buffers an upload or a socket upgrade. It redirects
+  an anonymous page visit to `/login` when the `session_token` cookie is absent, and allows
+  the public paths listed in the same file. It is a convenience, not the access check — the
+  backend validates the session on every request and answers 401, which `BackendProvider`
+  turns into a redirect.
+
+Both the fetch and the socket are same-origin, so the HttpOnly `session_token` cookie is
+first-party and the backend's `Origin` check sees the frontend's public origin. That is why
+`FRONTEND_ORIGIN` has to match that origin exactly, and why a WebSocket upgrade is refused
+when the `Origin` header is missing.
+
 ## Run locally
 
 The root `./run.sh` keeps the existing startup behavior outside WSL. Inside WSL,
@@ -67,7 +91,7 @@ Lightning CSS. The project enables optional dependencies in `.npmrc`; keep the
 lockfile, which includes both Windows and Linux packages. Reinstall dependencies
 when switching the operating system used to run this shared checkout.
 
-Open **http://localhost:4000**, register, and sign in. Anonymous visits and expired sessions redirect to login. Use separate browser profiles for different accounts. The backend keeps one session per account, and restarting Go requires signing in again.
+Open **http://localhost:4000**, register, and sign in. Anonymous visits and expired sessions redirect to login. Use separate browser profiles for different accounts. Sessions live in the backend's `session` table, so they survive a backend restart; an account has one session at a time and signing in again revokes the previous token.
 
 Messages contains People and Groups conversation tabs. Each group opens inside the inbox with Chat, Posts, Events, Media, and Group info tabs. Events appear as cards in the group chat with Going / Not going responses. Owners can update the group name, description and photo, approve requests, remove members, transfer ownership, or delete the group. Members can invite people, leave, and manage their own posts, photos, comments, messages and events. Owners can also delete group content.
 
