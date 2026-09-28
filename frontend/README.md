@@ -35,7 +35,7 @@ On Ubuntu / WSL, use `sh ./dev.sh` instead.
 
 The backend starts on port 5174. Register an account through the frontend; startup does not create demo users. Go and a C compiler are required; the script detects GCC at `C:\msys64\mingw64\bin` on Windows.
 
-In `frontend/.env`, keep your existing keys and add:
+In `frontend/`, copy `.env.example` to `.env.local` and set:
 
 ```dotenv
 BACKEND_URL=http://127.0.0.1:5174
@@ -71,7 +71,7 @@ Open **http://localhost:4000**, register, and sign in. Anonymous visits and expi
 
 Messages contains People and Groups conversation tabs. Each group opens inside the inbox with Chat, Posts, Events, Media, and Group info tabs. Events appear as cards in the group chat with Going / Not going responses. Owners can update the group name, description and photo, approve requests, remove members, transfer ownership, or delete the group. Members can invite people, leave, and manage their own posts, photos, comments, messages and events. Owners can also delete group content.
 
-Post titles are optional. Images are checked before upload and previewed in bounded square frames without stretching. JPEG, PNG, GIF and WebP are accepted, up to four images and 10 MB per image; PDFs are rejected. Pagination controls show the current page and prevent repeated rapid requests. Chat typing and live refreshes are throttled.
+Post titles are optional. Images are checked before upload and previewed in bounded square frames without stretching. JPEG, PNG, GIF and WebP are accepted, up to four images and 10 MB per image; PDFs are rejected. Lists grow as you scroll: `LoadMore` presses its own button for you when the end of the list comes into view, one page is in flight at a time, and a throttle window keeps a fast scroll from queueing repeat requests. Chat typing and live refreshes are throttled.
 
 ## Docker
 
