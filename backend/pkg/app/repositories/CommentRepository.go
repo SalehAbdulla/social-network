@@ -7,7 +7,7 @@ import (
 
 type CommentRepository interface {
 	GetComments(postId int, pageNumber int, pageSize int, sortBy string, sortOrder string, userID string) ([]models.Comment, int, error)
-	CreateComment(userId string, postId int, content string) (models.Comment, error)
+	CreateComment(userId string, postId int, content string, imageURLs string) (models.Comment, error)
 	DeleteComment(commentId int, userId string) error
 }
 
@@ -47,7 +47,7 @@ func (db *DB) GetComments(postId int, pageNumber int, pageSize int, sortBy strin
 	offset := (pageNumber - 1) * pageSize
 
 	query := `
-		SELECT c.commentId, c.postId, c.userId, u.nickName, c.content, c.score, c.createdAt,
+		SELECT c.commentId, c.postId, c.userId, u.nickName, c.content, c.imageUrls, c.score, c.createdAt,
 		       COALESCE(r.score, 0) AS userScore
 		FROM comment c
 		JOIN user u ON c.userId = u.userId
@@ -72,6 +72,7 @@ func (db *DB) GetComments(postId int, pageNumber int, pageSize int, sortBy strin
 			&com.UserId,
 			&com.Nickname,
 			&com.CommentText,
+			&com.ImageURLs,
 			&com.Score,
 			&com.CreatedAt,
 			&com.UserScore,
@@ -93,15 +94,18 @@ func (db *DB) GetComments(postId int, pageNumber int, pageSize int, sortBy strin
 	return comments, totalElements, nil
 }
 
-func (db *DB) CreateComment(userId string, postId int, content string) (models.Comment, error) {
+func (db *DB) CreateComment(userId string, postId int, content string, imageURLs string) (models.Comment, error) {
 	if err := db.DoesPostExists(postId); err != nil {
 		return models.Comment{}, err
 	}
+	if imageURLs == "" {
+		imageURLs = "[]"
+	}
 
 	result, err := db.Conn.Exec(
-		`INSERT INTO comment (postId, userId, content, score, createdAt)
-		 VALUES (?, ?, ?, 0, datetime('now'))`,
-		postId, userId, content,
+		`INSERT INTO comment (postId, userId, content, imageUrls, score, createdAt)
+		 VALUES (?, ?, ?, ?, 0, datetime('now'))`,
+		postId, userId, content, imageURLs,
 	)
 	if err != nil {
 		return models.Comment{}, realtimeforum.ErrInternal
@@ -122,7 +126,7 @@ func (db *DB) CreateComment(userId string, postId int, content string) (models.C
 
 	var com models.Comment
 	err = db.Conn.QueryRow(
-		`SELECT commentId, postId, userId, content, createdAt
+		`SELECT commentId, postId, userId, content, imageUrls, createdAt
 		 FROM comment
 		 WHERE commentId = ?`, commentID,
 	).Scan(
@@ -130,6 +134,7 @@ func (db *DB) CreateComment(userId string, postId int, content string) (models.C
 		&com.PostId,
 		&com.UserId,
 		&com.CommentText,
+		&com.ImageURLs,
 		&com.CreatedAt,
 	)
 
