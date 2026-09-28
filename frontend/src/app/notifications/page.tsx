@@ -1,6 +1,7 @@
 'use client';
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
+import { MessageSquare } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { type FollowRequest, type Notification, dateLabel, errorMessage, request } from '../api/social';
 import { useBackend } from '../components/BackendProvider';
@@ -19,6 +20,42 @@ function notificationPath(item: Notification) {
   if (item.entityType === 'message') return `/messages/${item.actorId}`;
   if (item.entityType === 'comment') return item.postId ? `/post/${item.postId}` : '/profile';
   return `/profile/${item.actorId}`;
+}
+
+function notificationText(item: Notification) {
+  if (item.entityType === 'group_invitation') return 'invited you to a group.';
+  if (item.entityType === 'group_request') return 'requested to join your group.';
+  if (item.entityType === 'group_event') return 'created a group event.';
+  if (item.entityType === 'message') return 'sent you a private message.';
+  if (item.entityType === 'comment') return 'commented on your post.';
+  if (item.entityType === 'follow_request') return 'requested to follow you.';
+  if (item.entityType === 'follow') return 'followed you.';
+  return 'updated a connection request.';
+}
+
+/**
+ * A private message is not a notification, so the two no longer look alike:
+ * message rows carry their own accent, a caption and a chat call to action,
+ * while every other type keeps the notification styling. The API keeps them
+ * apart too — the sidebar bell asks for `?exclude=message`, the Messages entry
+ * for `?types=message`.
+ */
+function NotificationCard({ item, busy, mark }: {
+  item: Notification;
+  busy: boolean;
+  mark: (path: string) => Promise<void>;
+}) {
+  const message = item.entityType === 'message';
+  const tone = message
+    ? (item.isRead ? 'border-teal-200 bg-card' : 'border-teal-300 bg-teal-50')
+    : (item.isRead ? 'border-slate-100 bg-white' : 'border-blue-100 bg-blue-50');
+
+  return <div className={`rounded-xl border p-5 space-y-2 ${tone}`}>
+    {message && <p className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-teal-700"><MessageSquare size={14} aria-hidden="true" />Private message</p>}
+    <p><Link href={`/profile/${item.actorId}`} className="font-semibold">@{item.actorNickname}</Link> {notificationText(item)}</p>
+    <p className="text-xs text-slate-400">{dateLabel(item.createdAt)}</p>
+    <div className="flex gap-4 text-sm"><Link href={notificationPath(item)} className={message ? 'font-medium text-teal-700' : 'text-blue-600'}>{message ? 'Open chat' : 'View'}</Link>{!item.isRead && <button disabled={busy} onClick={() => void mark(`/notifications/${item.notificationId}/read`)}>Mark as read</button>}</div>
+  </div>;
 }
 
 export default function Notifications() {
@@ -88,7 +125,7 @@ export default function Notifications() {
     <div className="space-y-3">
       <h2 className="text-lg font-semibold text-text">Activity</h2>
       {notifications.loading && <RowsSkeleton />}
-      {notifications.items.map(item => <div key={item.notificationId} className={`rounded-xl border p-5 space-y-2 ${item.isRead ? 'border-slate-100 bg-white' : 'border-blue-100 bg-blue-50'}`}><p><Link href={`/profile/${item.actorId}`} className="font-semibold">@{item.actorNickname}</Link> {item.entityType === 'group_invitation' ? 'invited you to a group.' : item.entityType === 'group_request' ? 'requested to join your group.' : item.entityType === 'group_event' ? 'created a group event.' : item.entityType === 'message' ? 'sent you a message.' : item.entityType === 'comment' ? 'commented on your post.' : item.entityType === 'follow_request' ? 'requested to follow you.' : item.entityType === 'follow' ? 'followed you.' : 'updated a connection request.'}</p><p className="text-xs text-slate-400">{dateLabel(item.createdAt)}</p><div className="flex gap-4 text-sm"><Link href={notificationPath(item)} className="text-blue-600">View</Link>{!item.isRead && <button disabled={busy} onClick={() => void mark(`/notifications/${item.notificationId}/read`)}>Mark as read</button>}</div></div>)}
+      {notifications.items.map(item => <NotificationCard key={item.notificationId} item={item} busy={busy} mark={mark} />)}
       {notifications.settled && notifications.items.length === 0 && <RequestState empty="You're all caught up." />}
       {notifications.items.length > 0 && <LoadMore loading={notifications.loadingMore} hasMore={notifications.hasMore} onLoadMore={notifications.loadMore} label="Load more notifications" />}
     </div>
