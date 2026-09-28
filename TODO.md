@@ -7,7 +7,8 @@ Baseline checks: `go test ./...` passes, `go vet ./...` is clean, both Docker im
 through `compose.yaml`, and migrations `000001`–`000010` are applied at boot by
 `backend/pkg/db/sqlite/sqlite.go`.
 
-Working today: auth (register/login/logout, bcrypt, cookie sessions), public/private
+Working today: auth (register with an optional avatar, About Me and visibility choice,
+login/logout, bcrypt, cookie sessions), public/private
 profiles, followers/following lists, posts with three privacy levels, reactions, comments
 with images, groups (create/browse/invite/request/accept/post/comment/event+RSVP/chat/
 transfer/leave), notifications with WebSocket push and separate notification and message
@@ -15,10 +16,10 @@ badges, media uploads
 (JPEG/PNG/GIF/WebP/MP4/WebM), stories, and realtime chat with typing, read receipts and
 presence.
 
-Known spec-level gap, detailed below: register-form field parity (P0-5).
-Closed on 2026-09-28: comment media (P0-2), the chat permission rules (P0-3), the
-notification/message split (P0-4) and durable sessions (P0-6); see "Work in flight and
-handoff" at the end of this file for what is still in someone else's hands.
+Spec-critical gaps: none open. Closed on 2026-09-28: comment media (P0-2), the chat permission
+rules (P0-3), the notification/message split (P0-4), register field parity (P0-5) and durable
+sessions (P0-6); see "Work in flight and handoff" at the end of this file for what is still in
+someone else's hands.
 
 ## Working prompt
 
@@ -236,23 +237,61 @@ clears the badge). Artifacts: `backend/tmp/integration-1790613918588`.
 - [x] **P1** Test asserting the bell count excludes `message` rows and the message count
   excludes everything else.
 
-### P0-5 · Register form does not match the required field list
+### P0-5 · Register form does not match the required field list (implemented 2026-09-28; verified locally)
 
 Spec requires Email, Password, First Name, Last Name and Date of Birth, and requires
-Avatar/Image, Nickname and About Me to be *present in the form but skippable*. Currently the
-form (`frontend/src/app/login/page.tsx`, register branch) has no Avatar or About Me input,
-Nickname is mandatory, and the profile silently defaults to public.
+Avatar/Image, Nickname and About Me to be *present in the form but skippable*. The register
+branch of `frontend/src/app/login/page.tsx` had no Avatar or About Me input, Nickname was
+mandatory, and the profile silently defaulted to public.
 
-- [ ] **P0** Add optional Avatar and About Me inputs with an upload preview, sending the
-  URL from `POST /api/v1/media`.
-- [ ] **P0** Persist them: extend `user.RegisterRequestDTO`,
-  `AuthService.Register`, and `AuthRepository.InsertUser`.
-- [ ] **P0** Make Nickname genuinely optional — auto-generate a unique handle
-  (`ValidateNickname`, `user.nickName NOT NULL UNIQUE`, and every `/profile/{id}` link assume
-  it exists) or default it and document the deviation.
-- [ ] **P1** Offer a public/private choice at signup instead of defaulting `isPublic = 1`.
-- [ ] **P1** Test: registering with only the mandatory fields succeeds, and a supplied
-  avatar/bio shows up on the profile.
+Policy: the form now carries all eight fields and only the five mandatory ones are required.
+The nickname is genuinely optional — `user.nickName` is `NOT NULL UNIQUE` and every
+`/profile/{id}` link assumes a handle, so a blank nickname is *generated* rather than
+rejected: `AuthService.availableNickname` builds a handle from first+last name (falling back
+to the email local part, then `user`), keeps only `[a-z0-9_]`, and appends a counter until
+`NicknameAvailable` is true. About Me (≤1000 runes) and the public/private choice travel in
+the register request and are written by the same `INSERT`, so there is no window where the
+account exists with a default profile; `isPublic` is only treated as private when the form
+sends `false`/`off`, which keeps the old public default for clients that omit it. No
+migration was needed: `aboutMe`, `avatar` and `isPublic` already exist in `000001`.
+
+Deviation from the sketch above, and why: **the avatar cannot ride in the register request.**
+`POST /api/v1/media` sits behind `AuthMiddleware`, so an anonymous visitor cannot upload, and
+`cmd/security.go` caps non-media bodies at 1 MiB so the file cannot be attached to the
+register call either. Rejected options were an unauthenticated upload endpoint (anonymous
+disk-fill vector) and multipart registration (duplicates the media pipeline inside the auth
+handler and needs that cap raised for an anonymous endpoint). The form therefore previews the
+picked file locally, and once `POST /auth/register` has set the session cookie the client
+uploads it and attaches it with one `PUT /users/me`; a failure there warns instead of losing
+the new account. `Avatar` is consequently not a `RegisterRequestDTO` field — About Me and the
+visibility choice are, and the handle is returned by the register response so the client
+never has to guess it.
+
+`AuthRepository.InsertUser` now takes a `models.Registration` struct instead of nine
+positional arguments, because adding `bio` and `isPublic` to a list that already held five
+adjacent strings invited a silent swap.
+
+Verified: `go build ./...`, `go vet ./...`, `go test ./...`; `npm run lint` (0 errors);
+`npm run build`; the full browser smoke suite. New coverage:
+`backend/cmd/register_fields_test.go` (mandatory-only signup plus a generated handle,
+colliding names getting different handles, a typed handle surviving and a duplicate being
+rejected, About Me and `isPublic=false` landing on the profile while a stranger gets the
+stripped view, the `on`/`off` spellings, an over-long About Me rejected, and the documented
+avatar path — upload, `PUT /users/me`, served to the owner and on the shared profile) and two
+browser steps in `frontend/scripts/integration-smoke.mjs` (mandatory-only signup generating a
+handle; the fully filled form keeping its handle and About Me, staying private, and saving the
+uploaded photo). Artifacts: `backend/tmp/integration-1790615446452`.
+
+- [x] **P0** Optional Avatar and About Me inputs with an upload preview. The preview is local
+  to the form; the URL from `POST /api/v1/media` is attached straight after signup, for the
+  reason above.
+- [x] **P0** Persisted: `user.RegisterRequestDTO`, `AuthService.Register` and the
+  `InsertUser` insert all carry About Me and the visibility choice; the avatar arrives with
+  the follow-up profile update.
+- [x] **P0** Nickname is optional and auto-generated, as described above.
+- [x] **P1** Public/private choice at signup instead of defaulting `isPublic = 1`.
+- [x] **P1** Test: registering with only the mandatory fields succeeds and generates a handle,
+  and a supplied avatar/bio shows up on the profile.
 
 ### P0-6 · Sessions were in-memory; the `session` table was dead code (implemented 2026-09-28; verified locally)
 
@@ -431,13 +470,14 @@ Reference: `GroupHandler.go`, `GroupManagementHandler.go`, `GroupContentHandler.
 - [ ] **P1** Add direct tests for the packages that have none: `pkg/app/handlers`,
   `pkg/app/repositories`, `pkg/middleware`, `pkg/websocket` — they are currently only
   exercised indirectly through `cmd/*_test.go`.
-- [ ] **P1** Cover every P0 flow with tests: follow requests, comment media, chat permission
+- [x] **P1** Cover every P0 flow with tests: follow requests, comment media, chat permission
   rules, register field parity, notification type separation, and session persistence.
-  Progress 2026-09-28: follow requests, comment media, the chat permission rules, notification
-  type separation and session persistence are covered in Go; register field parity has none.
-- [ ] **P1** Extend the browser smoke suite to the follow-request and comment-image journeys.
-  Progress 2026-09-28: the comment-image journey and the notification/message badge split are
-  now browser steps; the follow-request journey is not.
+  Closed 2026-09-28: all six have Go coverage — `cmd/follow_request_test.go`,
+  `cmd/comment_media_test.go`, `cmd/chat_permission_test.go`, `cmd/register_fields_test.go`,
+  `cmd/notification_types_test.go` and `cmd/session_test.go`.
+- [x] **P1** Extend the browser smoke suite to the follow-request and comment-image journeys.
+  Closed 2026-09-28: the follow-request, comment-image, notification/message badge and signup
+  journeys all run in the browser suite.
 - [x] **P1** Add a migration test that runs `up` → `down` → `up` over all ten migrations on
   a scratch database. `backend/pkg/db/sqlite/migrations_test.go` does exactly that, checks
   that 000009 keeps existing session rows, and asserts the 000010 comment media column
@@ -618,13 +658,23 @@ The theme/dark-mode rework that shared this tree is **committed too** (`19b694c`
 (`bg-card`, `border-border`, `text-muted`, `bg-surface-2`, `text-brand-1`, the `chat-*`
 component classes) are the ones to build on.
 
+- P0-5 (register field parity) is complete; it touched `login/page.tsx`. The avatar is
+  attached with a `PUT /users/me` straight after signup, because `POST /media` needs the
+  session that registering creates — do not "simplify" that into a register field.
 - P0-4 (notification vs message split) is complete; it touched `SideBar.tsx` and
   `notifications/page.tsx`.
 - P0-2 (comment media) is complete; it touched `PostCard.tsx` and `profile/page.tsx`.
 - P0-3 is complete on the backend; the only missing piece is the frontend guard, handed off
   with the exact change list in that section. `canMessage` is still only a type in
   `frontend/src/app/api/social.ts`, so nothing reads the flag yet.
-- Register field parity (P0-5) is now the only open P0 item.
+- No P0 items are open. What is left is the P1/P2/P3 list above.
+
+Changed in the P0-5 session (2026-09-28), for review: `backend/pkg/models/Registration.go`,
+`backend/pkg/app/repositories/AuthRepository.go`, `backend/pkg/app/service/AuthService.go`,
+`backend/pkg/app/handlers/AuthHandler.go`, `backend/pkg/payload/user/RegisterRequestDTO.go`,
+`backend/cmd/{seed/main.go,integration_test.go,follow_request_test.go}`,
+`backend/cmd/register_fields_test.go`, `frontend/src/app/login/page.tsx`,
+`frontend/scripts/integration-smoke.mjs`.
 
 Changed in the P0-4 session (2026-09-28), for review: `backend/pkg/models/Notification.go`,
 `backend/pkg/app/repositories/NotificationRepository.go`,
