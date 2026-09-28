@@ -15,6 +15,18 @@ func NotificationEntityTypes() []string {
 	}
 }
 
+// IsNotificationEntityType reports whether the API exposes this entityType. The
+// service validates creation with it, so the whitelist cannot drift from the
+// list the SQL and the query filters use.
+func IsNotificationEntityType(entityType string) bool {
+	for _, known := range NotificationEntityTypes() {
+		if known == entityType {
+			return true
+		}
+	}
+	return false
+}
+
 type Notification struct {
 	NotificationId int
 	UserId         string
