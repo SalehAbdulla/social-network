@@ -58,6 +58,7 @@ func routes() http.Handler {
 		"GET /api/v1/users/{userId}":              handlers.HandlerCtx.UserProfile,
 		"PUT /api/v1/users/me":                    handlers.HandlerCtx.UpdateProfile,
 		"GET /api/v1/users/{userId}/posts":        handlers.HandlerCtx.ProfilePosts,
+		"GET /api/v1/users/{userId}/media":        handlers.HandlerCtx.ProfileMedia,
 		"GET /api/v1/users/{userId}/follows":      handlers.HandlerCtx.FollowLists,
 		"PUT /api/v1/users/{userId}/follow":       handlers.HandlerCtx.Follow,
 		"DELETE /api/v1/users/{userId}/follow":    handlers.HandlerCtx.Follow,
