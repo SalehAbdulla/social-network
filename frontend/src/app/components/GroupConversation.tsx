@@ -1,11 +1,12 @@
 'use client';
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { ArrowLeft, Info } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { type Group, type GroupMember, type GroupRequest, type SocialUser, displayName, errorMessage, request, upload } from '../api/social';
 import { useBackend } from './BackendProvider';
+import { useDialogFocus } from '../lib/useDialogFocus';
 import { useResource } from '../lib/useResource';
 import { useLiveRefresh } from '../lib/useLiveRefresh';
 import Avatar from './Avatar';
@@ -22,6 +23,12 @@ function GroupInfo({ group, changed }: { group: Group; changed: () => void }) {
   const [image, setImage] = useState(group.imageUrl);
   const [busy, setBusy] = useState(false);
   const [confirm, setConfirm] = useState<'delete' | 'leave' | null>(null);
+  // The confirmation prompt is a dialog with the drawer's keyboard contract:
+  // Escape and Cancel both cancel it, focus starts on the action and returns to
+  // the button that opened it. It stays part of the page rather than an overlay,
+  // so `lockScroll` is off; `enabled` installs the trap only while it is open.
+  const confirmButton = useRef<HTMLButtonElement>(null);
+  const confirmDialog = useDialogFocus<HTMLDivElement>(() => setConfirm(null), { initialFocus: confirmButton, enabled: confirm !== null, lockScroll: false });
   const [search, setSearch] = useState('');
   const [query, setQuery] = useState('');
   const members = useResource<GroupMember[]>(`/groups/${group.groupId}/members`);
@@ -54,7 +61,7 @@ function GroupInfo({ group, changed }: { group: Group; changed: () => void }) {
     <section className="rounded-2xl border border-red-100 bg-white p-5">
       <button className="text-sm font-medium text-red-600" onClick={() => setConfirm(group.isOwner ? 'delete' : 'leave')}>{group.isOwner ? 'Delete group' : 'Leave group'}</button>
       {group.isOwner && <p className="mt-2 text-xs text-slate-500">To leave without deleting the group, transfer ownership to a member first.</p>}
-      {confirm && <div className="mt-3 space-y-3"><p className="text-sm text-slate-600">{confirm === 'delete' ? 'Delete this group and all its messages, posts and events? This cannot be undone.' : 'Leave this group? You will need an invitation or approval to rejoin.'}</p><div className="flex gap-2"><button disabled={busy} className="rounded-lg bg-red-600 px-4 py-2 text-sm text-white" onClick={() => void mutate(async () => { await request(confirm === 'delete' ? `/groups/${group.groupId}` : `/groups/${group.groupId}/members/${user.userId}`, 'DELETE'); router.push('/messages/groups'); }, confirm === 'delete' ? 'Group deleted' : 'You left the group')}>{confirm === 'delete' ? 'Delete permanently' : 'Leave group'}</button><button className="chat-secondary" onClick={() => setConfirm(null)}>Cancel</button></div></div>}
+      {confirm && <div ref={confirmDialog} tabIndex={-1} role="dialog" aria-labelledby={`group-${group.groupId}-confirm`} className="mt-3 space-y-3"><p id={`group-${group.groupId}-confirm`} className="text-sm text-slate-600">{confirm === 'delete' ? 'Delete this group and all its messages, posts and events? This cannot be undone.' : 'Leave this group? You will need an invitation or approval to rejoin.'}</p><div className="flex gap-2"><button ref={confirmButton} disabled={busy} className="rounded-lg bg-red-600 px-4 py-2 text-sm text-white" onClick={() => void mutate(async () => { await request(confirm === 'delete' ? `/groups/${group.groupId}` : `/groups/${group.groupId}/members/${user.userId}`, 'DELETE'); router.push('/messages/groups'); }, confirm === 'delete' ? 'Group deleted' : 'You left the group')}>{confirm === 'delete' ? 'Delete permanently' : 'Leave group'}</button><button className="chat-secondary" onClick={() => setConfirm(null)}>Cancel</button></div></div>}
     </section>
   </div></div>;
 }
