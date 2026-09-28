@@ -3,6 +3,12 @@
 Legend: `[x]` verified working on `main` @ `cb91348` unless an item notes local verification · `[ ]` open · **P0** blocks a mandatory
 spec line · **P1** required before release · **P2** polish · **P3** nice to have.
 
+Items closed on 2026-09-28 after that revision carry their own evidence line. The backend ones
+are locally verified with `go build ./...`, `go vet ./...` and `go test ./...`; the frontend
+ones with `npm run lint` (0 errors), `npx tsc --noEmit` and `npm run build`. They are
+uncommitted until reviewed, and the browser smoke suite was not run — see the session note at
+the end of this file.
+
 Baseline checks: `go test ./...` passes, `go vet ./...` is clean, both Docker images build
 through `compose.yaml`, and migrations `000001`–`000010` are applied at boot by
 `backend/pkg/db/sqlite/sqlite.go`.
@@ -407,7 +413,20 @@ Reference: `GroupHandler.go`, `GroupManagementHandler.go`, `GroupContentHandler.
   session cookie plus the middleware's `Origin`/`Sec-Fetch-Site` rejection of every non-GET
   request from another origin, documented in `DEPLOYMENT.md`. A token would change every
   mutating call without adding a property those two controls do not already provide.
-- [ ] **P1** Run `npm audit` and `govulncheck ./...`, then fix or justify each finding in CI.
+- [x] **P1** Run `npm audit` and `govulncheck ./...`, then fix or justify each finding in CI.
+  Closed 2026-09-28: both scanners run in `.github/workflows/ci.yml`, and each finding is
+  justified in `DEPLOYMENT.md` under "Dependency advisories". `govulncheck` is blocking,
+  because it only fails on a vulnerability the code actually reaches; its three findings are
+  standard-library issues (`crypto/tls`, the unencrypted HTTP/2 `net/http` check,
+  `encoding/asn1` recursion) fixed in **go1.26.6**, and both the Dockerfile base image and CI
+  take a current 1.26 patch — so the finding means "build with an up-to-date toolchain", not
+  "change the code", and pinning an older patch would keep it. `npm audit` is reported, not
+  enforced: it lists 4 high and 1 critical, all inside Next.js tooling, and its only fix is
+  `npm install next@16.3.6`, outside the pinned range (tracked below). None is reachable in
+  this deployment — the two Next.js RCEs need a Windows host or the AVIF
+  image-optimisation endpoint, and no component uses `next/image`, so `sharp` and the
+  optimiser are dead paths; `postcss` and `js-yaml` run only at build time over our own CSS
+  and config; `nanoid`'s advisory needs a caller passing a size of zero.
 - [ ] **P2** Harden uploads further: re-encode images or serve them with
   `Content-Disposition: attachment` and a restrictive CSP so an HTML/SVG payload cannot be
   used for stored XSS.
@@ -422,9 +441,29 @@ Reference: `GroupHandler.go`, `GroupManagementHandler.go`, `GroupContentHandler.
   (`Loading`, `RequestState`, `error.tsx`, `not-found.tsx`).
 - [x] Failures are reported with `react-hot-toast` rather than inline blocks, per the
   recent refactor commits (`ae86292`, `c4b5a46`, `4483030`).
-- [ ] **P1** Media and upload edge cases: files over the 51 MiB cap, zero-byte files, an
+- [x] **P1** Media and upload edge cases: files over the 51 MiB cap, zero-byte files, an
   extension that disagrees with the detected MIME, and orphaned `media` rows when the
-  referencing post, comment, story or message is deleted.
+  referencing post, comment, story or message is deleted. Closed 2026-09-28: the size
+  violations now answer **413** (the request was well formed, it was simply too large) with a
+  message naming the limit — the 50 MB file ceiling and the 10 MB image ceiling are separate,
+  and a body past the request ceiling is caught through `http.MaxBytesError`; an empty file
+  answers 400 with `ErrEmptyUpload` instead of a bare "bad request". The type contract is now
+  stated and pinned rather than incidental: the filename and extension are never read, the
+  client's `Content-Type` is ignored, and the stored/served type comes from
+  `http.DetectContentType` plus `image.DecodeConfig`, so a PNG named `.gif` is served as
+  `image/png` and an HTML or PDF payload with an image extension is refused. Orphaned rows are
+  handled by a collector (`pkg/app/repositories/MediaRepository.go` +
+  `pkg/app/handlers/MediaCleanup.go`) that deletes every media row no live row references —
+  checked across all eight referencing surfaces — together with its file, and sweeps
+  UUID-named strays; it runs at boot and hourly from `cmd/main.go` with a 24-hour grace window
+  (`handlers.MediaGrace`) so an upload that has not been attached yet is safe, and an expired
+  story releases its media because it can never be served again. Evidence:
+  `cmd/media_upload_test.go` (413 for both ceilings, 400 for an empty file, the sniffed type
+  served with `nosniff`, HTML/PDF refused, and a sweep after deleting each of a post, a
+  comment, a story and a message, plus the never-attached upload, the stray file and an
+  expired story), the 413 fixture in `cmd/group_management_test.go`, and a browser step in
+  `frontend/scripts/integration-smoke.mjs` that posts the same cases through the Next rewrite.
+  Documented in `DEPLOYMENT.md`.
 - [x] **P1** Audit the `postVisibility` SQL fragment over every read path: feed, single post,
   profile posts, likes tab, comments and direct media. All six were already covered by the one
   fragment, and the audit found the one surface that was not: **reactions**. `UpsertReaction`
@@ -458,11 +497,35 @@ Reference: `GroupHandler.go`, `GroupManagementHandler.go`, `GroupContentHandler.
   empty state; the follow-request half is unchanged.
 - [ ] **P1** Reconnect/offline UX: `BackendProvider.tsx:94` retries the socket every 3 s with
   no visible state — surface the existing `connected` context value in the UI.
-- [ ] **P1** Accessibility pass: apply the drawer's focus trap and Escape handling to
+- [x] **P1** Accessibility pass: apply the drawer's focus trap and Escape handling to
   `EditProfile`, `StoriesBar` and `GroupConversation` dialogs; confirm `aria-live` on the
-  unread badge; check colour contrast on the teal/blue gradients.
+  unread badge; check colour contrast on the teal/blue gradients. Closed 2026-09-28: the
+  drawer's keyboard contract is now a reusable hook, `frontend/src/app/lib/useDialogFocus.ts`
+  — focus moves into the dialog on open (an optional `initialFocus`, else the first control),
+  Tab and Shift+Tab cycle inside it, Escape closes it, the page is frozen and focus returns to
+  the trigger. It is applied to `EditProfile`, both `StoriesBar` dialogs (`CreateStory` starts
+  in its text field, the story viewer on its close button), the `GroupConversation`
+  leave/delete confirmation (inline, so `lockScroll` is off and `enabled` installs the trap
+  only while it is open) and `FollowListModal`, the other real overlay, which previously had
+  none of this. The unread badges were the weak part of the `aria-live` story: the badge was
+  inserted *with* its number, and a live region has to exist before its text changes or the
+  first announcement can be missed, so the region is now the always-mounted wrapper and the
+  badge inside it appears later. The badge itself keeps its `aria-label`, because that is what
+  names it inside the link and what the browser suite reads — an earlier draft moved the count
+  into a separate visually-hidden region, which would have quietly invalidated five assertions
+  in `integration-smoke.mjs`, so the wrapper was the better shape. Contrast was measured rather
+  than eyeballed and three combinations failed AA for their text size: white on
+  `teal-600`/`teal-500` is ~3.7:1/~2.5:1 and white on `red-500` ~3.8:1, so the messages badge,
+  the Create Post and Publish gradients, the story card gradient and the notification badge now
+  end on `teal-700`/`red-600` (5.5:1 and 4.8:1). Recorded rather than fixed: `UserCard.tsx` and
+  `StoryItem.tsx` carry the same white-on-`blue-500` problem but are imported nowhere, so they
+  are dead code (see the housekeeping list).
 - [ ] **P1** Responsive review at 320 / 375 / 768 / 1440 px for messages, group chat,
-  profile, notifications, and the new follow-request screens.
+  profile, notifications, and the new follow-request screens. Not done in the
+  accessibility session: it needs a real browser and the Chrome dependency was unavailable
+  there, so it would have been a claim rather than a check. The group-chat step in
+  `frontend/scripts/integration-smoke.mjs` already drives a mobile viewport — extend that
+  pattern per surface instead of starting from scratch.
 - [ ] **P2** Replace the `dummyUserData` / `dummyMessagesData` fallbacks in
   `frontend/public/assets.ts` with real empty states, then delete the unused exports.
 - [ ] **P2** Optimistic updates for follow/unfollow and reactions to avoid a full refetch
@@ -486,12 +549,40 @@ Reference: `GroupHandler.go`, `GroupManagementHandler.go`, `GroupContentHandler.
   checks and child-process cleanup.
 - [x] **P1** Add a root `.env.example` (`APP_ENV`, `FRONTEND_ORIGIN`) — `DEPLOYMENT.md:9`
   instructs the reader to create a root `.env` that is not scaffolded anywhere.
-- [ ] **P1** Rewrite the top-level `README.md`: it is still the verbatim assignment text and
-  never describes what was built, the stack, the folder layout, or how to run it.
-- [ ] **P1** Document the `frontend/src/proxy.ts` middleware and the `/api/v1` + `/ws`
-  rewrite contract in `frontend/README.md` (currently only partially covered).
-- [ ] **P1** Add CI (GitHub Actions or the school equivalent) running `go vet`, `go test`,
-  `npm ci`, `npm run lint`, `npm run build`, `docker compose build`, `npm audit`.
+- [x] **P1** Rewrite the top-level `README.md`: it is still the verbatim assignment text and
+  never describes what was built, the stack, the folder layout, or how to run it. Closed
+  2026-09-28: the assignment text is gone (its requirements are quoted in this file), replaced
+  by what the app does, the stack table, the folder layout, Docker and local run instructions,
+  the check commands, the privacy rules worth knowing before changing code, and a map of the
+  other documents.
+- [x] **P1** Document the `frontend/src/proxy.ts` middleware and the `/api/v1` + `/ws`
+  rewrite contract in `frontend/README.md` (currently only partially covered). Closed
+  2026-09-28: a "Same-origin proxy" section now explains both mechanisms — the two rewrites in
+  `next.config.ts`, the build-time `BACKEND_URL` (and why changing it means rebuilding the
+  frontend image), `proxyClientMaxBodySize` and the 51 MiB body ceiling — and the page-gate
+  middleware, including its matcher excluding `/api/*` and `/ws` so it never buffers an upload
+  or a socket upgrade, and the fact that it is a convenience rather than the access check.
+  The same file's claim that a backend restart signs everyone out was stale since sessions
+  moved into the database, and is corrected.
+- [x] **P1** Add CI (GitHub Actions or the school equivalent) running `go vet`, `go test`,
+  `npm ci`, `npm run lint`, `npm run build`, `docker compose build`, `npm audit`. Closed
+  2026-09-28: `.github/workflows/ci.yml` has four jobs — backend (`go build`/`vet`/`test`),
+  frontend (`npm ci`/`lint`/`npx tsc --noEmit`/`build`, plus `npm audit` as a reported step),
+  `govulncheck`, and a Compose job (`docker compose config` + `build`) that waits on the first
+  two. Go `1.26.x` and Node `22` mirror the two Dockerfiles, a concurrency group cancels
+  superseded runs, and each job's comment says why it is scoped the way it is. It is GitHub
+  Actions because the implementation lives on GitHub; translating it to the school's GitLab is
+  a P2 below.
+- [ ] **P2** Bump Next.js past the audit advisory: `16.2.12` is pinned and `npm audit` wants
+  `next@16.3.6` (see Authentication and Security for why the current findings are not
+  reachable). After the bump, re-run lint, `npx tsc --noEmit`, `npm run build` and the browser
+  suite, then the audit step can stop being report-only and the `next/image` item below is
+  unblocked.
+- [ ] **P2** Wire the browser smoke suite into CI: `npm run test:integration` needs Chrome on
+  the runner (`CHROME_PATH`), builds both services and takes several minutes, which is why the
+  workflow leaves it out for now.
+- [ ] **P2** Mirror `.github/workflows/ci.yml` for the school's GitLab if that is where the
+  project is graded.
 - [ ] **P1** Run and record a real backup → wipe → restore drill of the `social-data` volume
   using `sqlite3 .backup`, and verify uploaded media is included.
 - [ ] **P2** Verify `docker compose config` and a full `docker compose up --build` on a clean
@@ -531,7 +622,9 @@ Reference: `GroupHandler.go`, `GroupManagementHandler.go`, `GroupContentHandler.
   non-permitted sender.
 - [ ] **P2** Load smoke: 50 concurrent WebSocket clients and sustained request throughput
   through the frontend proxy, confirming the rate limiter behaves.
-- [ ] **P2** Add `npm run lint` and `npm run build` to the definition of done for every PR.
+- [x] **P2** Add `npm run lint` and `npm run build` to the definition of done for every PR.
+  Closed 2026-09-28 as part of the CI work: `.github/workflows/ci.yml` runs both on every push
+  and pull request, so a branch that breaks either cannot merge without a visible failure.
 - [ ] **P2** Record the release checklist (build, migrate, backup, deploy, verify, rollback)
   in `DEPLOYMENT.md`.
 
@@ -545,6 +638,11 @@ Reference: `GroupHandler.go`, `GroupManagementHandler.go`, `GroupContentHandler.
   `MenuItems.tsx`, `menuItemsData` and the lucide import it needed are gone. The `dummy*`
   fixtures stay for now because `dummyStoriesData` is still imported by `StoryCard` and
   `StoryCarousel`; they go with the empty-state work above.
+- [ ] **P3** Delete the two remaining unimported components: `frontend/src/app/components/StoryItem.tsx`
+  and `UserCard.tsx` are referenced by nothing (a grep for either name returns only the files
+  themselves) and still build on the older `types/story` shape. They were noticed during the
+  accessibility pass because both put white text on a `blue-500` gradient (~3.7:1, below AA);
+  deleting them is the right fix rather than recolouring dead code.
 - [x] **P1** Remove the stale Clerk and `NEXT_PUBLIC_DEV_USER` references listed under
   Authentication and Security.
 - [ ] **P1** Keep this file current. The previous revision marked shipped features (group
@@ -664,7 +762,10 @@ Ordered roughly by value for effort.
 
 - [ ] **P3** Use `next/image` for `Avatar` and post media (the `remotePatterns` block in
   `next.config.ts` already exists) instead of raw `<img>` tags, to get responsive sizing and
-  lazy loading for free.
+  lazy loading for free. Blocked on the Next.js bump above for a security reason, not a
+  stylistic one: the image-optimisation API is the path the critical audit advisory describes,
+  and `sharp`, the optimiser it loads, is currently a dead dependency precisely because
+  nothing calls `next/image`.
 - [ ] **P3** Virtualise long comment and chat lists, which currently render every loaded item.
 - [ ] **P3** Deduplicate requests: `/users/me` and `/users/me/follows` are fetched separately
   by several components on the same page (`PostForm.tsx:23`, `SideBar.tsx:47`).
@@ -713,6 +814,32 @@ component classes) are the ones to build on.
   with the exact change list in that section. `canMessage` is still only a type in
   `frontend/src/app/api/social.ts`, so nothing reads the flag yet.
 - No P0 items are open. What is left is the P1/P2/P3 list above.
+
+Changed in the media-edge-case, accessibility and release-CI session (2026-09-28), for review:
+`backend/errors.go`, `backend/pkg/app/handlers/{utils,MediaHandler,MediaCleanup}.go`,
+`backend/pkg/app/repositories/MediaRepository.go`,
+`backend/cmd/{main.go,media_upload_test.go,group_management_test.go}`,
+`frontend/src/app/lib/useDialogFocus.ts`,
+`frontend/src/app/components/{EditProfile,StoriesBar,GroupConversation,FollowListModal,SideBar,PostForm}.tsx`,
+`frontend/scripts/integration-smoke.mjs`, `.github/workflows/ci.yml`, `README.md`,
+`frontend/README.md`, `DEPLOYMENT.md`.
+
+Three clusters landed together. **Media and upload edge cases**: size violations answer 413
+with the limit named, an empty file answers 400 with its own error, the "type comes from the
+bytes, never the filename" contract is stated and pinned, and a collector deletes media rows
+nothing references (plus their files) at boot and hourly with a 24-hour grace window.
+**Accessibility**: one `useDialogFocus` hook now gives `EditProfile`, both `StoriesBar`
+dialogs, the `GroupConversation` confirmation and `FollowListModal` the drawer's focus trap,
+Escape handling and focus restore; the unread badges moved to a persistent live region; and
+four white-on-colour combinations were darkened after measuring them. **Release**: CI with
+four jobs, a real top-level README, and the proxy/rewrite contract documented.
+
+Evidence: `go build ./...`, `go vet ./...`, `go test ./...` all pass (including the new
+`cmd/media_upload_test.go`), `npm run lint` reports 0 errors, `npx tsc --noEmit` is clean and
+`npm run build` succeeds. `npm run test:integration` was **not** run: this environment has no
+Chrome, so the browser step added for the upload edge cases and every focus and contrast
+change still need one smoke run before they are trusted. `.next-smoke/` and `backend/tmp/`
+were left untracked, as before.
 
 Changed in the visibility-audit session (2026-09-28), for review:
 `backend/pkg/app/repositories/{PostRepository,ReactionRepository}.go`,
