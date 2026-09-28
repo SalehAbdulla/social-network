@@ -1,11 +1,11 @@
 'use client';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { ChevronLeft, ChevronRight, MoreVertical, Plus, Trash2, X } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { type Story, errorMessage, request, upload } from '../api/social';
-import { useResource } from '../lib/useResource';
+import { usePagedList } from '../lib/usePagedList';
 import { useBackend } from './BackendProvider';
-import Pagination from './Pagination';
+import LoadMore from './LoadMore';
 
 export function CreateStory({ close, saved }: { close: () => void; saved: () => void }) {
   const [text, setText] = useState('');
@@ -29,31 +29,51 @@ export function CreateStory({ close, saved }: { close: () => void; saved: () => 
     <button disabled={busy} className="w-full rounded-lg bg-blue-600 py-3 text-white disabled:opacity-50">{busy ? 'Sharing?' : 'Share story'}</button>
   </form></div>;
 }
+const STORIES_PER_PAGE = 30;
+// `/stories` caps a page at 30 rows and pages with a raw offset.
+const STORIES_KEY = '/stories';
+
 export default function StoriesBar() {
   const { user } = useBackend();
-  const [offset, setOffset] = useState(0);
-  const stories = useResource<Story[]>(`/stories?offset=${offset}`);
+  const stories = usePagedList<Story, Story[]>({
+    key: STORIES_KEY,
+    pageQuery: page => `?offset=${(page - 1) * STORIES_PER_PAGE}`,
+    pageSize: STORIES_PER_PAGE,
+    normalize: raw => ({ items: raw }),
+    keyOf: story => story.storyId,
+  });
+  const strip = useRef<HTMLDivElement>(null);
   const [creating, setCreating] = useState(false);
   const [viewing, setViewing] = useState<Story | null>(null);
   const [deleting, setDeleting] = useState(false);
   const reload = stories.reload;
   function showNextStory() {
-    const items = stories.data || [];
+    const items = stories.items;
     const index = viewing ? items.findIndex(story => story.storyId === viewing.storyId) : -1;
-    setViewing(index >= 0 && index < items.length - 1 ? items[index + 1] : null);
+    if (index < 0) return;
+    // Running off the end of the loaded strip asks for the next page instead of
+    // closing the viewer, so a long story row can be watched end to end.
+    if (index < items.length - 1) setViewing(items[index + 1]);
+    else stories.loadMore();
   }
   function showPreviousStory() {
-    const items = stories.data || [];
+    const items = stories.items;
     const index = viewing ? items.findIndex(story => story.storyId === viewing.storyId) : -1;
     if (index > 0) setViewing(items[index - 1]);
   }
-  useEffect(() => { const timer = setInterval(reload, 60000); return () => clearInterval(timer); }, [reload]);
-  return <section className="space-y-3"><div className="no-scrollbar flex gap-4 overflow-x-auto pb-2">
+  // A background refresh would collapse the pages the reader scrolled through,
+  // so it only runs while the strip still shows the newest stories.
+  useEffect(() => {
+    const timer = setInterval(() => { if (!strip.current || strip.current.scrollLeft === 0) reload(); }, 60000);
+    return () => clearInterval(timer);
+  }, [reload]);
+  return <section className="space-y-3"><div ref={strip} className="no-scrollbar flex gap-4 overflow-x-auto pb-2">
     <button onClick={() => setCreating(true)} className="flex aspect-[3/4] h-40 min-w-30 shrink-0 flex-col items-center justify-center rounded-lg border-2 border-dashed border-blue-200 bg-linear-to-b from-blue-50 to-white text-sm text-slate-700 shadow-sm transition hover:shadow-md"><span className="mb-3 flex size-10 items-center justify-center rounded-full bg-blue-600 text-white"><Plus size={20} /></span><span className="font-medium">Create story</span></button>
-    {stories.data?.map(story => <StoryCard key={story.storyId} story={story} currentUserId={user.userId} onView={setViewing} onDelete={async () => { await request(`/stories/${story.storyId}`, 'DELETE'); reload(); if (viewing?.storyId === story.storyId) setViewing(null); }} />)}
-  </div>{(offset > 0 || stories.data?.length === 30) && <Pagination label="Stories pagination" page={offset / 30 + 1} hasNext={stories.data?.length === 30} loading={stories.loading} onChange={page => setOffset((page - 1) * 30)} />}
+    {stories.items.map(story => <StoryCard key={story.storyId} story={story} currentUserId={user.userId} onView={setViewing} onDelete={async () => { await request(`/stories/${story.storyId}`, 'DELETE'); reload(); if (viewing?.storyId === story.storyId) setViewing(null); }} />)}
+    <LoadMore compact className="h-40 w-24" label="Load more stories" endLabel={null} loading={stories.loadingMore} hasMore={stories.hasMore} onLoadMore={stories.loadMore} />
+  </div>
     {creating && <CreateStory close={() => setCreating(false)} saved={reload} />}
-    {viewing && <StoryViewer key={viewing.storyId} story={viewing} canDelete={viewing.userId === user.userId} close={() => setViewing(null)} onPrevious={showPreviousStory} onNext={showNextStory} hasPrevious={stories.data?.findIndex(story => story.storyId === viewing.storyId) ? true : false} hasNext={stories.data ? stories.data.findIndex(story => story.storyId === viewing.storyId) < stories.data.length - 1 : false} deleting={deleting} onDelete={async () => { setDeleting(true); try { await request(`/stories/${viewing.storyId}`, 'DELETE'); setViewing(null); reload(); } catch (error) { toast.error(errorMessage(error)); } finally { setDeleting(false); } }} />}
+    {viewing && <StoryViewer key={viewing.storyId} story={viewing} canDelete={viewing.userId === user.userId} close={() => setViewing(null)} onPrevious={showPreviousStory} onNext={showNextStory} hasPrevious={stories.items.findIndex(story => story.storyId === viewing.storyId) > 0} hasNext={stories.items.findIndex(story => story.storyId === viewing.storyId) < stories.items.length - 1 || stories.hasMore} deleting={deleting} onDelete={async () => { setDeleting(true); try { await request(`/stories/${viewing.storyId}`, 'DELETE'); setViewing(null); reload(); } catch (error) { toast.error(errorMessage(error)); } finally { setDeleting(false); } }} />}
   </section>;
 }
 
