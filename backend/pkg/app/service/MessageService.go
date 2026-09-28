@@ -38,6 +38,14 @@ func (m MessageServiceImpl) GetMessages(conversationPartnerID string, currentUse
 		return message.MessagesResponse{}, err
 	}
 
+	// Threads whose participants are no longer allowed to chat stay hidden, so
+	// the inbox listing and direct URLs agree with the send rule.
+	if allowed, err := m.messageRepo.CanMessage(currentUserID, conversationPartnerID); err != nil {
+		return message.MessagesResponse{}, err
+	} else if !allowed {
+		return message.MessagesResponse{}, realtimeforum.ErrForbidden
+	}
+
 	messages, totalElements, err := m.messageRepo.GetMessages(conversationPartnerID, currentUserID, offset, limit)
 	if err != nil {
 		return message.MessagesResponse{}, err
@@ -77,6 +85,12 @@ func (m MessageServiceImpl) SendMessage(senderID string, recipientID string, tex
 
 	if err := m.authRepository.DoesUserExists(recipientID); err != nil {
 		return message.MessageDTO{}, err
+	}
+
+	if allowed, err := m.messageRepo.CanMessage(senderID, recipientID); err != nil {
+		return message.MessageDTO{}, err
+	} else if !allowed {
+		return message.MessageDTO{}, realtimeforum.ErrForbidden
 	}
 
 	msg, err := m.messageRepo.SaveMessage(senderID, recipientID, textMessage)
