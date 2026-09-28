@@ -1,54 +1,68 @@
 package repositories
 
 import (
+	"strings"
+
 	realtimeforum "social-network/backend"
 	"social-network/backend/pkg/models"
 )
 
 type NotificationRepository interface {
-	GetNotifications(userID string, offset, limit int, unreadOnly bool) ([]models.Notification, int, error)
-	GetUnreadCount(userID string) (int, error)
+	// types narrows the query to those entity types: the bell badge asks for
+	// everything except `message` while the Messages badge asks for `message`
+	// only. A nil list means every known type; an empty list matches nothing.
+	GetNotifications(userID string, offset, limit int, unreadOnly bool, types []string) ([]models.Notification, int, error)
+	GetUnreadCount(userID string, types []string) (int, error)
 	CreateNotification(userID, actorID, entityType string, entityID int) (models.Notification, error)
 	MarkAsRead(notificationID int, userID string) error
 	MarkAllAsRead(userID string) error
 	MarkAsReadByActor(userID, actorID, entityType string) error
 }
 
-func (db *DB) GetNotifications(userID string, offset, limit int, unreadOnly bool) ([]models.Notification, int, error) {
-	var totalElements int
-	var countQuery string
-	var countArgs []interface{}
+// notificationTypeFilter builds `<column> IN (?,?,…)` together with its
+// arguments. A nil list expands to every type the API exposes and an empty list
+// becomes a false predicate, because `IN ()` is not valid SQL.
+func notificationTypeFilter(column string, types []string) (string, []any) {
+	if types == nil {
+		types = models.NotificationEntityTypes()
+	}
+	if len(types) == 0 {
+		return "1 = 0", nil
+	}
+	args := make([]any, len(types))
+	for i, entityType := range types {
+		args[i] = entityType
+	}
+	return column + " IN (" + strings.TrimSuffix(strings.Repeat("?,", len(types)), ",") + ")", args
+}
 
+func (db *DB) GetNotifications(userID string, offset, limit int, unreadOnly bool, types []string) ([]models.Notification, int, error) {
+	countFilter, countFilterArgs := notificationTypeFilter("entityType", types)
+	countQuery := "SELECT COUNT(*) FROM notification WHERE " + countFilter + " AND userId = ?"
+	countArgs := append(append([]any{}, countFilterArgs...), userID)
 	if unreadOnly {
-		countQuery = "SELECT COUNT(*) FROM notification WHERE entityType IN ('comment','message','follow','follow_request','group_invitation','group_request','group_event') AND userId = ? AND isRead = 0"
-		countArgs = []interface{}{userID}
-	} else {
-		countQuery = "SELECT COUNT(*) FROM notification WHERE entityType IN ('comment','message','follow','follow_request','group_invitation','group_request','group_event') AND userId = ?"
-		countArgs = []interface{}{userID}
+		countQuery += " AND isRead = 0"
 	}
 
-	err := db.Conn.QueryRow(countQuery, countArgs...).Scan(&totalElements)
-	if err != nil {
+	var totalElements int
+	if err := db.Conn.QueryRow(countQuery, countArgs...).Scan(&totalElements); err != nil {
 		return nil, 0, realtimeforum.ErrInternal
 	}
 
+	selectFilter, selectFilterArgs := notificationTypeFilter("n.entityType", types)
 	query := `
 		SELECT n.notificationId, n.userId, n.actorId, COALESCE(u.nickName, ''), n.entityType, n.entityId, n.isRead, n.createdAt, COALESCE(c.postId, 0)
 		FROM notification n
 		LEFT JOIN user u ON n.actorId = u.userId
 		LEFT JOIN comment c ON n.entityType = 'comment' AND n.entityId = c.commentId
-		WHERE n.entityType IN ('comment','message','follow','follow_request','group_invitation','group_request','group_event') AND n.userId = ?
+		WHERE ` + selectFilter + ` AND n.userId = ?
 	`
-	var args []interface{}
-	args = append(args, userID)
-
 	if unreadOnly {
 		query += " AND n.isRead = 0"
 	}
-
 	query += " ORDER BY n.createdAt DESC LIMIT ? OFFSET ?"
-	args = append(args, limit, offset)
 
+	args := append(append([]any{}, selectFilterArgs...), userID, limit, offset)
 	rows, err := db.Conn.Query(query, args...)
 	if err != nil {
 		return nil, 0, realtimeforum.ErrInternal
@@ -75,11 +89,16 @@ func (db *DB) GetNotifications(userID string, offset, limit int, unreadOnly bool
 	return notifications, totalElements, nil
 }
 
-func (db *DB) GetUnreadCount(userID string) (int, error) {
+// GetUnreadCount counts the unread rows a filtered badge should show. `types`
+// follows the same nil/empty rules as GetNotifications.
+func (db *DB) GetUnreadCount(userID string, types []string) (int, error) {
+	filter, filterArgs := notificationTypeFilter("entityType", types)
+	args := append(append([]any{}, filterArgs...), userID)
+
 	var count int
 	err := db.Conn.QueryRow(
-		"SELECT COUNT(*) FROM notification WHERE entityType IN ('comment','message','follow','follow_request','group_invitation','group_request','group_event') AND userId = ? AND isRead = 0",
-		userID,
+		"SELECT COUNT(*) FROM notification WHERE "+filter+" AND userId = ? AND isRead = 0",
+		args...,
 	).Scan(&count)
 	if err != nil {
 		return 0, realtimeforum.ErrInternal
