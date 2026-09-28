@@ -63,13 +63,11 @@ jobs:
         run: npx tsc --noEmit
       - name: Build
         run: npm run build
-      - name: Dependency audit (reporting)
-        # Reported, not enforced, on purpose: every open advisory is in Next.js
-        # tooling and the only fix today is `npm install next@16.3.6`, which is
-        # outside the pinned range. DEPLOYMENT.md records why each finding is not
-        # reachable in this deployment and TODO.md tracks the framework bump, so
-        # the numbers stay visible without a red pipeline that hides real breaks.
-        continue-on-error: true
+      - name: Dependency audit
+        # Blocking since the framework bump of 2026-09-28 cleared every advisory
+        # (4 high + 1 critical -> 0). The step was report-only before that because
+        # the only fix on offer was outside the pinned Next.js range; a new finding
+        # should now stop the build rather than sit in the log.
         run: npm audit --audit-level=high
 
   vulnerabilities:
