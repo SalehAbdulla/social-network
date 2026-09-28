@@ -437,7 +437,10 @@ Reference: `GroupHandler.go`, `GroupManagementHandler.go`, `GroupContentHandler.
   this deployment — the two Next.js RCEs need a Windows host or the AVIF
   image-optimisation endpoint, and no component uses `next/image`, so `sharp` and the
   optimiser are dead paths; `postcss` and `js-yaml` run only at build time over our own CSS
-  and config; `nanoid`'s advisory needs a caller passing a size of zero.
+  and config; `nanoid`'s advisory needs a caller passing a size of zero. Superseded
+  2026-09-28: the framework bump cleared all five findings, so the audit step in CI now
+  enforces `--audit-level=high` instead of reporting it — the justifying above is kept only as
+  the record of why they were not fixed sooner.
 - [ ] **P2** Harden uploads further: re-encode images or serve them with
   `Content-Disposition: attachment` and a restrictive CSP so an HTML/SVG payload cannot be
   used for stored XSS.
@@ -605,11 +608,19 @@ Reference: `GroupHandler.go`, `GroupManagementHandler.go`, `GroupContentHandler.
   superseded runs, and each job's comment says why it is scoped the way it is. It is GitHub
   Actions because the implementation lives on GitHub; translating it to the school's GitLab is
   a P2 below.
-- [ ] **P2** Bump Next.js past the audit advisory: `16.2.12` is pinned and `npm audit` wants
+- [x] **P2** Bump Next.js past the audit advisory: `16.2.12` is pinned and `npm audit` wants
   `next@16.3.6` (see Authentication and Security for why the current findings are not
   reachable). After the bump, re-run lint, `npx tsc --noEmit`, `npm run build` and the browser
   suite, then the audit step can stop being report-only and the `next/image` item below is
-  unblocked.
+  unblocked. Closed 2026-09-28: `next` and `eslint-config-next` are both at **16.3.6** (still
+  pinned exactly) and the lockfile was refreshed; `npm audit` went from four high and one
+  critical to **0 vulnerabilities**, with `postcss`, `sharp` and the two remaining highs
+  (`js-yaml`, `nanoid`) cleared — the last two by an in-range `npm audit fix`, no `--force`.
+  Verified with `npm run lint` (0 errors), `npx tsc --noEmit`, `npm run build` and the full
+  browser suite, which passed 24 steps against `Next.js 16.3.6 (Turbopack)` with no runtime
+  exceptions. CI's audit step is blocking now, and the bump surfaced one new lint warning
+  (`no-location-assign-relative-destination` at the logout handler), answered with an
+  explanation rather than a behaviour change: a full reload there is what drops the socket.
 - [ ] **P2** Wire the browser smoke suite into CI: `npm run test:integration` needs Chrome on
   the runner (`CHROME_PATH`), builds both services and takes several minutes, which is why the
   workflow leaves it out for now.
@@ -823,10 +834,15 @@ Ordered roughly by value for effort.
 
 - [ ] **P3** Use `next/image` for `Avatar` and post media (the `remotePatterns` block in
   `next.config.ts` already exists) instead of raw `<img>` tags, to get responsive sizing and
-  lazy loading for free. Blocked on the Next.js bump above for a security reason, not a
-  stylistic one: the image-optimisation API is the path the critical audit advisory describes,
-  and `sharp`, the optimiser it loads, is currently a dead dependency precisely because
-  nothing calls `next/image`.
+  lazy loading for free. The security blocker is gone — Next.js is 16.3.6, so the advisory that
+  named the image-optimisation API no longer applies — but a design problem replaced it: every
+  image this app renders is authenticated media behind `GET /api/v1/media/{id}`, and the
+  optimiser fetches that URL server-side *without the viewer's cookie*, so it would receive a
+  401 and render nothing, while its cache is keyed by URL alone and would hand one viewer's
+  private photo to the next request. Adopting `next/image` therefore means `unoptimized` for
+  anything private (which forfeits the point) or signed per-viewer media URLs. Do it for
+  genuinely public images first, or not at all; the 26 `no-img-element` warnings are the
+  standing reminder.
 - [ ] **P3** Virtualise long comment and chat lists, which currently render every loaded item.
 - [ ] **P3** Deduplicate requests: `/users/me` and `/users/me/follows` are fetched separately
   by several components on the same page (`PostForm.tsx:23`, `SideBar.tsx:47`).
@@ -875,6 +891,23 @@ component classes) are the ones to build on.
   with the exact change list in that section. `canMessage` is still only a type in
   `frontend/src/app/api/social.ts`, so nothing reads the flag yet.
 - No P0 items are open. What is left is the P1/P2/P3 list above.
+
+Changed in the framework-bump session (2026-09-28), for review:
+`frontend/package.json`, `frontend/package-lock.json`,
+`frontend/src/app/components/SideBar.tsx`, `.github/workflows/ci.yml`, `DEPLOYMENT.md`.
+
+Next.js moved from the pinned 16.2.12 to **16.3.6**, with `eslint-config-next` in lockstep and
+the lockfile refreshed. That took `npm audit` from four high and one critical to **zero**: the
+critical named the image-optimisation API, `postcss` and `sharp` went with the framework, and
+`js-yaml` and `nanoid` cleared on an in-range `npm audit fix`. The bump is verified by lint
+(0 errors), `npx tsc --noEmit`, a production build and the browser suite, which passed 24 steps
+against `Next.js 16.3.6 (Turbopack)` — the first framework change in this project with browser
+evidence behind it. CI's audit step now enforces `--audit-level=high` instead of reporting, and
+the one warning the newer config added (`no-location-assign-relative-destination` at the logout
+handler) is answered with a comment explaining why that reload is deliberate rather than by
+changing behaviour. The `next/image` item is unblocked but re-scoped: the optimiser fetches
+media without the viewer's session cookie, so it cannot serve this app's authenticated images
+without `unoptimized` or signed URLs — recorded rather than discovered later.
 
 Changed in the browser-verification and responsive-check session (2026-09-28), for review:
 `frontend/scripts/integration-smoke.mjs`, `frontend/src/app/discover/page.tsx`.
