@@ -7,3 +7,11 @@ instruction.md
 client
 PingUp/
 backend/uploads/
+backend/tmp/
+# The SQLite database is local state, not source. Migrations recreate it at boot.
+backend/pkg/db/*.db
+backend/pkg/db/*.db-journal
+backend/pkg/db/*.db-wal
+backend/pkg/db/*.db-shm
+frontend/.next/
+frontend/.next-smoke/
