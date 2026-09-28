@@ -37,10 +37,13 @@ func (re *HandlerContext) decode(w http.ResponseWriter, r *http.Request, value a
 	return true
 }
 
+// allowedOrigin gates the WebSocket upgrade. A JSON endpoint can fall back to
+// CORS and Sec-Fetch-Site, but a browser always sends Origin on a WebSocket
+// handshake, so a request without one is not a browser and is rejected here.
 func (re *HandlerContext) allowedOrigin(r *http.Request) bool {
 	origin := r.Header.Get("Origin")
 	if origin == "" {
-		return true
+		return false
 	}
 	u, err := url.Parse(origin)
 	if err != nil || (u.Scheme != "http" && u.Scheme != "https") {
