@@ -119,7 +119,11 @@ func TestPostPrivacyIntegration(t *testing.T) {
 	}
 	alex.call("GET", "/api/v1/post?id="+strconv.Itoa(selected.PostId), nil, 200)
 
-	if err := repo.InsertUser("carol-id", "caroldemo", "Carol", "Demo", "carol@example.com", "hash", "2000-01-01", 2000, "female"); err != nil {
+	if err := repo.InsertUser(models.Registration{
+		UserID: "carol-id", Nickname: "caroldemo", FirstName: "Carol", LastName: "Demo",
+		Email: "carol@example.com", PasswordHash: "hash", BirthDate: "2000-01-01", BirthYear: 2000,
+		Gender: "female", IsPublic: true,
+	}); err != nil {
 		t.Fatal(err)
 	}
 	service.DefaultSessionManager.CreateSession("carol-id", "carol-token")
@@ -196,7 +200,10 @@ func integrationServer(t *testing.T, dev, production bool) (*httptest.Server, *r
 	repo := &repositories.DB{Conn: database}
 	hash, _ := bcrypt.GenerateFromPassword([]byte("DummyUser123!"), bcrypt.MinCost)
 	for _, u := range []struct{ id, email, nick, first string }{{"dummy-id", "dummy@example.com", "dummyuser", "Dummy"}, {"alex-id", "alex@example.com", "alexdemo", "Alex"}} {
-		if err := repo.InsertUser(u.id, u.nick, u.first, "User", u.email, string(hash), "2000-01-01", 2000, "male"); err != nil {
+		if err := repo.InsertUser(models.Registration{
+			UserID: u.id, Nickname: u.nick, FirstName: u.first, LastName: "User", Email: u.email,
+			PasswordHash: string(hash), BirthDate: "2000-01-01", BirthYear: 2000, Gender: "male", IsPublic: true,
+		}); err != nil {
 			t.Fatal(err)
 		}
 	}
