@@ -387,12 +387,26 @@ Reference: `GroupHandler.go`, `GroupManagementHandler.go`, `GroupContentHandler.
   used to be in this file.
 - [x] **P1** Drop `NEXT_PUBLIC_DEV_USER` from `frontend/.env.local` and the matching warning
   in `DEPLOYMENT.md:20` — no code reads it any more.
-- [ ] **P1** Document and test the security headers set in `backend/cmd/security.go`
-  (CSP, HSTS, `X-Content-Type-Options`) by asserting them on an API response.
-- [ ] **P1** Add per-account login throttling or lockout on top of the per-peer IP limit,
-  since the frontend proxy hides real client IPs.
-- [ ] **P1** Write down the CSRF reasoning (`SameSite=Lax` cookies plus JSON-only mutations)
-  or add a token.
+- [x] **P1** Document and test the security headers by asserting them on an API response.
+  `backend/cmd/security_test.go` pins `X-Content-Type-Options`, `Referrer-Policy`,
+  `X-Frame-Options`, `Content-Security-Policy` and `Cache-Control` on an `/api/` response, and
+  `DEPLOYMENT.md` records which layer owns what. Two of the three headers named in the task did
+  not exist: the middleware set `nosniff` and `Referrer-Policy` only, so `X-Frame-Options: DENY`
+  and a `default-src 'none'; frame-ancestors 'none'` CSP were added for API responses. HSTS and
+  a document CSP are deliberately left to the layer that serves HTML (the reverse proxy or the
+  frontend) rather than claimed here, because an API response is never a document.
+- [x] **P1** Add per-account login throttling on top of the per-peer limit, because the
+  frontend proxy hides real client IPs. `pkg/middleware.AttemptLimiter` counts **failures** per
+  identifier, so a successful sign-in clears them, and `AuthHandler.Login` answers `429` with
+  `Retry-After` (10 failures / 15 minutes, `loginMaxFailures` and `loginFailureWindow`) before
+  the password is looked at. An identifier no account owns locks identically, so the lock
+  cannot be used to enumerate accounts, and it never touches other accounts. Registering stays
+  on the peer limit. Trusting `X-Forwarded-For` was rejected rather than overlooked: Next.js
+  fills that header in only when the client did not send one, so a forged value survives.
+- [x] **P1** Write down the CSRF reasoning instead of adding a token: the `SameSite=Lax`
+  session cookie plus the middleware's `Origin`/`Sec-Fetch-Site` rejection of every non-GET
+  request from another origin, documented in `DEPLOYMENT.md`. A token would change every
+  mutating call without adding a property those two controls do not already provide.
 - [ ] **P1** Run `npm audit` and `govulncheck ./...`, then fix or justify each finding in CI.
 - [ ] **P2** Harden uploads further: re-encode images or serve them with
   `Content-Disposition: attachment` and a restrictive CSP so an HTML/SVG payload cannot be
@@ -411,11 +425,32 @@ Reference: `GroupHandler.go`, `GroupManagementHandler.go`, `GroupContentHandler.
 - [ ] **P1** Media and upload edge cases: files over the 51 MiB cap, zero-byte files, an
   extension that disagrees with the detected MIME, and orphaned `media` rows when the
   referencing post, comment, story or message is deleted.
-- [ ] **P1** Verify the `postVisibility` SQL fragment
-  (`SocialRepository.go:113,150` and the `CommentRepository` equivalent) covers every read
-  path: feed, single post, profile posts, likes tab, comments, and direct media access.
-  Follow-request smoke investigation: an existing selected audience entry still grants
-  post/media access after unfollow; audit whether that access should require a current follow.
+- [x] **P1** Audit the `postVisibility` SQL fragment over every read path: feed, single post,
+  profile posts, likes tab, comments and direct media. All six were already covered by the one
+  fragment, and the audit found the one surface that was not: **reactions**. `UpsertReaction`
+  checked existence only, so any signed-in user could read a private post's score, change it,
+  and use 200-vs-404 as an existence oracle for posts and comments; `CanViewPost`, the helper
+  written for that check, had no callers at all. It now runs through `reactionTarget` next to a
+  new `CanViewComment` (comment → its post) and answers 404 for an unreadable target, and the
+  dead `DoesCommentExists` is gone. Evidence: `cmd/post_visibility_test.go` walks the fragment
+  as the owner, the chosen follower, a stranger and a later follower, and asserts a rejected
+  reaction leaves the score untouched.
+- [x] **P1** Settle the selected-audience-after-unfollow question: **`selected` is a grant, not
+  a live relation.** The spec separates "almost private (only followers of the creator)" from
+  "private (only the followers chosen by the creator)", so `followers` tracks the `follow`
+  table while `selected` records who the author picked when the post was written; unfollowing
+  later does not revoke it, a follower arriving later never gains it, and the author's lever is
+  editing the post, which re-validates against current followers and rewrites the list (a
+  now-unfollowed member cannot be kept, and `ValidateSelectedFollowers` refuses a non-follower
+  in the first place). Pinned by `TestSelectedAudienceIsAGrantNotALiveRelation` and documented
+  on the fragment itself. Deliberate exceptions recorded rather than changed: avatars, group
+  images and story media are readable by any authenticated user (they back the avatar, the
+  group directory and the stories strip, which all carry no audience), and a cover photo needs
+  a public profile or a follow.
+- [ ] **P2** Decide whether stories need an audience. They are listed to, and their media is
+  readable by, every signed-in user: the audit found no privacy field on the `story` table and
+  no audience check in the story branch of `CanViewMedia`. The spec's story requirement does not
+  mention privacy, so this is a decision to record rather than a bug to fix silently.
 - [ ] **P1** Add error, empty and loading states for the new P0 flows (follow requests,
   comment media) following the toast convention. Progress 2026-09-28: the comment composer
   reports upload and validation failures with `react-hot-toast`, its list already had a
@@ -678,6 +713,15 @@ component classes) are the ones to build on.
   with the exact change list in that section. `canMessage` is still only a type in
   `frontend/src/app/api/social.ts`, so nothing reads the flag yet.
 - No P0 items are open. What is left is the P1/P2/P3 list above.
+
+Changed in the visibility-audit session (2026-09-28), for review:
+`backend/pkg/app/repositories/{PostRepository,ReactionRepository}.go`,
+`backend/cmd/post_visibility_test.go`.
+
+Changed in the auth-hardening session (2026-09-28), for review:
+`backend/errors.go`, `backend/pkg/app/handlers/{utils,HandlerContext,AuthHandler}.go`,
+`backend/pkg/middleware/{limiter.go,limiter_test.go}`, `backend/cmd/{security.go,security_test.go,login_lockout_test.go}`,
+`DEPLOYMENT.md`.
 
 Changed in the group-notification session (2026-09-28), for review:
 `backend/pkg/models/Notification.go`, `backend/pkg/app/service/{NotificationService,GroupService}.go`,
