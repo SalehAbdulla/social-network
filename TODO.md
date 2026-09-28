@@ -192,13 +192,24 @@ the hiding), and a browser-smoke addition asserting 403 + a clean inbox.
   `WebSocketHandler.handlePrivateMessage` (`backend/pkg/app/handlers/WebSocketHandler.go:94`).
 - [x] **P0** Decide the migration story for existing `message` rows that predate the rule
   (keep them readable, or hide the threads) and document it.
-- [ ] **P1** Frontend: disable the "Message" action with an explanation when messaging is
+- [x] **P1** Frontend: disable the "Message" action with an explanation when messaging is
   not allowed — `frontend/src/app/profile/page.tsx` and `frontend/src/app/discover/page.tsx`.
   The blocker is gone (the pagination rework that owned both files is committed), so this is
   two conditions on the existing `Message` links plus the viewer-relative `canMessage` flag
   that `GET /api/v1/users/{userId}` returns (typed as an optional `canMessage` in
   `frontend/src/app/api/social.ts`). Until then a blocked attempt fails with the backend's 403
   toast, which is correct but less friendly.
+  Closed 2026-09-28: one component, `frontend/src/app/components/MessageAction.tsx`, now owns
+  the rule in the UI — it renders the link when the flag is true and a non-interactive,
+  `aria-disabled` action carrying an accessible explanation otherwise, so both pages say why
+  rather than handing back a 403. It is used by the profile header (which passes
+  `profile.canMessage === true` into `ProfileActions`) and by every discover card, and it fails
+  closed so a missing flag cannot offer a chat the API would refuse. Evidence: the browser
+  suite now asserts the three states it matters for — a private profile and the discover list
+  hide the link while showing the reason, and accepting the follow brings the link back — and
+  `cmd/chat_permission_test.go` gained the two assertions the UI depends on, that the discover
+  list carries the viewer-relative flag in both the blocked and the unlocked case (the single
+  profile endpoint was already covered).
 - [x] **P1** Tests: mutual follow allowed, one-way follow allowed, stranger → public profile
   allowed, stranger → private profile rejected, WS push rejected for the same case.
 
@@ -490,13 +501,26 @@ Reference: `GroupHandler.go`, `GroupManagementHandler.go`, `GroupContentHandler.
   readable by, every signed-in user: the audit found no privacy field on the `story` table and
   no audience check in the story branch of `CanViewMedia`. The spec's story requirement does not
   mention privacy, so this is a decision to record rather than a bug to fix silently.
-- [ ] **P1** Add error, empty and loading states for the new P0 flows (follow requests,
+- [x] **P1** Add error, empty and loading states for the new P0 flows (follow requests,
   comment media) following the toast convention. Progress 2026-09-28: the comment composer
   reports upload and validation failures with `react-hot-toast`, its list already had a
   spinner plus `LoadMore`, and the profile media tab now has a skeleton and a "No photos yet."
-  empty state; the follow-request half is unchanged.
-- [ ] **P1** Reconnect/offline UX: `BackendProvider.tsx:94` retries the socket every 3 s with
-  no visible state — surface the existing `connected` context value in the UI.
+  empty state; the follow-request half is unchanged. Closed 2026-09-28: the follow-request
+  half turned out to be almost complete already — `notifications/page.tsx` renders a
+  `RowsSkeleton` while the list loads, a `RequestState` when it is empty, and a `LoadMore`
+  for the next page, and a failed request is reported by the shared `usePagedList` hook with a
+  toast that carries its own retry, which is the convention this file records. The one real
+  gap was honesty, not coverage: a failed load also rendered "No pending follow requests." and
+  "You're all caught up.", so both empty states are now gated on `!error`, matching what the
+  newest pages already did (`page.tsx`, `discover/page.tsx`, `profile/page.tsx`).
+- [x] **P1** Reconnect/offline UX: `BackendProvider.tsx:94` retries the socket every 3 s with
+  no visible state — surface the existing `connected` context value in the UI. Closed
+  2026-09-28: the direct conversation already showed a local dot, but nothing else did, so the
+  provider now tracks a dropped connection and renders one polite status banner inside `main`
+  ("Reconnecting… new messages and notifications may be delayed"), which the rest of the app
+  inherits. It is deliberately set only after a socket that had been open closes, so a cold
+  start does not flash a warning before the first handshake, and a failure to connect at all
+  keeps going to the existing "Couldn't connect" screen with its Reconnect button.
 - [x] **P1** Accessibility pass: apply the drawer's focus trap and Escape handling to
   `EditProfile`, `StoriesBar` and `GroupConversation` dialogs; confirm `aria-live` on the
   unread badge; check colour contrast on the teal/blue gradients. Closed 2026-09-28: the
@@ -605,7 +629,15 @@ Reference: `GroupHandler.go`, `GroupManagementHandler.go`, `GroupContentHandler.
 - [x] `go vet ./...` is clean.
 - [ ] **P1** Add direct tests for the packages that have none: `pkg/app/handlers`,
   `pkg/app/repositories`, `pkg/middleware`, `pkg/websocket` — they are currently only
-  exercised indirectly through `cmd/*_test.go`.
+  exercised indirectly through `cmd/*_test.go`. Progress 2026-09-28: two of the four are
+  covered. `pkg/app/handlers/handlers_test.go` pins the whole `HandleError` status contract as
+  a table — including that a size violation is 413 rather than 400 and that a 500 never leaks
+  the underlying error text — plus `allowedOrigin`, which is the WebSocket handshake gate, and
+  `isASCII`. `pkg/websocket/hub_test.go` covers fan-out to every socket of one user and nobody
+  else, presence following the first and last socket, the online and offline announcements,
+  `BroadcastToAll`, and `Stop` closing every channel; it passes under `-race -count=2`.
+  `pkg/app/repositories` still has no direct test (its queries are exercised through `cmd`),
+  and `pkg/middleware` only covers the limiter, not `AuthMiddleware`.
 - [x] **P1** Cover every P0 flow with tests: follow requests, comment media, chat permission
   rules, register field parity, notification type separation, and session persistence.
   Closed 2026-09-28: all six have Go coverage — `cmd/follow_request_test.go`,
@@ -643,6 +675,12 @@ Reference: `GroupHandler.go`, `GroupManagementHandler.go`, `GroupContentHandler.
   themselves) and still build on the older `types/story` shape. They were noticed during the
   accessibility pass because both put white text on a `blue-500` gradient (~3.7:1, below AA);
   deleting them is the right fix rather than recolouring dead code.
+- [ ] **P3** Run `gofmt` over two files it does not currently accept:
+  `backend/pkg/app/handlers/ReactionHandler.go` and `backend/pkg/websocket/types.go` are not
+  `gofmt`-clean (misaligned struct tags and continuation lines). They have been left alone
+  twice now because a formatting-only change would have buried the real diff; fold them into
+  the next commit that touches those files, or do them together as their own commit. Every
+  file added since is formatted.
 - [x] **P1** Remove the stale Clerk and `NEXT_PUBLIC_DEV_USER` references listed under
   Authentication and Security.
 - [ ] **P1** Keep this file current. The previous revision marked shipped features (group
@@ -814,6 +852,29 @@ component classes) are the ones to build on.
   with the exact change list in that section. `canMessage` is still only a type in
   `frontend/src/app/api/social.ts`, so nothing reads the flag yet.
 - No P0 items are open. What is left is the P1/P2/P3 list above.
+
+Changed in the chat-permission, reconnection and direct-test session (2026-09-28), for review:
+`frontend/src/app/components/{MessageAction,BackendProvider}.tsx`,
+`frontend/src/app/{profile,discover,notifications}/page.tsx`,
+`frontend/scripts/integration-smoke.mjs`, `backend/cmd/chat_permission_test.go`,
+`backend/pkg/app/handlers/handlers_test.go`, `backend/pkg/websocket/hub_test.go`.
+
+Three P1 items closed and a fourth advanced. **Chat permission**: one `MessageAction`
+component gates the Message action on the viewer-relative `canMessage` flag in the profile
+header and on every discover card, explaining the rule instead of letting the click earn a
+403 — the last piece of the P0-3 handoff. **Reconnect UX**: the provider now surfaces a
+dropped socket with a single polite banner, because only the direct conversation had a local
+indicator. **States**: the follow-request flow already had its loading, empty and retrying
+toast; what it lacked was honesty, so the notifications page no longer renders "No pending
+follow requests." or "You're all caught up." after a failed load. **Tests**: `pkg/app/handlers`
+and `pkg/websocket` gained direct coverage, and `cmd/chat_permission_test.go` now pins the
+discover-list half of the chat rule that the new UI reads.
+
+Evidence: `go build ./...`, `go vet ./...` and `go test ./...` pass — both new packages also
+under `-race -count=2` — `npm run lint` reports 0 errors, `npx tsc --noEmit` is clean and
+`npm run build` succeeds. Still not run: `npm run test:integration`, because this environment
+has no Chrome, so the three new browser assertions about the message gate need one smoke run
+before they are trusted.
 
 Changed in the media-edge-case, accessibility and release-CI session (2026-09-28), for review:
 `backend/errors.go`, `backend/pkg/app/handlers/{utils,MediaHandler,MediaCleanup}.go`,
