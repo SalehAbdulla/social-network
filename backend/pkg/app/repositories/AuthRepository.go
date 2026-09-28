@@ -11,7 +11,7 @@ import (
 type AuthRepository interface {
 	DoesEmailExists(email string) error
 	DoesNicknameExists(nickname string) error
-	InsertUser(userID, nickName, firstName, lastName, email, hashedPassword, birthDate string, yearOfBirth int, gender string) error
+	InsertUser(registration models.Registration) error
 	NicknameAvailable(nickname string) (bool, error)
 	GetUserCredentials(identifier string) (string, string, error)
 	GetUserProfile(userID string) (models.UserProfile, error)
@@ -43,22 +43,24 @@ func (db *DB) DoesNicknameExists(nickname string) error {
 	return nil
 }
 
-func (db *DB) InsertUser(userID, nickName, firstName, lastName, email, hashedPassword, birthDate string, yearOfBirth int, gender string) error {
+func (db *DB) InsertUser(registration models.Registration) error {
 	_, err := db.Conn.Exec(
-		`INSERT INTO user (userId, nickName, firstName, lastName, email, password, birthDate, birthYear, gender)
-		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-		userID, nickName, firstName, lastName, email, hashedPassword, birthDate, yearOfBirth, gender,
+		`INSERT INTO user (userId, nickName, firstName, lastName, email, password, birthDate, birthYear, gender, aboutMe, isPublic)
+		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		registration.UserID, registration.Nickname, registration.FirstName, registration.LastName,
+		registration.Email, registration.PasswordHash, registration.BirthDate, registration.BirthYear,
+		registration.Gender, registration.Bio, registration.IsPublic,
 	)
 	if err != nil {
 		slog.Error("failed to insert user into database",
-			"email", email,
-			"nickname", nickName,
+			"email", registration.Email,
+			"nickname", registration.Nickname,
 			"error", err,
 		)
-		if nicknameErr := db.DoesNicknameExists(nickName); nicknameErr == realtimeforum.ErrNickName {
+		if nicknameErr := db.DoesNicknameExists(registration.Nickname); nicknameErr == realtimeforum.ErrNickName {
 			return nicknameErr
 		}
-		if emailErr := db.DoesEmailExists(email); emailErr == realtimeforum.ErrEmailExists {
+		if emailErr := db.DoesEmailExists(registration.Email); emailErr == realtimeforum.ErrEmailExists {
 			return emailErr
 		}
 		return realtimeforum.ErrInternal
