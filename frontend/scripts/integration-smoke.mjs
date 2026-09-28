@@ -430,6 +430,18 @@ try {
   await command('Emulation.setDeviceMetricsOverride', { width: 1440, height: 960, deviceScaleFactor: 1, mobile: false }, dummy);
   console.log('PASS: groups inside conversations, join approval, group chat, events, RSVP, posts, editing and mobile layout');
 
+  // A group notification opens the tab that needs attention instead of the chat:
+  // a join request is answered on Group info, an event lives on Events.
+  await navigate(dummy, '/notifications');
+  await until(dummy, `!!document.querySelector('a[href="/messages/groups/${group.groupId}?tab=info"]')`, 'join request notification target');
+  await evaluate(dummy, `document.querySelector('a[href="/messages/groups/${group.groupId}?tab=info"]').click()`);
+  await until(dummy, `document.querySelector('[aria-label="Group conversation tabs"] button[aria-pressed="true"]')?.textContent === 'Group info'`, 'request notification opens the group info tab');
+  await navigate(alex, '/notifications');
+  await until(alex, `!!document.querySelector('a[href="/messages/groups/${group.groupId}?tab=events"]')`, 'event notification target');
+  await evaluate(alex, `document.querySelector('a[href="/messages/groups/${group.groupId}?tab=events"]').click()`);
+  await until(alex, `document.querySelector('[aria-label="Group conversation tabs"] button[aria-pressed="true"]')?.textContent === 'Events' && document.body.innerText.includes(${JSON.stringify(`Meetup ${stamp}`)})`, 'event notification opens the events tab');
+  console.log('PASS: group notifications deep-link to the tab that needs attention');
+
   await navigate(dummy, '/');
   await evaluate(dummy, `[...document.querySelectorAll('button')].find(button => button.textContent.includes('Create story')).click()`);
   await fill(dummy, '[role="dialog"] textarea', `Browser story ${stamp}`);
