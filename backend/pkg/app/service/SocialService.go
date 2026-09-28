@@ -61,6 +61,23 @@ func (s *SocialService) ValidateTarget(actor, target string) error {
 	return s.Repo.DoesUserExists(target)
 }
 
+// CanMessage enforces the chat rule from the spec: private messages are only
+// possible between two users where at least one follows the other, or when the
+// recipient has a public profile.
+func (s *SocialService) CanMessage(actor, target string) error {
+	if err := s.ValidateTarget(actor, target); err != nil {
+		return err
+	}
+	allowed, err := s.Repo.CanMessage(actor, target)
+	if err != nil {
+		return err
+	}
+	if !allowed {
+		return backend.ErrForbidden
+	}
+	return nil
+}
+
 func (s *SocialService) Follow(actor, target string) (string, error) {
 	if err := s.ValidateTarget(actor, target); err != nil {
 		return "", err
