@@ -70,6 +70,10 @@ export default function Sidebar({ isSideBarOpen, setSideBarOpen, isCollapsed, se
     setLoggingOut(true);
     try {
       await request('/auth/logout', 'POST');
+      // A full reload is deliberate: it drops the WebSocket and every other piece
+      // of client state the signed-out session owned, which a router push would
+      // leave behind. The app sets no `basePath`, so the relative path is correct.
+      // eslint-disable-next-line @next/next/no-location-assign-relative-destination
       window.location.href = '/login';
     } catch (error) {
       toast.error(errorMessage(error));
