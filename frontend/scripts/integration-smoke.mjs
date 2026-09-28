@@ -339,6 +339,10 @@ try {
   await navigate(alex, `/profile/${originalDummy.userId}`);
   await button(alex, 'Follow');
   await until(alex, `!!document.querySelector('button[title="Cancel follow request"]')`, 'private profile shows Requested');
+  // A blocked chat is explained before the click: the profile swaps the Message
+  // link for a disabled action that states the rule, instead of letting the
+  // attempt fail with the backend's 403.
+  assert(await evaluate(alex, `!document.querySelector('a[href="/messages/${originalDummy.userId}"]') && [...document.querySelectorAll('[title]')].some(node => node.getAttribute('title').includes('one of you follows the other'))`), 'a private profile replaces the message link with an explanation');
   assert.equal((await api(dummy, '/users/me')).followers.includes(originalAlex.userId), false);
   assert.equal(await evaluate(alex, `(async () => (await fetch('/api/v1/media/${mediaURL.split('/').pop()}', { cache: 'no-store' })).status)()`), 403);
   // The chat rule: a stranger cannot open or write a private thread with a
@@ -354,6 +358,7 @@ try {
   await fill(alex, 'input[aria-label="Search people"]', 'dummyuser');
   await button(alex, 'Search');
   await until(alex, `document.querySelector('main').innerText.includes('@dummyuser')`, 'find private user');
+  assert(await evaluate(alex, `!document.querySelector('a[href="/messages/${originalDummy.userId}"]')`), 'discover hides the message link for a blocked chat');
   await button(alex, 'Follow');
   await until(alex, `!!document.querySelector('button[title="Cancel follow request"]')`, 'discovery shows Requested');
   await button(alex, 'Requested');
@@ -366,6 +371,7 @@ try {
   await until(dummy, `document.querySelector('section[aria-label="Follow requests"]').innerText.includes('@alexdemo')`, 'second request arrives');
   await button(dummy, 'Accept');
   await until(alex, `document.body.innerText.includes('Unfollow') && document.body.innerText.includes(${JSON.stringify(`Updated ${stamp}`)})`, 'accept unlocks private profile live');
+  assert(await evaluate(alex, `!!document.querySelector('a[href="/messages/${originalDummy.userId}"]')`), 'accepting the follow restores the message action');
   assert.equal((await api(dummy, '/users/me')).followers.includes(originalAlex.userId), true);
   assert.equal(await evaluate(alex, `(async () => (await fetch('/api/v1/media/${mediaURL.split('/').pop()}', { cache: 'no-store' })).status)()`), 200);
   await api(dummy, '/users/me', 'PUT', { ...privateOwner, isPublic: originalDummy.isPublic });
