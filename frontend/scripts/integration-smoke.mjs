@@ -250,6 +250,29 @@ try {
   await until(alex, `[...document.querySelectorAll('a[href="/post/${postId}"] img')].some(image => image.getAttribute('src') === ${JSON.stringify(commentPhoto)})`, 'comment photo in the profile media tab');
   console.log('PASS: the profile media tab lists the comment photo');
 
+  // Upload edge cases through the same-origin path the composers use. The empty
+  // file and the lying extension are refused with 400; anything past the 50 MB
+  // ceiling is answered 413, which also proves the Next rewrite forwards a body
+  // that size rather than truncating it.
+  const uploadFixture = (name, type, bytes) => `(async () => {
+    const form = new FormData();
+    form.append('file', new File([${bytes}], ${JSON.stringify(name)}, { type: ${JSON.stringify(type)} }));
+    const response = await fetch('/api/v1/media', { method: 'POST', body: form, credentials: 'include' });
+    return { status: response.status, body: await response.json().catch(() => ({})) };
+  })()`;
+  const gifBytes = (megabytes) => `(() => { const data = new Uint8Array(${megabytes} * 1024 * 1024); data.set([0x47, 0x49, 0x46, 0x38, 0x39, 0x61]); return data; })()`;
+  for (const [label, name, type, bytes, status, hint] of [
+    ['an empty file', 'empty.png', 'image/png', 'new Uint8Array(0)', 400, 'empty'],
+    ['an HTML document named .png', 'page.png', 'image/png', 'new TextEncoder().encode("<!DOCTYPE html><html><body>hi</body></html>")', 400, null],
+    ['an image past the 10 MB image ceiling', 'huge.gif', 'image/gif', gifBytes(11), 413, '10 MB'],
+    ['a video past the 50 MB ceiling', 'huge.mp4', 'video/mp4', 'new Uint8Array(50 * 1024 * 1024 + 1)', 413, '50 MB'],
+  ]) {
+    const result = await evaluate(alex, uploadFixture(name, type, bytes));
+    assert.equal(result.status, status, `${label} answered ${result.status}: ${JSON.stringify(result.body)}`);
+    if (hint) assert(String(result.body.error).includes(hint), `${label} reported ${JSON.stringify(result.body.error)}`);
+  }
+  console.log('PASS: empty, mismatched and oversized uploads are refused with the right status');
+
   const notificationCount = (await api(dummy, '/notifications/unread-count?exclude=message')).count;
   await until(dummy, `!!document.querySelector('[aria-label="${notificationCount} unread notifications"]')`, 'notification badge updates without refresh', 10000);
   const notifications = await api(dummy, '/notifications');
