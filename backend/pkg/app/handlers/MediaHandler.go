@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"errors"
 	"image"
 	_ "image/gif"
 	_ "image/jpeg"
@@ -16,11 +17,31 @@ import (
 	"github.com/google/uuid"
 )
 
-const maxUpload = 50 << 20
+const (
+	maxUpload      = 50 << 20 // video ceiling, and the hard ceiling for every upload
+	maxImageUpload = 10 << 20 // images are far cheaper to store and serve
+	// Multipart framing (boundaries, headers) sits on top of the file itself, so
+	// the request reader is allowed a small margin over the file ceiling. A body
+	// bigger than this is refused before it is buffered.
+	multipartOverhead = 1 << 20
+)
 
+// UploadMedia stores one uploaded file and records it in the media table.
+//
+// The client's filename and extension are deliberately ignored: the type comes
+// from the bytes, first via http.DetectContentType and then, for images, via
+// image.DecodeConfig, so a `photo.png` that is really a GIF is stored and served
+// as image/gif and an HTML or PDF payload wearing an image extension is refused.
+// The stored name is a fresh UUID, which also rules out path traversal.
 func (re *HandlerContext) UploadMedia(w http.ResponseWriter, r *http.Request) {
-	r.Body = http.MaxBytesReader(w, r.Body, maxUpload+(1<<20))
+	r.Body = http.MaxBytesReader(w, r.Body, maxUpload+multipartOverhead)
 	if err := r.ParseMultipartForm(1 << 20); err != nil {
+		// A body over the ceiling is a size problem, not a malformed request.
+		var tooLarge *http.MaxBytesError
+		if errors.As(err, &tooLarge) {
+			re.HandleError(w, r, backend.ErrUploadTooLarge)
+			return
+		}
 		re.HandleError(w, r, backend.ErrBadRequest)
 		return
 	}
@@ -31,8 +52,12 @@ func (re *HandlerContext) UploadMedia(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	defer file.Close()
-	if header.Size == 0 || header.Size > maxUpload {
-		re.HandleError(w, r, backend.ErrBadRequest)
+	if header.Size == 0 {
+		re.HandleError(w, r, backend.ErrEmptyUpload)
+		return
+	}
+	if header.Size > maxUpload {
+		re.HandleError(w, r, backend.ErrUploadTooLarge)
 		return
 	}
 	head := make([]byte, 512)
@@ -43,8 +68,12 @@ func (re *HandlerContext) UploadMedia(w http.ResponseWriter, r *http.Request) {
 	}
 	mime := http.DetectContentType(head[:n])
 	allowed := map[string]bool{"image/jpeg": true, "image/png": true, "image/gif": true, "image/webp": true, "video/mp4": true, "video/webm": true}
-	if !allowed[mime] || (strings.HasPrefix(mime, "image/") && header.Size > 10<<20) {
+	if !allowed[mime] {
 		re.HandleError(w, r, backend.ErrBadRequest)
+		return
+	}
+	if strings.HasPrefix(mime, "image/") && header.Size > maxImageUpload {
+		re.HandleError(w, r, backend.ErrImageTooLarge)
 		return
 	}
 	if _, err = file.Seek(0, io.SeekStart); err != nil {
@@ -52,6 +81,8 @@ func (re *HandlerContext) UploadMedia(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	// Check real image metadata, rather than trusting an extension or MIME header.
+	// WebP is skipped because the standard library has no decoder for it; the
+	// sniffed header and the byte ceiling above still apply.
 	if strings.HasPrefix(mime, "image/") && mime != "image/webp" {
 		config, _, decodeErr := image.DecodeConfig(file)
 		if decodeErr != nil || config.Width < 1 || config.Height < 1 || int64(config.Width)*int64(config.Height) > 40000000 {
