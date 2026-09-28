@@ -112,6 +112,11 @@ func TestChatPermissionRule(t *testing.T) {
 	if seen := decoded[models.SocialUser](t, alex.call("GET", "/api/v1/users/dummy-id", nil, 200)); seen.CanMessage {
 		t.Fatal("a private profile claimed the viewer can message it")
 	}
+	// The discover list carries the same viewer-relative flag, because that is
+	// the screen the UI uses to decide whether to offer the action at all.
+	if listed := decoded[[]models.SocialUser](t, alex.call("GET", "/api/v1/users?q=dummy", nil, 200)); len(listed) != 1 || listed[0].CanMessage {
+		t.Fatalf("discover offered a blocked chat: %+v", listed)
+	}
 
 	// Stranger -> public profile is allowed in both directions.
 	privateMessage(t, dummy, "alex-id", "hello public profile", 201)
@@ -124,6 +129,9 @@ func TestChatPermissionRule(t *testing.T) {
 	// because a follow in either direction is enough.
 	dummy.call("PUT", "/api/v1/users/alex-id/follow", nil, 200)
 	privateMessage(t, alex, "dummy-id", "one-way reply", 201)
+	if listed := decoded[[]models.SocialUser](t, alex.call("GET", "/api/v1/users?q=dummy", nil, 200)); len(listed) != 1 || !listed[0].CanMessage {
+		t.Fatalf("discover still hid an unlocked chat: %+v", listed)
+	}
 	alex.call("GET", "/api/v1/messages?partnerId=dummy-id", nil, 200)
 	inbox := decoded[[]message.ChatUserDTO](t, alex.call("GET", "/api/v1/messages/users", nil, 200))
 	if len(inbox) != 1 || inbox[0].UserId != "dummy-id" {
