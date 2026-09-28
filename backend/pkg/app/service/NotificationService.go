@@ -7,8 +7,8 @@ import (
 )
 
 type NotificationService interface {
-	GetNotifications(userID string, offset, limit int, unreadOnly bool) (notification.NotificationResponse, error)
-	GetUnreadCount(userID string) (int, error)
+	GetNotifications(userID string, offset, limit int, unreadOnly bool, types []string) (notification.NotificationResponse, error)
+	GetUnreadCount(userID string, types []string) (int, error)
 	CreateNotification(userID, actorID, entityType string, entityID int) (notification.NotificationDTO, error)
 	MarkAsRead(notificationID int, userID string) error
 	MarkAllAsRead(userID string) error
@@ -25,8 +25,8 @@ func NewNotificationService(notificationRepo db.NotificationRepository) Notifica
 	}
 }
 
-func (n NotificationServiceImpl) GetNotifications(userID string, offset, limit int, unreadOnly bool) (notification.NotificationResponse, error) {
-	notifications, totalElements, err := n.notificationRepo.GetNotifications(userID, offset, limit, unreadOnly)
+func (n NotificationServiceImpl) GetNotifications(userID string, offset, limit int, unreadOnly bool, types []string) (notification.NotificationResponse, error) {
+	notifications, totalElements, err := n.notificationRepo.GetNotifications(userID, offset, limit, unreadOnly, types)
 	if err != nil {
 		return notification.NotificationResponse{}, err
 	}
@@ -53,8 +53,8 @@ func (n NotificationServiceImpl) GetNotifications(userID string, offset, limit i
 	}, nil
 }
 
-func (n NotificationServiceImpl) GetUnreadCount(userID string) (int, error) {
-	return n.notificationRepo.GetUnreadCount(userID)
+func (n NotificationServiceImpl) GetUnreadCount(userID string, types []string) (int, error) {
+	return n.notificationRepo.GetUnreadCount(userID, types)
 }
 
 func (n NotificationServiceImpl) CreateNotification(userID, actorID, entityType string, entityID int) (notification.NotificationDTO, error) {
