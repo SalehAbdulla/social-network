@@ -35,7 +35,7 @@ func (re *HandlerContext) SendChatMessage(w http.ResponseWriter, r *http.Request
 		re.HandleError(w, r, backend.ErrBadRequest)
 		return
 	}
-	if err := re.SocialService.ValidateTarget(sender, req.RecipientID); err != nil {
+	if err := re.SocialService.CanMessage(sender, req.RecipientID); err != nil {
 		re.HandleError(w, r, err)
 		return
 	}
@@ -129,7 +129,7 @@ func (re *HandlerContext) ReadChat(w http.ResponseWriter, r *http.Request) {
 	if !re.decode(w, r, &req) {
 		return
 	}
-	if err := re.SocialService.ValidateTarget(currentUser(r), req.PartnerID); err != nil {
+	if err := re.SocialService.CanMessage(currentUser(r), req.PartnerID); err != nil {
 		re.HandleError(w, r, err)
 		return
 	}
