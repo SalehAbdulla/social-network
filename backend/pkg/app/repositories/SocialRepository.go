@@ -51,12 +51,38 @@ func (db *DB) SocialProfile(id string, viewers ...string) (models.SocialUser, er
 		}
 	}
 	if len(viewers) > 0 && viewers[0] != id {
+		// The third flag is the chat rule seen from viewers[0]: the profile is
+		// public, or either user follows the other.
 		err = db.Conn.QueryRow(`SELECT
 			EXISTS(SELECT 1 FROM connection WHERE requesterId=? AND recipientId=? AND status='pending'),
-			EXISTS(SELECT 1 FROM connection WHERE requesterId=? AND recipientId=? AND status='pending')`,
-			id, viewers[0], viewers[0], id).Scan(&u.PendingIncoming, &u.PendingOutgoing)
+			EXISTS(SELECT 1 FROM connection WHERE requesterId=? AND recipientId=? AND status='pending'),
+			EXISTS(SELECT 1 FROM user u WHERE u.userId=? AND (u.isPublic=1 OR EXISTS(
+				SELECT 1 FROM follow f WHERE (f.followerId=? AND f.followedId=?) OR (f.followerId=? AND f.followedId=?))))`,
+			id, viewers[0], viewers[0], id,
+			id, viewers[0], id, id, viewers[0]).Scan(&u.PendingIncoming, &u.PendingOutgoing, &u.CanMessage)
 	}
 	return u, err
+}
+
+// CanMessage reports whether actor may start or continue a private chat with
+// target: the spec allows it when at least one of them follows the other, and a
+// public profile is reachable by anyone. A missing target reports ErrNotFound so
+// callers can answer 404 instead of 403.
+func (db *DB) CanMessage(actor, target string) (bool, error) {
+	if target == "" || actor == target {
+		return false, nil
+	}
+	var allowed bool
+	err := db.Conn.QueryRow(`SELECT isPublic = 1 OR EXISTS(
+			SELECT 1 FROM follow f WHERE (f.followerId=? AND f.followedId=?) OR (f.followerId=? AND f.followedId=?))
+		FROM user WHERE userId = ?`, actor, target, target, actor, target).Scan(&allowed)
+	if errors.Is(err, sql.ErrNoRows) {
+		return false, backend.ErrNotFound
+	}
+	if err != nil {
+		return false, err
+	}
+	return allowed, nil
 }
 
 func (db *DB) CanViewPrivateProfile(viewerID, profileID string) (bool, error) {
