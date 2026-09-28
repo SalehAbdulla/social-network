@@ -41,7 +41,7 @@ func (re *HandlerContext) Register(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	userID, token, err := re.AuthService.Register(req)
+	registered, err := re.AuthService.Register(req)
 	if err != nil {
 		re.HandleError(w, r, err)
 		return
@@ -49,7 +49,7 @@ func (re *HandlerContext) Register(w http.ResponseWriter, r *http.Request) {
 
 	http.SetCookie(w, &http.Cookie{
 		Name:     "session_token",
-		Value:    token,
+		Value:    registered.Token,
 		Path:     "/",
 		HttpOnly: true,
 		Secure:   re.App.InProduction,
@@ -57,17 +57,17 @@ func (re *HandlerContext) Register(w http.ResponseWriter, r *http.Request) {
 	})
 
 	re.App.Logger.Info("user registered and logged in successfully",
-		"user_id", userID,
+		"user_id", registered.UserID,
 		"email", req.Email,
-		"nickname", req.Nickname,
+		"nickname", registered.Nickname,
 	)
 
 	w.WriteHeader(http.StatusCreated)
 	json.NewEncoder(w).Encode(payload.SuccessResponse[registerResponse]{
 		Success: true,
 		Data: registerResponse{
-			UserID:   userID,
-			Nickname: req.Nickname,
+			UserID:   registered.UserID,
+			Nickname: registered.Nickname,
 		},
 		Message: "user registered successfully",
 	})
