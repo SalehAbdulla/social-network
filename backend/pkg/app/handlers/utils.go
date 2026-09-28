@@ -57,6 +57,9 @@ func (re *HandlerContext) HandleError(w http.ResponseWriter, r *http.Request, er
 	case realtimeforum.ErrMethodNotAllowed:
 		statusCode = http.StatusMethodNotAllowed
 		level = slog.LevelWarn
+	case realtimeforum.ErrTooManyRequests:
+		statusCode = http.StatusTooManyRequests
+		level = slog.LevelWarn
 	case realtimeforum.ErrInternal:
 		statusCode = http.StatusInternalServerError
 		level = slog.LevelError
