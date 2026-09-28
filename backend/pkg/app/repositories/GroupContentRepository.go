@@ -50,12 +50,8 @@ func (db *DB) AddGroupContent(c models.GroupContent) (int, error) {
 	if err != nil {
 		return 0, err
 	}
-	if c.Kind == "events" {
-		_, err = tx.Exec(`INSERT INTO notification(userId,actorId,entityType,entityId,message) SELECT userId,?,'group_event',?,'' FROM socialGroupMember WHERE groupId=? AND userId<>?`, c.UserID, c.GroupID, c.GroupID, c.UserID)
-		if err != nil {
-			return 0, err
-		}
-	}
+	// A new event is announced by the handler, which knows the members and can
+	// push each notification as it creates it.
 	return int(id), tx.Commit()
 }
 
