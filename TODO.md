@@ -636,17 +636,23 @@ Reference: `GroupHandler.go`, `GroupManagementHandler.go`, `GroupContentHandler.
 - [x] `frontend/scripts/integration-smoke.mjs` drives real Chrome through
   `npm run test:integration` against an isolated database under `backend/tmp`.
 - [x] `go vet ./...` is clean.
-- [ ] **P1** Add direct tests for the packages that have none: `pkg/app/handlers`,
-  `pkg/app/repositories`, `pkg/middleware`, `pkg/websocket` — they are currently only
-  exercised indirectly through `cmd/*_test.go`. Progress 2026-09-28: two of the four are
-  covered. `pkg/app/handlers/handlers_test.go` pins the whole `HandleError` status contract as
-  a table — including that a size violation is 413 rather than 400 and that a 500 never leaks
-  the underlying error text — plus `allowedOrigin`, which is the WebSocket handshake gate, and
-  `isASCII`. `pkg/websocket/hub_test.go` covers fan-out to every socket of one user and nobody
-  else, presence following the first and last socket, the online and offline announcements,
-  `BroadcastToAll`, and `Stop` closing every channel; it passes under `-race -count=2`.
-  `pkg/app/repositories` still has no direct test (its queries are exercised through `cmd`),
-  and `pkg/middleware` only covers the limiter, not `AuthMiddleware`.
+- [x] **P1** Add direct tests for the packages that have none: `pkg/app/handlers`,
+  `pkg/app/repositories`, `pkg/middleware`, `pkg/websocket` — they were only exercised
+  indirectly through `cmd/*_test.go`. Closed 2026-09-28, all four covered.
+  `pkg/app/handlers/handlers_test.go` pins the whole `HandleError` status contract as a table —
+  including that a size violation is 413 rather than 400 and that a 500 never leaks the
+  underlying error text — plus `allowedOrigin`, the WebSocket handshake gate, and `isASCII`.
+  `pkg/websocket/hub_test.go` covers fan-out to every socket of one user and nobody else,
+  presence following the first and last socket, the online and offline announcements,
+  `BroadcastToAll` and `Stop` closing every channel. `pkg/app/repositories/SocialRepository_test.go`
+  migrates a scratch database and tests the two pieces of SQL this file leans on hardest: the
+  collector's orphan query across all eight surfaces, with each reference released one at a
+  time, the grace window asserted from both sides and an expired story counted as released, and
+  the media access rule branch by branch, next to the chat rule and
+  `ValidateSelectedFollowers`. `pkg/middleware/middleware_test.go` adds `AuthMiddleware` — no
+  cookie, an unknown token, a live token, the cookie cleared on rejection, and the account
+  reaching the handler through the context. The websocket and middleware packages also pass
+  under `-race`.
 - [x] **P1** Cover every P0 flow with tests: follow requests, comment media, chat permission
   rules, register field parity, notification type separation, and session persistence.
   Closed 2026-09-28: all six have Go coverage — `cmd/follow_request_test.go`,
@@ -861,6 +867,25 @@ component classes) are the ones to build on.
   with the exact change list in that section. `canMessage` is still only a type in
   `frontend/src/app/api/social.ts`, so nothing reads the flag yet.
 - No P0 items are open. What is left is the P1/P2/P3 list above.
+
+Changed in the backup-drill and repository-test session (2026-09-28), for review:
+`scripts/backup-restore-drill.sh`, `DEPLOYMENT.md`,
+`backend/pkg/app/repositories/SocialRepository_test.go`,
+`backend/pkg/middleware/middleware_test.go`.
+
+The backup → wipe → restore drill the release list asked for is now a script that can be re-run
+rather than a claim in a document, and it passed on its first execution: the account, the
+session cookie taken *before* the wipe, the post, the photo bytes and the row and file counts
+all came back. `DEPLOYMENT.md` records the commands, the result and the Docker-on-a-volume
+equivalent, with the caveat that no Docker daemon was available to run that half. The
+direct-test item is closed too: `pkg/app/repositories` now exercises the collector's orphan
+query across all eight surfaces and the media access rule branch by branch, and `pkg/middleware`
+covers `AuthMiddleware` instead of only the limiter.
+
+Evidence: `go build ./...`, `go vet ./...` and `go test ./...` pass across all nine packages,
+with `pkg/websocket` and `pkg/middleware` also passing under `-race`. The new files are
+`gofmt`-clean. The drill is the only end-to-end run in this batch, and it is reproducible with
+`bash scripts/backup-restore-drill.sh`.
 
 Changed in the chat-permission, reconnection and direct-test session (2026-09-28), for review:
 `frontend/src/app/components/{MessageAction,BackendProvider}.tsx`,
