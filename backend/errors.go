@@ -28,4 +28,5 @@ var (
 	ErrCommentLength        = errors.New("comment must be between 3 and 300 characters")
 	ErrMissingPostId        = errors.New("post not found")
 	ErrNonASCII             = errors.New("only English letters, numbers, and punctuation are allowed")
+	ErrTooManyRequests      = errors.New("too many attempts, please wait a moment")
 )
