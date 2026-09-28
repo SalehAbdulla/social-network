@@ -519,6 +519,62 @@ try {
   await until(dummy, `location.pathname === '/' && !!document.querySelector('aside[aria-label="Main navigation"]')`, 'sign back in after expiry');
   console.log('PASS: API 401 redirects to login and the normal login form restores access');
 
+  // The signup form has to work from the mandatory fields alone: the nickname is
+  // optional and the backend generates a handle, and the avatar, About me and the
+  // visibility choice are present but skippable.
+  const newcomer = await createPage(null);
+  await button(newcomer, 'Need an account? Register');
+  await until(newcomer, `!!document.querySelector('input[name="firstName"]')`, 'register form');
+  assert(await evaluate(newcomer, `!document.querySelector('input[name="nickName"]').required`), 'the nickname field must be optional');
+  assert(await evaluate(newcomer, `!!document.querySelector('textarea[name="aboutMe"]') && !!document.querySelector('select[name="isPublic"]') && !!document.querySelector('input[aria-label="Add photos"]')`), 'About me, the visibility choice and the avatar picker must be on the form');
+  assert(await evaluate(newcomer, `['Nickname', 'About me'].every(text => [...document.querySelectorAll('form label')].some(label => label.textContent.includes(text) && label.textContent.includes('optional')))`), 'nickname and About me must be marked optional');
+  assert(await evaluate(newcomer, `document.querySelector('form').innerText.includes('Profile photo (optional)')`), 'the avatar field must be marked optional');
+  await fill(newcomer, 'input[name="firstName"]', 'Browser');
+  await fill(newcomer, 'input[name="lastName"]', `Minimal${stamp}`);
+  await fill(newcomer, 'input[name="email"]', `browser-minimal-${stamp}@example.com`);
+  await fill(newcomer, 'input[name="birthDate"]', '2000-01-01');
+  await fill(newcomer, 'select[name="gender"]', 'female');
+  await fill(newcomer, 'input[name="password"]', 'BrowserSignup123!');
+  await fill(newcomer, 'input[name="confirmPassword"]', 'BrowserSignup123!');
+  await button(newcomer, 'Create account');
+  await until(newcomer, `location.pathname === '/' && !!document.querySelector('aside[aria-label="Main navigation"]')`, 'minimal signup reaches the feed', 15000);
+  const minimalProfile = await api(newcomer, '/users/me');
+  assert(/^[a-z0-9_]{2,33}$/.test(minimalProfile.nickname), `generated handle: ${JSON.stringify(minimalProfile.nickname)}`);
+  console.log('PASS: signing up with the mandatory fields only generates a handle');
+
+  // The same form with everything filled in: the chosen handle survives, About me
+  // and the private choice land on the profile, and the photo is uploaded with
+  // the session the signup just created.
+  const optional = await createPage(null);
+  await button(optional, 'Need an account? Register');
+  await until(optional, `!!document.querySelector('input[name="firstName"]')`, 'second register form');
+  await fill(optional, 'input[name="firstName"]', 'Browser');
+  await fill(optional, 'input[name="lastName"]', `Optional${stamp}`);
+  await fill(optional, 'input[name="nickName"]', `opted_${stamp}`);
+  await fill(optional, 'input[name="email"]', `browser-optional-${stamp}@example.com`);
+  await fill(optional, 'input[name="birthDate"]', '2000-01-01');
+  await fill(optional, 'select[name="gender"]', 'male');
+  await fill(optional, 'input[name="password"]', 'BrowserSignup123!');
+  await fill(optional, 'input[name="confirmPassword"]', 'BrowserSignup123!');
+  await fill(optional, 'textarea[name="aboutMe"]', `About me ${stamp}`);
+  await fill(optional, 'select[name="isPublic"]', 'false');
+  await until(optional, `document.body.innerText.includes('Nickname is available.')`, 'nickname availability');
+  const avatarFixture = path.join(taskDir, 'avatar.png');
+  await writeFile(avatarFixture, Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aD1sAAAAASUVORK5CYII=', 'base64'));
+  const registerDocument = await command('DOM.getDocument', {}, optional);
+  const avatarInput = await command('DOM.querySelector', { nodeId: registerDocument.root.nodeId, selector: 'input[aria-label="Add photos"]' }, optional);
+  await command('DOM.setFileInputFiles', { nodeId: avatarInput.nodeId, files: [avatarFixture] }, optional);
+  await until(optional, `!!document.querySelector('img[alt="Preview of avatar.png"]')`, 'avatar preview before signup');
+  await button(optional, 'Create account');
+  await until(optional, `location.pathname === '/' && !!document.querySelector('aside[aria-label="Main navigation"]')`, 'optional signup reaches the feed', 15000);
+  const optionalProfile = await api(optional, '/users/me');
+  assert.equal(optionalProfile.nickname, `opted_${stamp}`);
+  assert.equal(optionalProfile.bio, `About me ${stamp}`);
+  assert.equal(optionalProfile.isPublic, false);
+  assert(/^\/api\/v1\/media\//.test(optionalProfile.avatar), `the signup photo was not saved: ${JSON.stringify(optionalProfile.avatar)}`);
+  assert(await evaluate(optional, `(async () => (await fetch(${JSON.stringify(optionalProfile.avatar)})).ok)()`), 'the signup photo is served');
+  console.log('PASS: the optional signup fields reach the profile and the avatar uploads after signup');
+
   await navigate(dummy, '/');
   await until(dummy, `!!document.querySelector('article')`, 'feed ready for scroll');
   await evaluate(dummy, `window.scrollTo(0, document.body.scrollHeight)`);
