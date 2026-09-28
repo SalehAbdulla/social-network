@@ -36,3 +36,25 @@ func TestSessionManagerCreateSessionEvictsPreviousToken(t *testing.T) {
 		t.Fatal("expected token to be removed after delete")
 	}
 }
+
+// TestSessionExpiryHonoursTheIdleWindowAndTheAbsoluteCap pins the sliding
+// expiry math: activity moves the deadline forward, never past the cap.
+func TestSessionExpiryHonoursTheIdleWindowAndTheAbsoluteCap(t *testing.T) {
+	createdAt := time.Date(2026, 1, 1, 12, 0, 0, 0, time.UTC)
+
+	fresh := sessionExpiry(createdAt, createdAt)
+	if want := createdAt.Add(SessionIdleTTL); !fresh.Equal(want) {
+		t.Fatalf("fresh session expires at %s, want the idle window %s", fresh, want)
+	}
+
+	// A user active every day still loses the session at the absolute cap.
+	active := sessionExpiry(createdAt, createdAt.Add(SessionAbsoluteTTL-time.Hour))
+	if want := createdAt.Add(SessionAbsoluteTTL); !active.Equal(want) {
+		t.Fatalf("active session expires at %s, want the cap %s", active, want)
+	}
+
+	if SessionIdleTTL >= SessionAbsoluteTTL {
+		t.Fatal("the idle window must be shorter than the absolute cap")
+	}
+}
+
