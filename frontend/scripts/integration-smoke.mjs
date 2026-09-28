@@ -250,7 +250,7 @@ try {
   await until(alex, `[...document.querySelectorAll('a[href="/post/${postId}"] img')].some(image => image.getAttribute('src') === ${JSON.stringify(commentPhoto)})`, 'comment photo in the profile media tab');
   console.log('PASS: the profile media tab lists the comment photo');
 
-  const notificationCount = (await api(dummy, '/notifications/unread-count')).count;
+  const notificationCount = (await api(dummy, '/notifications/unread-count?exclude=message')).count;
   await until(dummy, `!!document.querySelector('[aria-label="${notificationCount} unread notifications"]')`, 'notification badge updates without refresh', 10000);
   const notifications = await api(dummy, '/notifications');
   assert(notifications.notifications.some(item => item.entityType === 'comment' && item.actorId === originalAlex.userId));
@@ -364,7 +364,7 @@ try {
   await evaluate(alex, `document.querySelector('aside[aria-label="Conversations"] a[href="/messages/groups/${group.groupId}"]').click()`);
   await button(alex, 'Request to join');
   await until(alex, `document.querySelector('section > header').innerText.includes('Request pending')`, 'pending request updates group header immediately', 3000);
-  const groupNotificationCount = (await api(dummy, '/notifications/unread-count')).count;
+  const groupNotificationCount = (await api(dummy, '/notifications/unread-count?exclude=message')).count;
   await until(dummy, `!!document.querySelector('[aria-label="${groupNotificationCount} unread notifications"]')`, 'group notification badge updates live', 10000);
   await button(dummy, 'Group info');
   await until(dummy, `document.body.innerText.includes('alexdemo')`, 'owner receives request');
@@ -488,6 +488,26 @@ try {
   await button(dummy, 'Delete for everyone');
   await until(dummy, `!document.body.innerText.includes(${JSON.stringify(`Edited browser message ${stamp}`)})`, 'delete for everyone');
   console.log('PASS: live typing, messages, read receipts, edits and scoped deletion');
+
+  // New notifications and new private messages are displayed differently: the
+  // bell counts everything except messages, the Messages entry counts only
+  // those, so an unread chat must move one badge and leave the other alone.
+  await navigate(alex, '/');
+  await until(alex, `!!document.querySelector('aside[aria-label="Main navigation"]')`, 'Alex sidebar ready');
+  const messagesBefore = (await api(alex, '/notifications/unread-count?types=message')).count;
+  await api(dummy, '/messages', 'POST', { recipientId: originalAlex.userId, text: `Badge probe ${stamp}` });
+  await until(alex, `!!document.querySelector('aside[aria-label="Main navigation"] a[href="/messages"] span[aria-label="${messagesBefore + 1} unread messages"]')`, 'messages badge counts the unread chat', 10000);
+  const bellWithUnreadMessage = (await api(alex, '/notifications/unread-count?exclude=message')).count;
+  await until(alex, `(document.querySelector('aside[aria-label="Main navigation"] a[href="/notifications"] span[aria-label$="unread notifications"]')?.textContent ?? '0') === ${JSON.stringify(String(bellWithUnreadMessage))}`, 'the bell badge ignores the unread chat', 10000);
+  console.log('PASS: an unread chat moves the messages badge and not the bell');
+
+  await navigate(alex, '/notifications');
+  await until(alex, `[...document.querySelectorAll('a')].some(link => link.textContent.trim() === 'Open chat')`, 'message rows are their own card');
+  assert(await evaluate(alex, `[...document.querySelectorAll('p')].some(item => item.textContent.includes('Private message') && item.className.includes('text-teal-700'))`), 'message cards carry their own accent');
+  await until(alex, `!!document.querySelector('a[href="/messages/${originalDummy.userId}"]')`, 'the message card opens the chat');
+  await navigate(alex, `/messages/${originalDummy.userId}`);
+  await until(alex, `!document.querySelector('aside[aria-label="Main navigation"] a[href="/messages"] span[aria-label$="unread messages"]')`, 'opening the chat clears the messages badge', 10000);
+  console.log('PASS: notifications and private messages are shown and counted separately');
 
   await api(dummy, '/auth/logout', 'POST');
   await fill(dummy, 'textarea[aria-label="Message"]', 'This unauthorized message must not be sent');
