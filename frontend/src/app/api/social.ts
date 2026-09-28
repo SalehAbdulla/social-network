@@ -29,8 +29,10 @@ export interface Post {
 export interface Page<T> { posts: T[]; totalPages: number; totalElements: number; lastPage: boolean }
 export interface Comment {
   commentId: number; postId: number; userId: string; nickname: string; commentText: string;
-  score: number; userScore: number; createdAt: string;
+  imageUrls: string[]; score: number; userScore: number; createdAt: string;
 }
+/** One photo in a profile's media tab, from a post or from a comment. */
+export interface MediaItem { url: string; postId: number; title: string; createdAt: string }
 export interface Story {
   storyId: number; userId: string; nickname: string; avatar: string; content: string;
   mediaUrl: string; mediaType: 'text' | 'image' | 'video'; backgroundColor: string; createdAt: string; expiresAt: string;
