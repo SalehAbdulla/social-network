@@ -7,9 +7,13 @@ import (
 	"strings"
 	"time"
 	"unicode"
+	"unicode/utf8"
 )
 
 type RegisterRequestDTO struct {
+	// Nickname is optional. When it is blank the service generates a unique
+	// handle, because user.nickName is NOT NULL UNIQUE and every /profile/{id}
+	// link assumes one.
 	Nickname        string
 	Email           string
 	FirstName       string
@@ -18,6 +22,8 @@ type RegisterRequestDTO struct {
 	ConfirmPassword string
 	BirthDate       string
 	Gender          string
+	Bio             string
+	IsPublic        bool
 }
 
 func isASCIIPrintable(s string) bool {
@@ -72,7 +78,8 @@ func validBirthDate(value string) bool {
 }
 
 func (d *RegisterRequestDTO) ParseAndValidate(r *http.Request) error {
-	nickname, nicknameErr := ValidateNickname(r.FormValue("nickName"))
+	rawNickname := strings.TrimSpace(r.FormValue("nickName"))
+	nickname, nicknameErr := ValidateNickname(rawNickname)
 	d.Nickname = nickname
 	d.Email = strings.TrimSpace(strings.ToLower(r.FormValue("email")))
 	d.FirstName = strings.TrimSpace(strings.ToLower(r.FormValue("firstName")))
@@ -81,17 +88,28 @@ func (d *RegisterRequestDTO) ParseAndValidate(r *http.Request) error {
 	d.ConfirmPassword = strings.TrimSpace(r.FormValue("confirmPassword"))
 	d.BirthDate = strings.TrimSpace(r.FormValue("birthDate"))
 	d.Gender = strings.TrimSpace(strings.ToLower(r.FormValue("gender")))
-	if nicknameErr != nil {
+	d.Bio = strings.TrimSpace(r.FormValue("aboutMe"))
+	// A missing isPublic keeps the historical public default, so a client that
+	// does not know about the choice behaves exactly as before.
+	publicChoice := strings.TrimSpace(strings.ToLower(r.FormValue("isPublic")))
+	d.IsPublic = publicChoice == "" || publicChoice == "true" || publicChoice == "on"
+
+	// Only a nickname the visitor actually typed has to be valid.
+	if rawNickname != "" && nicknameErr != nil {
 		return nicknameErr
 	}
 
-	if d.Nickname == "" || d.Email == "" || d.FirstName == "" || d.LastName == "" ||
+	if d.Email == "" || d.FirstName == "" || d.LastName == "" ||
 		d.Password == "" || d.ConfirmPassword == "" || d.BirthDate == "" || d.Gender == "" {
 		return realtimeforum.ErrBadRequest
 	}
 
-	if d.Nickname == "" || !isASCIIPrintable(d.FirstName) || !isASCIIPrintable(d.LastName) {
+	if !isASCIIPrintable(d.FirstName) || !isASCIIPrintable(d.LastName) {
 		return realtimeforum.ErrNonASCII
+	}
+
+	if utf8.RuneCountInString(d.Bio) > 1000 {
+		return realtimeforum.ErrBadRequest
 	}
 
 	if len(d.FirstName) < 1 || len(d.FirstName) > 50 {
