@@ -290,6 +290,11 @@ try {
   await until(alex, `!!document.querySelector('button[title="Cancel follow request"]')`, 'private profile shows Requested');
   assert.equal((await api(dummy, '/users/me')).followers.includes(originalAlex.userId), false);
   assert.equal(await evaluate(alex, `(async () => (await fetch('/api/v1/media/${mediaURL.split('/').pop()}', { cache: 'no-store' })).status)()`), 403);
+  // The chat rule: a stranger cannot open or write a private thread with a
+  // private profile, and the rejected message must never be stored.
+  assert.equal(await evaluate(alex, `(async () => (await fetch('/api/v1/messages?partnerId=${originalDummy.userId}', { cache: 'no-store' })).status)()`), 403, 'a private profile must hide the thread from a stranger');
+  assert.equal(await evaluate(alex, `(async () => (await fetch('/api/v1/messages', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ recipientId: ${JSON.stringify(originalDummy.userId)}, text: 'stranger hello' }) })).status)()`), 403, 'a private profile must reject a stranger message');
+  assert.equal((await api(alex, '/messages/users')).some(person => person.userId === originalDummy.userId), false, 'a blocked thread must not appear in the inbox');
   await until(dummy, `document.querySelector('section[aria-label="Follow requests"]').innerText.includes('@alexdemo')`, 'request arrives live');
   await button(dummy, 'Decline');
   await until(alex, `!document.querySelector('button[title="Cancel follow request"]') && [...document.querySelectorAll('button')].some(b => b.textContent === 'Follow')`, 'decline restores Follow');
