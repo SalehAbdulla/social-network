@@ -47,6 +47,7 @@ func TestMigrationsRoundTrip(t *testing.T) {
 		t.Fatalf("initial up: %v", err)
 	}
 	assertSessionColumns(t, database, true)
+	assertCommentColumns(t, database)
 
 	if err := migrations.Down(); err != nil {
 		t.Fatalf("down: %v", err)
@@ -61,9 +62,10 @@ func TestMigrationsRoundTrip(t *testing.T) {
 		t.Fatalf("second up: %v", err)
 	}
 	assertSessionColumns(t, database, true)
+	assertCommentColumns(t, database)
 	version, dirty, err := migrations.Version()
-	if err != nil || dirty || version != 9 {
-		t.Fatalf("expected clean version 9, got %d (dirty=%v, err=%v)", version, dirty, err)
+	if err != nil || dirty || version != 10 {
+		t.Fatalf("expected clean version 10, got %d (dirty=%v, err=%v)", version, dirty, err)
 	}
 }
 
@@ -131,8 +133,34 @@ func TestSessionLifecycleKeepsExistingRows(t *testing.T) {
 
 func assertSessionColumns(t *testing.T, database *sql.DB, wantLifecycle bool) {
 	t.Helper()
+	columns := tableColumns(t, database, "session")
+	for _, name := range []string{"token", "userId", "expiresAt"} {
+		if !columns[name] {
+			t.Fatalf("session is missing %q after the migration", name)
+		}
+	}
+	for _, name := range []string{"createdAt", "lastSeenAt"} {
+		if columns[name] != wantLifecycle {
+			t.Fatalf("session column %q presence = %v, want %v", name, columns[name], wantLifecycle)
+		}
+	}
+}
+
+// assertCommentColumns guards the media column added by 000010.
+func assertCommentColumns(t *testing.T, database *sql.DB) {
+	t.Helper()
+	columns := tableColumns(t, database, "comment")
+	for _, name := range []string{"commentId", "postId", "userId", "content", "imageUrls"} {
+		if !columns[name] {
+			t.Fatalf("comment is missing %q after the migration", name)
+		}
+	}
+}
+
+func tableColumns(t *testing.T, database *sql.DB, table string) map[string]bool {
+	t.Helper()
 	columns := map[string]bool{}
-	rows, err := database.Query("PRAGMA table_info(session)")
+	rows, err := database.Query("PRAGMA table_info(" + table + ")")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -150,16 +178,7 @@ func assertSessionColumns(t *testing.T, database *sql.DB, wantLifecycle bool) {
 	if err := rows.Err(); err != nil {
 		t.Fatal(err)
 	}
-	for _, name := range []string{"token", "userId", "expiresAt"} {
-		if !columns[name] {
-			t.Fatalf("session is missing %q after the migration", name)
-		}
-	}
-	for _, name := range []string{"createdAt", "lastSeenAt"} {
-		if columns[name] != wantLifecycle {
-			t.Fatalf("session column %q presence = %v, want %v", name, columns[name], wantLifecycle)
-		}
-	}
+	return columns
 }
 
 func tableExists(t *testing.T, database *sql.DB, table string) bool {
