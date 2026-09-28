@@ -1,7 +1,7 @@
 'use client';
 import { useState } from 'react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { ArrowLeft, Info } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { type Group, type GroupMember, type GroupRequest, type SocialUser, displayName, errorMessage, request, upload } from '../api/social';
@@ -60,7 +60,19 @@ function GroupInfo({ group, changed }: { group: Group; changed: () => void }) {
 }
 
 export default function GroupConversation({ groupId }: { groupId: string }) {
-  const [tab, setTab] = useState('timeline');
+  const searchParams = useSearchParams();
+  // A group notification links to the tab that needs attention (`?tab=events`,
+  // `?tab=info`), so the requested tab is the entry point. Switching tabs stays
+  // local state, and a second request arriving while this view is still mounted
+  // (one group to the next) resets it during the render, which is React's
+  // documented way to adjust state when an input changes.
+  const requestedTab = searchParams.get('tab') ?? 'timeline';
+  const [tab, setTab] = useState(requestedTab);
+  const [lastRequested, setLastRequested] = useState(requestedTab);
+  if (requestedTab !== lastRequested) {
+    setLastRequested(requestedTab);
+    setTab(requestedTab);
+  }
   const group = useResource<Group>(`/groups/${groupId}`);
   useLiveRefresh(group.reload, groupId);
   if (group.loading) return <Loading />;
