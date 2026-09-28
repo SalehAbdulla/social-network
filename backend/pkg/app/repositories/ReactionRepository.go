@@ -8,22 +8,42 @@ import (
 
 type ReactionRepository interface {
 	UpsertReaction(userId string, entityType string, entityId int, score int) (int, error)
-	DoesCommentExists(commentId int) error
 	GetUserScore(userId string, entityType string, entityId int) (int, error)
 }
 
-func (db *DB) UpsertReaction(userId string, entityType string, entityId int, score int) (int, error) {
+// reactionTarget checks that the viewer may read what they are reacting to.
+// Existence alone is not enough: reacting to a post you cannot open would leak
+// its score and turn the endpoint into an existence oracle. An unreadable target
+// answers not found, exactly like PostRepository.GetPostByID, so the answer says
+// nothing about whether the row exists.
+func (db *DB) reactionTarget(userId, entityType string, entityId int) error {
 	switch entityType {
 	case "post":
-		if err := db.DoesPostExists(entityId); err != nil {
-			return 0, err
+		allowed, err := db.CanViewPost(entityId, userId)
+		if err != nil {
+			return realtimeforum.ErrInternal
 		}
+		if !allowed {
+			return realtimeforum.ErrNotFound
+		}
+		return nil
 	case "comment":
-		if err := db.DoesCommentExists(entityId); err != nil {
-			return 0, err
+		allowed, err := db.CanViewComment(entityId, userId)
+		if err != nil {
+			return realtimeforum.ErrInternal
 		}
+		if !allowed {
+			return realtimeforum.ErrNotFound
+		}
+		return nil
 	default:
-		return 0, realtimeforum.ErrBadRequest
+		return realtimeforum.ErrBadRequest
+	}
+}
+
+func (db *DB) UpsertReaction(userId string, entityType string, entityId int, score int) (int, error) {
+	if err := db.reactionTarget(userId, entityType, entityId); err != nil {
+		return 0, err
 	}
 
 	var existingReaction models.Reaction
@@ -82,7 +102,6 @@ func (db *DB) UpsertReaction(userId string, entityType string, entityId int, sco
 		return 0, realtimeforum.ErrInternal
 	}
 
-	
 	switch entityType {
 	case "post":
 		_, err = db.Conn.Exec(
@@ -118,16 +137,4 @@ func (db *DB) GetUserScore(userId string, entityType string, entityId int) (int,
 		return int(score.Int64), nil
 	}
 	return 0, nil
-}
-
-func (db *DB) DoesCommentExists(commentId int) error {
-	var count int
-	err := db.Conn.QueryRow("SELECT COUNT(*) FROM comment WHERE commentId = ?", commentId).Scan(&count)
-	if err != nil {
-		return realtimeforum.ErrInternal
-	}
-	if count == 0 {
-		return realtimeforum.ErrNotFound
-	}
-	return nil
 }
