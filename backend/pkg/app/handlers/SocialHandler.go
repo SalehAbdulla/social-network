@@ -242,15 +242,7 @@ func (re *HandlerContext) DecideFollowRequest(w http.ResponseWriter, r *http.Req
 }
 
 func (re *HandlerContext) socialNotification(actor, target, kind string) {
-	notification, err := re.NotificationService.CreateNotification(target, actor, kind, 0)
-	if err != nil {
-		re.App.Logger.Error("social notification failed", "error", err)
-		return
-	}
-	if re.Hub != nil {
-		data, _ := json.Marshal(map[string]any{"type": "notification", "payload": notification})
-		re.Hub.SendToUser(target, data)
-	}
+	re.notifyUser(target, actor, kind, 0)
 }
 
 // FollowLists serves the followers and following lists of one profile so the
