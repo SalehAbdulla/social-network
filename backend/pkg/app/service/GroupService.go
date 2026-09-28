@@ -31,13 +31,15 @@ func (s *GroupService) RequireMember(groupID int, userID string) error {
 	return nil
 }
 
-func (s *GroupService) RequestJoin(groupID int, userID string) error {
+// RequestJoin records a join request and reports whether it is a new one that
+// the owner should hear about.
+func (s *GroupService) RequestJoin(groupID int, userID string) (bool, error) {
 	group, err := s.Repo.Group(groupID, userID)
 	if err != nil {
-		return err
+		return false, err
 	}
 	if group.IsMember {
-		return backend.ErrBadRequest
+		return false, backend.ErrBadRequest
 	}
 	return s.Repo.AddGroupRequest(groupID, userID)
 }
@@ -56,19 +58,21 @@ func (s *GroupService) Decide(groupID, requestID int, ownerID, status string) er
 	return s.Repo.GroupRequestDecision(groupID, requestID, status)
 }
 
-func (s *GroupService) Invite(groupID int, inviterID, inviteeID string) error {
+// Invite records an invitation and reports whether it is a new one that the
+// invitee should hear about.
+func (s *GroupService) Invite(groupID int, inviterID, inviteeID string) (bool, error) {
 	if inviteeID == "" {
-		return backend.ErrBadRequest
+		return false, backend.ErrBadRequest
 	}
 	if _, err := s.Repo.SocialProfile(inviteeID); err != nil {
-		return err
+		return false, err
 	}
 	group, err := s.Repo.Group(groupID, inviterID)
 	if err != nil {
-		return err
+		return false, err
 	}
 	if !group.IsOwner && !group.IsMember {
-		return backend.ErrForbidden
+		return false, backend.ErrForbidden
 	}
 	return s.Repo.AddGroupInvitation(groupID, inviterID, inviteeID)
 }
