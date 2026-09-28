@@ -84,10 +84,16 @@ export default function Sidebar({ isSideBarOpen, setSideBarOpen, isCollapsed, se
     <Link href="/" aria-label="Social Network home" onClick={() => setSideBarOpen(false)} className="mb-6 mt-2 block shrink-0"><img src={isCollapsed ? '/favicon.svg' : '/logo.svg'} alt="Social Network" className={isCollapsed ? 'mx-auto h-10 w-10 object-contain' : 'h-16 w-full object-contain dark:brightness-125'} /></Link>
     <nav className="space-y-2">{links.map(({ href, label, icon: Icon }) => <Link key={href} href={href} title={label} onClick={() => setSideBarOpen(false)} className={`flex items-center gap-3 rounded-xl px-3 py-3 ${pathname === href || (href !== '/' && pathname.startsWith(href + '/')) ? 'bg-blue-50 text-blue-700' : 'text-slate-600 hover:bg-slate-50'}`}>
       <Icon size={21} className="shrink-0" />{!isCollapsed && <span>{label}</span>}
-      {href === '/notifications' && !!count.data?.count && <span aria-label={`${count.data.count} unread notifications`} aria-live="polite" className="rounded-full bg-red-500 px-1.5 text-xs text-white">{count.data.count}</span>}
-      {href === '/messages' && !!messages.data?.count && <span aria-label={`${messages.data.count} unread messages`} aria-live="polite" className="flex items-center gap-1 rounded-full bg-teal-600 px-1.5 text-xs text-white"><MessageSquare size={11} aria-hidden="true" />{messages.data.count}</span>}
+      {/* A live region has to exist before its text changes, so the region is the
+          always-mounted wrapper and the badge inside it appears later — that way
+          the first count is announced instead of missed. The badge keeps its own
+          aria-label, which is what names it inside the link. Red-600 and teal-700
+          clear 4.5:1 against white here; red-500 and teal-600 are only ~3.7:1,
+          which fails at this text size. */}
+      {href === '/notifications' && <span role="status" aria-live="polite">{!!count.data?.count && <span aria-label={`${count.data.count} unread notifications`} className="rounded-full bg-red-600 px-1.5 text-xs text-white">{count.data.count}</span>}</span>}
+      {href === '/messages' && <span role="status" aria-live="polite">{!!messages.data?.count && <span aria-label={`${messages.data.count} unread messages`} className="flex items-center gap-1 rounded-full bg-teal-700 px-1.5 text-xs text-white"><MessageSquare size={11} aria-hidden="true" />{messages.data.count}</span>}</span>}
     </Link>)}</nav>
-    <Link href="/create-post" title="Create post" onClick={() => setSideBarOpen(false)} className="mt-6 flex items-center justify-center gap-2 rounded-lg bg-linear-to-r from-blue-600 to-teal-600 p-3 text-white"><CirclePlus size={20} />{!isCollapsed && 'Create Post'}</Link>
+    <Link href="/create-post" title="Create post" onClick={() => setSideBarOpen(false)} className="mt-6 flex items-center justify-center gap-2 rounded-lg bg-linear-to-r from-blue-600 to-teal-700 p-3 text-white"><CirclePlus size={20} />{!isCollapsed && 'Create Post'}</Link>
     <div className="mt-auto shrink-0 border-t border-border pt-4 space-y-3">
       <ThemeToggle compact={isCollapsed} label={!isCollapsed} className={isCollapsed ? 'mx-auto' : ''} />
       <Link href="/profile" onClick={() => setSideBarOpen(false)} className="flex items-center gap-2"><Avatar name={displayName(user)} avatarUrl={user.avatar} />{!isCollapsed && <div className="min-w-0"><p className="truncate font-medium">{displayName(user)}</p><p className="truncate text-xs text-muted">@{user.nickname}</p></div>}</Link>
