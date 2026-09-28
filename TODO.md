@@ -348,12 +348,22 @@ Reference: `GroupHandler.go`, `GroupManagementHandler.go`, `GroupContentHandler.
 - [x] Events with `startsAt` plus Going / Not going RSVP (`groupRSVP`, `GroupRSVP`).
 - [x] Members list, remove member, leave group, delete group, transfer ownership
   (`ManageGroupMember`, "Make group owner").
-- [ ] **P1** Route `group_request`, `group_invitation` and `group_event` notifications
-  through `NotificationService.CreateNotification` instead of the raw SQL inserts in
-  `GroupRepository.go:91,196` and `GroupContentRepository.go:54`, so they push over the hub
-  at creation time instead of relying on a refetch.
-- [ ] **P1** Make group-event notifications deep-link to the event rather than the group
-  overview (`notificationPath` in `notifications/page.tsx:11`).
+- [x] **P1** Route `group_request`, `group_invitation` and `group_event` notifications
+  through `NotificationService.CreateNotification` instead of raw SQL inserts, so they push
+  over the hub at creation time instead of relying on a refetch. The three inline inserts are
+  gone; the handlers create the rows after the group action commits and push each one through
+  `notifyUser`, the same helper the comment, message and follow paths use. The service
+  whitelist now reads `models.IsNotificationEntityType`, and the repos report whether a
+  request or invitation actually landed so a repeat while one is pending cannot duplicate the
+  notification. Wire change: these flows used to send `notification_changed` (a refetch cue)
+  and now send the created row as `notification`; `TestLiveConnectionUpdates` was updated to
+  assert the payload rather than just the type.
+- [x] **P1** Make group notifications deep-link to the view that needs attention rather than
+  the group's chat tab: a join request opens `?tab=info` (where it is accepted or declined),
+  an event opens `?tab=events`, which `GroupConversation` now reads as its entry tab. The row
+  still points at the group, so this also fixes notifications created before the change. It
+  lands on the events list rather than highlighting the exact event, because the row does not
+  carry the event id; storing one would need a migration for a marginal gain.
 - [ ] **P2** Paginate the members and requests lists (currently fetch-all).
 - [ ] **P2** Split upcoming and past events, and add an event reminder.
 - [ ] **P2** Tests for leave / remove / transfer / delete authorization edges (owner cannot
@@ -668,6 +678,14 @@ component classes) are the ones to build on.
   with the exact change list in that section. `canMessage` is still only a type in
   `frontend/src/app/api/social.ts`, so nothing reads the flag yet.
 - No P0 items are open. What is left is the P1/P2/P3 list above.
+
+Changed in the group-notification session (2026-09-28), for review:
+`backend/pkg/models/Notification.go`, `backend/pkg/app/service/{NotificationService,GroupService}.go`,
+`backend/pkg/app/repositories/{GroupRepository,GroupContentRepository}.go`,
+`backend/pkg/app/handlers/{NotificationHandler,SocialHandler,GroupHandler,GroupContentHandler}.go`,
+`backend/cmd/{group_notifications_test.go,integration_test.go}`,
+`frontend/src/app/notifications/page.tsx`, `frontend/src/app/components/GroupConversation.tsx`,
+`frontend/scripts/integration-smoke.mjs`.
 
 Changed in the P0-5 session (2026-09-28), for review: `backend/pkg/models/Registration.go`,
 `backend/pkg/app/repositories/AuthRepository.go`, `backend/pkg/app/service/AuthService.go`,
