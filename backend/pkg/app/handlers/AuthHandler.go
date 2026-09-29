@@ -176,6 +176,51 @@ func (re *HandlerContext) Logout(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// ChangePassword replaces the signed-in account's password. It answers 401 for
+// a missing session (the middleware never reaches the handler in that case), 400
+// for a malformed or weak payload and for a wrong current password, and 200 with
+// a freshly rotated session cookie otherwise.
+func (re *HandlerContext) ChangePassword(w http.ResponseWriter, r *http.Request) {
+	userID, ok := middleware.UserIDFromContext(r.Context())
+	if !ok || userID == "" {
+		re.HandleError(w, r, realtimeforum.ErrUnauthorized)
+		return
+	}
+
+	var req user.ChangePasswordRequestDTO
+	if !re.decode(w, r, &req) {
+		return
+	}
+	if err := req.Validate(); err != nil {
+		re.HandleError(w, r, err)
+		return
+	}
+
+	token, err := re.AuthService.ChangePassword(userID, req.CurrentPassword, req.NewPassword)
+	if err != nil {
+		re.HandleError(w, r, err)
+		return
+	}
+
+	// The replacement token goes to the browser that changed the password; every
+	// other session of this account was revoked inside the rotation. This cookie
+	// is deliberately not persistent: ending a "remember me" grant when the
+	// credential changes is the conservative direction, and signing in again
+	// restores it.
+	http.SetCookie(w, &http.Cookie{
+		Name:     "session_token",
+		Value:    token,
+		Path:     "/",
+		HttpOnly: true,
+		Secure:   re.App.InProduction,
+		SameSite: http.SameSiteLaxMode,
+	})
+
+	re.App.Logger.Info("password changed", "user_id", userID)
+
+	respond(w, http.StatusOK, map[string]string{"message": "Password changed"})
+}
+
 func (re *HandlerContext) Me(w http.ResponseWriter, r *http.Request) {
 	userID, ok := middleware.UserIDFromContext(r.Context())
 	if !ok || userID == "" {
