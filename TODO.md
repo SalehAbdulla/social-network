@@ -381,7 +381,29 @@ Reference: `GroupHandler.go`, `GroupManagementHandler.go`, `GroupContentHandler.
   still points at the group, so this also fixes notifications created before the change. It
   lands on the events list rather than highlighting the exact event, because the row does not
   carry the event id; storing one would need a migration for a marginal gain.
-- [ ] **P2** Paginate the members and requests lists (currently fetch-all).
+- [x] **P2** Paginate the members and requests lists (currently fetch-all). Closed 2026-09-28:
+  both lists use the paging the rest of the app already speaks — `?offset=` with a `LIMIT 31`
+  query (30 rows plus one sentinel row that tells the client there is more) and a bare slice, which
+  `usePagedList` + `LoadMore` consume without a new envelope. `GroupConversation.tsx` now pages
+  them, keeps the live refresh on `refresh` (which folds page 1 in without dropping pages already
+  opened) and re-reads from page 1 after a mutation, since the list itself changed. The
+  notification fan-out keeps an unbounded `AllGroupMembers`: paging *that* would have quietly
+  stopped telling everyone past the thirtieth member about an event or an announcement, which is
+  why the two queries share one constant instead of the paged one replacing the other.
+  Two things worth recording. The `ORDER BY` gained a final tiebreaker (`gm.userId`,
+  `r.requestId`) because paging a sort that ties is exactly how `LIMIT`/`OFFSET` starts repeating
+  and skipping rows — and the test seeds every row with the same timestamp to keep that honest.
+  And the browser suite caught a real wiring bug in the first attempt: the page query was
+  `&offset=`, which is right for keys that already carry a `?` but produced `/groups/1/members&offset=0`
+  for these two, so every group step 404'd until it was `?offset=`. Verified: `cmd/group_pagination_test.go`
+  drives 41 members and 41 requests over two pages and asserts the sentinel row is the only repeat,
+  the union is complete, the owner leads the member list, and both endpoints still answer 403 to a
+  non-member and a non-owner on *page 2*; `go build`/`vet`/`test ./...` pass; `npm run lint` (0 errors)
+  and `npx tsc --noEmit` are clean; the browser suite passes 27 steps with two new assertions on the
+  group info tab — a short list renders every member and offers no second page. **Not browser-tested:
+  the >30-row path**, only Go-tested: seeding 31 accounts into the browser fixtures would disturb what
+  the existing steps assert about the seeded data, and the honest place to get that coverage is the
+  demo seed (see the P3 item about extending it).
 - [ ] **P2** Split upcoming and past events, and add an event reminder.
 - [x] **P2** Tests for leave / remove / transfer / delete authorization edges (owner cannot
   be removed, non-owner cannot remove others). Closed 2026-09-28:
@@ -1047,6 +1069,22 @@ component classes) are the ones to build on.
   with the exact change list in that section. `canMessage` is still only a type in
   `frontend/src/app/api/social.ts`, so nothing reads the flag yet.
 - No P0 items are open. What is left is the P1/P2/P3 list above.
+
+Changed in the group-pagination session (2026-09-28), for review:
+`backend/pkg/app/repositories/GroupRepository.go`, `backend/pkg/app/handlers/{GroupHandler.go,GroupContentHandler.go}`,
+`backend/cmd/group_pagination_test.go` (new), `frontend/src/app/components/GroupConversation.tsx`,
+`frontend/scripts/integration-smoke.mjs`, `TODO.md`.
+
+The first half of the Groups pair: members and join requests no longer arrive whole. The two list
+queries now share one constant so the paged endpoint and the unbounded notification fan-out cannot
+drift, the sort gained the tiebreaker that paging a tied column needs, and the frontend reuses the
+paging primitives the other five lists already use. The browser suite earned its keep twice: it
+caught my malformed page query (`&offset=` on a key with no `?`, 404ing every group step) before
+this landed, and it now asserts that a short list offers no second page. The events half of the
+pair — splitting upcoming from past, and the reminder — is still open with its shape recorded.
+Evidence: `go build ./...`/`go vet ./...`/`go test ./...` pass (nine packages ok), `npm run lint`
+is 0 errors with the same 28 known warnings, `npx tsc --noEmit` is clean, and the browser suite
+passes 27 steps with no runtime exceptions.
 
 Changed in the tree-hygiene session (2026-09-28), for review:
 `frontend/src/app/connections/page.tsx`, `frontend/scripts/{integration-smoke.mjs,run-integration.mjs}`,
