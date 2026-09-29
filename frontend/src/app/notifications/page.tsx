@@ -3,7 +3,7 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { MessageSquare } from 'lucide-react';
 import toast from 'react-hot-toast';
-import { type FollowRequest, type Notification, dateLabel, errorMessage, request } from '../api/social';
+import { type FollowRequest, type Notification, dateLabel, errorMessage, isoTimestamp, relativeLabel, request } from '../api/social';
 import { useBackend } from '../components/BackendProvider';
 import { useLiveRefresh } from '../lib/useLiveRefresh';
 import { usePagedList } from '../lib/usePagedList';
@@ -57,7 +57,7 @@ function NotificationCard({ item, busy, mark }: {
   return <div className={`rounded-xl border p-5 space-y-2 ${tone}`}>
     {message && <p className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-teal-700"><MessageSquare size={14} aria-hidden="true" />Private message</p>}
     <p><Link href={`/profile/${item.actorId}`} className="font-semibold">@{item.actorNickname}</Link> {notificationText(item)}</p>
-    <p className="text-xs text-slate-400">{dateLabel(item.createdAt)}</p>
+    <p className="text-xs text-slate-400"><time dateTime={isoTimestamp(item.createdAt)} title={dateLabel(item.createdAt)}>{relativeLabel(item.createdAt)}</time></p>
     <div className="flex gap-4 text-sm"><Link href={notificationPath(item)} className={message ? 'font-medium text-teal-700' : 'text-blue-600'}>{message ? 'Open chat' : 'View'}</Link>{!item.isRead && <button disabled={busy} onClick={() => void mark(`/notifications/${item.notificationId}/read`)}>Mark as read</button>}</div>
   </div>;
 }
