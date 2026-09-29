@@ -25,6 +25,13 @@ const pending = new Map();
 const exceptions = [];
 const exceptionDetails = [];
 const failedResponses = [];
+// Every same-origin response the browser saw, grouped by page. It exists so a test
+// can assert that an action did *not* refetch a list, which nothing else can check
+// — and it is per page because the suite keeps several tabs open at once, where
+// another tab's legitimate refetch must not read as this one's.
+const responsesByPage = new Map();
+const requestsMatching = (page, fragment) => (responsesByPage.get(page) || []).filter(url => url.includes(fragment));
+const requestsTo = (page, fragment) => requestsMatching(page, fragment).length;
 let holdGroupRefresh = false;
 const heldGroupRequests = [];
 socket.addEventListener('message', async ({ data }) => {
@@ -45,8 +52,13 @@ socket.addEventListener('message', async ({ data }) => {
       } catch { /* Navigation can discard the exception object. */ }
     }
   }
-  if (event.method === 'Network.responseReceived' && event.params.response.status >= 400 && event.params.response.url.startsWith(base)) {
-    failedResponses.push({ url: event.params.response.url, status: event.params.response.status });
+  if (event.method === 'Network.responseReceived' && event.params.response.url.startsWith(base)) {
+    const seen = responsesByPage.get(event.sessionId) || [];
+    seen.push(event.params.response.url);
+    responsesByPage.set(event.sessionId, seen);
+    if (event.params.response.status >= 400) {
+      failedResponses.push({ url: event.params.response.url, status: event.params.response.status });
+    }
   }
   if (event.method === 'Fetch.requestPaused') {
     // Use the system font offline without making the stylesheet loader reject.
@@ -324,11 +336,18 @@ try {
   await until(alex, `!!document.querySelector('[aria-label="Profile statistics"]') && document.body.innerText.includes('Unfollow')`, 'profile follow control');
   const beforeFollow = await api(dummy, '/users/me');
   const stats = followers => `document.querySelector('[aria-label="Profile statistics"]')?.innerText.replace(/\\s+/g, ' ').trim() === ${JSON.stringify(`${followers} followers ${beforeFollow.following.length} following`)}`;
+  const postsRequestsBefore = requestsTo(alex, '/posts?liked=');
   await button(alex, 'Unfollow');
   await until(alex, stats(beforeFollow.followers.length - 1), 'viewed profile updates follower count');
+  // The control is optimistic and the list did not change, so it must not be
+  // re-read — not by the click, and not by the `social_changed` echo the follow
+  // endpoint pushes to the actor as well as the target. The follower count is a
+  // different, single resource and is still allowed to be re-read.
+  assert.equal(requestsTo(alex, '/posts?liked='), postsRequestsBefore, `unfollowing must not refetch the profile post list: ${requestsMatching(alex, '/posts?liked=')}`);
   await until(dummy, stats(beforeFollow.followers.length - 1), 'owner sees live follower count');
   await button(alex, 'Follow');
   await until(alex, stats(beforeFollow.followers.length), 'follow restores follower count');
+  assert.equal(requestsTo(alex, '/posts?liked='), postsRequestsBefore, `following must not refetch the profile post list either: ${requestsMatching(alex, '/posts?liked=')}`);
   await until(dummy, stats(beforeFollow.followers.length), 'owner sees restored count');
   console.log('PASS: profile follow/unfollow and live database counts');
 
