@@ -32,6 +32,10 @@ const failedResponses = [];
 const responsesByPage = new Map();
 const requestsMatching = (page, fragment) => (responsesByPage.get(page) || []).filter(url => url.includes(fragment));
 const requestsTo = (page, fragment) => requestsMatching(page, fragment).length;
+// Console errors, so a regression that only shows up as a warning or a React
+// hydration complaint cannot pass unnoticed: the suite watches exceptions, which
+// those are not.
+const consoleErrors = [];
 let holdGroupRefresh = false;
 const heldGroupRequests = [];
 socket.addEventListener('message', async ({ data }) => {
@@ -51,6 +55,9 @@ socket.addEventListener('message', async ({ data }) => {
         detail.event = inspected.result.value;
       } catch { /* Navigation can discard the exception object. */ }
     }
+  }
+  if (event.method === 'Runtime.consoleAPICalled' && event.params.type === 'error') {
+    consoleErrors.push(event.params.args.map(argument => argument.value ?? argument.description ?? '').join(' '));
   }
   if (event.method === 'Network.responseReceived' && event.params.response.url.startsWith(base)) {
     const seen = responsesByPage.get(event.sessionId) || [];
@@ -253,6 +260,14 @@ try {
   assert(photoComment && photoComment.imageUrls.length === 1, `the comment kept its photo: ${JSON.stringify(photoComment)}`);
   const commentPhoto = photoComment.imageUrls[0];
   assert(await evaluate(alex, `(async () => (await fetch(${JSON.stringify(commentPhoto)})).ok)()`), 'the uploaded comment photo is served');
+  // Recency is what a reader wants here, and the exact instant has to stay
+  // available: relative in the text, a real timestamp in `dateTime` and `title`.
+  const freshComment = await evaluate(alex, `(() => {
+    const node = [...document.querySelectorAll('article time[datetime]')].find(item => item.textContent.trim().length > 0);
+    return node ? { text: node.textContent.trim(), title: node.getAttribute('title'), dateTime: node.getAttribute('datetime') } : null;
+  })()`);
+  assert(freshComment && /ago|now|yesterday/i.test(freshComment.text), `a freshly written item reads as relative: ${JSON.stringify(freshComment)}`);
+  assert(freshComment.dateTime && freshComment.title, `the exact instant stays on the element: ${JSON.stringify(freshComment)}`);
   console.log('PASS: a comment carries an uploaded photo, renders it and stores its URL');
 
   // The profile media tab lists comment photos next to post photos.
@@ -717,6 +732,8 @@ try {
   console.log('PASS: messages, group chat, profile, notifications and discover fit 320, 375, 768 and 1440 px');
   assert.deepEqual(exceptions, [], 'Browser runtime exceptions');
   console.log('PASS: no browser runtime exceptions');
+  assert.deepEqual(consoleErrors, [], `Browser console errors: ${JSON.stringify(consoleErrors.slice(0, 5))}`);
+  console.log('PASS: no browser console errors');
 } finally {
   if (dummy && originalDummy) {
     if (postId) await api(dummy, `/posts?id=${postId}`, 'DELETE').catch(() => {});
