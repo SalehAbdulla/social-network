@@ -77,6 +77,26 @@ func validBirthDate(value string) bool {
 	return age >= 13 && age <= 100
 }
 
+// ValidatePassword applies the signup password rules to a new credential, so
+// the register form and the change-password form cannot drift apart. An empty
+// password is a bad request rather than a length failure, because a missing
+// field is a different mistake from a too-short one.
+func ValidatePassword(password, confirm string) error {
+	if password == "" {
+		return realtimeforum.ErrBadRequest
+	}
+	if password != confirm {
+		return realtimeforum.ErrPasswordsDontMatch
+	}
+	if len(password) < 12 || len(password) > 64 {
+		return realtimeforum.ErrPasswordLength
+	}
+	if !passwordStrength(password) {
+		return realtimeforum.ErrInvalidPassForm
+	}
+	return nil
+}
+
 func (d *RegisterRequestDTO) ParseAndValidate(r *http.Request) error {
 	rawNickname := strings.TrimSpace(r.FormValue("nickName"))
 	nickname, nicknameErr := ValidateNickname(rawNickname)
@@ -124,16 +144,8 @@ func (d *RegisterRequestDTO) ParseAndValidate(r *http.Request) error {
 		return realtimeforum.ErrInvalidEmail
 	}
 
-	if d.Password != d.ConfirmPassword {
-		return realtimeforum.ErrPasswordsDontMatch
-	}
-
-	if len(d.Password) < 12 || len(d.Password) > 64 {
-		return realtimeforum.ErrPasswordLength
-	}
-
-	if !passwordStrength(d.Password) {
-		return realtimeforum.ErrInvalidPassForm
+	if err := ValidatePassword(d.Password, d.ConfirmPassword); err != nil {
+		return err
 	}
 
 	if !validBirthDate(d.BirthDate) {
