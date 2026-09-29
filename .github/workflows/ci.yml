@@ -62,6 +62,11 @@ jobs:
       - name: Typecheck
         run: npx tsc --noEmit
       - name: Build
+        # A production build refuses to guess the backend address, because the value
+        # is compiled into the rewrites (see frontend/next.config.ts). A build never
+        # exercises them, so naming one here is enough.
+        env:
+          BACKEND_URL: http://backend:5174
         run: npm run build
       - name: Dependency audit
         # Blocking since the framework bump of 2026-09-28 cleared every advisory

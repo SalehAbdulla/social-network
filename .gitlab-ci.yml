@@ -52,6 +52,11 @@ frontend:
         - frontend/package-lock.json
     paths:
       - frontend/.npm-cache/
+  variables:
+    # A production build refuses to guess the backend address, because the value is
+    # compiled into the rewrites (see frontend/next.config.ts). A build never
+    # exercises them, so naming one here is enough.
+    BACKEND_URL: http://backend:5174
   script:
     - cd frontend
     # No setup-node action here, so the job keeps its own npm cache; the install
