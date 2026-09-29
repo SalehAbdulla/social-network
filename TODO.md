@@ -383,8 +383,17 @@ Reference: `GroupHandler.go`, `GroupManagementHandler.go`, `GroupContentHandler.
   carry the event id; storing one would need a migration for a marginal gain.
 - [ ] **P2** Paginate the members and requests lists (currently fetch-all).
 - [ ] **P2** Split upcoming and past events, and add an event reminder.
-- [ ] **P2** Tests for leave / remove / transfer / delete authorization edges (owner cannot
-  be removed, non-owner cannot remove others).
+- [x] **P2** Tests for leave / remove / transfer / delete authorization edges (owner cannot
+  be removed, non-owner cannot remove others). Closed 2026-09-28:
+  `cmd/group_authorization_test.go` registers a third and a fourth account through the real signup
+  endpoint and pins the refusals — a plain member cannot remove the owner or another member, only
+  the owner transfers and only to the literal role `owner`, a transfer to a non-member is a 404,
+  the owner can neither be removed nor leave (400, so a group is never left ownerless), the former
+  owner loses delete and removal rights but may still leave, leaving closes the member-only doors,
+  a stranger can do nothing in the group, an invitation is answerable only by its invitee, and only
+  the owner may read or decide join requests while the owner's acceptance still adds the applicant.
+  The membership count is read back from the database after leaving and after deletion, so a
+  cascade that failed to run would fail the test.
 
 ## Authentication and Security
 
@@ -444,9 +453,51 @@ Reference: `GroupHandler.go`, `GroupManagementHandler.go`, `GroupContentHandler.
 - [ ] **P2** Harden uploads further: re-encode images or serve them with
   `Content-Disposition: attachment` and a restrictive CSP so an HTML/SVG payload cannot be
   used for stored XSS.
-- [ ] **P2** Add password change / reset (not required by the spec, required by any real
-  deployment).
-- [ ] **P2** Rotate the session token on privilege change and on password change.
+- [x] **P2** Add password change / reset (not required by the spec, required by any real
+  deployment). Closed 2026-09-28 for **change**; **reset stays open by decision** — see the note
+  under this item. `PUT /api/v1/users/me/password` takes `currentPassword`, `newPassword` and
+  `confirmPassword` as JSON, applies the register strength rules through one shared
+  `ValidatePassword` (so the two forms cannot drift), refuses a wrong current password with its own
+  message rather than the sign-in one, and answers the standard error envelope otherwise. The UI is
+  a `ChangePassword` dialog on your own profile, built on the theme tokens and the same focus
+  contract as `EditProfile`. Verified: `go build`/`vet`/`test ./...` pass, including
+  `cmd/password_change_test.go` (happy path, four rejected payloads that leave the stored hash
+  untouched, wrong current password, unauthenticated 401, wrong method 404, and both directions of
+  the credential swap) and the `ErrWrongPassword` row in the handler status table; `npm run lint`
+  (0 errors) and `npx tsc --noEmit` are clean, `npm run build` succeeds, and the browser suite
+  passes **26 steps** with the new journey — the dialog flags a mismatched confirmation and keeps
+  its submit disabled, closes on success, the tab keeps working on the rotated cookie, which is
+  still HttpOnly, and the seeded password is restored at the end.
+  **Reset is not implemented and should not be claimed:** it needs mail delivery, and this project
+  has no mailer, no SMTP dependency and no outbound mail anywhere. Adding it properly means an
+  email provider, a single-use token table with short expiry, and the wording of the message — a
+  feature in its own right, not a variation of this one. Recorded here so the gap is visible
+  instead of implied by the word "reset".
+- [x] **P2** Rotate the session token on privilege change and on password change. Closed
+  2026-09-28 with the reduction stated rather than glossed: this app has no roles or permission
+  levels, so there is no other privilege transition to hook — the credential change is the only
+  one, and it now rotates. `AuthService.ChangePassword` generates the replacement token through
+  `SessionManager.CreateSession`, which is already the revoke-and-issue step: `SaveSession` deletes
+  every other session row of that account inside the same transaction that inserts the new one, so
+  a stolen cookie stops working immediately rather than at expiry, and the browser that made the
+  change keeps working because the handler returns it the new cookie. Writing the test found a real
+  bug in the in-memory cache: `CreateSession` evicted only the token in `UIDToToken`, so a token
+  that had been re-cached from the database — exactly what a process restart leaves behind — stayed
+  valid after its row was deleted. It now evicts every cached token of that account, pinned by
+  `TestCreateSessionEvictsTokensRecachedFromTheStore`. The integration test writes a second session
+  row for one account (the login flow cannot produce two) and asserts it is gone from the table and
+  answered 401 over HTTP, that the pre-change cookie is 401 too, and that the response's cookie
+  still works. One consequence is documented rather than hidden: an open WebSocket for the revoked
+  browser survives until that tab's next request 401s, at which point the client's session-expired
+  handler clears the user and drops the socket (`DEPLOYMENT.md`).
+- [ ] **P2** Password reset by email. Split out of the item above on 2026-09-28 so it stays
+  visible instead of being implied by the word "reset". The backend has no mailer and no SMTP
+  dependency, so this is a feature rather than a variation: choose a provider, add a
+  `passwordReset` table holding a hashed single-use token with a short expiry (15-30 minutes),
+  send the link, and keep the token single-use and bound to one account. The change flow above
+  already does the hard part — verify, rehash, rotate, revoke the account's other sessions — so
+  the reset endpoint can reuse it, but it must not ship without rate limiting and without an
+  answer that cannot be used to discover which addresses are registered.
 
 ## Reliability and UX
 
@@ -601,13 +652,17 @@ Reference: `GroupHandler.go`, `GroupManagementHandler.go`, `GroupContentHandler.
   moved into the database, and is corrected.
 - [x] **P1** Add CI (GitHub Actions or the school equivalent) running `go vet`, `go test`,
   `npm ci`, `npm run lint`, `npm run build`, `docker compose build`, `npm audit`. Closed
-  2026-09-28: `.github/workflows/ci.yml` has four jobs — backend (`go build`/`vet`/`test`),
-  frontend (`npm ci`/`lint`/`npx tsc --noEmit`/`build`, plus `npm audit` as a reported step),
-  `govulncheck`, and a Compose job (`docker compose config` + `build`) that waits on the first
-  two. Go `1.26.x` and Node `22` mirror the two Dockerfiles, a concurrency group cancels
-  superseded runs, and each job's comment says why it is scoped the way it is. It is GitHub
-  Actions because the implementation lives on GitHub; translating it to the school's GitLab is
-  a P2 below.
+  2026-09-28: four jobs — backend (`go build`/`vet`/`test`), frontend
+  (`npm ci`/`lint`/`npx tsc --noEmit`/`build`/`npm audit`), `govulncheck`, and a Compose job
+  (`docker compose config` + `build`) that waits on the first two. Go `1.26.x` and Node `22`
+  mirror the two Dockerfiles, a concurrency group cancels superseded runs, and each job's comment
+  says why it is scoped the way it is. Two corrections made on 2026-09-28 after measuring rather
+  than trusting this line: `npm audit` stopped being a reported step when the framework bump
+  cleared every advisory (this line still described it as reported), and the claim that "the
+  implementation lives on GitHub" was wrong — `git remote -v` shows a single remote, the school's
+  GitLab, so the GitHub Actions file never had a host to run on. `.gitlab-ci.yml` now carries the
+  same four jobs for the host this repository is actually pushed to; see that item in Testing and
+  Release.
 - [x] **P2** Bump Next.js past the audit advisory: `16.2.12` is pinned and `npm audit` wants
   `next@16.3.6` (see Authentication and Security for why the current findings are not
   reachable). After the bump, re-run lint, `npx tsc --noEmit`, `npm run build` and the browser
@@ -623,9 +678,30 @@ Reference: `GroupHandler.go`, `GroupManagementHandler.go`, `GroupContentHandler.
   explanation rather than a behaviour change: a full reload there is what drops the socket.
 - [ ] **P2** Wire the browser smoke suite into CI: `npm run test:integration` needs Chrome on
   the runner (`CHROME_PATH`), builds both services and takes several minutes, which is why the
-  workflow leaves it out for now.
-- [ ] **P2** Mirror `.github/workflows/ci.yml` for the school's GitLab if that is where the
-  project is graded.
+  workflow leaves it out for now. Sharpened 2026-09-28: the runner needs Go, Node *and* a Chrome
+  binary in one image, because `scripts/run-integration.mjs` shells out to `go build` for the
+  backend and spawns the Next.js dev server itself before driving the browser over the DevTools
+  protocol. On GitLab that is one job on `node:22-bookworm` with the Go toolchain and `chromium`
+  installed and `CHROME_PATH` pointed at it — worth adding as an opt-in job (`when: manual`) first
+  so a flaky browser run cannot redden every pipeline. Still open: running it needs a runner, and
+  it was not attempted blind.
+- [x] **P2** Mirror `.github/workflows/ci.yml` for the school's GitLab if that is where the
+  project is graded. Closed 2026-09-28, and it turned out to matter more than a mirror:
+  `git remote -v` has exactly one remote, `https://learn.reboot01.com/git/saabdulla/social-network.git`,
+  so **the GitHub workflow has never had a host to run on** — until now the repository had no CI
+  that could execute at all. `.gitlab-ci.yml` now runs the same four jobs (`backend`, `frontend`,
+  `govulncheck`, `containers`) with the same commands, verified by comparing the two files'
+  command lists programmatically rather than by eye: all four match, with two mechanical
+  differences that have no counterpart without the `setup-go`/`setup-node` actions and are
+  commented in place (`npm ci --cache .npm-cache --prefer-offline`, and
+  `$(go env GOPATH)/bin/govulncheck` after `go install`). Caches are keyed on `go.sum` and
+  `package-lock.json` and live under `$CI_PROJECT_DIR/.cache` because GitLab only caches inside
+  the project directory. Two things are recorded rather than hidden: the `containers` job uses
+  `docker:27` with a `docker:27-dind` service (the image ships the compose plugin in
+  `/usr/local/libexec/docker/cli-plugins`, confirmed from the image's own Dockerfile) and is set
+  `allow_failure: true`, because a runner that permits a privileged service cannot be assumed —
+  it is blocking on GitHub and should be flipped here once a pipeline shows DinD working; and the
+  file itself has not been executed, because that needs the school's runner.
 - [x] **P1** Run and record a real backup → wipe → restore drill of the `social-data` volume
   using `sqlite3 .backup`, and verify uploaded media is included. Closed 2026-09-28:
   `scripts/backup-restore-drill.sh` now performs the whole cycle against a throwaway directory
@@ -639,8 +715,21 @@ Reference: `GroupHandler.go`, `GroupManagementHandler.go`, `GroupContentHandler.
   not executed, because the environment had no Docker daemon.
 - [ ] **P2** Verify `docker compose config` and a full `docker compose up --build` on a clean
   host; record the first-run steps and the expected log lines in `DEPLOYMENT.md`.
-- [ ] **P2** Add health/readiness endpoints and container healthchecks (`compose.yaml`
-  currently relies only on `depends_on`).
+- [x] **P2** Add health/readiness endpoints and container healthchecks (`compose.yaml`
+  currently relied only on `depends_on`). Closed 2026-09-28: `GET /api/v1/health` is liveness and
+  never touches the database; `GET /api/v1/ready` pings SQLite with a two-second ceiling and answers
+  `503` with the standard error envelope when it cannot. Both live in `HealthHandler.go` and are
+  registered unauthenticated in `cmd/router.go`, so the same URL answers directly and through the
+  frontend proxy. Both images now install `curl` and carry a `HEALTHCHECK` on `/api/v1/ready` every
+  10 seconds, and `compose.yaml` replaced the bare `depends_on` list with
+  `condition: service_healthy`; the frontend's probe goes through its own rewrite, so it only passes
+  when the proxy and the backend are both answering. `cmd/health_test.go` pins the two probes apart
+  — closing the database leaves `/health` at 200 while `/ready` turns 503 — and the new cases in
+  `handlers_test.go` pin that a context with no database, or a nil one, fails closed instead of
+  panicking. Verified with `go build ./...`, `go vet ./...` and `go test ./...`. **Not verified:
+  `docker compose up --build`** — this environment has no Docker daemon, so the `HEALTHCHECK` lines
+  and the `service_healthy` gate are reviewed rather than executed; `DEPLOYMENT.md` records both and
+  says so.
 - [ ] **P2** Guard the build-time `BACKEND_URL` coupling (`DEPLOYMENT.md:5`) with a
   build-time assertion, or move to runtime configuration.
 - [ ] **P2** Pin image digests and Go/Node patch versions for reproducible builds.
@@ -684,15 +773,32 @@ Reference: `GroupHandler.go`, `GroupManagementHandler.go`, `GroupContentHandler.
   a scratch database. `backend/pkg/db/sqlite/migrations_test.go` does exactly that, checks
   that 000009 keeps existing session rows, and asserts the 000010 comment media column
   survives the round trip.
-- [ ] **P2** Add a WebSocket test for private-message delivery plus rejection of a
-  non-permitted sender.
+- [x] **P2** Add a WebSocket test for private-message delivery plus rejection of a
+  non-permitted sender. Closed 2026-09-28: `TestPrivateMessageSocketDelivery` in
+  `cmd/chat_permission_test.go` drives two live sockets through the real hub. It asserts that the
+  recipient receives an `incoming_msg` whose payload matches the stored row (id, sender id, sender
+  nickname, text and timestamp), that the sender's own second socket receives the same echo, that
+  the unread notification is pushed and points at that message id, that `open_chat` marks it read
+  and suppresses the badge for the next message while still delivering it, and that a frame from a
+  non-permitted sender is neither delivered, stored nor notified — measured on fresh sockets,
+  because a read deadline leaves a connection unusable. The sync points are real side effects (the
+  message row count and the unread-notification count) rather than fixed sleeps, and the test
+  passes under `-race`. The storage half of the same rule was already covered by
+  `TestPrivateMessageSocketRespectsTheChatRule`, which this test leaves in place.
 - [ ] **P2** Load smoke: 50 concurrent WebSocket clients and sustained request throughput
   through the frontend proxy, confirming the rate limiter behaves.
 - [x] **P2** Add `npm run lint` and `npm run build` to the definition of done for every PR.
   Closed 2026-09-28 as part of the CI work: `.github/workflows/ci.yml` runs both on every push
   and pull request, so a branch that breaks either cannot merge without a visible failure.
-- [ ] **P2** Record the release checklist (build, migrate, backup, deploy, verify, rollback)
-  in `DEPLOYMENT.md`.
+- [x] **P2** Record the release checklist (build, migrate, backup, deploy, verify, rollback)
+  in `DEPLOYMENT.md`. Closed 2026-09-28: a *Release checklist* section does exactly that in six
+  ordered steps, each naming the command that answers it, with the reasons the order matters —
+  the backup has to precede the automatic migrations, and verification has to happen while the
+  previous version is still available. Two parts are called out because they are the ones that
+  get skipped: the backup is both halves (database plus uploads) taken with the writer stopped,
+  and rollback is both halves too, since redeploying the old binary across a new migration leaves
+  it reading a schema it does not expect — so the step-2 backup is the way back, not a volume
+  deletion.
 
 ## Housekeeping and Cleanup
 
@@ -709,26 +815,76 @@ Reference: `GroupHandler.go`, `GroupManagementHandler.go`, `GroupContentHandler.
   themselves) and still build on the older `types/story` shape. They were noticed during the
   accessibility pass because both put white text on a `blue-500` gradient (~3.7:1, below AA);
   deleting them is the right fix rather than recolouring dead code.
-- [ ] **P3** Run `gofmt` over two files it does not currently accept:
-  `backend/pkg/app/handlers/ReactionHandler.go` and `backend/pkg/websocket/types.go` are not
-  `gofmt`-clean (misaligned struct tags and continuation lines). They have been left alone
-  twice now because a formatting-only change would have buried the real diff; fold them into
-  the next commit that touches those files, or do them together as their own commit. Every
-  file added since is formatted.
+- [ ] **P3** Run `gofmt` over the files it does not currently accept. Corrected 2026-09-28 after
+  measuring instead of trusting this line: `cd backend && gofmt -l .` lists fourteen files, not two.
+  Only three have a real formatting problem — `pkg/websocket/types.go` (misaligned struct tags and
+  continuation lines), and `pkg/app/service/ReactionService.go` with
+  `pkg/app/service/SessionManager_test.go` (space-indented imports). The other eleven, including
+  `pkg/app/handlers/ReactionHandler.go`, differ only by a missing final newline, which the previous
+  revision described as misaligned tags without opening the diff. Every file added or touched since
+  (including `cmd/*_test.go`, `HealthHandler.go` and the new tests) is clean. Left alone a third
+  time on purpose: a whitespace-only change across fourteen files would bury the health-endpoint and
+  test diff it would land with. It is one command — `cd backend && gofmt -w $(gofmt -l . | grep -v tmp/)` —
+  and it belongs in its own commit.
 - [x] **P1** Remove the stale Clerk and `NEXT_PUBLIC_DEV_USER` references listed under
   Authentication and Security.
 - [ ] **P1** Keep this file current. The previous revision marked shipped features (group
   chat, group events, both Docker images) as unchecked while omitting the real gaps, which
   is worse than having no TODO at all.
-- [ ] **P2** Decide the fate of the legacy redirect-only routes: `frontend/src/app/connections/page.tsx`
-  and the `follows` entry still present in the stale `.next-smoke` build output.
-- [ ] **P2** Confirm `.next/`, `.next-smoke/`, `backend/tmp/` and `backend/uploads/` stay
+- [x] **P2** Decide the fate of the legacy redirect-only routes: `frontend/src/app/connections/page.tsx`
+  and the `follows` entry still present in the stale `.next-smoke` build output. Decided
+  2026-09-28: **keep `/connections`, and nothing else needs deciding.** The history settles both
+  halves — `fb7e825` added this file *as* a redirect ("Redirect the legacy connections URL to the
+  profile"), and `dc453f6` removed the standalone follows page outright, so the `follows` entry the
+  item mentions was only ever a build artifact of a route that no longer exists (and the artifact
+  itself is gone with the directory, below). Keeping it costs five lines and saves every old link
+  and bookmark; deleting it would break them for no gain. The reason now lives in the file rather
+  than in a commit message, and the decision is tested in both directions: the anonymous sweep
+  proves the session gate fires for `/connections`, and a new signed-in step proves the redirect
+  actually lands on `/profile` (`PASS: the legacy connections URL still redirects to the profile`).
+  That second assertion was the real gap — "keep it" was previously unverified.
+- [x] **P2** Confirm `.next/`, `.next-smoke/`, `backend/tmp/` and `backend/uploads/` stay
   untracked (verified: only the database is currently tracked) and add them to
-  `.gitignore` explicitly rather than relying on the `tmp` pattern.
-- [ ] **P2** Review `frontend/scripts/run-integration.mjs` versus
-  `scripts/run-wsl.sh` for duplicated launcher logic and merge what overlaps.
-- [ ] **P2** Delete the generated `.next-smoke` directory from the working tree and document
-  `NEXT_DIST_DIR` as the supported way to get a second build directory.
+  `.gitignore` explicitly rather than relying on the `tmp` pattern. Closed 2026-09-28 by
+  correcting the premise instead of changing the file: they are **already explicit**, and there are
+  two tracked ignore files rather than one. `git check-ignore -v` names the rule for every path —
+  `frontend/.gitignore` (itself tracked) covers `/node_modules`, `/.next/`, `/.next-smoke/`, `.env*`,
+  `*.tsbuildinfo` and `next-env.d.ts`, while the root `.gitignore` covers `backend/tmp/`,
+  `backend/uploads/` and the database files — and `git ls-files` returns nothing for any of them, so
+  no generated artifact is tracked. Two things this measurement turned up: `frontend/.env.local` is
+  ignored by the `.env*` rule while `.env.example` is tracked and not ignored, which is the right way
+  round; and nothing here relies on the `tmp` pattern, which was the item's assumption.
+- [x] **P2** Review `frontend/scripts/run-integration.mjs` versus
+  `scripts/run-wsl.sh` for duplicated launcher logic and merge what overlaps. Reviewed
+  2026-09-28 and the measurement says **there is no shared code to merge** — recorded rather than
+  forced. `scripts/run-wsl.sh` (160 lines, bash) is a development launcher: it takes `start|status|stop`,
+  serialises concurrent working copies with two flocks and a state file validated against
+  `/proc/<pid>/stat`, refuses to start when 4000 or a configured `PORT` is already taken, sources
+  nvm for non-interactive WSL shells, heals a missing platform-specific dependency with `npm ci`, and
+  keeps both services in `setsid` process groups. `run-integration.mjs` (86 lines, Node) is a test
+  harness: random free ports, an isolated database with a copy of the migrations, `go build` for the
+  server and seed, per-service log files, HTTP readiness polling, and a kill-tree that also handles
+  Windows `taskkill`. Making one call the other would drag fixed ports, flock and a PID state file
+  into the harness, or free ports, test-database setup and log capture into the launcher, and would
+  leave one of the two platforms untested. What *was* duplicated was intent, not code — "wait until
+  the backend can serve" — and that is now expressed through the endpoint built for it: the harness
+  polls `/api/v1/ready` for both services (the second one through the frontend's rewrite, so a wrong
+  `BACKEND_URL` fails at startup instead of mid-suite) instead of polling an authenticated route for
+  a 401. Verified: the next run logs exactly two `GET /api/v1/ready` → 200 requests, one direct and
+  one proxied.
+- [x] **P2** Delete the generated `.next-smoke` directory from the working tree and document
+  `NEXT_DIST_DIR` as the supported way to get a second build directory. Closed 2026-09-28: the
+  directory is gone (783 MB) and `frontend/README.md` now says, next to the browser check that
+  creates it, that the check builds into `frontend/.next-smoke` because `run-integration.mjs` sets
+  `NEXT_DIST_DIR`, that this is what keeps the check out of the development `.next`, and that the
+  directory is a cache which the next run recreates. Deleting it is safe in the two places that
+  mention it: `tsconfig.json`'s `.next-smoke/types/**` includes match nothing and are simply
+  unsatisfied (`npx tsc --noEmit` stays clean), and `eslint.config.mjs` only ignores it. The cost is
+  recorded too — the first browser run after this is a cold one — and the recreation is not assumed:
+  after deleting the directory (783 MB), a cold `npm run test:integration` passed all **27 steps**
+  with no runtime exceptions and rebuilt `.next-smoke` from scratch. Still lying in the tree and
+  deliberately left alone: `frontend/.next` (2.8 GB) and `backend/tmp` (1.9 GB), both live caches
+  used by the build and the test harness rather than leftovers.
 
 ## Nice to have
 
@@ -891,6 +1047,79 @@ component classes) are the ones to build on.
   with the exact change list in that section. `canMessage` is still only a type in
   `frontend/src/app/api/social.ts`, so nothing reads the flag yet.
 - No P0 items are open. What is left is the P1/P2/P3 list above.
+
+Changed in the tree-hygiene session (2026-09-28), for review:
+`frontend/src/app/connections/page.tsx`, `frontend/scripts/{integration-smoke.mjs,run-integration.mjs}`,
+`frontend/README.md`, `TODO.md`, and the removal of the generated `frontend/.next-smoke/` directory.
+
+Four P2s closed, three of them by measuring rather than by writing code, which is the honest
+outcome for housekeeping work: the ignore-pattern item's premise was wrong (every rule is already
+explicit, in two tracked `.gitignore` files), the launcher-duplication item has no shared code to
+merge (bash and Node, fixed and free ports, long-lived and single-run lifecycles, WSL and
+macOS/Windows), and the legacy-route item needed a decision plus the assertion that was missing —
+a signed-in visit to `/connections` landing on `/profile`, which nothing checked before. The one
+real code change was pointing the test harness's readiness checks at `/api/v1/ready`, which is what
+that endpoint was added for, and which also catches a wrong `BACKEND_URL` at startup. Evidence: the
+browser suite passes **27 steps** (one new) with no runtime exceptions, run after the deletion;
+`npx tsc --noEmit` and `npm run lint` (0 errors, the same 28 known warnings) stay clean without the
+directory, since only a tsconfig include that matches nothing and an eslint ignore ever referenced
+it. `.next-smoke` was 783 MB, and the claim that the harness recreates it was verified rather than
+assumed: after the deletion a cold run rebuilt it from scratch and passed all 27 steps.
+`frontend/README.md` now says the first run after a deletion is slower.
+
+Changed in the password-change session (2026-09-28), for review:
+`backend/pkg/payload/user/{RegisterRequestDTO.go,ChangePasswordRequestDTO.go}` (the second is new),
+`backend/errors.go`, `backend/pkg/app/handlers/{AuthHandler.go,utils.go,handlers_test.go}`,
+`backend/pkg/app/repositories/AuthRepository.go`, `backend/pkg/app/service/AuthService.go`,
+`backend/pkg/app/service/{SessionManager.go,SessionManager_test.go}`, `backend/cmd/router.go`,
+`backend/cmd/{password_change_test.go,health_test.go}`,
+`frontend/src/app/api/social.ts`, `frontend/src/app/components/ChangePassword.tsx` (new),
+`frontend/src/app/profile/page.tsx`, `frontend/scripts/integration-smoke.mjs`,
+`README.md`, `frontend/README.md`, `DEPLOYMENT.md`.
+
+Two Authentication and Security P2s closed. Writing the test found a bug worth naming: the session
+cache evicted only the newest token per user, so a token re-cached from the database — what a
+restart leaves behind — stayed valid after `SaveSession` had deleted its row. `CreateSession` now
+evicts every cached token of that account. Evidence: `go build ./...`, `go vet ./...` and
+`go test ./...` all pass; the browser suite passes **26 steps** (two new ones) with no runtime
+exceptions, run against the cached Chrome for Testing build; `npm run lint` is 0 errors,
+`npx tsc --noEmit` and `npm run build` are clean. One thing is deliberately left undone and
+recorded rather than implied: password **reset** needs mail delivery this project does not have, so
+it is now its own P2 instead of a closed item. The `gofmt` situation is unchanged —
+`SessionManager_test.go` was already on the unformatted list for its import indentation, and the
+test added there is tab-indented like the rest of the file.
+
+Changed in the CI-mirror and release-checklist session (2026-09-28), for review:
+`.gitlab-ci.yml` (new), `DEPLOYMENT.md`, `README.md`, `TODO.md`.
+
+Two P2s closed, both about the release path rather than the product. The mirror item turned up
+something worth knowing: `git remote -v` has a single remote and it is the school's GitLab, so
+`.github/workflows/ci.yml` — written and reviewed earlier the same day — never had a host to run
+on. `.gitlab-ci.yml` now carries the same four jobs for the host the repository is actually pushed
+to. Faithfulness was checked rather than asserted: a script read both files, normalised each job to
+`(working-directory, command)` pairs and compared them, and all four match; the two differences
+that have no counterpart without the `setup-go`/`setup-node` actions are commented in the file (the
+npm cache flag and the explicit `govulncheck` path). The `containers` job is `allow_failure: true`
+because Docker-in-Docker needs a runner that permits a privileged service — it is blocking on
+GitHub, and it should be flipped once a pipeline shows DinD working. Neither CI file was executed:
+this environment has no GitLab runner, and the GitHub one has nothing to run on. `DEPLOYMENT.md`
+gained the six-step release checklist the other P2 asked for, and `README.md` now names both CI
+files in its layout. Re-verified while mirroring the checks: `npm run lint` (0 errors, the 28 known
+warnings) and `npx tsc --noEmit` are clean on this tree.
+
+Changed in the health-endpoint and coverage-gap session (2026-09-28), for review:
+`backend/pkg/app/handlers/HealthHandler.go` (new), `backend/pkg/app/handlers/handlers_test.go`,
+`backend/cmd/router.go`, `backend/cmd/health_test.go` (new), `backend/cmd/chat_permission_test.go`,
+`backend/cmd/group_authorization_test.go` (new), `backend/Dockerfile`, `frontend/Dockerfile`,
+`compose.yaml`, `DEPLOYMENT.md`, `README.md`.
+
+Two P2 coverage gaps and one P2 deployment gap closed. Evidence: `go build ./...`, `go vet ./...`
+and `go test ./...` all pass; `gofmt -l` reports nothing for any file added or touched here; and
+`go test -race ./cmd/ -run 'TestPrivateMessageSocket|TestHealthAndReadiness'` passes. The browser
+suite was **not** run: the only frontend change is the image's `HEALTHCHECK`, which that suite does
+not exercise, and it is the one part of this session with no evidence behind it — `docker compose
+up --build` needs a Docker host. The measurements that corrected the `gofmt` item were taken with
+the local `gofmt` from go1.26.5; a different toolchain may list a different set.
 
 Changed in the framework-bump session (2026-09-28), for review:
 `frontend/package.json`, `frontend/package-lock.json`,
