@@ -563,6 +563,42 @@ try {
   await until(dummy, `location.pathname === '/' && !!document.querySelector('aside[aria-label="Main navigation"]')`, 'sign back in after expiry');
   console.log('PASS: API 401 redirects to login and the normal login form restores access');
 
+  // The legacy /connections URL is kept as a redirect (see the page), so a
+  // signed-in member has to land on the profile rather than on a 404. The
+  // anonymous sweep above only proves the session gate fires.
+  await command('Page.navigate', { url: base + '/connections' }, dummy);
+  await until(dummy, `location.pathname === '/profile'`, 'the legacy connections URL redirects to the profile');
+  console.log('PASS: the legacy connections URL still redirects to the profile');
+
+  // The password change is the one flow that rotates the session, so it is worth
+  // a browser pass rather than only the API test: the dialog must refuse a
+  // mismatched confirmation, close on success, and leave this tab working on the
+  // replacement cookie. The seeded password is restored at the end, because the
+  // rest of the suite signs in with it.
+  await navigate(dummy, '/profile');
+  await button(dummy, 'Change password');
+  await until(dummy, `!!document.querySelector('[aria-label="Change password"]')`, 'password dialog');
+  await fill(dummy, 'input[name="currentPassword"]', 'DummyUser123!');
+  await fill(dummy, 'input[name="newPassword"]', 'BrowserRotate123!');
+  await fill(dummy, 'input[name="confirmPassword"]', 'BrowserRotate124!');
+  await until(dummy, `!!document.querySelector('[aria-label="Change password"] [role="alert"]')`, 'a mismatched confirmation is flagged');
+  assert(await evaluate(dummy, `[...document.querySelectorAll('[aria-label="Change password"] button')].find(item => item.textContent.trim() === 'Update password').disabled`), 'the submit button must stay disabled while the two entries differ');
+  await fill(dummy, 'input[name="confirmPassword"]', 'BrowserRotate123!');
+  await evaluate(dummy, `document.querySelector('[aria-label="Change password"] form').requestSubmit()`);
+  await until(dummy, `!document.querySelector('[aria-label="Change password"]')`, 'the dialog closes once the password is changed', 15000);
+  await navigate(dummy, '/profile');
+  assert(await evaluate(dummy, `document.cookie.indexOf('session_token') === -1`), 'the rotated session cookie must stay HttpOnly');
+  console.log('PASS: the password dialog rotates the session and this tab keeps working');
+
+  await button(dummy, 'Change password');
+  await until(dummy, `!!document.querySelector('[aria-label="Change password"]')`, 'password dialog for the restore');
+  await fill(dummy, 'input[name="currentPassword"]', 'BrowserRotate123!');
+  await fill(dummy, 'input[name="newPassword"]', 'DummyUser123!');
+  await fill(dummy, 'input[name="confirmPassword"]', 'DummyUser123!');
+  await evaluate(dummy, `document.querySelector('[aria-label="Change password"] form').requestSubmit()`);
+  await until(dummy, `!document.querySelector('[aria-label="Change password"]')`, 'the seeded password is restored', 15000);
+  console.log('PASS: the replacement password works as the current one and the seed is restored');
+
   // The signup form has to work from the mandatory fields alone: the nickname is
   // optional and the backend generates a handle, and the avatar, About me and the
   // visibility choice are present but skippable.
