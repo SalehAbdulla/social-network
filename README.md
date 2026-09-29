@@ -150,6 +150,11 @@ dependency advisories. The first five commands are what CI runs on every push â€
   unreadable or empty file and `413` past a size ceiling. An image's declared canvas is capped at
   40 megapixels from its own header, WebP included, and the same allow-list is applied when a file
   is served: a row whose type is not one of the six is downloaded rather than rendered inline.
+- **Dates** go through `dateLabel` (absolute, in the visitor's locale) or `relativeLabel`
+  ("3 hours ago", falling back to the absolute beyond a week, both via `Intl`). Either way the
+  element is a `<time dateTime={isoTimestamp(...)} title={dateLabel(...)}>`, so the exact instant
+  survives the wording. Join dates, event start times and chat timestamps stay absolute on purpose:
+  there the fact matters more than the recency.
 
 ## Documentation map
 
