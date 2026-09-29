@@ -83,6 +83,7 @@ func (re *HandlerContext) HandleError(w http.ResponseWriter, r *http.Request, er
 			err == realtimeforum.ErrInvalidBirthDate,
 			err == realtimeforum.ErrGender,
 			err == realtimeforum.ErrInvalidCredentials,
+			err == realtimeforum.ErrWrongPassword,
 			err == realtimeforum.ErrTitleLength,
 			err == realtimeforum.ErrContentLength,
 			err == realtimeforum.ErrCommentLength,
