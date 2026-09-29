@@ -61,11 +61,22 @@ function Comments({ post, onCountChange }: { post: Post; onCountChange: (delta: 
   async function react(comment: Comment, score: number) {
     if (busy) return;
     setBusy(true);
+    // Optimistic: the arrows move now and the server's total replaces the guess
+    // when it answers, so a click is not a round trip of nothing happening. A
+    // failure puts the previous numbers back and says why.
+    const previous = { score: comment.score, userScore: comment.userScore };
+    const userScore = comment.userScore === score ? 0 : score;
+    comments.update(items => items.map(item => item.commentId === comment.commentId
+      ? { ...item, score: item.score + (userScore - item.userScore), userScore } : item));
     try {
       const result = await request<{ totalScore: number }>('/reactions', 'POST', { entityType: 'comment', entityId: comment.commentId, score });
       comments.update(items => items.map(item => item.commentId === comment.commentId
-        ? { ...item, score: result.totalScore, userScore: comment.userScore === score ? 0 : score } : item));
-    } catch (error) { toast.error(errorMessage(error)); } finally { setBusy(false); }
+        ? { ...item, score: result.totalScore, userScore } : item));
+    } catch (error) {
+      comments.update(items => items.map(item => item.commentId === comment.commentId
+        ? { ...item, ...previous } : item));
+      toast.error(errorMessage(error));
+    } finally { setBusy(false); }
   }
   return <div className="space-y-4 border-t border-slate-100 pt-4">
     <form onSubmit={submit} className="space-y-2"><label className="block text-sm font-medium" htmlFor={`comment-${post.postId}`}>{editing ? 'Edit comment' : 'Add a comment'}</label><textarea id={`comment-${post.postId}`} required minLength={3} maxLength={300} value={text} onChange={event => setText(event.target.value)} className="w-full rounded-lg border border-slate-200 p-3 text-sm" />
@@ -97,9 +108,20 @@ export default function PostCard({ post, fetchPosts, onPostRemoved }: {
   const vote = reaction || post;
   const commentCount = Math.max(0, post.commentsCounter + commentDelta);
   async function react(score: number) {
+    if (busy) return;
     setBusy(true);
-    try { const result = await request<{ totalScore: number }>('/reactions', 'POST', { entityType: 'post', entityId: post.postId, score }); setReaction({ score: result.totalScore, userScore: vote.userScore === score ? 0 : score }); }
-    catch (error) { toast.error(errorMessage(error)); } finally { setBusy(false); }
+    // Optimistic like the comment arrows: the vote moves now, the server's total
+    // replaces the estimate when it answers, and a failure puts it back.
+    const previous = { score: vote.score, userScore: vote.userScore };
+    const userScore = vote.userScore === score ? 0 : score;
+    setReaction({ score: vote.score + (userScore - vote.userScore), userScore });
+    try {
+      const result = await request<{ totalScore: number }>('/reactions', 'POST', { entityType: 'post', entityId: post.postId, score });
+      setReaction({ score: result.totalScore, userScore });
+    } catch (error) {
+      setReaction(previous);
+      toast.error(errorMessage(error));
+    } finally { setBusy(false); }
   }
   async function remove() {
     if (busy) return;
