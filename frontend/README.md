@@ -116,7 +116,14 @@ npm run lint
 npx tsc --noEmit
 npm run build
 npm run test:integration
+node scripts/dead-modules.mjs
 ```
+
+`dead-modules.mjs` resolves every relative import in `src` to its target and reports
+the modules nothing imports, skipping Next.js route files, which are entry points by
+convention. Spot-checking for dead files missed them twice here — a component whose
+only importer is itself dead reads as "used" if the check is done by name — so it is
+worth running after deleting anything.
 
 The integration command builds and starts temporary backend and frontend servers
 on available ports, seeds a separate database, and drives two headless Chrome
