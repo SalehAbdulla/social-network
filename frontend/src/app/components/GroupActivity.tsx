@@ -1,6 +1,6 @@
 ﻿'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { Fragment, useEffect, useRef, useState } from 'react';
 import { CalendarDays, Check, Plus, X } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { dateLabel, displayName, errorMessage, request, upload } from '../api/social';
@@ -19,6 +19,8 @@ interface Content {
   id: number; userId: string; firstName: string; lastName: string; nickname: string; kind: string;
   parentId: number; title: string; content: string; mediaUrl: string; startsAt: string; createdAt: string;
   rsvp: string; going: number; notGoing: number;
+  /** Decided by the server from the same SQL that orders the events tab. */
+  upcoming: boolean;
 }
 
 function ContentForm({ groupId, kind, item, parentId = 0, saved, cancel }: {
@@ -76,6 +78,17 @@ export default function GroupActivity({ groupId, kind = 'timeline', parentId = 0
   const nearBottom = useRef(true);
   const items = resource.items;
   const isChat = kind === 'timeline';
+  // The events tab is split into what is still to come and what has been. The
+  // server says which is which: `upcoming` comes from the same SQL that orders the
+  // tab, so the sections and the order cannot disagree, and nothing here depends
+  // on when the render happened to run.
+  const rows = isChat ? [...items].reverse() : items;
+  const sections = kind === 'events'
+    ? [
+        { heading: 'Upcoming', rows: rows.filter(item => item.upcoming) },
+        { heading: 'Past', rows: rows.filter(item => !item.upcoming) },
+      ]
+    : [{ heading: '', rows }];
   useEffect(() => {
     if (isChat && nearBottom.current) bottom.current?.scrollIntoView({ block: 'nearest' });
   }, [resource.items, isChat]);
@@ -96,7 +109,9 @@ export default function GroupActivity({ groupId, kind = 'timeline', parentId = 0
       {resource.settled && resource.items.length === 0 && <p className="py-8 text-center text-sm text-slate-500">{isChat ? 'Say hello, share a photo, or plan your first event.' : `No ${kind} yet.`}</p>}
       {/* The chat shows the newest item last, so older pages load at the top. */}
       {isChat && <LoadMore loading={resource.loadingMore} hasMore={resource.hasMore} onLoadMore={resource.loadMore} label="Load earlier messages" endLabel={null} className="py-2" />}
-      <div className={kind === 'media' ? 'grid gap-4 sm:grid-cols-2 xl:grid-cols-3' : 'space-y-4'}>{(isChat ? [...items].reverse() : items).map(item => {
+      <div className={kind === 'media' ? 'grid gap-4 sm:grid-cols-2 xl:grid-cols-3' : 'space-y-4'}>{sections.map(section => <Fragment key={section.heading}>
+        {section.heading && section.rows.length > 0 && <h4 className="pt-1 text-xs font-semibold uppercase tracking-wider text-slate-500">{section.heading}</h4>}
+        {section.rows.map(item => {
         const mine = item.userId === user.userId;
         const ownMessage = isChat && mine && item.kind === 'messages';
         return <div key={item.id} className={isChat ? `flex ${mine ? 'justify-end' : 'justify-start'}` : ''}>
@@ -110,7 +125,8 @@ export default function GroupActivity({ groupId, kind = 'timeline', parentId = 0
             {item.kind === 'posts' && kind !== 'media' && <PostComments groupId={groupId} parentId={item.id} isOwner={isOwner} />}
           </article>
         </div>;
-      })}</div>{!isChat && <LoadMore loading={resource.loadingMore} hasMore={resource.hasMore} onLoadMore={resource.loadMore} label={kind === 'comments' ? 'Load more comments' : 'Load more'} endLabel={null} />}<div ref={bottom} />
+        })}
+      </Fragment>)}</div>{!isChat && <LoadMore loading={resource.loadingMore} hasMore={resource.hasMore} onLoadMore={resource.loadMore} label={kind === 'comments' ? 'Load more comments' : 'Load more'} endLabel={null} />}<div ref={bottom} />
     </div>
     {isChat && <ChatComposer onSend={async (text, file) => {
       const media = file ? await upload(file) : null;
