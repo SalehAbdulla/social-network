@@ -637,10 +637,23 @@ Reference: `GroupHandler.go`, `GroupManagementHandler.go`, `GroupContentHandler.
   images and story media are readable by any authenticated user (they back the avatar, the
   group directory and the stories strip, which all carry no audience), and a cover photo needs
   a public profile or a follow.
-- [ ] **P2** Decide whether stories need an audience. They are listed to, and their media is
+- [x] **P2** Decide whether stories need an audience. They are listed to, and their media is
   readable by, every signed-in user: the audit found no privacy field on the `story` table and
   no audience check in the story branch of `CanViewMedia`. The spec's story requirement does not
-  mention privacy, so this is a decision to record rather than a bug to fix silently.
+  mention privacy, so this is a decision to record rather than a bug to fix silently. **Decided
+  2026-09-28: stories stay a broadcast to signed-in members, with no audience.**
+  Reasons in the order that decided it: the spec asks for none, and an audience would be scope the
+  project has no requirement for; the listing and the media rule already agree with each other, both
+  keying on expiry alone, so there is no inconsistency to repair — only a policy to state; and the
+  cost is real rather than cosmetic, since an audience means an audience column and a migration, a
+  branch in `CanViewMedia`, a decision about what an expired story inside a grace window may still
+  do, the UI to choose an audience, and a follow question the spec never asks (followers-only would
+  need the same live-relation rule posts use).
+  Recorded in three places so it cannot read as an oversight: a comment at the rule itself in
+  `SocialRepository.go`, the media-access paragraph in `DEPLOYMENT.md`, and the rules list in
+  `README.md` — which had been pointing at this item while it was still open. The behaviour was
+  already pinned by tests rather than by prose (`TestExpiredStoryMediaIsCollected` and the
+  media-access rule test in `pkg/app/repositories`), so the decision rests on evidence.
 - [x] **P1** Add error, empty and loading states for the new P0 flows (follow requests,
   comment media) following the toast convention. Progress 2026-09-28: the comment composer
   reports upload and validation failures with `react-hot-toast`, its list already had a
@@ -872,11 +885,35 @@ Reference: `GroupHandler.go`, `GroupManagementHandler.go`, `GroupContentHandler.
   `docker compose up --build`** — this environment has no Docker daemon, so the `HEALTHCHECK` lines
   and the `service_healthy` gate are reviewed rather than executed; `DEPLOYMENT.md` records both and
   says so.
-- [ ] **P2** Guard the build-time `BACKEND_URL` coupling (`DEPLOYMENT.md:5`) with a
-  build-time assertion, or move to runtime configuration.
+- [x] **P2** Guard the build-time `BACKEND_URL` coupling (`DEPLOYMENT.md:5`) with a
+  build-time assertion, or move to runtime configuration. Closed 2026-09-28 by taking the assertion
+  half, and saying why not the other: the address is compiled into the rewrites, so runtime
+  configuration would mean owning a proxy process rather than a rewrite — a different deployment
+  shape, not a guard.
+  `next.config.ts` now has one `backendURL()`: development still answers with the loopback fallback,
+  while a **production build refuses to guess** — unset stops the build with a message naming the fix
+  — and the shape is checked too, so a value that is not http(s) or that ends with a slash fails
+  instead of compiling `//api/v1/…` into every rewrite. Both CI workflows pass a placeholder, which
+  also means CI builds the same shape the image does.
+  Verified by failing it and then passing it: with `.env.local` moved aside, the unset build fails
+  with exactly that message, `BACKEND_URL='not a url'` fails as malformed, `http://backend:5174/`
+  fails on the slash, and the real build passes with `exit=0` once the variable is back.
+  `frontend/README.md` no longer claims a silent default and `DEPLOYMENT.md` records the guard.
 - [ ] **P2** Pin image digests and Go/Node patch versions for reproducible builds.
-- [ ] **P2** Ship a sample reverse-proxy config (Caddy or nginx) showing Host/Origin
-  preservation and the WebSocket upgrade for `/ws`.
+- [x] **P2** Ship a sample reverse-proxy config (Caddy or nginx) showing Host/Origin
+  preservation and the WebSocket upgrade for `/ws`. Closed 2026-09-28: `deploy/Caddyfile.example`
+  terminates TLS, forwards to the loopback-bound frontend, and shows what the proxy has to do that
+  the app cannot do for itself. Caddy rather than nginx because it obtains its own certificates and
+  needs no ceremony for the WebSocket upgrade, which is the part easiest to get wrong; the nginx
+  equivalents (the usual three `Upgrade`/`Connection` lines plus `proxy_set_header Host $host`) are
+  written in the same file for whoever deploys with nginx instead. The document-level headers live
+  there on purpose — the backend sends no HSTS and no document CSP, because a JSON API is not where a
+  browser reads a policy — and per-client rate limiting is called out as that layer's job, since the
+  app's limits are per direct peer.
+  **Labelled unverified, deliberately:** this environment has no `caddy` binary and no Docker daemon,
+  so the file is reviewed rather than executed. The two things to do on a host are `caddy validate
+  --config deploy/Caddyfile.example` and a check that the CSP does not block Next's inline bootstrap
+  scripts; the file says both, and `DEPLOYMENT.md` says the same where a deployer will read it.
 
 ## Testing and Release
 
@@ -1229,6 +1266,22 @@ component classes) are the ones to build on.
   with the exact change list in that section. `canMessage` is still only a type in
   `frontend/src/app/api/social.ts`, so nothing reads the flag yet.
 - No P0 items are open. What is left is the P1/P2/P3 list above.
+
+Changed in the build-guard and stories-decision session (2026-09-28), for review:
+`frontend/next.config.ts`, `.github/workflows/ci.yml`, `.gitlab-ci.yml`, `frontend/README.md`,
+`backend/pkg/app/repositories/SocialRepository.go`, `DEPLOYMENT.md`, `TODO.md`.
+
+Two P2s closed. The `BACKEND_URL` guard took the assertion half of its item rather than the runtime
+half, and says why: the address is compiled into the rewrites, so runtime configuration would mean
+owning a proxy process instead of a rewrite. It now also refuses a malformed value and a trailing
+slash, and both CI workflows pass a placeholder so their build matches the image's shape. Verified by
+failing it three ways and then passing it. The stories item was a decision rather than a feature, and
+it is now recorded at the rule itself, in the deployment notes and in the README that had been
+pointing at the item while it was open, with the cost of an audience written down so the choice can
+be revisited on purpose.
+Evidence: `go build ./...`/`go vet ./...` and the repository plus cmd tests pass with the comment
+added to `CanViewMedia`; `npm run build` passes with `BACKEND_URL` set and fails with each of the
+three bad shapes; `frontend/README.md` and `DEPLOYMENT.md` describe the guard.
 
 Changed in the load-smoke session (2026-09-28), for review:
 `backend/cmd/load_smoke_test.go` (new), `frontend/scripts/integration-smoke.mjs`, `README.md`,
