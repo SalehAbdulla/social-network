@@ -113,6 +113,28 @@ func main() {
 		}
 	}()
 
+	// Event reminders go out an hour before an event starts, checked every few
+	// minutes: the sweep is one query and the stamp makes a repeat harmless, so a
+	// short interval costs nothing and keeps the timing tight.
+	go func() {
+		remind := func() {
+			result, err := hc.SendEventReminders(time.Now().UTC(), handlers.EventReminderLead)
+			if err != nil {
+				app.Logger.Error("event reminders failed", "error", err)
+				return
+			}
+			if result.Events > 0 {
+				app.Logger.Info("event reminders sent", "events", result.Events, "members", result.Members)
+			}
+		}
+		remind()
+		ticker := time.NewTicker(5 * time.Minute)
+		defer ticker.Stop()
+		for range ticker.C {
+			remind()
+		}
+	}()
+
 	wsHub := pkgwebsocket.NewHub()
 	hc.SetHub(wsHub)
 	go wsHub.Run()
