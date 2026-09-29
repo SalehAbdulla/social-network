@@ -21,6 +21,7 @@ import { usePagedList } from '../lib/usePagedList';
 import { useResource } from '../lib/useResource';
 
 import Avatar from '../components/Avatar';
+import ChangePassword from '../components/ChangePassword';
 import EditProfile from '../components/EditProfile';
 import FollowListModal, {
   type FollowListTab,
@@ -80,6 +81,7 @@ export default function Profile() {
 
 
   const [isEditing, setIsEditing] = useState(false);
+  const [isChangingPassword, setIsChangingPassword] = useState(false);
   const [followListTab, setFollowListTab] = useState<FollowListTab | null>(null);
   const [isFollowingBusy, setIsFollowingBusy] = useState(false);
 
@@ -145,6 +147,7 @@ export default function Profile() {
             isFollowing={isFollowing}
             isFollowingBusy={isFollowingBusy}
             onEdit={() => setIsEditing(true)}
+            onChangePassword={() => setIsChangingPassword(true)}
             onToggleFollow={() => void handleToggleFollow()}
             canOpenFollowLists={canViewProfile}
             onOpenFollowList={setFollowListTab}
@@ -213,6 +216,11 @@ export default function Profile() {
               saved={profile.reload}
             />
           )}
+          {/* Change password — the backend rotates the session, so nothing here
+              has to refresh the signed-in user afterwards. */}
+          {isChangingPassword && (
+            <ChangePassword close={() => setIsChangingPassword(false)} />
+          )}
         {/* Followers and following */}
           {followListTab && (
             <FollowListModal
@@ -235,6 +243,7 @@ type ProfileHeaderProps = {
   isFollowing: boolean;
   isFollowingBusy: boolean;
   onEdit: () => void;
+  onChangePassword: () => void;
   onToggleFollow: () => void;
   canOpenFollowLists: boolean;
   onOpenFollowList: (tab: FollowListTab) => void;
@@ -247,6 +256,7 @@ function ProfileHeader({
   isFollowing,
   isFollowingBusy,
   onEdit,
+  onChangePassword,
   onToggleFollow,
   canOpenFollowLists,
   onOpenFollowList,
@@ -276,13 +286,22 @@ function ProfileHeader({
           />
 
           {isOwnProfile ? (
-            <button
-              type="button"
-              onClick={onEdit}
-              className="rounded-lg border border-slate-200 px-4 py-2"
-            >
-              Edit profile
-            </button>
+            <div className="flex flex-wrap gap-2">
+              <button
+                type="button"
+                onClick={onEdit}
+                className="rounded-lg border border-slate-200 px-4 py-2"
+              >
+                Edit profile
+              </button>
+              <button
+                type="button"
+                onClick={onChangePassword}
+                className="rounded-lg border border-slate-200 px-4 py-2"
+              >
+                Change password
+              </button>
+            </div>
           ) : (
             <ProfileActions
               pendingOutgoing={profile.pendingOutgoing}
