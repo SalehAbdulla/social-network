@@ -13,7 +13,8 @@ what was built, how it is laid out, and how to run it.
 
 **Accounts and profiles** — register with the five mandatory fields plus an optional
 nickname (generated when left blank), avatar, About Me and a public/private choice;
-bcrypt password hashing; HttpOnly cookie sessions that survive a restart. Profiles
+bcrypt password hashing; HttpOnly cookie sessions that survive a restart, with a password
+change that rotates the session and signs out the account's other browsers. Profiles
 show followers/following, posts, and a media tab that merges post and comment photos.
 Following a private profile is a request the owner accepts or declines; following a
 public profile happens immediately.
@@ -67,8 +68,10 @@ frontend/
   src/proxy.ts             page-level session gate (the API and /ws are excluded)
   scripts/                 browser smoke suite driven over the Chrome DevTools Protocol
 compose.yaml               both services and the social-data volume
-DEPLOYMENT.md              environment variables, headers, limits, backup and release checks
+DEPLOYMENT.md              environment variables, headers, limits, backup, release checklist and checks
 TODO.md                    the open work list and the reasoning behind what is closed
+.github/workflows/ci.yml   the checks below as a GitHub Actions workflow
+.gitlab-ci.yml             the same four checks for the school's GitLab, which is this repo's origin
 ```
 
 ## Run it
@@ -105,6 +108,10 @@ rewrites `/api/v1/*` and `/ws` to that origin, so the browser keeps using port 4
 Register an account on the login page — nothing is seeded, and there is no development
 login shortcut.
 
+The backend also answers `GET /api/v1/health` (liveness) and `GET /api/v1/ready` (readiness,
+database-backed) without a session; both containers use the second one as their `HEALTHCHECK`.
+They are documented in `DEPLOYMENT.md`.
+
 ## Checks
 
 ```sh
@@ -117,7 +124,9 @@ The last command builds temporary backend and frontend servers, seeds an isolate
 under `backend/tmp`, and drives headless Chrome through the real UI; it needs Chrome
 installed (`CHROME_PATH` overrides the location). `docker compose config` and
 `docker compose build` are the container checks, and `npm audit` / `govulncheck ./...` cover
-dependency advisories.
+dependency advisories. The first five commands are what CI runs on every push — see
+`.gitlab-ci.yml` (this repository's origin is the school's GitLab) and `.github/workflows/ci.yml`.
+`DEPLOYMENT.md` puts them in release order.
 
 ## Rules worth knowing before changing code
 
@@ -131,7 +140,9 @@ dependency advisories.
   profile or a follow. Stories carry no audience, which is recorded as a decision in
   `TODO.md`.
 - **Sessions** live in the `session` table (14 days idle, 30 days absolute), so a backend
-  restart does not sign anyone out. Logging in revokes the previous token.
+  restart does not sign anyone out. Logging in revokes the previous token, and so does
+  changing the password (`PUT /api/v1/users/me/password`), which returns the replacement
+  cookie to the browser that made the change.
 - **Uploads** are typed by their bytes, not their filename, and are answered `400` for an
   unreadable or empty file and `413` past a size ceiling.
 
