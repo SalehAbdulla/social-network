@@ -22,6 +22,7 @@ type AuthService interface {
 	Logout(token string) error
 	GetMe(userID string) (user.UserDTO, error)
 	NicknameAvailable(nickname string) (bool, error)
+	ChangePassword(userID, currentPassword, newPassword string) (string, error)
 }
 
 // RegisteredUser is the account a signup created, including the handle the
@@ -183,6 +184,43 @@ func (s AuthServiceImpl) Login(identifier, password string) (string, string, err
 func (s AuthServiceImpl) Logout(token string) error {
 	s.sessionManager.DeleteSession(token)
 	return nil
+}
+
+// ChangePassword verifies the current credential, stores the replacement and
+// rotates the session, returning the token the caller's browser should now use.
+// The rotation is the part that matters: SaveSession deletes every other session
+// row of this user in the same transaction that inserts the new one, so a stolen
+// cookie stops working the moment the owner changes their password. The session
+// that made the change keeps working because it receives the new token.
+//
+// If the session write fails after the hash was stored, the password has changed
+// and the caller is told so: the old token stays valid until it expires, which
+// is why that path is logged as an error rather than swallowed.
+func (s AuthServiceImpl) ChangePassword(userID, currentPassword, newPassword string) (string, error) {
+	currentHash, err := s.db.PasswordHash(userID)
+	if err != nil {
+		return "", err
+	}
+	if err := bcrypt.CompareHashAndPassword([]byte(currentHash), []byte(currentPassword)); err != nil {
+		slog.Info("password change rejected", "user_id", userID)
+		return "", realtimeforum.ErrWrongPassword
+	}
+
+	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(newPassword), bcrypt.DefaultCost)
+	if err != nil {
+		slog.Error("failed to hash password", "user_id", userID, "error", err)
+		return "", realtimeforum.ErrInternal
+	}
+	if err := s.db.UpdatePassword(userID, string(hashedPassword)); err != nil {
+		return "", err
+	}
+
+	token := uuid.NewString()
+	if err := s.sessionManager.CreateSession(userID, token); err != nil {
+		slog.Error("failed to rotate the session after a password change", "user_id", userID, "error", err)
+		return "", realtimeforum.ErrInternal
+	}
+	return token, nil
 }
 
 func (s AuthServiceImpl) GetMe(userID string) (user.UserDTO, error) {
