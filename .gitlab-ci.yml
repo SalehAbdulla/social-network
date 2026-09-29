@@ -1,0 +1,102 @@
+# Mirrors .github/workflows/ci.yml for the school's GitLab, which is where this
+# repository's `origin` actually points (learn.reboot01.com/git). Both files run
+# the same four checks that TODO.md's definition of done names, so a branch
+# cannot land on either host unverified.
+#
+# Two deliberate divergences from the GitHub workflow, both about the runner
+# rather than the checks:
+#
+#   * The containers job is `allow_failure: true`. It is blocking on GitHub.
+#     Docker-in-Docker needs a runner that permits a privileged service, which
+#     the school's runner cannot be assumed to have; the job still runs and
+#     reports when it can, and the other three checks still block. Flip it to
+#     blocking once a pipeline has shown the DinD service working.
+#   * Images are referenced by the same floating tags the Dockerfiles use
+#     (golang:1.26-bookworm, node:22-bookworm, docker:27) rather than a version
+#     managed by the pipeline. Pinning those is a separate open item in TODO.md.
+
+default:
+  interruptible: true
+
+stages:
+  - checks
+  - containers
+
+# Caches have to live under the project directory to be picked up by GitLab's
+# cache, so the Go module and build caches are pointed there explicitly.
+variables:
+  GOMODCACHE: $CI_PROJECT_DIR/.cache/go-mod
+  GOCACHE: $CI_PROJECT_DIR/.cache/go-build
+
+backend:
+  stage: checks
+  image: golang:1.26-bookworm
+  cache:
+    key:
+      files:
+        - backend/go.sum
+    paths:
+      - .cache/
+  script:
+    - cd backend
+    - go build ./...
+    - go vet ./...
+    - go test ./...
+
+frontend:
+  stage: checks
+  image: node:22-bookworm
+  cache:
+    key:
+      files:
+        - frontend/package-lock.json
+    paths:
+      - frontend/.npm-cache/
+  script:
+    - cd frontend
+    # No setup-node action here, so the job keeps its own npm cache; the install
+    # itself is the same `npm ci` against the same lockfile.
+    - npm ci --cache .npm-cache --prefer-offline
+    - npm run lint
+    - npx tsc --noEmit
+    - npm run build
+    # Blocking since the framework bump cleared every advisory; a new finding
+    # should stop the pipeline rather than sit in the log.
+    - npm audit --audit-level=high
+
+govulncheck:
+  stage: checks
+  image: golang:1.26-bookworm
+  cache:
+    key:
+      files:
+        - backend/go.sum
+    paths:
+      - .cache/
+  script:
+    - cd backend
+    - go install golang.org/x/vuln/cmd/govulncheck@latest
+    # Fails only on a vulnerability the code actually reaches; packages that are
+    # imported but never called are listed and do not fail the job. The path is
+    # spelled out because there is no setup-go action adding it to PATH here.
+    - $(go env GOPATH)/bin/govulncheck ./...
+
+containers:
+  stage: containers
+  needs:
+    - backend
+    - frontend
+  image: docker:27
+  services:
+    - docker:27-dind
+  variables:
+    DOCKER_HOST: tcp://docker:2376
+    DOCKER_TLS_CERTDIR: "/certs"
+    DOCKER_TLS_VERIFY: 1
+    DOCKER_CERT_PATH: "$DOCKER_TLS_CERTDIR/client"
+  allow_failure: true
+  script:
+    # The image ships the compose plugin in /usr/local/libexec/docker/cli-plugins,
+    # so `docker compose` needs nothing installed.
+    - docker compose config
+    - docker compose build
