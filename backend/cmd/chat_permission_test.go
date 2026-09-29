@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"encoding/json"
 	"net/http"
 	"net/url"
@@ -69,6 +70,202 @@ func TestPrivateMessageSocketRespectsTheChatRule(t *testing.T) {
 	}
 	if after := countMessages(); after != before+1 {
 		t.Fatalf("the permitted socket message was not stored (%d -> %d)", before, after)
+	}
+}
+
+// socketFrame is the envelope every push shares, so a test can wait for a type
+// and then read only that frame's payload.
+type socketFrame struct {
+	Type    string          `json:"type"`
+	Payload json.RawMessage `json:"payload"`
+}
+
+// waitForFrame reads frames until one of wantType arrives or the deadline runs
+// out. Anything else on the wire is skipped rather than treated as a failure,
+// because the hub also fans presence updates out to everyone.
+func waitForFrame(t *testing.T, socket *websocket.Conn, wantType string, within time.Duration) socketFrame {
+	t.Helper()
+	deadline := time.Now().Add(within)
+	seen := []string{}
+	for time.Now().Before(deadline) {
+		socket.SetReadDeadline(deadline)
+		_, data, err := socket.ReadMessage()
+		if err != nil {
+			t.Fatalf("waiting for a %q frame: saw %v, then %v", wantType, seen, err)
+		}
+		for _, line := range bytes.Split(data, []byte("\n")) {
+			var frame socketFrame
+			if err := json.Unmarshal(line, &frame); err != nil {
+				continue
+			}
+			if frame.Type == wantType {
+				return frame
+			}
+			seen = append(seen, frame.Type)
+		}
+	}
+	t.Fatalf("no %q frame arrived within %s: saw %v", wantType, within, seen)
+	return socketFrame{}
+}
+
+// TestPrivateMessageSocketDelivery covers the half the rule test cannot see: the
+// recipient's own socket receives the stored message, the sender's second tab
+// stays in step, and a chat that is already open raises no badge.
+func TestPrivateMessageSocketDelivery(t *testing.T) {
+	server, repo := integrationServer(t, true, false)
+	senderClient, recipientClient := newIntegrationClient(t, server), newIntegrationClient(t, server)
+	senderClient.login("dummy@example.com")
+	recipientClient.login("alex@example.com")
+	serverURL, _ := url.Parse(server.URL)
+
+	sender := dialSocket(t, senderClient, serverURL)
+	defer sender.Close()
+	recipient := dialSocket(t, recipientClient, serverURL)
+	defer recipient.Close()
+
+	countMessages := func() int {
+		t.Helper()
+		var count int
+		if err := repo.Conn.QueryRow("SELECT COUNT(*) FROM message").Scan(&count); err != nil {
+			t.Fatal(err)
+		}
+		return count
+	}
+	unread := func() int {
+		t.Helper()
+		var count int
+		if err := repo.Conn.QueryRow(
+			`SELECT COUNT(*) FROM notification
+			 WHERE userId='alex-id' AND actorId='dummy-id' AND entityType='message' AND isRead=0`,
+		).Scan(&count); err != nil {
+			t.Fatal(err)
+		}
+		return count
+	}
+	send := func(socket *websocket.Conn, recipientID, text string) {
+		t.Helper()
+		frame, err := json.Marshal(map[string]any{
+			"type":    "private_msg",
+			"payload": map[string]string{"recipientId": recipientID, "text": text},
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := socket.WriteMessage(websocket.TextMessage, frame); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	// The recipient's socket receives the message that was persisted, carrying
+	// the stored id, the sender's handle and a timestamp — not just a type.
+	before := countMessages()
+	send(sender, "alex-id", "straight to the socket")
+	incoming := waitForFrame(t, recipient, "incoming_msg", 5*time.Second)
+	var delivered struct {
+		MessageId      int    `json:"messageId"`
+		SenderId       string `json:"senderId"`
+		SenderNickname string `json:"senderNickname"`
+		Text           string `json:"text"`
+		TimeStamp      string `json:"timeStamp"`
+	}
+	if err := json.Unmarshal(incoming.Payload, &delivered); err != nil {
+		t.Fatal(err)
+	}
+	if delivered.MessageId < 1 || delivered.SenderId != "dummy-id" ||
+		delivered.Text != "straight to the socket" || delivered.TimeStamp == "" {
+		t.Fatalf("the delivered frame does not match the stored message: %+v", delivered)
+	}
+	if delivered.SenderNickname == "" || delivered.SenderNickname == "dummy-id" {
+		t.Fatalf("the delivered frame carries no readable sender name: %+v", delivered)
+	}
+	if after := countMessages(); after != before+1 {
+		t.Fatalf("expected exactly one stored message, %d -> %d", before, after)
+	}
+
+	// The sender hears the same frame, so a second tab of theirs is in step.
+	echo := waitForFrame(t, sender, "incoming_msg", 5*time.Second)
+	var echoed struct {
+		MessageId int `json:"messageId"`
+	}
+	if err := json.Unmarshal(echo.Payload, &echoed); err != nil {
+		t.Fatal(err)
+	}
+	if echoed.MessageId != delivered.MessageId {
+		t.Fatalf("the sender's echo is a different message: %d vs %d", echoed.MessageId, delivered.MessageId)
+	}
+
+	// The recipient is not looking at the conversation, so a badge is raised.
+	if got := unread(); got != 1 {
+		t.Fatalf("expected one unread message notification, found %d", got)
+	}
+	notification := waitForFrame(t, recipient, "notification", 5*time.Second)
+	var notice struct {
+		ActorId    string `json:"actorId"`
+		EntityType string `json:"entityType"`
+		EntityId   int    `json:"entityId"`
+	}
+	if err := json.Unmarshal(notification.Payload, &notice); err != nil {
+		t.Fatal(err)
+	}
+	if notice.ActorId != "dummy-id" || notice.EntityType != "message" || notice.EntityId != delivered.MessageId {
+		t.Fatalf("the pushed notification does not point at the message: %+v", notice)
+	}
+
+	// Opening the chat marks that notification read, which is also proof that
+	// the frame has been handled. Poll for it rather than sleeping a fixed time.
+	openChat, err := json.Marshal(map[string]any{"type": "open_chat", "payload": map[string]string{"partnerId": "dummy-id"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := recipient.WriteMessage(websocket.TextMessage, openChat); err != nil {
+		t.Fatal(err)
+	}
+	deadline := time.Now().Add(3 * time.Second)
+	for unread() != 0 && time.Now().Before(deadline) {
+		time.Sleep(25 * time.Millisecond)
+	}
+	if got := unread(); got != 0 {
+		t.Fatalf("open_chat did not mark the chat read, %d still unread", got)
+	}
+
+	// With the chat open the message is still delivered, but no new badge is
+	// raised and nothing else is pushed to that socket.
+	send(sender, "alex-id", "while the chat is open")
+	second := waitForFrame(t, recipient, "incoming_msg", 5*time.Second)
+	if !bytes.Contains(second.Payload, []byte("while the chat is open")) {
+		t.Fatalf("the second frame is not the second message: %s", second.Payload)
+	}
+	recipient.SetReadDeadline(time.Now().Add(500 * time.Millisecond))
+	if _, data, err := recipient.ReadMessage(); err == nil {
+		t.Fatalf("an open chat was pushed something extra: %s", data)
+	}
+	if got := unread(); got != 0 {
+		t.Fatalf("an open chat still raised a notification, %d unread", got)
+	}
+
+	// The rejection half: a stranger's socket frame is neither stored nor
+	// delivered. Fresh sockets, because a read deadline above leaves a
+	// connection unusable.
+	profile := decoded[models.SocialUser](t, senderClient.call("GET", "/api/v1/users/me", nil, 200))
+	profile.IsPublic = false
+	senderClient.call("PUT", "/api/v1/users/me", profile, 200)
+
+	blockedSender := dialSocket(t, recipientClient, serverURL)
+	defer blockedSender.Close()
+	blockedRecipient := dialSocket(t, senderClient, serverURL)
+	defer blockedRecipient.Close()
+
+	before = countMessages()
+	send(blockedSender, "dummy-id", "a stranger should not land")
+	blockedRecipient.SetReadDeadline(time.Now().Add(700 * time.Millisecond))
+	if _, data, err := blockedRecipient.ReadMessage(); err == nil {
+		t.Fatalf("a forbidden frame was delivered to the recipient: %s", data)
+	}
+	if after := countMessages(); after != before {
+		t.Fatalf("a forbidden frame was stored (%d -> %d)", before, after)
+	}
+	if got := unread(); got != 0 {
+		t.Fatalf("a forbidden frame raised a notification, %d unread", got)
 	}
 }
 
