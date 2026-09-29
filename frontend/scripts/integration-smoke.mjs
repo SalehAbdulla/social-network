@@ -468,6 +468,13 @@ try {
   await until(dummy, `!!document.querySelector('a[href="/messages/groups/${group.groupId}?tab=info"]')`, 'join request notification target');
   await evaluate(dummy, `document.querySelector('a[href="/messages/groups/${group.groupId}?tab=info"]').click()`);
   await until(dummy, `document.querySelector('[aria-label="Group conversation tabs"] button[aria-pressed="true"]')?.textContent === 'Group info'`, 'request notification opens the group info tab');
+  // The member and request lists are paged now. A short group has to render every
+  // member on the first page and report that the list has ended, with no way to
+  // ask for a second page: a stray "Load more members" button would mean the page
+  // size or the end-of-list rule is wired wrong.
+  await until(dummy, `!!document.querySelector('a[href="/profile/${originalAlex.userId}"]')`, 'member list on the group info tab');
+  assert(await evaluate(dummy, `[...document.querySelectorAll('button')].every(button => button.textContent.trim() !== 'Load more members')`), 'a short member list must not offer a second page');
+  assert(await evaluate(dummy, `document.body.innerText.includes("You're all caught up")`), 'the member list has to report that it ended');
   await navigate(alex, '/notifications');
   await until(alex, `!!document.querySelector('a[href="/messages/groups/${group.groupId}?tab=events"]')`, 'event notification target');
   await evaluate(alex, `document.querySelector('a[href="/messages/groups/${group.groupId}?tab=events"]').click()`);
