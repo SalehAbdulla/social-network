@@ -12,6 +12,8 @@ import (
 	"path/filepath"
 	"strings"
 
+	_ "golang.org/x/image/webp"
+
 	backend "social-network/backend"
 
 	"github.com/google/uuid"
@@ -24,7 +26,23 @@ const (
 	// the request reader is allowed a small margin over the file ceiling. A body
 	// bigger than this is refused before it is buffered.
 	multipartOverhead = 1 << 20
+	// maxImagePixels caps a decoded canvas at 40 megapixels. It is what stops a
+	// decompression bomb: a few hundred bytes can declare a canvas far larger than
+	// any real photo, and the byte ceiling says nothing about that.
+	maxImagePixels = 40_000_000
 )
+
+// allowedMediaType is the allow-list of types this API stores and serves. One
+// list for both directions on purpose: the upload path decides what may be kept,
+// and the read path decides what may be rendered, so a row that holds some other
+// type cannot be served as that type.
+func allowedMediaType(mime string) bool {
+	switch mime {
+	case "image/jpeg", "image/png", "image/gif", "image/webp", "video/mp4", "video/webm":
+		return true
+	}
+	return false
+}
 
 // UploadMedia stores one uploaded file and records it in the media table.
 //
@@ -67,8 +85,7 @@ func (re *HandlerContext) UploadMedia(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	mime := http.DetectContentType(head[:n])
-	allowed := map[string]bool{"image/jpeg": true, "image/png": true, "image/gif": true, "image/webp": true, "video/mp4": true, "video/webm": true}
-	if !allowed[mime] {
+	if !allowedMediaType(mime) {
 		re.HandleError(w, r, backend.ErrBadRequest)
 		return
 	}
@@ -81,11 +98,12 @@ func (re *HandlerContext) UploadMedia(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	// Check real image metadata, rather than trusting an extension or MIME header.
-	// WebP is skipped because the standard library has no decoder for it; the
-	// sniffed header and the byte ceiling above still apply.
-	if strings.HasPrefix(mime, "image/") && mime != "image/webp" {
+	// Every allowed image format is registered, WebP included, so this also caps a
+	// decompression bomb: a canvas over maxImagePixels is refused however small the
+	// file is. Only the header is decoded, which is cheap for every format.
+	if strings.HasPrefix(mime, "image/") {
 		config, _, decodeErr := image.DecodeConfig(file)
-		if decodeErr != nil || config.Width < 1 || config.Height < 1 || int64(config.Width)*int64(config.Height) > 40000000 {
+		if decodeErr != nil || config.Width < 1 || config.Height < 1 || int64(config.Width)*int64(config.Height) > maxImagePixels {
 			re.HandleError(w, r, backend.ErrBadRequest)
 			return
 		}
@@ -140,7 +158,16 @@ func (re *HandlerContext) GetMedia(w http.ResponseWriter, r *http.Request) {
 		re.HandleError(w, r, backend.ErrForbidden)
 		return
 	}
-	w.Header().Set("Content-Type", mime)
+	// The stored row decides the type, so it is checked against the same list the
+	// upload used. A row holding anything else — written by a migration, an import
+	// or a bug — is handed over as a download rather than served as itself, so an
+	// unexpected type can never be rendered by a browser inline.
+	contentType := mime
+	if !allowedMediaType(mime) {
+		contentType = "application/octet-stream"
+		w.Header().Set("Content-Disposition", "attachment")
+	}
+	w.Header().Set("Content-Type", contentType)
 	w.Header().Set("X-Content-Type-Options", "nosniff")
 	w.Header().Set("Cache-Control", "private, max-age=3600")
 	http.ServeFile(w, r, filepath.Join(re.App.UploadDir, id))
