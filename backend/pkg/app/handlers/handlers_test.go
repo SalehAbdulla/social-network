@@ -46,6 +46,7 @@ func TestHandleErrorStatusContract(t *testing.T) {
 		{"image too large", backend.ErrImageTooLarge, http.StatusRequestEntityTooLarge, "the image is larger than the 10 MB limit"},
 		{"empty upload", backend.ErrEmptyUpload, http.StatusBadRequest, "the selected file is empty"},
 		{"nickname taken", backend.ErrNickName, http.StatusBadRequest, "this username is already taken"},
+		{"wrong current password", backend.ErrWrongPassword, http.StatusBadRequest, "your current password is incorrect"},
 		{"comment too long", backend.ErrCommentLength, http.StatusBadRequest, "comment must be between 3 and 300 characters"},
 		{"internal", backend.ErrInternal, http.StatusInternalServerError, "internal server error"},
 		{"unknown", errors.New("connection reset by peer"), http.StatusInternalServerError, "internal server error"},
@@ -124,5 +125,63 @@ func TestIsASCII(t *testing.T) {
 		if got := isASCII(value); got != want {
 			t.Fatalf("isASCII(%q) = %v, want %v", value, got, want)
 		}
+	}
+}
+
+// decodeEnvelope reads the {success, data, error, code} shape the probes answer
+// with, so a test can assert the envelope rather than a substring.
+func decodeEnvelope(t *testing.T, recorder *httptest.ResponseRecorder) (success bool, data map[string]string, message string, code int) {
+	t.Helper()
+	var body struct {
+		Success bool              `json:"success"`
+		Data    map[string]string `json:"data"`
+		Error   string            `json:"error"`
+		Code    int               `json:"code"`
+	}
+	if err := json.Unmarshal(recorder.Body.Bytes(), &body); err != nil {
+		t.Fatalf("probe response is not JSON: %s", recorder.Body.String())
+	}
+	if recorder.Header().Get("Content-Type") != "application/json" {
+		t.Fatalf("a probe must answer JSON, got %q", recorder.Header().Get("Content-Type"))
+	}
+	return body.Success, body.Data, body.Error, body.Code
+}
+
+// TestHealthIsLivenessWithoutTheDatabase pins the split between the two probes:
+// liveness answers 200 even when there is no database behind it, because its
+// only claim is that the process is serving.
+func TestHealthIsLivenessWithoutTheDatabase(t *testing.T) {
+	re := testContext(t, "http://localhost:4000")
+	recorder := httptest.NewRecorder()
+	re.Health(recorder, httptest.NewRequest("GET", "/api/v1/health", nil))
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", recorder.Code)
+	}
+	success, data, _, _ := decodeEnvelope(t, recorder)
+	if !success || data["status"] != "ok" {
+		t.Fatalf("unexpected liveness body: %+v", data)
+	}
+}
+
+// TestReadyFailsClosedWithoutADatabase covers the deliberate edge in the
+// readiness probe: a context whose services were never wired, and even a nil
+// context, must answer 503 rather than panic, because a panicking healthcheck
+// is a crash loop instead of a diagnosis.
+func TestReadyFailsClosedWithoutADatabase(t *testing.T) {
+	for name, re := range map[string]*HandlerContext{
+		"services not wired": testContext(t, "http://localhost:4000"),
+		"nil context":        nil,
+	} {
+		t.Run(name, func(t *testing.T) {
+			recorder := httptest.NewRecorder()
+			re.Ready(recorder, httptest.NewRequest("GET", "/api/v1/ready", nil))
+			if recorder.Code != http.StatusServiceUnavailable {
+				t.Fatalf("expected 503, got %d", recorder.Code)
+			}
+			success, _, message, code := decodeEnvelope(t, recorder)
+			if success || code != http.StatusServiceUnavailable || message != "database unreachable" {
+				t.Fatalf("a failed probe must not answer a success envelope: %d %s %s", recorder.Code, message, recorder.Body.String())
+			}
+		})
 	}
 }
