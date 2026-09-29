@@ -737,7 +737,28 @@ Reference: `GroupHandler.go`, `GroupManagementHandler.go`, `GroupContentHandler.
   profile change the follower count and issue **no** `/posts?liked=` request on the acting page, and
   the suite passes 27 steps with no runtime exceptions; `npx tsc --noEmit` is clean, `npm run lint`
   is 0 errors, and `npm run build` succeeds.
-- [ ] **P2** Localise `dateLabel` and relative timestamps.
+- [x] **P2** Localise `dateLabel` and relative timestamps. Closed 2026-09-28, measuring first:
+  `dateLabel` was **already** locale-aware — it delegates to `toLocaleString()` — so that half was
+  recorded rather than rewritten. What did not exist anywhere in live code was a relative label: the
+  only relative formatter in the tree was a hand-rolled English plural table inside
+  `UserProfileInfo.tsx`, and that file turned out to be dead (see the sweep below).
+  Added `relativeLabel` on `Intl.RelativeTimeFormat` with `numeric: 'auto'`, so the wording comes from
+  the visitor's locale and a locale that has the word can say "yesterday" instead of "1 day ago". It
+  covers the last week and falls back to `dateLabel` beyond that, which is where an exact date tells a
+  reader more than "9 days ago" does. Used where recency is the point — notification rows, post
+  headers and comment timestamps — each rendered as
+  `<time dateTime={isoTimestamp(…)} title={dateLabel(…)}>` so the exact instant stays machine-readable
+  and available on hover. Left absolute on purpose, and recorded here so it is a decision rather than
+  an oversight: "Joined …", event start times (you need the time of day, not "in 3 days") and chat
+  timestamps (a chat wants a clock, not a distance). The parsing both formatters need moved into one
+  `parseTimestamp`, which also keeps "Invalid Date" out of the page when a value is not a date.
+  The value is computed at render, so it is as fresh as the last refresh — noted in the helper, and
+  these surfaces refresh on their own.
+  Verified: the browser suite asserts that a freshly written item renders a relative phrase with a
+  real `dateTime` and `title`, and — new — that the whole run produces **no console errors**, which is
+  also the measurement behind the hydration question this item raises: `toLocaleString()` runs in the
+  server render as well as in the browser, and the answer here is that it produces no hydration
+  complaints, because every date this app shows comes from data fetched after mount.
 - [x] **P2** Infinite-scroll ("load more") affordance for the feed: `LoadMore.tsx` +
   `usePagedList.ts`, and every other paged surface (comments, stories, profile, discover,
   notifications, group content, chat history, group list). `Pagination.tsx` is gone.
@@ -939,7 +960,13 @@ Reference: `GroupHandler.go`, `GroupManagementHandler.go`, `GroupContentHandler.
   list corrected: the sweep that closed the dummy-fixture item above found **five** unimported
   components, not two — those two plus `StoryCarousel.tsx`, `StoryCard.tsx` and `StoryModal.tsx` —
   and all five are now gone. `types/story` stays because the live `StoryViewer` inside `StoriesBar`
-  still uses it.
+  still uses it. **Amended 2026-09-28:** a second, systematic pass found six more modules with no
+  importer and deleted them too — `MessageItem.tsx`, `ProfileModel.tsx`, `StoryViewer.tsx` (the
+  standalone file; `StoriesBar` defines its own, the same trap as `StoryCard`), `UserProfileInfo.tsx`,
+  `lib/imageSrc.ts` and, once those were gone, `types/story.ts`. The count only stopped moving when
+  the check became a script instead of a guess: `frontend/scripts/dead-modules.mjs` resolves every
+  relative import to its target and reports what nothing imports, which is now documented in
+  `frontend/README.md` and reports 0 of 53 source files.
 - [ ] **P3** Run `gofmt` over the files it does not currently accept. Corrected 2026-09-28 after
   measuring instead of trusting this line: `cd backend && gofmt -l .` lists fourteen files, not two.
   Only three have a real formatting problem — `pkg/websocket/types.go` (misaligned struct tags and
@@ -1172,6 +1199,24 @@ component classes) are the ones to build on.
   with the exact change list in that section. `canMessage` is still only a type in
   `frontend/src/app/api/social.ts`, so nothing reads the flag yet.
 - No P0 items are open. What is left is the P1/P2/P3 list above.
+
+Changed in the dates and dead-modules session (2026-09-28), for review:
+`frontend/src/app/api/social.ts`, `frontend/src/app/components/PostCard.tsx`,
+`frontend/src/app/notifications/page.tsx`, `frontend/scripts/{dead-modules.mjs,integration-smoke.mjs}`,
+`frontend/README.md`, `README.md`, the deletion of `frontend/src/app/components/{MessageItem,ProfileModel,StoryViewer,UserProfileInfo}.tsx`,
+`frontend/src/app/lib/imageSrc.ts`, `frontend/src/app/types/{story,RegisterRequestDTO}.ts`, `TODO.md`.
+
+One reliability P2 closed and the dead-code sweep finished properly. The dates item measured in two
+directions: `dateLabel` was already locale-aware, so that half was recorded rather than rewritten,
+and the only relative formatter in the tree was inside a component nothing imports — which is what
+led to the sweep. That sweep is now a script rather than a guess, because guessing missed dead files
+twice; it found six more modules, and it reports 0 of 53. The new console-error assertion in the
+browser suite is the measurement behind the hydration question the item raises: `toLocaleString()`
+runs on the server as well as in the browser, and in this app that produces no complaints, since
+every date shown comes from data fetched after mount. Evidence: `npx tsc --noEmit` clean, `npm run
+lint` 0 errors with 19 warnings (four fewer, from the deleted components' `no-img-element`), `npm run
+build` succeeds, and the browser suite passes 28 steps — including the new console-error guard and the
+relative-label assertion.
 
 Changed in the optimistic-feedback and dead-code session (2026-09-28), for review:
 `frontend/src/app/components/PostCard.tsx`, `frontend/src/app/discover/page.tsx`,
