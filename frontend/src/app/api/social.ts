@@ -103,6 +103,15 @@ export async function request<T>(path: string, method = 'GET', body?: unknown, s
   }
 }
 
+/**
+ * Replaces the signed-in account's password. The backend rotates the session in
+ * the same request, so the response's cookie is the one this tab must keep
+ * using; every other browser signed in to the account is signed out.
+ */
+export async function changePassword(currentPassword: string, newPassword: string, confirmPassword: string): Promise<void> {
+  await request('/users/me/password', 'PUT', { currentPassword, newPassword, confirmPassword });
+}
+
 export async function upload(file: File): Promise<{ url: string; mediaType: 'image' | 'video' }> {
 	if (!file.size) throw new Error('The selected file is empty.');
 	if (!['image/jpeg','image/png','image/gif','image/webp','video/mp4','video/webm'].includes(file.type)) throw new Error('Choose a JPEG, PNG, GIF, WebP, MP4 or WebM file.');
