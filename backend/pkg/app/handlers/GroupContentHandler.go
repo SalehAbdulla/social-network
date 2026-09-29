@@ -131,6 +131,9 @@ func (re *HandlerContext) GroupContent(w http.ResponseWriter, r *http.Request) {
 	}
 	c.ID = id
 	if kind == "events" {
+		// The event was validated as starting in the future, and the create
+		// response is what the tab renders until it refetches.
+		c.Upcoming = true
 		re.notifyGroupEvent(groupID, userID)
 	}
 	re.groupChanged(groupID, kind)
