@@ -17,4 +17,9 @@ type GroupContent struct {
 	RSVP      string `json:"rsvp"`
 	Going     int    `json:"going"`
 	NotGoing  int    `json:"notGoing"`
+	// Upcoming says whether an event is still to come, decided by the same SQL
+	// that orders the events tab. The client splits its two sections on this
+	// rather than on its own clock, so the sections and the order cannot disagree
+	// — and a render stays a pure function of what the server sent.
+	Upcoming bool `json:"upcoming"`
 }
