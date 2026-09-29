@@ -141,7 +141,7 @@ func (re *HandlerContext) GroupContent(w http.ResponseWriter, r *http.Request) {
 // notification points at the group, which is the id the group routes carry; the
 // event itself is the newest row on the group's events tab.
 func (re *HandlerContext) notifyGroupEvent(groupID int, authorID string) {
-	members, err := re.GroupService.Repo.GroupMembers(groupID)
+	members, err := re.GroupService.Repo.AllGroupMembers(groupID)
 	if err != nil {
 		re.App.Logger.Error("group event members failed", "error", err, "group_id", groupID)
 		return
@@ -195,7 +195,7 @@ func (re *HandlerContext) groupChanged(groupID int, kind string, extraUsers ...s
 	if re.Hub == nil {
 		return
 	}
-	members, err := re.GroupService.Repo.GroupMembers(groupID)
+	members, err := re.GroupService.Repo.AllGroupMembers(groupID)
 	if err != nil {
 		return
 	}

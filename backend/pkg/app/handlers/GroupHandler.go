@@ -90,11 +90,15 @@ func (re *HandlerContext) GetGroupMembers(w http.ResponseWriter, r *http.Request
 	if !ok {
 		return
 	}
+	offset, ok := re.offset(w, r)
+	if !ok {
+		return
+	}
 	if err := re.GroupService.RequireMember(id, currentUser(r)); err != nil {
 		re.HandleError(w, r, err)
 		return
 	}
-	members, err := re.GroupService.Repo.GroupMembers(id)
+	members, err := re.GroupService.Repo.GroupMembers(id, offset)
 	if err != nil {
 		re.HandleError(w, r, err)
 		return
@@ -107,6 +111,10 @@ func (re *HandlerContext) GetGroupRequests(w http.ResponseWriter, r *http.Reques
 	if !ok {
 		return
 	}
+	offset, ok := re.offset(w, r)
+	if !ok {
+		return
+	}
 	group, err := re.GroupService.Repo.Group(id, currentUser(r))
 	if err != nil {
 		re.HandleError(w, r, err)
@@ -116,7 +124,7 @@ func (re *HandlerContext) GetGroupRequests(w http.ResponseWriter, r *http.Reques
 		re.HandleError(w, r, backend.ErrForbidden)
 		return
 	}
-	requests, err := re.GroupService.Repo.GroupRequests(id)
+	requests, err := re.GroupService.Repo.GroupRequests(id, offset)
 	if err != nil {
 		re.HandleError(w, r, err)
 		return

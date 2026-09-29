@@ -94,12 +94,22 @@ func (db *DB) AddGroupRequest(groupID int, userID string) (bool, error) {
 	return count > 0, tx.Commit()
 }
 
-func (db *DB) GroupMembers(groupID int) ([]models.GroupMember, error) {
-	rows, err := db.Conn.Query(`SELECT u.userId,u.nickName,u.firstName,u.lastName,COALESCE(u.avatar,''),gm.role,gm.joinedAt
-        FROM socialGroupMember gm JOIN user u ON u.userId=gm.userId WHERE gm.groupId=? ORDER BY gm.role='owner' DESC,gm.joinedAt`, groupID)
-	if err != nil {
-		return nil, err
-	}
+// groupPageSize is the page the group lists hand the frontend: 30 rows, with one
+// extra row requested so the client can tell "there is more" without a count.
+const groupPageSize = 30
+
+// Both list queries are shared between the paged API list and the unbounded one
+// the notification fan-out needs, so the two cannot drift apart. The final
+// ORDER BY key is not decoration: paginating on a sort without a total order
+// lets SQLite return the same row twice and skip another, and members who joined
+// in the same second tie on joinedAt.
+const groupMembersQuery = `SELECT u.userId,u.nickName,u.firstName,u.lastName,COALESCE(u.avatar,''),gm.role,gm.joinedAt
+        FROM socialGroupMember gm JOIN user u ON u.userId=gm.userId WHERE gm.groupId=? ORDER BY gm.role='owner' DESC,gm.joinedAt,gm.userId`
+
+const groupRequestsQuery = `SELECT r.requestId,r.groupId,r.userId,u.nickName,r.status,r.createdAt
+        FROM socialGroupRequest r JOIN user u ON u.userId=r.userId WHERE r.groupId=? AND r.status='pending' ORDER BY r.createdAt,r.requestId`
+
+func scanGroupMembers(rows *sql.Rows) ([]models.GroupMember, error) {
 	defer rows.Close()
 	members := []models.GroupMember{}
 	for rows.Next() {
@@ -112,9 +122,29 @@ func (db *DB) GroupMembers(groupID int) ([]models.GroupMember, error) {
 	return members, rows.Err()
 }
 
-func (db *DB) GroupRequests(groupID int) ([]models.GroupRequest, error) {
-	rows, err := db.Conn.Query(`SELECT r.requestId,r.groupId,r.userId,u.nickName,r.status,r.createdAt
-        FROM socialGroupRequest r JOIN user u ON u.userId=r.userId WHERE r.groupId=? AND r.status='pending' ORDER BY r.createdAt`, groupID)
+// GroupMembers reads one page of the member list for the API.
+func (db *DB) GroupMembers(groupID, offset int) ([]models.GroupMember, error) {
+	rows, err := db.Conn.Query(groupMembersQuery+" LIMIT ? OFFSET ?", groupID, groupPageSize+1, offset)
+	if err != nil {
+		return nil, err
+	}
+	return scanGroupMembers(rows)
+}
+
+// AllGroupMembers is for the notification fan-out, and is deliberately not
+// paged: every member has to hear about an event or an announcement, so paging
+// here would quietly stop telling everyone past the thirtieth.
+func (db *DB) AllGroupMembers(groupID int) ([]models.GroupMember, error) {
+	rows, err := db.Conn.Query(groupMembersQuery, groupID)
+	if err != nil {
+		return nil, err
+	}
+	return scanGroupMembers(rows)
+}
+
+// GroupRequests reads one page of pending join requests for the owner.
+func (db *DB) GroupRequests(groupID, offset int) ([]models.GroupRequest, error) {
+	rows, err := db.Conn.Query(groupRequestsQuery+" LIMIT ? OFFSET ?", groupID, groupPageSize+1, offset)
 	if err != nil {
 		return nil, err
 	}
