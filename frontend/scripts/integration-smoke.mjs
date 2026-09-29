@@ -479,6 +479,11 @@ try {
   await until(alex, `!!document.querySelector('a[href="/messages/groups/${group.groupId}?tab=events"]')`, 'event notification target');
   await evaluate(alex, `document.querySelector('a[href="/messages/groups/${group.groupId}?tab=events"]').click()`);
   await until(alex, `document.querySelector('[aria-label="Group conversation tabs"] button[aria-pressed="true"]')?.textContent === 'Events' && document.body.innerText.includes(${JSON.stringify(`Meetup ${stamp}`)})`, 'event notification opens the events tab');
+  // The events tab is split into what is to come and what has been, and the split
+  // is what the server decided when it ordered the tab: the new event has to sit
+  // under the Upcoming heading. Compared in the DOM rather than in innerText,
+  // because the heading is styled uppercase and innerText returns rendered text.
+  assert(await evaluate(alex, `(() => { const heading = [...document.querySelectorAll('h4')].find(node => node.textContent.trim().toLowerCase() === 'upcoming'); const event = [...document.querySelectorAll('article')].find(node => node.innerText.includes(${JSON.stringify(`Meetup ${stamp}`)})); return !!heading && !!event && (heading.compareDocumentPosition(event) & Node.DOCUMENT_POSITION_FOLLOWING) !== 0; })()`), 'the upcoming event belongs under the Upcoming heading');
   console.log('PASS: group notifications deep-link to the tab that needs attention');
 
   await navigate(dummy, '/');
