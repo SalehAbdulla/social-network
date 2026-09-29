@@ -68,12 +68,17 @@ try {
   const api = start('backend', executable, [], {
     cwd: taskDir, env: { ...env, PORT: String(backendPort), APP_ENV: 'development', FRONTEND_ORIGIN: base, UPLOAD_DIR: path.join(taskDir, 'uploads') },
   });
-  await ready(api, `${backendURL}/api/v1/users/me`, 401);
+  // Readiness is the endpoint the backend exposes for exactly this question, and
+  // it fails while the database is unreachable — a stronger signal than waiting
+  // for a 401 out of an authenticated route.
+  await ready(api, `${backendURL}/api/v1/ready`, 200);
   console.log('Starting the frontend against the isolated backend...');
   const web = start('frontend', process.execPath, [path.join(frontend, 'node_modules/next/dist/bin/next'), 'dev', '-p', String(frontendPort)], {
     cwd: frontend, env: { ...env, NODE_ENV: 'development', BACKEND_URL: backendURL, NEXT_DIST_DIR: '.next-smoke', NEXT_TELEMETRY_DISABLED: '1' },
   });
-  await ready(web, base + '/login', 200);
+  // Through the frontend's own rewrite, so a wrong BACKEND_URL fails here rather
+  // than in the middle of the suite.
+  await ready(web, base + '/api/v1/ready', 200);
   await run(process.execPath, ['scripts/integration-smoke.mjs'], { cwd: frontend, env: { ...env, BASE_URL: base, TEST_ARTIFACT_DIR: taskDir } });
 } finally {
   for (const child of services.reverse()) {
