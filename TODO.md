@@ -927,8 +927,38 @@ Reference: `GroupHandler.go`, `GroupManagementHandler.go`, `GroupContentHandler.
   message row count and the unread-notification count) rather than fixed sleeps, and the test
   passes under `-race`. The storage half of the same rule was already covered by
   `TestPrivateMessageSocketRespectsTheChatRule`, which this test leaves in place.
-- [ ] **P2** Load smoke: 50 concurrent WebSocket clients and sustained request throughput
-  through the frontend proxy, confirming the rate limiter behaves.
+- [x] **P2** Load smoke: 50 concurrent WebSocket clients and sustained request throughput
+  through the frontend proxy, confirming the rate limiter behaves. Closed 2026-09-28, split by what
+  each harness can honestly carry.
+  **In Go** (`cmd/load_smoke_test.go`): fifty signed-in members connected at once, which needed the
+  members to be inserted and given sessions through the manager rather than registered — fifty
+  bcrypt hashes would prove nothing about the hub, and since this app keeps one session per account
+  that is the only way to have fifty signed-in clients simultaneously. One group message, and every
+  one of the fifty sockets must receive the broadcast (**50 broadcasts in about 2 ms**). Sustained
+  throughput is eight workers against a SQLite-backed endpoint with every response asserted 200 and
+  the rate **reported, not asserted** (about 6,700 req/s), because a wall-clock threshold fails in CI
+  for reasons that have nothing to do with the code. The limiter gets its own server and its own
+  test: requests 1–1200 answered and the 1201st a `429` with `Retry-After`, which pins the `> limit`
+  off-by-one the middleware actually implements.
+  **Through the proxy** (browser suite): fifty sockets opened from a page against Next's `/ws`
+  rewrite, with one socket-sent message that all fifty have to receive. The message goes over a
+  socket rather than the REST endpoint because the two push different frames — REST sends
+  `message_changed` as a refetch cue, the socket path fans out `incoming_msg` — and the socket path
+  is the one being loaded.
+  **Deliberately not in the browser:** the throughput burst and the limiter's ceiling. That run
+  shares one per-peer budget with every other step, and the first version of this step proved the
+  point by tripping it: a 100-request burst pushed the bucket past 1,200, 429'd every following step
+  (`/discover` timed out with the tail of the run showing nothing but 429s), and would also have
+  failed the console-error guard, since a failed fetch is a console error. The burst was removed and
+  the reason recorded rather than papered over — the Go harness has its own bucket and no other
+  traffic.
+  A second failure in the same step is worth keeping too: the first version opened fifty sockets and
+  received **nothing**, because the message was sent while the handshakes were still completing and a
+  frame that arrives with no handler attached is dropped by the browser. The handlers are now
+  attached at construction, before the handshake finishes.
+  Verified: `go test ./...` passes (nine packages) with the three new tests, and the browser suite
+  passes 29 steps — including `50 sockets through the frontend proxy, all receiving one fan-out` and
+  no console errors.
 - [x] **P2** Add `npm run lint` and `npm run build` to the definition of done for every PR.
   Closed 2026-09-28 as part of the CI work: `.github/workflows/ci.yml` runs both on every push
   and pull request, so a branch that breaks either cannot merge without a visible failure.
@@ -1199,6 +1229,21 @@ component classes) are the ones to build on.
   with the exact change list in that section. `canMessage` is still only a type in
   `frontend/src/app/api/social.ts`, so nothing reads the flag yet.
 - No P0 items are open. What is left is the P1/P2/P3 list above.
+
+Changed in the load-smoke session (2026-09-28), for review:
+`backend/cmd/load_smoke_test.go` (new), `frontend/scripts/integration-smoke.mjs`, `README.md`,
+`DEPLOYMENT.md`, `TODO.md`.
+
+One Testing and Release P2 closed, split by what each harness can carry honestly: the Go harness
+owns the fifty-socket fan-out, the sustained throughput and the rate-limiter boundary, because it has
+its own per-peer bucket and no other traffic; the browser suite owns the fifty sockets through the
+proxy, which is the only place Next's upgrade path meets concurrency. Both halves failed once before
+they passed, and both failures are recorded: the browser step first sent its message while fifty
+handshakes were still finishing (a frame with no handler attached is dropped by the browser), and its
+100-request burst then tripped the shared 1,200-a-minute limiter, 429'ing every following step and
+threatening the console-error guard — which is why throughput moved to Go rather than being tuned
+down. Evidence: `go test ./...` passes with the three new tests (50 broadcasts in ~2 ms, ~6,700 req/s
+reported, limiter boundary pinned), and the browser suite passes 29 steps with no console errors.
 
 Changed in the dates and dead-modules session (2026-09-28), for review:
 `frontend/src/app/api/social.ts`, `frontend/src/app/components/PostCard.tsx`,
