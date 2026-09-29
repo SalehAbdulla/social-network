@@ -404,7 +404,33 @@ Reference: `GroupHandler.go`, `GroupManagementHandler.go`, `GroupContentHandler.
   the >30-row path**, only Go-tested: seeding 31 accounts into the browser fixtures would disturb what
   the existing steps assert about the seeded data, and the honest place to get that coverage is the
   demo seed (see the P3 item about extending it).
-- [ ] **P2** Split upcoming and past events, and add an event reminder.
+- [x] **P2** Split upcoming and past events, and add an event reminder. Closed 2026-09-28.
+  **The split** is a query decision rather than a UI one: `ListGroupContent` orders the events tab by
+  when things happen — upcoming soonest first, then past most recent first — and hands each event an
+  `upcoming` flag computed from the same expression, so the two sections the tab renders cannot
+  disagree with the order they are in. Three details make that honest. Every comparison goes through
+  SQLite's `datetime()`, because `startsAt` is stored as RFC3339 and comparing
+  `2026-09-29T18:00:00Z` against `datetime('now')` as a plain string misjudges any event later the
+  same day (`'T'` sorts after `' '`) — the test creates exactly that event to keep it pinned. The
+  ordering ends on `id`, so paging a tab whose timestamps tie still has a total order. And the flag is
+  what keeps the render pure: the first attempt computed `Date.now()` during render and the lint
+  config rightly rejected it, so the client no longer owns a clock and the sections are a function of
+  what the server sent.
+  **The reminder** is a new periodic job (`handlers/GroupEventReminders.go`), shaped like the media
+  collector and started from `main.go` every five minutes with a one-hour lead. It finds events
+  starting inside the window that are unstamped, notifies every member who answered *going* through
+  the existing `group_event` path — never the author, never a decliner, pointing at the group so it
+  deep-links to the events tab — and stamps the row. Migration `000011_event_reminder` adds
+  `reminderSentAt`, and `MarkEventReminded` only stamps an unstamped row, so a repeat sweep or a
+  second instance finds nothing instead of reminding twice; the deliberate trade is that a crash
+  between the stamp and the last notification loses one reminder rather than duplicating it.
+  Verified: `cmd/group_events_test.go` creates events through the API (so they carry the real RFC3339
+  form) plus two past ones written straight to the table, and asserts the order, the `upcoming` flag
+  agreeing with that order, that one sweep reports exactly one event and one member told, that the
+  author and the decliner get nothing, that a second sweep is a no-op, and that the out-of-window and
+  past events stay unstamped; `migrations_test.go` runs eleven migrations up→down→up, checks the
+  column survives, and its version expectation moved to 11; `go build`/`vet`/`test ./...` pass, and
+  the browser suite passes with an assertion that the event sits under the Upcoming heading.
 - [x] **P2** Tests for leave / remove / transfer / delete authorization edges (owner cannot
   be removed, non-owner cannot remove others). Closed 2026-09-28:
   `cmd/group_authorization_test.go` registers a third and a fourth account through the real signup
@@ -1069,6 +1095,26 @@ component classes) are the ones to build on.
   with the exact change list in that section. `canMessage` is still only a type in
   `frontend/src/app/api/social.ts`, so nothing reads the flag yet.
 - No P0 items are open. What is left is the P1/P2/P3 list above.
+
+Changed in the group-events session (2026-09-28), for review:
+`backend/pkg/db/migrations/sqlite/000011_event_reminder.{up,down}.sql` (new),
+`backend/pkg/models/GroupContent.go`, `backend/pkg/app/repositories/GroupContentRepository.go`,
+`backend/pkg/app/handlers/GroupContentHandler.go`, `backend/pkg/app/handlers/GroupEventReminders.go` (new),
+`backend/cmd/main.go`, `backend/cmd/group_events_test.go` (new),
+`backend/pkg/db/sqlite/migrations_test.go`, `frontend/src/app/components/GroupActivity.tsx`,
+`frontend/scripts/integration-smoke.mjs`, `README.md`, `DEPLOYMENT.md`, `TODO.md`.
+
+The second half of the Groups pair. Two things are worth flagging beyond the feature. The split is
+decided by the server, and my first version of it was wrong in a way the lint config caught:
+computing `Date.now()` during render is impure, so the client no longer decides which section an
+event belongs to — the SQL that orders the tab also returns the `upcoming` flag, which removes the
+clock from the render entirely and makes the sections and the order incapable of disagreeing. And
+the ordering had to go through SQLite's `datetime()`: `startsAt` is RFC3339, so a plain string
+comparison against `datetime('now')` would call any event later the same day upcoming. Evidence:
+`go build ./...`/`go vet ./...`/`go test ./...` pass (nine packages), `migrations_test.go` now runs
+eleven migrations up→down→up with the column assertion and version 11, `npx tsc --noEmit` is clean,
+`npm run lint` is back to 0 errors with the same 28 known warnings, and the browser suite passes
+with the new Upcoming assertion.
 
 Changed in the group-pagination session (2026-09-28), for review:
 `backend/pkg/app/repositories/GroupRepository.go`, `backend/pkg/app/handlers/{GroupHandler.go,GroupContentHandler.go}`,
