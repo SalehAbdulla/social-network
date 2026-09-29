@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"encoding/base64"
+	"encoding/binary"
 	"encoding/json"
 	"io"
 	"mime/multipart"
@@ -147,6 +148,113 @@ func TestUploadEdgeCases(t *testing.T) {
 			}
 		})
 	}
+}
+
+// buildWebP writes a lossless WebP header for the given canvas and nothing else:
+// enough for the content sniffer and for image.DecodeConfig to read the size,
+// which is exactly the shape of a decompression bomb — a handful of bytes
+// declaring a canvas that would take hundreds of megabytes to decode.
+func buildWebP(width, height int) []byte {
+	packed := uint32(width-1) | uint32(height-1)<<14 // 14 bits each; alpha and version left off
+	payload := []byte{0x2F, 0, 0, 0, 0}              // 0x2F is the VP8L signature byte
+	binary.LittleEndian.PutUint32(payload[1:], packed)
+	chunk := append([]byte("VP8L"), 0, 0, 0, 0)
+	binary.LittleEndian.PutUint32(chunk[4:], uint32(len(payload)))
+	chunk = append(chunk, payload...)
+	if len(payload)%2 == 1 {
+		chunk = append(chunk, 0) // RIFF pads an odd-sized chunk
+	}
+	file := append([]byte("RIFF"), 0, 0, 0, 0)
+	binary.LittleEndian.PutUint32(file[4:], uint32(4+len(chunk)))
+	file = append(file, []byte("WEBP")...)
+	return append(file, chunk...)
+}
+
+// TestUploadHardening covers the corners that are about what a file *claims*
+// rather than how many bytes it is: a canvas that would explode on decode, a type
+// that must never be stored as itself, and a media row that somehow holds one.
+func TestUploadHardening(t *testing.T) {
+	server, repo := integrationServer(t, true, false)
+	client := newIntegrationClient(t, server)
+	client.login("dummy@example.com")
+
+	// SVG is the classic stored-XSS payload and it is not on the allow-list. The
+	// type comes from the bytes, so calling it picture.png changes nothing.
+	t.Run("an SVG is refused whatever it is called", func(t *testing.T) {
+		svg := []byte(`<?xml version="1.0"?><svg xmlns="http://www.w3.org/2000/svg" onload="alert(1)"></svg>`)
+		status, message, _ := postMediaFixture(t, server, client, "picture.png", svg)
+		if status != http.StatusBadRequest {
+			t.Fatalf("expected the SVG to be refused with 400, got %d %q", status, message)
+		}
+	})
+
+	// A WebP declaring the largest canvas the format can express — 16384×16384,
+	// because VP8L stores each dimension in 14 bits — is a few dozen bytes on the
+	// wire and 268 megapixels to decode. It used to be accepted because the
+	// standard library had no WebP decoder and the dimension check was skipped for
+	// that one format.
+	t.Run("a WebP canvas over the cap is refused", func(t *testing.T) {
+		status, message, _ := postMediaFixture(t, server, client, "bomb.webp", buildWebP(16384, 16384))
+		if status != http.StatusBadRequest {
+			t.Fatalf("expected the oversized WebP canvas to be refused with 400, got %d %q", status, message)
+		}
+	})
+
+	// The same format inside the cap is accepted and served as itself, which is
+	// what shows the check reads the header rather than refusing WebP outright.
+	t.Run("a WebP canvas within the cap is accepted and served inline", func(t *testing.T) {
+		status, message, url := postMediaFixture(t, server, client, "small.webp", buildWebP(64, 64))
+		if status != http.StatusCreated {
+			t.Fatalf("expected the small WebP to be accepted, got %d %q", status, message)
+		}
+		response, err := client.client.Get(server.URL + url)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer response.Body.Close()
+		io.Copy(io.Discard, response.Body)
+		if got := response.Header.Get("Content-Type"); got != "image/webp" {
+			t.Fatalf("expected image/webp, got %q", got)
+		}
+		if got := response.Header.Get("Content-Disposition"); got != "" {
+			t.Fatalf("a stored image has to render inline, got Content-Disposition %q", got)
+		}
+	})
+
+	// The read path holds the stored type to the same list the upload used, so a
+	// row holding a page is handed over as a download instead of being rendered —
+	// the door the allow-list exists to keep shut, checked at both ends.
+	t.Run("a media row holding a page is downloaded, not rendered", func(t *testing.T) {
+		const id = "123e4567-e89b-12d3-a456-4266141740aa"
+		page := []byte("<!DOCTYPE html><script>alert(1)</script>")
+		if err := repo.AddMedia(id, "dummy-id", "text/html"); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(app.UploadDir, id), page, 0600); err != nil {
+			t.Fatal(err)
+		}
+		response, err := client.client.Get(server.URL + "/api/v1/media/" + id)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer response.Body.Close()
+		body, _ := io.ReadAll(response.Body)
+		if response.StatusCode != http.StatusOK {
+			t.Fatalf("expected the row to be served, got %d: %s", response.StatusCode, body)
+		}
+		if got := response.Header.Get("Content-Type"); got != "application/octet-stream" {
+			t.Fatalf("expected application/octet-stream, got %q", got)
+		}
+		if got := response.Header.Get("Content-Disposition"); !strings.HasPrefix(got, "attachment") {
+			t.Fatalf("expected an attachment disposition, got %q", got)
+		}
+		if response.Header.Get("X-Content-Type-Options") != "nosniff" {
+			t.Fatal("a downloaded row still has to say nosniff")
+		}
+		if !bytes.Equal(body, page) {
+			t.Fatal("the bytes served are not the bytes stored")
+		}
+	})
 }
 
 // TestExpiredStoryMediaIsCollected pins the other half of the story rule: while a
