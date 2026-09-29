@@ -91,7 +91,7 @@ Lightning CSS. The project enables optional dependencies in `.npmrc`; keep the
 lockfile, which includes both Windows and Linux packages. Reinstall dependencies
 when switching the operating system used to run this shared checkout.
 
-Open **http://localhost:4000**, register, and sign in. Anonymous visits and expired sessions redirect to login. Use separate browser profiles for different accounts. Sessions live in the backend's `session` table, so they survive a backend restart; an account has one session at a time and signing in again revokes the previous token.
+Open **http://localhost:4000**, register, and sign in. Anonymous visits and expired sessions redirect to login. Use separate browser profiles for different accounts. Sessions live in the backend's `session` table, so they survive a backend restart; an account has one session at a time and signing in again revokes the previous token. Changing the password from your own profile (`PUT /api/v1/users/me/password`, driven by the `ChangePassword` dialog) rotates it the same way, so any other browser signed in to the account is signed out and this one keeps working on the replacement cookie.
 
 Messages contains People and Groups conversation tabs. Each group opens inside the inbox with Chat, Posts, Events, Media, and Group info tabs. Events appear as cards in the group chat with Going / Not going responses. Owners can update the group name, description and photo, approve requests, remove members, transfer ownership, or delete the group. Members can invite people, leave, and manage their own posts, photos, comments, messages and events. Owners can also delete group content.
 
@@ -124,4 +124,8 @@ sessions through the UI. It does not use your development database. Chrome must
 be installed; set `CHROME_PATH` if it is outside its default Windows location.
 Logs, the test database, and screenshots remain in `backend/tmp/integration-*`.
 The temporary servers stop when the check finishes. Go uses `backend/tmp/go-build`
-for its cache unless `GOCACHE` is already set.
+for its cache unless `GOCACHE` is already set. The frontend it starts builds into
+`frontend/.next-smoke`, which `run-integration.mjs` sets through `NEXT_DIST_DIR`
+so the check never disturbs your development build in `frontend/.next`. That
+directory is a cache, not state: delete it whenever you want the space back and
+the next run recreates it (the first run after that is slower).
