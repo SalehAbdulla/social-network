@@ -48,6 +48,7 @@ func TestMigrationsRoundTrip(t *testing.T) {
 	}
 	assertSessionColumns(t, database, true)
 	assertCommentColumns(t, database)
+	assertEventColumns(t, database)
 
 	if err := migrations.Down(); err != nil {
 		t.Fatalf("down: %v", err)
@@ -63,9 +64,10 @@ func TestMigrationsRoundTrip(t *testing.T) {
 	}
 	assertSessionColumns(t, database, true)
 	assertCommentColumns(t, database)
+	assertEventColumns(t, database)
 	version, dirty, err := migrations.Version()
-	if err != nil || dirty || version != 10 {
-		t.Fatalf("expected clean version 10, got %d (dirty=%v, err=%v)", version, dirty, err)
+	if err != nil || dirty || version != 11 {
+		t.Fatalf("expected clean version 11, got %d (dirty=%v, err=%v)", version, dirty, err)
 	}
 }
 
@@ -154,6 +156,17 @@ func assertCommentColumns(t *testing.T, database *sql.DB) {
 		if !columns[name] {
 			t.Fatalf("comment is missing %q after the migration", name)
 		}
+	}
+}
+
+// assertEventColumns guards the reminder column added by 000011. It has to
+// survive the down and the second up, because the sweep depends on the stamp
+// still being there rather than on it being recreated.
+func assertEventColumns(t *testing.T, database *sql.DB) {
+	t.Helper()
+	columns := tableColumns(t, database, "groupContent")
+	if !columns["reminderSentAt"] {
+		t.Fatal("groupContent is missing reminderSentAt after the migration")
 	}
 }
 
