@@ -17,6 +17,8 @@ type AuthRepository interface {
 	GetUserProfile(userID string) (models.UserProfile, error)
 	DoesUserExists(userID string) error
 	GetUserNickname(userID string) (string, error)
+	PasswordHash(userID string) (string, error)
+	UpdatePassword(userID, hashedPassword string) error
 }
 
 func (db *DB) DoesEmailExists(email string) error {
@@ -93,6 +95,34 @@ func (db *DB) GetUserCredentials(identifier string) (string, string, error) {
 	}
 
 	return userID, hashedPassword, nil
+}
+
+// PasswordHash returns the stored bcrypt hash for one account. It is looked up
+// by id, not by identifier, because the caller is already authenticated.
+func (db *DB) PasswordHash(userID string) (string, error) {
+	var hashed string
+	err := db.Conn.QueryRow("SELECT password FROM user WHERE userId = ?", userID).Scan(&hashed)
+	if errors.Is(err, sql.ErrNoRows) {
+		return "", realtimeforum.ErrNotFound
+	}
+	if err != nil {
+		return "", realtimeforum.ErrInternal
+	}
+	return hashed, nil
+}
+
+// UpdatePassword replaces one account's hash. It does not touch sessions; the
+// caller rotates those, because issuing the replacement token is what revokes
+// the old one (see SaveSession).
+func (db *DB) UpdatePassword(userID, hashedPassword string) error {
+	result, err := db.Conn.Exec("UPDATE user SET password = ? WHERE userId = ?", hashedPassword, userID)
+	if err != nil {
+		return realtimeforum.ErrInternal
+	}
+	if count, _ := result.RowsAffected(); count == 0 {
+		return realtimeforum.ErrNotFound
+	}
+	return nil
 }
 
 func (db *DB) GetUserProfile(userID string) (models.UserProfile, error) {
