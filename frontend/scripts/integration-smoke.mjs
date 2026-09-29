@@ -579,6 +579,52 @@ try {
   await until(dummy, `!document.body.innerText.includes(${JSON.stringify(`Edited browser message ${stamp}`)})`, 'delete for everyone');
   console.log('PASS: live typing, messages, read receipts, edits and scoped deletion');
 
+  // Fifty sockets through the frontend proxy at once, with one message that every
+  // one of them has to receive: the hub's fan-out and Next's upgrade path are what a
+  // single connection cannot exercise, and this is the only place both are real.
+  //
+  // Throughput and the limiter's ceiling are measured in Go instead, and deliberately:
+  // this run shares one per-peer budget with every other step, and a burst big enough
+  // to be interesting trips the 1200-a-minute limit — which 429s the rest of the suite
+  // and, since a failed fetch is a console error, fails the guard at the end as well.
+  // The Go harness has its own bucket and no other traffic.
+  //
+  // The handlers are attached when each socket is constructed, before its handshake
+  // finishes: a frame that arrives with no handler attached is dropped by the
+  // browser, which is how the first version of this step managed to open fifty
+  // sockets and receive nothing.
+  const opened = await evaluate(alex, `(async () => {
+    const url = (location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host + '/ws';
+    window.__loadFrames = 0;
+    window.__loadSockets = Array.from({ length: 50 }, () => {
+      const socket = new WebSocket(url);
+      socket.onmessage = event => { if (String(event.data).includes('incoming_msg')) window.__loadFrames++; };
+      return socket;
+    });
+    const results = await Promise.all(window.__loadSockets.map(socket => new Promise(resolve => {
+      socket.onopen = () => resolve(true);
+      socket.onerror = () => resolve(false);
+    })));
+    return results.filter(Boolean).length;
+  })()`);
+  assert.equal(opened, 50, `fifty sockets have to open through the proxy, got ${opened}`);
+  // The message goes over a socket rather than through the REST endpoint, because
+  // the two push different frames: the REST path sends `message_changed` as a
+  // refetch cue, while `incoming_msg` is what the socket delivery path fans out —
+  // and the socket path is the one being loaded here.
+  await pause(300);
+  await evaluate(dummy, `(async () => {
+    const socket = new WebSocket((location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host + '/ws');
+    await new Promise((resolve, reject) => { socket.onopen = () => resolve(true); socket.onerror = () => reject(new Error('sender socket failed')); });
+    socket.send(JSON.stringify({ type: 'private_msg', payload: { recipientId: ${JSON.stringify(originalAlex.userId)}, text: ${JSON.stringify(`Load fan-out ${stamp}`)} } }));
+    await new Promise(resolve => setTimeout(resolve, 500));
+    socket.close();
+    return true;
+  })()`);
+  await until(alex, `window.__loadFrames === 50`, 'every socket receives the fan-out', 15000);
+  await evaluate(alex, `window.__loadSockets.forEach(socket => socket.close()); delete window.__loadSockets; true`);
+  console.log('PASS: 50 sockets through the frontend proxy, all receiving one fan-out');
+
   // New notifications and new private messages are displayed differently: the
   // bell counts everything except messages, the Messages entry counts only
   // those, so an unread chat must move one badge and leave the other alone.
