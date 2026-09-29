@@ -9,6 +9,10 @@ services:
       UPLOAD_DIR: /data/uploads
     volumes:
       - social-data:/data
+    # The probe itself lives in the image (Dockerfile HEALTHCHECK): /api/v1/ready,
+    # which fails until SQLite answers. `docker inspect` reports it, and the
+    # frontend below waits for it instead of starting beside a backend that is
+    # still migrating.
     restart: unless-stopped
   frontend:
     image: social-network-frontend
@@ -19,7 +23,8 @@ services:
     ports:
       - "127.0.0.1:4000:4000"
     depends_on:
-      - backend
+      backend:
+        condition: service_healthy
     restart: unless-stopped
 volumes:
   social-data:
