@@ -9,10 +9,14 @@ The browser sends the backend's HTTP-only session cookie with these requests.
 Two mechanisms keep the browser on the Next.js port (4000):
 
 - **Rewrites.** `next.config.ts` maps `/api/v1/:path*` and `/ws` onto
-  `${BACKEND_URL}/api/v1/:path*` and `${BACKEND_URL}/ws`. `BACKEND_URL` defaults to
-  `http://127.0.0.1:5174` and is compiled into the build — the Docker image passes
-  `http://backend:5174` as a build argument — so moving the backend means rebuilding the
-  frontend image rather than setting a runtime variable. `experimental.proxyClientMaxBodySize`
+  `${BACKEND_URL}/api/v1/:path*` and `${BACKEND_URL}/ws`. The value is compiled into the
+  build — the Docker image passes `http://backend:5174` as a build argument — so moving the
+  backend means rebuilding the frontend image rather than setting a runtime variable.
+  `npm run dev` falls back to `http://127.0.0.1:5174`, but a **production build refuses to
+  guess**: with `BACKEND_URL` unset it stops with an error rather than compiling a loopback
+  address into a container that cannot reach it, and it also refuses a value that is not an
+  http(s) URL or that ends with a slash (which would make every rewrite carry a double slash).
+  CI passes a placeholder for the same reason. `experimental.proxyClientMaxBodySize`
   is raised to `52mb` so a request up to the backend's 51 MiB body ceiling can pass through
   the middleware layer unchanged.
 - **Page gate.** `src/proxy.ts` runs as middleware over the matcher
