@@ -37,6 +37,27 @@ func TestSessionManagerCreateSessionEvictsPreviousToken(t *testing.T) {
 	}
 }
 
+// TestCreateSessionEvictsTokensRecachedFromTheStore pins the case a restart
+// creates. A token that reached the cache through a database lookup is not in
+// UIDToToken, so evicting only the newest token per user would leave it working
+// after its row was deleted.
+func TestCreateSessionEvictsTokensRecachedFromTheStore(t *testing.T) {
+	sm := NewSessionManager()
+	// What GetUserIdByToken's database fallback leaves behind.
+	sm.TokenToUID["recovered-from-store"] = "user"
+	sm.Expires["recovered-from-store"] = time.Now().Add(time.Hour)
+
+	if err := sm.CreateSession("user", "fresh"); err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := sm.GetUserIdByToken("recovered-from-store"); ok {
+		t.Fatal("a token re-cached from the store outlived the new session")
+	}
+	if _, ok := sm.GetUserIdByToken("fresh"); !ok {
+		t.Fatal("the new session is not resolvable")
+	}
+}
+
 // TestSessionExpiryHonoursTheIdleWindowAndTheAbsoluteCap pins the sliding
 // expiry math: activity moves the deadline forward, never past the cap.
 func TestSessionExpiryHonoursTheIdleWindowAndTheAbsoluteCap(t *testing.T) {
