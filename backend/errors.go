@@ -15,6 +15,7 @@ var (
 	ErrMethodNotAllowed     = errors.New("method not allowed")
 	ErrInvalidPassForm      = errors.New("password must contain at least one letter, one number, and one symbol")
 	ErrInvalidCredentials   = errors.New("invalid email or password")
+	ErrWrongPassword        = errors.New("your current password is incorrect")
 	ErrPasswordsDontMatch   = errors.New("passwords do not match")
 	ErrInvalidAge           = errors.New("please enter a valid age between 1 and 100")
 	ErrInvalidBirthDate     = errors.New("please enter a valid date of birth; you must be at least 13 years old")
