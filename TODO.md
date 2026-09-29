@@ -694,10 +694,49 @@ Reference: `GroupHandler.go`, `GroupManagementHandler.go`, `GroupContentHandler.
   break opportunity and its flex row had no `min-w-0`; the handle now truncates and the bio
   wraps, and the suite is green afterwards. The follow-request surface is covered through the
   notifications page and the profile header, which is where it renders.
-- [ ] **P2** Replace the `dummyUserData` / `dummyMessagesData` fallbacks in
-  `frontend/public/assets.ts` with real empty states, then delete the unused exports.
-- [ ] **P2** Optimistic updates for follow/unfollow and reactions to avoid a full refetch
-  on every click.
+- [x] **P2** Replace the `dummyUserData` / `dummyMessagesData` fallbacks in
+  `frontend/public/assets.ts` with real empty states, then delete the unused exports. Closed
+  2026-09-28, and measuring first changed what the work was: the two named fallbacks had **zero
+  references** (they were replaced when the live surfaces were built), as did `dummyPostsData`,
+  `dummyRecentMessagesData`, `dummyFollowersData` and `dummyFollowingData`. The only fixture still
+  referenced was `dummyStoriesData`, and its sole consumers were components nothing imported —
+  `StoryCarousel` and `StoryCard`. So the fix was dead-code removal rather than new empty states:
+  five unimported components deleted (`StoryCarousel`, `StoryCard`, `StoryItem`, `UserCard` and
+  `StoryModal` — one more than the P3 item below had listed), then every dummy export stripped from
+  `assets.ts`, which is now just the live `assets` object the login page uses. Deleting the
+  components also took five `no-img-element` lint warnings with them (28 → 23). Verified: `npx tsc
+  --noEmit` clean, `npm run lint` 0 errors, `npm run build` succeeds, and the browser suite passes
+  27 steps — including the stories journeys, which is what proves the deleted pair were not the
+  components the app actually renders.
+- [x] **P2** Optimistic updates for follow/unfollow and reactions to avoid a full refetch
+  on every click. Closed 2026-09-28, with the measurement splitting the item in two.
+  **Reactions were already free of refetches** — the post arrows and the comment arrows both keep
+  local state and take the server's `totalScore`, so there was nothing to remove. What they were not
+  was optimistic: a click did nothing until the round trip answered. Both now flip immediately from
+  the delta, replace the estimate with the server's total, and put the previous numbers back with a
+  toast on failure.
+  **Follow/unfollow did refetch, in two places.** The profile page re-read the posts, the profile and
+  the user on every click; discover re-read the whole people list. Both controls now flip at once —
+  the intent is held locally and cleared when the refreshed values arrive, with `pendingOutgoing`
+  written into the row because a request on a private profile has to keep showing as "Requested" —
+  and the *list* refetch is gone. Single-resource reads stay, deliberately: `refreshUser` because
+  `user.following` is what every other surface reads, and the profile's own counts because the page
+  displays them (the browser suite asserts the count changes, so removing that read would have
+  traded a tested behaviour for nothing). Posts are re-read only when following actually changes what
+  the viewer may see — following or unfollowing a **private** profile, not the request case, and not
+  a public one.
+  **The refetch came back through the socket**, which the test caught rather than the reading:
+  `/users/{id}/follow` pushes `social_changed` to the target *and* to the actor, and the profile
+  page's listener re-read posts and media on it, so an actor's own click still re-read the list it had
+  just updated optimistically. The listener now ignores that echo when `actorId` is the signed-in
+  user, and still reloads everything on a reconnect, where events really were missed.
+  The first version of the test also failed for a reason worth recording: it counted responses across
+  *all* open tabs, and the suite keeps the other user's page open, where the reload is correct — the
+  count is now per page, which is what makes the claim about *this* click checkable.
+  Verified: `frontend/scripts/integration-smoke.mjs` asserts that unfollowing and following from a
+  profile change the follower count and issue **no** `/posts?liked=` request on the acting page, and
+  the suite passes 27 steps with no runtime exceptions; `npx tsc --noEmit` is clean, `npm run lint`
+  is 0 errors, and `npm run build` succeeds.
 - [ ] **P2** Localise `dateLabel` and relative timestamps.
 - [x] **P2** Infinite-scroll ("load more") affordance for the feed: `LoadMore.tsx` +
   `usePagedList.ts`, and every other paged surface (comments, stories, profile, discover,
@@ -892,11 +931,15 @@ Reference: `GroupHandler.go`, `GroupManagementHandler.go`, `GroupContentHandler.
   `MenuItems.tsx`, `menuItemsData` and the lucide import it needed are gone. The `dummy*`
   fixtures stay for now because `dummyStoriesData` is still imported by `StoryCard` and
   `StoryCarousel`; they go with the empty-state work above.
-- [ ] **P3** Delete the two remaining unimported components: `frontend/src/app/components/StoryItem.tsx`
+- [x] **P3** Delete the two remaining unimported components: `frontend/src/app/components/StoryItem.tsx`
   and `UserCard.tsx` are referenced by nothing (a grep for either name returns only the files
   themselves) and still build on the older `types/story` shape. They were noticed during the
   accessibility pass because both put white text on a `blue-500` gradient (~3.7:1, below AA);
-  deleting them is the right fix rather than recolouring dead code.
+  deleting them is the right fix rather than recolouring dead code. Closed 2026-09-28 with the
+  list corrected: the sweep that closed the dummy-fixture item above found **five** unimported
+  components, not two — those two plus `StoryCarousel.tsx`, `StoryCard.tsx` and `StoryModal.tsx` —
+  and all five are now gone. `types/story` stays because the live `StoryViewer` inside `StoriesBar`
+  still uses it.
 - [ ] **P3** Run `gofmt` over the files it does not currently accept. Corrected 2026-09-28 after
   measuring instead of trusting this line: `cd backend && gofmt -l .` lists fourteen files, not two.
   Only three have a real formatting problem — `pkg/websocket/types.go` (misaligned struct tags and
@@ -1129,6 +1172,23 @@ component classes) are the ones to build on.
   with the exact change list in that section. `canMessage` is still only a type in
   `frontend/src/app/api/social.ts`, so nothing reads the flag yet.
 - No P0 items are open. What is left is the P1/P2/P3 list above.
+
+Changed in the optimistic-feedback and dead-code session (2026-09-28), for review:
+`frontend/src/app/components/PostCard.tsx`, `frontend/src/app/discover/page.tsx`,
+`frontend/src/app/profile/page.tsx`, `frontend/public/assets.ts`,
+`frontend/scripts/integration-smoke.mjs`, the deletion of
+`frontend/src/app/components/{StoryCarousel,StoryCard,StoryItem,UserCard,StoryModal}.tsx`, `TODO.md`.
+
+Two reliability P2s and one P3 closed, all three after measuring rather than as written. The
+fixtures item turned out to be dead code instead of missing empty states — the two fallbacks it named
+had no references at all, and the only fixture still in use fed components nothing imported, which
+is how five dead components rather than two came to be deleted. The optimistic-updates item split in
+half: reactions already avoided refetches and only needed to become optimistic, while follow/unfollow
+really did refetch — including through the `social_changed` echo the follow endpoint pushes to the
+actor, which the new browser assertion caught and reading alone had missed. Evidence:
+`npx tsc --noEmit` clean, `npm run lint` 0 errors with 23 warnings (five fewer, because the deleted
+components carried `no-img-element` warnings), `npm run build` succeeds, and the browser suite passes
+27 steps including two new assertions that a follow click does not re-read the profile's post list.
 
 Changed in the upload-hardening session (2026-09-28), for review:
 `backend/pkg/app/handlers/MediaHandler.go`, `backend/cmd/media_upload_test.go`, `backend/go.mod`,
