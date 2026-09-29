@@ -7,6 +7,7 @@ import toast from 'react-hot-toast';
 import { type Group, type GroupMember, type GroupRequest, type SocialUser, displayName, errorMessage, request, upload } from '../api/social';
 import { useBackend } from './BackendProvider';
 import { useDialogFocus } from '../lib/useDialogFocus';
+import { usePagedList } from '../lib/usePagedList';
 import { useResource } from '../lib/useResource';
 import { useLiveRefresh } from '../lib/useLiveRefresh';
 import Avatar from './Avatar';
@@ -14,6 +15,11 @@ import ImagePicker from './ImagePicker';
 import GroupActivity from './GroupActivity';
 import GroupJoinButton from './GroupJoinButton';
 import Loading from './Loading';
+import LoadMore from './LoadMore';
+
+// Must match groupPageSize in the backend's GroupRepository: one page of rows
+// plus the extra row the server sends as the "there is more" signal.
+const GROUP_LIST_PAGE_SIZE = 30;
 
 function GroupInfo({ group, changed }: { group: Group; changed: () => void }) {
   const { user } = useBackend();
@@ -31,11 +37,28 @@ function GroupInfo({ group, changed }: { group: Group; changed: () => void }) {
   const confirmDialog = useDialogFocus<HTMLDivElement>(() => setConfirm(null), { initialFocus: confirmButton, enabled: confirm !== null, lockScroll: false });
   const [search, setSearch] = useState('');
   const [query, setQuery] = useState('');
-  const members = useResource<GroupMember[]>(`/groups/${group.groupId}/members`);
-  const requests = useResource<GroupRequest[]>(`/groups/${group.groupId}/requests`, group.isOwner);
+  // Both lists are paged like every other list in the app. The backend sends one
+  // row more than a page holds, so `hasMore` falls back to "a short page is the
+  // last one" and the extra row is dropped by the hook's de-duplication. Live
+  // refresh folds the newest page in without discarding pages already opened.
+  const members = usePagedList<GroupMember, GroupMember[]>({
+    key: `/groups/${group.groupId}/members`,
+    pageQuery: page => `?offset=${(page - 1) * GROUP_LIST_PAGE_SIZE}`,
+    pageSize: GROUP_LIST_PAGE_SIZE,
+    normalize: raw => ({ items: raw }),
+    keyOf: member => member.userId,
+  });
+  const requests = usePagedList<GroupRequest, GroupRequest[]>({
+    key: `/groups/${group.groupId}/requests`,
+    pageQuery: page => `?offset=${(page - 1) * GROUP_LIST_PAGE_SIZE}`,
+    pageSize: GROUP_LIST_PAGE_SIZE,
+    normalize: raw => ({ items: raw }),
+    keyOf: item => item.requestId,
+    enabled: group.isOwner,
+  });
   const people = useResource<SocialUser[]>(`/users?q=${encodeURIComponent(query)}`, !!query);
-  useLiveRefresh(members.reload, String(group.groupId));
-  useLiveRefresh(requests.reload, String(group.groupId));
+  useLiveRefresh(members.refresh, String(group.groupId));
+  useLiveRefresh(requests.refresh, String(group.groupId));
   async function mutate(action: () => Promise<unknown>, message: string) {
     if (busy) return; setBusy(true);
     try { await action(); members.reload(); requests.reload(); changed(); toast.success(message); }
@@ -53,11 +76,14 @@ function GroupInfo({ group, changed }: { group: Group; changed: () => void }) {
     </section>
     <section className="rounded-2xl border border-slate-200 bg-white p-5"><h3 className="font-semibold">Members</h3>
       {members.loading && <Loading height={70} />}
-      <div className="mt-3 divide-y divide-slate-100">{members.data?.map(member => <div key={member.userId} className="flex flex-wrap items-center gap-3 py-3"><Avatar name={displayName(member)} avatarUrl={member.avatar} size={36} /><Link href={`/profile/${member.userId}`} className="min-w-0 flex-1 text-sm font-medium">{displayName(member)}{member.userId === user.userId ? ' (you)' : ''}<span className="block text-xs font-normal capitalize text-slate-400">{member.role}</span></Link>{group.isOwner && member.role !== 'owner' && <details className="relative"><summary className="cursor-pointer text-xs text-slate-500">Manage</summary><div className="absolute right-0 z-10 w-44 rounded-xl border border-slate-200 bg-white p-1 shadow-lg"><button disabled={busy} className="chat-menu text-xs" onClick={() => void mutate(() => request(`/groups/${group.groupId}/members/${member.userId}`, 'PUT', { role: 'owner' }), 'Group ownership transferred')}>Make group owner</button><button disabled={busy} className="chat-menu text-xs text-red-600" onClick={() => void mutate(() => request(`/groups/${group.groupId}/members/${member.userId}`, 'DELETE'), 'Member removed')}>Remove member</button></div></details>}</div>)}</div>
+      <div className="mt-3 divide-y divide-slate-100">{members.items.map(member => <div key={member.userId} className="flex flex-wrap items-center gap-3 py-3"><Avatar name={displayName(member)} avatarUrl={member.avatar} size={36} /><Link href={`/profile/${member.userId}`} className="min-w-0 flex-1 text-sm font-medium">{displayName(member)}{member.userId === user.userId ? ' (you)' : ''}<span className="block text-xs font-normal capitalize text-slate-400">{member.role}</span></Link>{group.isOwner && member.role !== 'owner' && <details className="relative"><summary className="cursor-pointer text-xs text-slate-500">Manage</summary><div className="absolute right-0 z-10 w-44 rounded-xl border border-slate-200 bg-white p-1 shadow-lg"><button disabled={busy} className="chat-menu text-xs" onClick={() => void mutate(() => request(`/groups/${group.groupId}/members/${member.userId}`, 'PUT', { role: 'owner' }), 'Group ownership transferred')}>Make group owner</button><button disabled={busy} className="chat-menu text-xs text-red-600" onClick={() => void mutate(() => request(`/groups/${group.groupId}/members/${member.userId}`, 'DELETE'), 'Member removed')}>Remove member</button></div></details>}</div>)}</div>
+      <LoadMore loading={members.loadingMore} hasMore={members.hasMore} onLoadMore={members.loadMore} label="Load more members" />
       <form className="mt-4 flex gap-2" onSubmit={event => { event.preventDefault(); setQuery(search.trim()); }}><input aria-label="Find people to invite" placeholder="Find people to invite" value={search} onChange={event => setSearch(event.target.value)} className="chat-field mt-0 min-w-0 flex-1" /><button className="chat-secondary">Find</button></form>
-      {!!query && <div className="mt-3 space-y-2">{people.loading && <Loading height={60} />}{people.data?.filter(person => !members.data?.some(member => member.userId === person.userId)).map(person => <div key={person.userId} className="flex items-center justify-between gap-2 text-sm"><span>{displayName(person)}</span><button disabled={busy} className="chat-secondary" onClick={() => void mutate(() => request(`/groups/${group.groupId}/invite/${person.userId}`, 'POST'), 'Invitation sent')}>Invite</button></div>)}{people.data?.length === 0 && <p className="text-sm text-slate-500">No people found.</p>}</div>}
+      {!!query && <div className="mt-3 space-y-2">{people.loading && <Loading height={60} />}{people.data?.filter(person => !members.items.some(member => member.userId === person.userId)).map(person => <div key={person.userId} className="flex items-center justify-between gap-2 text-sm"><span>{displayName(person)}</span><button disabled={busy} className="chat-secondary" onClick={() => void mutate(() => request(`/groups/${group.groupId}/invite/${person.userId}`, 'POST'), 'Invitation sent')}>Invite</button></div>)}{people.data?.length === 0 && <p className="text-sm text-slate-500">No people found.</p>}</div>}
     </section>
-    {group.isOwner && <section className="rounded-2xl border border-slate-200 bg-white p-5"><h3 className="font-semibold">Join requests</h3>{requests.data?.length ? requests.data.map(item => <div key={item.requestId} className="mt-3 flex flex-wrap items-center justify-between gap-2 text-sm"><span>{item.nickname}</span><div className="flex gap-2">{['accepted', 'declined'].map(status => <button key={status} disabled={busy} className="chat-secondary" onClick={() => void mutate(() => request(`/groups/${group.groupId}/requests/${item.requestId}`, 'PUT', { status }), status === 'accepted' ? 'Member added' : 'Request declined')}>{status === 'accepted' ? 'Accept' : 'Decline'}</button>)}</div></div>) : <p className="mt-3 text-sm text-slate-500">No pending requests.</p>}</section>}
+    {group.isOwner && <section className="rounded-2xl border border-slate-200 bg-white p-5"><h3 className="font-semibold">Join requests</h3>{requests.items.length ? requests.items.map(item => <div key={item.requestId} className="mt-3 flex flex-wrap items-center justify-between gap-2 text-sm"><span>{item.nickname}</span><div className="flex gap-2">{['accepted', 'declined'].map(status => <button key={status} disabled={busy} className="chat-secondary" onClick={() => void mutate(() => request(`/groups/${group.groupId}/requests/${item.requestId}`, 'PUT', { status }), status === 'accepted' ? 'Member added' : 'Request declined')}>{status === 'accepted' ? 'Accept' : 'Decline'}</button>)}</div></div>) : <p className="mt-3 text-sm text-slate-500">No pending requests.</p>}
+      <LoadMore loading={requests.loadingMore} hasMore={requests.hasMore} onLoadMore={requests.loadMore} label="Load more requests" />
+    </section>}
     <section className="rounded-2xl border border-red-100 bg-white p-5">
       <button className="text-sm font-medium text-red-600" onClick={() => setConfirm(group.isOwner ? 'delete' : 'leave')}>{group.isOwner ? 'Delete group' : 'Leave group'}</button>
       {group.isOwner && <p className="mt-2 text-xs text-slate-500">To leave without deleting the group, transfer ownership to a member first.</p>}
