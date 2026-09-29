@@ -123,8 +123,50 @@ export async function upload(file: File): Promise<{ url: string; mediaType: 'ima
 }
 
 export function displayName(user: { firstName: string; lastName: string; nickname?: string }) { return `${user.firstName} ${user.lastName}`.trim() || user.nickname || 'Member'; }
-export function dateLabel(value: string) {
-  // SQLite timestamps are UTC and do not include a zone suffix.
+
+/**
+ * SQLite timestamps are UTC and do not include a zone suffix, so a bare date is
+ * read as UTC rather than as the visitor's local time. Returns null when the value
+ * is not a date at all, which keeps every formatter below from printing "Invalid
+ * Date" into the page.
+ */
+function parseTimestamp(value: string): Date | null {
+  if (!value) return null;
   const date = new Date(value.includes('T') ? value : value.replace(' ', 'T') + 'Z');
-  return Number.isNaN(date.getTime()) ? '' : date.toLocaleString();
+  return Number.isNaN(date.getTime()) ? null : date;
+}
+
+/** The exact instant, for a `title` or a `dateTime` attribute. */
+export function isoTimestamp(value: string): string {
+  return parseTimestamp(value)?.toISOString() ?? '';
+}
+
+export function dateLabel(value: string) {
+  return parseTimestamp(value)?.toLocaleString() ?? '';
+}
+
+/**
+ * How long ago something happened, worded by the visitor's own locale.
+ *
+ * `Intl.RelativeTimeFormat` is used instead of a plural table because it knows the
+ * language and its wording — `numeric: 'auto'` lets a locale say "yesterday"
+ * rather than "1 day ago" where it has a word for it. The last week is relative,
+ * because that is when "3 hours ago" tells a reader more than a timestamp does;
+ * anything older falls back to `dateLabel`, where the opposite is true.
+ *
+ * The value is computed at render time, so a list that never re-renders shows a
+ * label frozen at the last refresh. That is the trade a relative label makes, and
+ * these surfaces refresh on their own (live polling, socket events).
+ */
+export function relativeLabel(value: string, now: number = Date.now()) {
+  const date = parseTimestamp(value);
+  if (!date) return '';
+  let remaining = (date.getTime() - now) / 1000;
+  const formatter = new Intl.RelativeTimeFormat(undefined, { numeric: 'auto' });
+  const units: Array<[Intl.RelativeTimeFormatUnit, number]> = [['second', 60], ['minute', 60], ['hour', 24], ['day', 7]];
+  for (const [unit, span] of units) {
+    if (Math.abs(remaining) < span) return formatter.format(Math.round(remaining), unit);
+    remaining /= span;
+  }
+  return dateLabel(value);
 }
