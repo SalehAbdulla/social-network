@@ -48,11 +48,18 @@ export default function Profile() {
 
   const isOwnProfile = profileId === user.userId;
   const isFollowing = user.following.includes(profileId);
+  // The follow control flips before the server answers. `isFollowing` is global
+  // state and `pendingOutgoing` belongs to the fetched profile, so the intent is
+  // held here until the refreshed values replace it — and it is three states rather
+  // than one because a follow on a private profile is a request, not a follow.
+  const [followIntent, setFollowIntent] = useState<'following' | 'requested' | 'none' | null>(null);
+  const followState = followIntent
+    ?? (isFollowing ? 'following' : profile.data?.pendingOutgoing ? 'requested' : 'none');
 
   const canViewProfile =
     isOwnProfile ||
     !!profile.data?.isPublic ||
-    isFollowing;
+    followState === 'following';
 
 
   const [activeTab, setActiveTab] = useState<ProfileTab>('posts');
@@ -93,6 +100,13 @@ export default function Profile() {
       const eventType = socketEvent.detail.type;
 
       if (eventType === 'social_changed' || eventType === 'connected') {
+        // The follow endpoints push this event to the target *and* to the actor
+        // (`chatEvent(actor, target, …)`, carrying both ids). For the actor it is
+        // the echo of a click whose result this page has already applied, so
+        // re-reading the post and media lists here would undo the point of doing it
+        // optimistically. A reconnect still reloads everything, because events were
+        // missed while the socket was down.
+        if (eventType === 'social_changed' && socketEvent.detail.payload?.actorId === user.userId) return;
         profile.reload();
         posts.reload();
         media.reload();
@@ -104,26 +118,38 @@ export default function Profile() {
     return () => {
       window.removeEventListener('social:socket', handleSocketEvent);
     };
-  }, [profile.reload, posts.reload, media.reload]);
+  }, [profile.reload, posts.reload, media.reload, user.userId]);
 
   async function handleToggleFollow() {
     if (isFollowingBusy) return;
 
     setIsFollowingBusy(true);
 
+    const cancels = followState === 'following' || followState === 'requested';
+    // A follow on a private profile becomes a request, which grants nothing yet.
+    const intent: 'following' | 'requested' | 'none' = cancels
+      ? 'none'
+      : profile.data?.isPublic === false ? 'requested' : 'following';
+    // Only following or unfollowing a private profile changes what this viewer may
+    // read, so that is the only case that re-reads the posts.
+    const reloadsPosts = profile.data?.isPublic === false && intent !== 'requested';
+    setFollowIntent(intent);
+
     try {
       await request(
         `/users/${profileId}/follow`,
-        isFollowing || profile.data?.pendingOutgoing ? 'DELETE' : 'PUT',
+        cancels ? 'DELETE' : 'PUT',
       );
 
+      // The counts are single small resources this page displays, so they are still
+      // re-read; the post list is not, which is the refetch this change removes.
       await refreshUser();
-
       profile.reload();
-      posts.reload();
+      if (reloadsPosts) posts.reload();
     } catch (error) {
       toast.error(errorMessage(error));
     } finally {
+      setFollowIntent(null);
       setIsFollowingBusy(false);
     }
   }
@@ -144,7 +170,8 @@ export default function Profile() {
             profile={profile.data}
             currentUser={user}
             isOwnProfile={isOwnProfile}
-            isFollowing={isFollowing}
+            isFollowing={followState === 'following'}
+            pendingOutgoing={followState === 'requested'}
             isFollowingBusy={isFollowingBusy}
             onEdit={() => setIsEditing(true)}
             onChangePassword={() => setIsChangingPassword(true)}
@@ -241,6 +268,7 @@ type ProfileHeaderProps = {
   currentUser: SocialUser;
   isOwnProfile: boolean;
   isFollowing: boolean;
+  pendingOutgoing: boolean;
   isFollowingBusy: boolean;
   onEdit: () => void;
   onChangePassword: () => void;
@@ -254,6 +282,7 @@ function ProfileHeader({
   currentUser,
   isOwnProfile,
   isFollowing,
+  pendingOutgoing,
   isFollowingBusy,
   onEdit,
   onChangePassword,
@@ -304,7 +333,7 @@ function ProfileHeader({
             </div>
           ) : (
             <ProfileActions
-              pendingOutgoing={profile.pendingOutgoing}
+              pendingOutgoing={pendingOutgoing}
               pendingIncoming={profile.pendingIncoming}
               canMessage={profile.canMessage === true}
               isFollowing={isFollowing}
