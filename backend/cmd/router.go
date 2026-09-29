@@ -13,6 +13,12 @@ func routes() http.Handler {
 	mux.HandleFunc("POST /api/v1/auth/login", handlers.HandlerCtx.Login)
 	mux.HandleFunc("GET /api/v1/auth/nickname-availability", handlers.HandlerCtx.NicknameAvailability)
 
+	// Probes are unauthenticated on purpose: a container healthcheck has no
+	// session cookie. They sit under /api/v1 so the same URL answers directly
+	// and through the frontend proxy, which is the path a browser uses.
+	mux.HandleFunc("GET /api/v1/health", handlers.HandlerCtx.Health)
+	mux.HandleFunc("GET /api/v1/ready", handlers.HandlerCtx.Ready)
+
 	mux.Handle("POST /api/v1/auth/logout", pkgmiddleware.AuthMiddleware(http.HandlerFunc(handlers.HandlerCtx.Logout)))
 	mux.Handle("GET /api/v1/auth/me", pkgmiddleware.AuthMiddleware(http.HandlerFunc(handlers.HandlerCtx.Me)))
 
@@ -57,6 +63,7 @@ func routes() http.Handler {
 		"GET /api/v1/users":                       handlers.HandlerCtx.Discover,
 		"GET /api/v1/users/{userId}":              handlers.HandlerCtx.UserProfile,
 		"PUT /api/v1/users/me":                    handlers.HandlerCtx.UpdateProfile,
+		"PUT /api/v1/users/me/password":           handlers.HandlerCtx.ChangePassword,
 		"GET /api/v1/users/{userId}/posts":        handlers.HandlerCtx.ProfilePosts,
 		"GET /api/v1/users/{userId}/media":        handlers.HandlerCtx.ProfileMedia,
 		"GET /api/v1/users/{userId}/follows":      handlers.HandlerCtx.FollowLists,
