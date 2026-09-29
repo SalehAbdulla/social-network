@@ -498,9 +498,43 @@ Reference: `GroupHandler.go`, `GroupManagementHandler.go`, `GroupContentHandler.
   2026-09-28: the framework bump cleared all five findings, so the audit step in CI now
   enforces `--audit-level=high` instead of reporting it — the justifying above is kept only as
   the record of why they were not fixed sooner.
-- [ ] **P2** Harden uploads further: re-encode images or serve them with
+- [x] **P2** Harden uploads further: re-encode images or serve them with
   `Content-Disposition: attachment` and a restrictive CSP so an HTML/SVG payload cannot be
-  used for stored XSS.
+  used for stored XSS. Closed 2026-09-28 by measuring first, and the measurement moved the work:
+  two thirds of this item were already done or wrong for this app, and the real hole was somewhere
+  the item did not look.
+  **Already closed, now pinned by tests:** the type is sniffed from the bytes and must be one of
+  six, so an HTML, PDF or SVG payload wearing an image extension is refused `400`, and the served
+  response carries the sniffed type with `nosniff` (plus the API-wide CSP). `TestUploadHardening`
+  adds the SVG case the item named.
+  **Wrong for this app, so not done:** `Content-Disposition: attachment` on media would break the
+  product — post photos, avatars, covers, story media and group images are all rendered inline by
+  `<img>`/`<video>`. Applying it to defend against a vector the allow-list already closes would
+  trade a real feature for nothing. It *is* applied to the one case where it helps, below.
+  **The real hole, found by reading the upload path:** the dimension check was skipped for WebP
+  ("the standard library has no decoder for it"), so the 40-megapixel ceiling did not exist for
+  that format at all — a header-only WebP can declare a canvas of 16384×16384 (the largest VP8L can
+  express, since each dimension is 14 bits), which is 268 megapixels from a few dozen bytes. That
+  was accepted before this change: reverting the fix makes the new test fail with `got 201`, which
+  is how the hole was confirmed rather than assumed. Fixed by registering the WebP decoder
+  (`golang.org/x/image/webp`, header-only `DecodeConfig` like the other three) and deleting the
+  special case, so one code path caps every allowed image format. The pin is deliberate on the
+  dependency: `v0.20.0` keeps the `go` directive at 1.25, where the current release would have
+  raised it to 1.26 for a hardening fix.
+  **Defence in depth at the other end:** the read path now holds the *stored* type to the same
+  allow-list. A row whose type is not one of the six is served as `application/octet-stream` with
+  `Content-Disposition: attachment` and `nosniff`, so a row written by an import, a migration or a
+  bug cannot be rendered inline; ordinary rows are untouched.
+  **Re-encoding, considered and rejected with reasons:** it cannot cover video (mp4/webm need an
+  external encoder) or WebP (Go cannot encode it), so it would protect two of six formats; and it
+  strips EXIF, which carries the **orientation** tag browsers apply, so phone photos would start
+  rendering sideways unless a rotation step came with it. That is a feature with a dependency and
+  real work behind it, not a hardening tweak, and it buys little against a vector the allow-list
+  already stops. Recorded here rather than left as an implied "not done".
+  Verified: `cmd/media_upload_test.go` (four new cases: SVG refused, a maximum-canvas WebP refused,
+  a small WebP accepted *and served inline* — which proves the check reads the header instead of
+  refusing the format — and a `text/html` row downloaded not rendered), plus `go build`/`vet`/`test ./...`
+  pass and the browser suite passes.
 - [x] **P2** Add password change / reset (not required by the spec, required by any real
   deployment). Closed 2026-09-28 for **change**; **reset stays open by decision** — see the note
   under this item. `PUT /api/v1/users/me/password` takes `currentPassword`, `newPassword` and
@@ -1095,6 +1129,24 @@ component classes) are the ones to build on.
   with the exact change list in that section. `canMessage` is still only a type in
   `frontend/src/app/api/social.ts`, so nothing reads the flag yet.
 - No P0 items are open. What is left is the P1/P2/P3 list above.
+
+Changed in the upload-hardening session (2026-09-28), for review:
+`backend/pkg/app/handlers/MediaHandler.go`, `backend/cmd/media_upload_test.go`, `backend/go.mod`,
+`backend/go.sum`, `README.md`, `DEPLOYMENT.md`, `TODO.md`.
+
+One Authentication and Security P2 closed, and the measurement is the interesting part: most of what
+the item asked for was already true, one of its suggestions would have broken the product, and the
+hole that did exist was in a corner the item never mentioned. The dimension check was skipped for
+WebP, so a header-only WebP could declare a 16384×16384 canvas — 268 megapixels from a few dozen
+bytes — and be accepted; reverting the fix makes the new test fail with `got 201`, so that is
+confirmed rather than inferred. The read path now also holds the *stored* type to the same
+allow-list and downloads anything else instead of rendering it. Re-encoding was rejected with
+reasons — it covers two of the six formats and would rotate every phone photo without an
+EXIF-aware rotation step — and `Content-Disposition: attachment` on media would have broken every
+inline image in the app. Evidence: `go build ./...`/`go vet ./...`/`go test ./...` pass (nine
+packages), the four new upload cases pass (including the fail-then-pass check above), and the
+browser suite passes 27 steps with no runtime exceptions. One dependency was added, pinned to the
+release that keeps the `go` directive at 1.25.
 
 Changed in the group-events session (2026-09-28), for review:
 `backend/pkg/db/migrations/sqlite/000011_event_reminder.{up,down}.sql` (new),
