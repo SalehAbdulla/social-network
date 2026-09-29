@@ -26,7 +26,10 @@ after 24 hours.
 
 **Groups** — create, browse, join by request or invitation, post, comment, share
 media, schedule events with Going / Not going replies, chat together, transfer
-ownership, and leave or delete.
+ownership, and leave or delete. The events tab is ordered by when things happen
+rather than when they were posted, so it splits into what is still to come and
+what has been, and an hour before an event starts the members who said they were
+going are reminded once.
 
 **Notifications and chat** — group invitations, join requests, group events, follow
 requests and comments raise notifications; private messages raise a different event.
