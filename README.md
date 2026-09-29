@@ -129,7 +129,10 @@ installed (`CHROME_PATH` overrides the location). `docker compose config` and
 `docker compose build` are the container checks, and `npm audit` / `govulncheck ./...` cover
 dependency advisories. The first five commands are what CI runs on every push — see
 `.gitlab-ci.yml` (this repository's origin is the school's GitLab) and `.github/workflows/ci.yml`.
-`DEPLOYMENT.md` puts them in release order.
+`DEPLOYMENT.md` puts them in release order. The Go suite carries the load smoke — fifty
+concurrent sockets whose broadcast is asserted, sustained throughput, and the rate limiter's
+boundary — and the browser suite opens fifty sockets through the frontend proxy, which is the only
+place the proxy's upgrade path is exercised at concurrency.
 
 ## Rules worth knowing before changing code
 
