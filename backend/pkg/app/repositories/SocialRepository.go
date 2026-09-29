@@ -296,6 +296,12 @@ func (db *DB) CanViewMedia(id, viewerID string) (bool, error) {
 				SELECT 1 FROM groupContent gc JOIN socialGroupMember gm ON gm.groupId=gc.groupId
 				WHERE gc.mediaUrl='/api/v1/media/' || m.mediaId AND gm.userId=?
 			) OR EXISTS (
+				-- Stories carry no audience: a live one is readable by any signed-in
+				-- member. That is a decision, not an omission — the spec's story
+				-- requirement names no privacy, and the listing query agrees with this
+				-- branch by keying on expiry alone. Expiry is therefore the only thing
+				-- that ends access, which is also why an expired story releases its
+				-- upload to the collector.
 				SELECT 1 FROM story s WHERE s.mediaUrl='/api/v1/media/' || m.mediaId AND s.expiresAt>datetime('now')
 			) OR EXISTS (
 				SELECT 1 FROM socialGroup g WHERE g.imageUrl='/api/v1/media/' || m.mediaId
