@@ -104,8 +104,15 @@ func (m *SessionManager) CreateSession(userID, token string) error {
 
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	if previousToken, ok := m.UIDToToken[userID]; ok && previousToken != token {
-		m.evictLocked(previousToken)
+	// Every cached token of this user goes, not only the newest one. A token that
+	// reached the cache through the database lookup above — which is what a
+	// restart leaves behind — is not in UIDToToken, and SaveSession has just
+	// deleted its row, so leaving it in memory would keep a revoked session
+	// usable until its cached expiry passed.
+	for cached, owner := range m.TokenToUID {
+		if owner == userID && cached != token {
+			m.evictLocked(cached)
+		}
 	}
 	if existingUserID, ok := m.TokenToUID[token]; ok && existingUserID != userID {
 		m.evictLocked(token)
