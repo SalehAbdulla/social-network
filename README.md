@@ -147,7 +147,9 @@ dependency advisories. The first five commands are what CI runs on every push â€
   changing the password (`PUT /api/v1/users/me/password`), which returns the replacement
   cookie to the browser that made the change.
 - **Uploads** are typed by their bytes, not their filename, and are answered `400` for an
-  unreadable or empty file and `413` past a size ceiling.
+  unreadable or empty file and `413` past a size ceiling. An image's declared canvas is capped at
+  40 megapixels from its own header, WebP included, and the same allow-list is applied when a file
+  is served: a row whose type is not one of the six is downloaded rather than rendered inline.
 
 ## Documentation map
 
