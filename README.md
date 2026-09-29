@@ -71,6 +71,7 @@ frontend/
   src/proxy.ts             page-level session gate (the API and /ws are excluded)
   scripts/                 browser smoke suite driven over the Chrome DevTools Protocol
 compose.yaml               both services and the social-data volume
+deploy/Caddyfile.example   a sample reverse proxy, reviewed rather than run here
 DEPLOYMENT.md              environment variables, headers, limits, backup, release checklist and checks
 TODO.md                    the open work list and the reasoning behind what is closed
 .github/workflows/ci.yml   the checks below as a GitHub Actions workflow
