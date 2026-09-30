@@ -66,6 +66,11 @@ func (re *HandlerContext) HandleError(w http.ResponseWriter, r *http.Request, er
 	case realtimeforum.ErrEmptyUpload:
 		statusCode = http.StatusBadRequest
 		level = slog.LevelWarn
+	case realtimeforum.ErrResetUnavailable:
+		// 503, not 500: nothing is broken, the server simply has no mail provider
+		// and must not pretend it sent a link (see DEPLOYMENT.md).
+		statusCode = http.StatusServiceUnavailable
+		level = slog.LevelWarn
 	case realtimeforum.ErrInternal:
 		statusCode = http.StatusInternalServerError
 		level = slog.LevelError
@@ -89,6 +94,7 @@ func (re *HandlerContext) HandleError(w http.ResponseWriter, r *http.Request, er
 			err == realtimeforum.ErrCommentLength,
 			err == realtimeforum.ErrMissingPostId,
 			err == realtimeforum.ErrNonASCII,
+			err == realtimeforum.ErrInvalidResetToken,
 			err == realtimeforum.ErrBadRequest:
 			statusCode = http.StatusBadRequest
 			level = slog.LevelWarn
