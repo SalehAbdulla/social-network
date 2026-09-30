@@ -19,6 +19,23 @@ type AuthRepository interface {
 	GetUserNickname(userID string) (string, error)
 	PasswordHash(userID string) (string, error)
 	UpdatePassword(userID, hashedPassword string) error
+	UserIDByEmail(email string) (string, error)
+}
+
+// UserIDByEmail resolves an address to the account that owns it. The address is
+// expected already normalised (trimmed and lowercased), which is how the
+// registration form stored it. ErrNotFound means "no such address" — the caller
+// decides whether to say so, and the reset endpoint deliberately does not.
+func (db *DB) UserIDByEmail(email string) (string, error) {
+	var userID string
+	err := db.Conn.QueryRow("SELECT userId FROM user WHERE email = ?", email).Scan(&userID)
+	if errors.Is(err, sql.ErrNoRows) {
+		return "", realtimeforum.ErrNotFound
+	}
+	if err != nil {
+		return "", realtimeforum.ErrInternal
+	}
+	return userID, nil
 }
 
 func (db *DB) DoesEmailExists(email string) error {
