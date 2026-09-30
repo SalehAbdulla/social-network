@@ -22,7 +22,9 @@ public profile happens immediately.
 **Posts, comments and reactions** — three privacy levels (`public`, `followers` for
 "almost private", `selected` for "only the followers you pick"), up to four images or
 GIFs per post, comments with their own image, and reaction scores. Stories expire
-after 24 hours.
+after 24 hours. An unsent post is kept in the browser, so a refresh does not lose the
+text or the audience chosen for it; the composer says what a publish is still missing
+instead of disabling its button, and Ctrl/Cmd + Enter publishes.
 
 **Groups** — create, browse, join by request or invitation, post, comment, share
 media, schedule events with Going / Not going replies, chat together, transfer
@@ -162,9 +164,15 @@ place the proxy's upgrade path is exercised at concurrency.
   the deployment has no mail provider — `DEPLOYMENT.md` says how to configure one, and why
   development logs the link instead.
 - **Uploads** are typed by their bytes, not their filename, and are answered `400` for an
-  unreadable or empty file and `413` past a size ceiling. An image's declared canvas is capped at
+  unreadable or empty file and `413` past a size ceiling, which names the file's own measured
+  size — "Image is 12.4 MB; the limit is 10 MB." An image's declared canvas is capped at
   40 megapixels from its own header, WebP included, and the same allow-list is applied when a file
-  is served: a row whose type is not one of the six is downloaded rather than rendered inline.
+  is served: a row whose type is not one of the six is downloaded rather than rendered inline. The
+  ceilings live in one place per language — `frontend/src/app/lib/mediaLimits.ts` and the constants
+  in `MediaHandler.go`/`CommentHandler.go` — and `backend/pkg/app/handlers/media_limits_test.go`
+  reads the TypeScript module and compares them, so the browser and the server can only move
+  together. It checks the numbers, not the wording, and not this document; the limit tables here and
+  in `DEPLOYMENT.md` are still kept in step by review.
 - **Dates** go through `dateLabel` (absolute, in the visitor's locale) or `relativeLabel`
   ("3 hours ago", falling back to the absolute beyond a week, both via `Intl`). Either way the
   element is a `<time dateTime={isoTimestamp(...)} title={dateLabel(...)}>`, so the exact instant
