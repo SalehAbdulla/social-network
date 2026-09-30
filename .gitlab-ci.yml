@@ -11,9 +11,10 @@
 #     the school's runner cannot be assumed to have; the job still runs and
 #     reports when it can, and the other three checks still block. Flip it to
 #     blocking once a pipeline has shown the DinD service working.
-#   * Images are referenced by the same floating tags the Dockerfiles use
-#     (golang:1.26-bookworm, node:22-bookworm, docker:27) rather than a version
-#     managed by the pipeline. Pinning those is a separate open item in TODO.md.
+#   * Images are referenced by tag *and* digest — `golang:1.26-bookworm@sha256:…`
+#     — the same pins the Dockerfiles carry, refreshed together by
+#     `scripts/pin-base-images.mjs`, which rewrites both files. That script also
+#     runs here as the `base-images` job and reports when a pin has fallen behind.
 
 default:
   interruptible: true
@@ -30,7 +31,7 @@ variables:
 
 backend:
   stage: checks
-  image: golang:1.26-bookworm
+  image: golang:1.26-bookworm@sha256:a688600ca24f8a4d3ca77f95b0dd40704a9fc787c826660eb7ba0b641b8b175d
   cache:
     key:
       files:
@@ -45,7 +46,7 @@ backend:
 
 frontend:
   stage: checks
-  image: node:22-bookworm
+  image: node:22-bookworm@sha256:363e1587494626837fa7f9a23bdb453d13b0ff3c67c705c2805cfc69c2d2fad7
   cache:
     key:
       files:
@@ -71,7 +72,7 @@ frontend:
 
 govulncheck:
   stage: checks
-  image: golang:1.26-bookworm
+  image: golang:1.26-bookworm@sha256:a688600ca24f8a4d3ca77f95b0dd40704a9fc787c826660eb7ba0b641b8b175d
   cache:
     key:
       files:
@@ -86,14 +87,24 @@ govulncheck:
     # spelled out because there is no setup-go action adding it to PATH here.
     - $(go env GOPATH)/bin/govulncheck ./...
 
+base-images:
+  stage: checks
+  # Reports rather than blocks: a new upstream patch release is not a defect in
+  # the commit that notices it. A drift line here means "run the script with
+  # --write and commit the pins". Needs no Docker, only Node and network.
+  image: node:22-bookworm@sha256:363e1587494626837fa7f9a23bdb453d13b0ff3c67c705c2805cfc69c2d2fad7
+  allow_failure: true
+  script:
+    - node scripts/pin-base-images.mjs
+
 containers:
   stage: containers
   needs:
     - backend
     - frontend
-  image: docker:27
+  image: docker:27@sha256:aa3df78ecf320f5fafdce71c659f1629e96e9de0968305fe1de670e0ca9176ce
   services:
-    - docker:27-dind
+    - docker:27-dind@sha256:aa3df78ecf320f5fafdce71c659f1629e96e9de0968305fe1de670e0ca9176ce
   variables:
     DOCKER_HOST: tcp://docker:2376
     DOCKER_TLS_CERTDIR: "/certs"
