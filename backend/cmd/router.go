@@ -13,6 +13,13 @@ func routes() http.Handler {
 	mux.HandleFunc("POST /api/v1/auth/login", handlers.HandlerCtx.Login)
 	mux.HandleFunc("GET /api/v1/auth/nickname-availability", handlers.HandlerCtx.NicknameAvailability)
 
+	// Password reset is unauthenticated by definition — it is what someone uses
+	// when they cannot sign in. The per-address rate limit lives in the handler,
+	// next to the answer it protects, and the endpoint reports 503 when this
+	// deployment has no way to deliver a link.
+	mux.HandleFunc("POST /api/v1/auth/password-reset", handlers.HandlerCtx.RequestPasswordReset)
+	mux.HandleFunc("POST /api/v1/auth/password-reset/confirm", handlers.HandlerCtx.ConfirmPasswordReset)
+
 	// Probes are unauthenticated on purpose: a container healthcheck has no
 	// session cookie. They sit under /api/v1 so the same URL answers directly
 	// and through the frontend proxy, which is the path a browser uses.
