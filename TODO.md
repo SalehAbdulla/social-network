@@ -1318,6 +1318,18 @@ running the `HEAD` version of the script against the same bogus path. The job it
 **unverified** — it has never run on a runner — so that item stays open, and `DEPLOYMENT.md` says so
 where a deployer will read it.
 
+Running the suite to verify the Chrome change turned up a flake worth more than the job it was meant to
+serve: the first of two runs failed at "Timed out: register form". The cause was measured rather than
+guessed — that run's frontend log contains **no** `/register` request at all, so the click meant to open
+the form never started a navigation. It landed before React attached its handler, on a tab `createPage`
+had just opened, where the button is present in the server-rendered HTML; and because the old code
+clicked once and then waited, a single missed click was a permanent stall rather than a diagnosable
+failure. `buttonThen` now clicks again while waiting for what the click should cause and reports when it
+needed more than one, with the assertion unchanged. Demonstrated by injecting the failure: with the first
+click swallowed — exactly the observed miss — the step passes and prints `NOTE: the register link took 2
+clicks; the first landed before hydration`, where the same miss failed the suite before. Two clean runs
+pass 29 steps.
+
 Changed in the base-image-pin session (2026-09-30), for review:
 `scripts/pin-base-images.mjs` (new), `backend/Dockerfile`, `frontend/Dockerfile`, `.gitlab-ci.yml`,
 `.github/workflows/ci.yml`, `DEPLOYMENT.md`, `README.md`, `TODO.md`.
