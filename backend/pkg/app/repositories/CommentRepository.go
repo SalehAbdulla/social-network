@@ -11,6 +11,18 @@ type CommentRepository interface {
 	DeleteComment(commentId int, userId string) error
 }
 
+// commentPageSelect is the comment list's projection and predicate, shared with the
+// plan test (query_plan_test.go) so what that measures is the query this runs. The
+// ORDER BY is appended at the call site because it comes from the request.
+const commentPageSelect = `
+		SELECT c.commentId, c.postId, c.userId, u.nickName, c.content, c.imageUrls, c.score, c.createdAt,
+		       COALESCE(r.score, 0) AS userScore
+		FROM comment c
+		JOIN user u ON c.userId = u.userId
+		LEFT JOIN reaction r ON r.entityType = 'comment' AND r.entityId = c.commentId AND r.userId = ?
+		WHERE c.postId = ?
+		ORDER BY `
+
 func (db *DB) GetComments(postId int, pageNumber int, pageSize int, sortBy string, sortOrder string, userID string) ([]models.Comment, int, error) {
 
 	if err := db.DoesPostExists(postId); err != nil {
@@ -46,14 +58,7 @@ func (db *DB) GetComments(postId int, pageNumber int, pageSize int, sortBy strin
 
 	offset := (pageNumber - 1) * pageSize
 
-	query := `
-		SELECT c.commentId, c.postId, c.userId, u.nickName, c.content, c.imageUrls, c.score, c.createdAt,
-		       COALESCE(r.score, 0) AS userScore
-		FROM comment c
-		JOIN user u ON c.userId = u.userId
-		LEFT JOIN reaction r ON r.entityType = 'comment' AND r.entityId = c.commentId AND r.userId = ?
-		WHERE c.postId = ?
-		ORDER BY ` + column + ` ` + order + `
+	query := commentPageSelect + column + ` ` + order + `
 		LIMIT ? OFFSET ?
 	`
 
