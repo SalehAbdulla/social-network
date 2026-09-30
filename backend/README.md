@@ -10,4 +10,6 @@ Two rules worth knowing before touching the chat code. Private messages are only
 
 Run `go test ./...` for backend tests. From `frontend`, run `npm run test:integration` for browser checks against an isolated database.
 
+`go test ./pkg/app/repositories/` also runs the query-plan check. It seeds a database, prints `EXPLAIN QUERY PLAN` for the read paths behind the feed, the comment list, the notifications list, the chat list, the follow-request list and one entity's score, asserts which index each one leans on, and — for the indexes `000013` creates — drops the index and measures the query again. That last part is why the numbers next to each index in the migration are reproducible rather than asserted: run the package and you get the before and after on your own machine. When you add a query that reads one of those tables, add a case there; a plan that scans says so by name before a user notices.
+
 From the repository root, `docker compose up --build -d` builds separate backend and frontend images. SQLite and uploads persist in the `social-data` volume. See the frontend README for usage.
