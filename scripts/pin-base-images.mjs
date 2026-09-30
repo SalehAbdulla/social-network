@@ -60,8 +60,10 @@ async function manifest(repo, reference) {
 }
 
 // The toolchain a tag (or a pin) carries, read from the linux/amd64 image config.
-async function toolchain(repo, digest) {
-  const index = await manifest(repo, digest);
+// `known` is the index body for that digest when the caller already has it, which
+// saves a request per image against a registry that rate-limits anonymous pulls.
+async function toolchain(repo, digest, known) {
+  const index = known ? { body: known } : await manifest(repo, digest);
   const amd64 = (index.body.manifests ?? []).find(entry =>
     entry.platform?.os === 'linux' && entry.platform?.architecture === 'amd64');
   if (!amd64) return '';
@@ -98,12 +100,20 @@ try {
   for (const key of new Set(references.map(reference => `${reference.name}:${reference.tag}`))) {
     const [name, tag] = key.split(':');
     const repo = `library/${name}`;
-    const { digest } = await manifest(repo, tag);
-    resolved.set(key, { digest, versions: await toolchain(repo, digest) });
+    const { digest, body } = await manifest(repo, tag);
+    resolved.set(key, { digest, versions: await toolchain(repo, digest, body) });
   }
 } catch (error) {
   console.error(`Could not resolve a base image from Docker Hub: ${error.message}`);
-  console.error('A pin can only be checked with registry access, so nothing was changed.');
+  if (error.message.includes('429')) {
+    // Documented reality: anonymous pulls are capped per address, and a shared CI
+    // runner hits that cap. It is not drift, and saying so keeps a red job from
+    // being read as a stale pin.
+    console.error('Docker Hub is rate limiting this address (anonymous pulls are capped per IP).');
+    console.error('This is not drift and nothing was changed. Retry later, or from another network.');
+  } else {
+    console.error('A pin can only be checked with registry access, so nothing was changed.');
+  }
   process.exit(2);
 }
 
