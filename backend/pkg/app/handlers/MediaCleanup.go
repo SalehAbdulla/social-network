@@ -6,6 +6,8 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+
+	"social-network/backend/pkg/media"
 )
 
 // MediaGrace is how long an upload may sit unreferenced before the collector
@@ -47,6 +49,14 @@ func (re *HandlerContext) PruneOrphanedMedia(grace time.Duration) (MediaCleanupR
 		if err := os.Remove(filepath.Join(re.App.UploadDir, id)); err == nil {
 			result.Files++
 		}
+		// A derivative is a file of its own, and its name is not a UUID, so the sweep below
+		// would treat it as something an operator put there and leave it forever. It goes with
+		// its original, here.
+		for _, variant := range media.Variants() {
+			if err := os.Remove(filepath.Join(re.App.UploadDir, media.FileName(id, variant))); err == nil {
+				result.Files++
+			}
+		}
 	}
 	stray, err := re.removeStrayMediaFiles(grace)
 	if err != nil {
@@ -56,11 +66,12 @@ func (re *HandlerContext) PruneOrphanedMedia(grace time.Duration) (MediaCleanupR
 	return result, nil
 }
 
-// removeStrayMediaFiles unlinks UUID-named regular files that no media row
-// points at. Only names that parse as a UUID are touched, so anything an
-// operator drops into the upload directory (or a nested directory) is left
-// alone, and only files older than grace, so an upload whose row is still being
-// written is not a candidate.
+// removeStrayMediaFiles unlinks regular files that no media row points at, whether they are an
+// upload itself or one of its derivatives. A name is only a candidate when its base — the name
+// itself, or the upload's id in front of a `_thumb`/`_large` suffix — parses as a UUID, so
+// anything an operator drops into the upload directory (`notes.txt`, `notes_large`, a nested
+// directory) is left alone; and only files older than grace, so an upload whose row is still
+// being written is not a candidate.
 func (re *HandlerContext) removeStrayMediaFiles(grace time.Duration) (int, error) {
 	entries, err := os.ReadDir(re.App.UploadDir)
 	if err != nil {
@@ -81,10 +92,17 @@ func (re *HandlerContext) removeStrayMediaFiles(grace time.Duration) (int, error
 	removed := 0
 	for _, entry := range entries {
 		name := entry.Name()
-		if entry.IsDir() || referenced[name] {
+		if entry.IsDir() {
 			continue
 		}
-		if _, err := uuid.Parse(name); err != nil {
+		base := name
+		if id, _, ok := media.ParseFileName(name); ok {
+			base = id
+		}
+		if _, err := uuid.Parse(base); err != nil {
+			continue
+		}
+		if referenced[base] {
 			continue
 		}
 		info, err := entry.Info()
