@@ -1,6 +1,7 @@
 "use client"
 
 import React from "react";
+import { mediaImageProps } from "../lib/mediaVariants";
 
 interface AvatarProps {
   name: string;
@@ -40,7 +41,7 @@ const Avatar = ({ name, avatarUrl, size = 40, className = "" }: AvatarProps) => 
   if (avatarUrl) {
     return (
       <img
-        src={avatarUrl}
+        {...mediaImageProps(avatarUrl, `${size}px`)}
         alt={name}
         width={size}
         height={size}
