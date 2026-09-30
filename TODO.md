@@ -10,9 +10,12 @@ with `go build ./...`, `go vet ./...` and `go test ./...`; the frontend ones wit
 2026-09-28/30 sessions are **committed and pushed** to `origin/main` as per-file commits, so `git log`
 and the session notes at the end of this file are the two records — the notes are newest-first.
 
-Baseline checks: `go test ./...` passes, `go vet ./...` is clean, both Docker images build
-through `compose.yaml`, and migrations `000001`–`000010` are applied at boot by
-`backend/pkg/db/sqlite/sqlite.go`.
+Baseline checks: `go test ./...` passes, `go vet ./...` is clean, `docker compose config`
+answers client-side with exit 0, and migrations `000001`–`000012` are applied at boot by
+`backend/pkg/db/sqlite/sqlite.go`. This list used to claim both images *build* through
+`compose.yaml`; that was never measured — the environment that writes this file has no
+reachable Docker daemon — so the claim is withdrawn rather than repeated, and the
+`up --build` item below stays open for a host that can run it.
 
 Working today: auth (register with an optional avatar, About Me and visibility choice,
 login/logout, bcrypt, cookie sessions), public/private
@@ -1194,30 +1197,63 @@ Ordered roughly by value for effort.
 - [ ] **P3** Instagram-style modal composer launched from the sidebar and the feed, keeping
   `/create-post` as a deep link (currently the only entry point is
   `Sidebar.tsx:79` → `create-post/page.tsx`).
-- [ ] **P3** Draft autosave to `localStorage` so a refresh does not lose a long post.
-- [ ] **P3** Show why publishing is blocked ("Add 4 more characters", "Choose a follower")
-  instead of a silently disabled button.
-- [ ] **P3** Sticky publish button and keyboard shortcut (Ctrl/Cmd + Enter) to publish.
+- [x] **P3** Draft autosave to `localStorage` so a refresh does not lose a long post.
+  Closed 2026-09-30: `lib/postDraft.ts` owns the key (`social:post-draft`), the composer
+  restores it after mount and clears it on publish or Discard. Only the text and the audience
+  survive — a `File` cannot be serialised — and the notice on screen says which parts came
+  back instead of presenting a half-restored draft as the whole thing. Verified by the browser
+  suite, which reloads the document and asserts the text returned while no photo did.
+- [x] **P3** Show why publishing is blocked ("Add 4 more characters", "Choose a follower")
+  instead of a silently disabled button. Closed 2026-09-30: the reason is computed from the
+  draft, rendered beside the sticky publish button, attached to the field with
+  `aria-describedby`, and the caret moves to that field when a publish is refused. The form is
+  `noValidate`, so the browser's own bubbles cannot pre-empt the sentence, and the server's
+  checks are unchanged and remain the authority. Verified in the browser suite.
+- [x] **P3** Sticky publish button and keyboard shortcut (Ctrl/Cmd + Enter) to publish.
+  Closed 2026-09-30: the existing action row is wrapped in a sticky container rather than
+  gaining a second button, and the shortcut is handled on the form's keydown — which is why it
+  works from the textarea where the text was typed, and why a bare Enter there is still a
+  newline. The browser suite dispatches the key through CDP with that field focused.
 
 ### Media and validation
 
-- [ ] **P3** Fix the WebP gap: `MediaHandler.go:55` skips `image.DecodeConfig` when the MIME
+- [x] **P3** Fix the WebP gap: `MediaHandler.go:55` skips `image.DecodeConfig` when the MIME
   is `image/webp`, so WebP dimensions and the 40 MP ceiling are never enforced. Decode with
-  `golang.org/x/image/webp`, or re-encode WebP on ingest.
+  `golang.org/x/image/webp`, or re-encode WebP on ingest. Already fixed by the upload-hardening
+  session (2026-09-28) and left open there; ticked 2026-09-30 after checking it rather than
+  assuming: the `webp` decoder is registered, so `DecodeConfig` reads WebP headers, and
+  `cmd/media_upload_test.go` asserts both directions — a 16384×16384 canvas built from a few
+  dozen bytes is refused with 400, and a 64×64 WebP is accepted and served as `image/webp`.
 - [ ] **P3** Enforce minimum dimensions and aspect ratios per purpose: square avatar at least
   200×200, cover at least 800×300, post media between 1:2 and 2:1.
 - [ ] **P3** Client-side downscale before upload (canvas, ~1600 px on the long edge, quality
   ~0.85), skipping animated GIFs so they stay animated. This cuts upload time and storage
   for phone photos, which are the common case.
-- [ ] **P3** Show each selected file's dimensions and size in `ImagePicker` before upload, so
-  a rejection is never a surprise.
+- [x] **P3** Show each selected file's dimensions and size in `ImagePicker` before upload, so
+  a rejection is never a surprise. Closed 2026-09-30: an overlay caption on each tile reports
+  `1440 × 1080 · 2.4 MB`, taken from the decode the check already performs (a video's numbers
+  arrive from its `loadedmetadata` event). An overlay rather than a line under the preview, so
+  the square frame keeps its size and the grid cannot grow a row. Verified in the browser suite
+  against the 1×1 fixture, which reads `1 × 1 · 68 B`.
 - [ ] **P3** Accept HEIC/HEIF and AVIF on the file input and convert on the client, or reject
   them with a message that names the format.
-- [ ] **P3** Single source of truth for the limits (10 MB image, 50 MB video, 40 MP,
+- [x] **P3** Single source of truth for the limits (10 MB image, 50 MB video, 40 MP,
   4 attachments) shared by `ImagePicker.tsx`, `MediaHandler.go` and the docs, instead of the
-  three copies that exist today.
-- [ ] **P3** Return a specific server error ("Image is 12.4 MB, the limit is 10 MB") rather
-  than the generic `ErrBadRequest`, and show it verbatim in the toast.
+  three copies that exist today. Closed 2026-09-30 with the honest shape of it: the three
+  browser copies are now one (`lib/mediaLimits.ts`), and `media_limits_test.go` reads that
+  module and compares its numbers against the Go constants, failing by name on whichever side
+  was changed alone (demonstrated in both directions). Two languages cannot share one literal,
+  and this file and the READMEs are a third copy no check can read; both gaps are written down
+  in the test and where a deployer reads them, rather than papered over.
+- [x] **P3** Return a specific server error ("Image is 12.4 MB, the limit is 10 MB") rather
+  than the generic `ErrBadRequest`, and show it verbatim in the toast. Closed 2026-09-30: the
+  client names the measured size before it spends the upload, and the server's `413` does too —
+  `ErrImageTooLarge` now arrives wrapped in an `ErrDetail`, which is why the status mapping
+  moved from `==` to `errors.Is` (a wrapped sentinel that fell through answered `500` for a
+  request that was merely too large). The 50 MB gate keeps the limit alone, and the reason is
+  recorded at the gate and in `DEPLOYMENT.md`. Verified by injection: reverting that one case
+  to equality fails the new test with `500` where `413` is expected, and
+  `cmd/media_upload_test.go` asserts both halves of the sentence through the real endpoint.
 - [ ] **P3** Client-side cropping for avatars, covers and post images (square, 4:5, 16:9).
 - [ ] **P3** Generate derivatives on upload (`_thumb`, `_large`) and serve them with `srcset`
   so the feed stops downloading full-resolution originals.
@@ -1337,6 +1373,75 @@ component classes) are the ones to build on.
   with the exact change list in that section. `canMessage` is still only a type in
   `frontend/src/app/api/social.ts`, so nothing reads the flag yet.
 - No P0 items are open. What is left is the P1/P2/P3 list above.
+
+Changed in the composer-and-limits session (2026-09-30), for review:
+`frontend/src/app/lib/mediaLimits.ts` (new), `frontend/src/app/lib/postDraft.ts` (new),
+`frontend/src/app/components/{ImagePicker,PostForm}.tsx`, `frontend/src/app/api/social.ts`,
+`frontend/scripts/integration-smoke.mjs`, `backend/errors.go`,
+`backend/pkg/app/handlers/{utils,MediaHandler,handlers_test}.go`,
+`backend/pkg/app/handlers/media_limits_test.go` (new), `backend/cmd/media_upload_test.go`,
+`README.md`, `DEPLOYMENT.md`, `frontend/README.md`, `TODO.md`.
+
+Six P3s closed, all of them in the composer or in the limits the composer talks about, and one of
+them turned out to be a measurement rather than a feature. The three copies of the ceilings became
+one module per language — `lib/mediaLimits.ts` and the Go constants — and
+`media_limits_test.go` reads the TypeScript file and compares them, because two languages cannot
+share a literal and a comment asking people to keep them in step is not a check. Both directions
+were demonstrated before it was trusted: changing `MAX_IMAGE_BYTES` alone, and changing
+`maxImageUpload` alone, each fail it by name with both numbers printed, and the tree was restored
+between. What it does *not* cover is the wording of the two byte formatters or the limit tables in
+the READMEs; both gaps are written at the test and where a deployer reads them rather than implied
+away.
+
+The measured-size item was half done already and is now whole: the 413 named the ceiling, and now
+names the file's own size with it. That required the status mapping to move from `==` to
+`errors.Is`, because a sentinel wrapped in the new `ErrDetail` fell through to the default branch
+and answered 500 for a request that was merely too large — a worse bug than the wording it
+improves, which is why its injected-fault check is a revert of one case instead of a new test
+(`expected 413 for a wrapped sentinel, got 500`). The 50 MB gate deliberately keeps the limit alone
+and says why at the gate: it runs before the type is sniffed and the request ceiling is that number
+plus a megabyte, so a measured size there would always read as the ceiling itself.
+
+The composer work is three items that are really one behaviour. The button is no longer silently
+disabled: the reason is computed from the draft, rendered beside it, attached to the field with
+`aria-describedby`, and the caret moves to that field when a publish is refused — which is also why
+the form is `noValidate`, since native bubbles would fire before the sentence could. The draft lives
+in `localStorage` under `social:post-draft`, is scoped to a new post, cleared on publish and by
+Discard, and read in a deferred task like ThemeProvider's so hydration cannot mismatch; it restores
+the text and the audience and says on screen that the photos did not come back, because a `File`
+cannot be serialised. The action row is sticky and is still one button, so nothing had to be
+duplicated for assistive technology to trip over.
+
+The browser suite carries all of it, since the frontend has no unit-test runner and this behaviour
+belongs to the DOM and to storage: a too-short post shows its reason, the draft reaches storage and
+survives a reload, Discard empties both, Ctrl+Enter publishes and clears the draft, the picker tile
+reads `1 × 1 · 68 B`, and `/create-post` joined the responsive sweep at four widths because a sticky
+row is exactly what overflows a narrow viewport. Two runs pass 31 steps each.
+
+One failure came from running rather than reading, in a step this session did not touch: the
+expired-session step lost a race with the sidebar's live-refresh poll. The evidence is in the two
+runs' logs — in one the logout answer and two poll 401s landed in the same millisecond, the tab
+reached `/login` first and the composer the step meant to type into was gone; in the other that step
+saw no poll 401 at all and passed. It now types before it logs out and attempts the send
+defensively, asserts the contract both paths share, and prints a NOTE when a poll wins. The first
+attempt at that evidence injected a two-second pause and proved nothing — the poll interval is
+fifteen seconds — so the claim was corrected and the run repeated with sixteen.
+
+Two items in this file were corrected rather than obeyed. The WebP gap was already fixed by the
+upload-hardening session and left open; it is ticked now, with the test that proves both directions
+named as the evidence. And the baseline line at the top claimed both Docker images *build* through
+`compose.yaml`, which was never measured anywhere — the daemon here answers 500 — so the claim is
+withdrawn in favour of what is true: `docker compose config` exits 0 client-side, and the
+`up --build` P2 below stays open for a host that can actually run it. Both P2s were left open and
+untouched for the same reason as before: no Docker daemon and no CI runner with Go, a C compiler
+and Chrome in one image.
+
+Deliberately not started, so the next session can pick them up on purpose rather than by
+accident: media derivatives (`_thumb`/`_large` + `srcset`), which change every media read path;
+the Instagram-like shell; bookmarks and hashtags; the missing database indexes with their
+`EXPLAIN QUERY PLAN` evidence; and the DX set (`make`/`just`, the WebSocket protocol document,
+OpenAPI). The first of those is the highest-value item left and the one most likely to break
+something, so it deserves a session of its own rather than the end of this one.
 
 Changed in the password-reset session (2026-09-30), for review:
 `backend/pkg/db/migrations/sqlite/000012_password_reset.{up,down}.sql` (new),
