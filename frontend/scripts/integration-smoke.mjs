@@ -274,6 +274,20 @@ try {
   await until(dummy, `(async () => (await (await fetch('/api/v1/post?id=${postId}')).json()).data.score === 1)()`, 'post reaction');
   console.log('PASS: post creation, image upload, detail page and reaction persist');
 
+  // The item's own claim, measured in the browser: the feed must stop downloading
+  // full-resolution originals, so every request for this post's picture carries a `?size=`.
+  // The upload here is a 1x1 PNG, which is narrower than both caps and therefore has no
+  // derivatives at all — so what the server answers is the original, and the point is which
+  // URL the browser asked for rather than what came back. That combination is the useful one:
+  // it proves the srcset is used for an upload that has nothing to choose between.
+  // The browser fetches the picture after the document, so wait for that request rather than
+  // racing it: the assertion below is about which URL arrives, not about it arriving.
+  for (let attempt = 0; attempt < 40 && requestsMatching(dummy, mediaURL).length === 0; attempt++) await pause(250);
+  const mediaRequests = requestsMatching(dummy, mediaURL);
+  assert(mediaRequests.length > 0, 'the post picture should have been requested');
+  assert(mediaRequests.every(url => url.includes('?size=')), `every request for the picture must name a size, got ${JSON.stringify(mediaRequests)}`);
+  console.log('PASS: the picture is fetched through a sized variant, never as the bare original');
+
   await evaluate(dummy, `document.querySelector('a[aria-label="Edit post"]').click()`);
   await until(dummy, `document.querySelector('h1')?.textContent === 'Edit Post' && !!document.querySelector('img[alt="Photo 1"]')`, 'prefilled post editor');
   assert.equal(await evaluate(dummy, `document.querySelector('input[placeholder="Give your post a title"]').value`), created.title);
@@ -383,11 +397,14 @@ try {
   assert(freshComment.dateTime && freshComment.title, `the exact instant stays on the element: ${JSON.stringify(freshComment)}`);
   console.log('PASS: a comment carries an uploaded photo, renders it and stores its URL');
 
-  // The profile media tab lists comment photos next to post photos.
+  // The profile media tab lists comment photos next to post photos. The tile asks for one of
+  // the server's derivatives rather than the original, so what identifies the photo here is its
+  // URL up to the `?size=` — asserting the bare URL would now be asserting that the grid
+  // downloads full-resolution originals, which is the opposite of what the app is for.
   await navigate(alex, '/profile');
   await until(alex, `!!document.querySelector('[aria-label="Profile statistics"]')`, 'own profile');
   await evaluate(alex, `[...document.querySelectorAll('button')].find(item => item.textContent.trim() === 'media').click()`);
-  await until(alex, `[...document.querySelectorAll('a[href="/post/${postId}"] img')].some(image => image.getAttribute('src') === ${JSON.stringify(commentPhoto)})`, 'comment photo in the profile media tab');
+  await until(alex, `[...document.querySelectorAll('a[href="/post/${postId}"] img')].some(image => { const src = image.getAttribute('src') || ''; return src.startsWith(${JSON.stringify(commentPhoto)}) && src.includes('size='); })`, 'comment photo in the profile media tab');
   console.log('PASS: the profile media tab lists the comment photo');
 
   // Upload edge cases through the same-origin path the composers use: an empty
