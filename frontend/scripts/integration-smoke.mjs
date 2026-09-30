@@ -758,9 +758,24 @@ try {
   await until(alex, `!document.querySelector('aside[aria-label="Main navigation"] a[href="/messages"] span[aria-label$="unread messages"]')`, 'opening the chat clears the messages badge', 10000);
   console.log('PASS: notifications and private messages are shown and counted separately');
 
-  await api(dummy, '/auth/logout', 'POST');
+  // The session is revoked under the open tab, so the next authenticated request is
+  // answered 401 and the visitor lands on the login form. Which request that is cannot
+  // be fixed: the sidebar's live-refresh poll may already be in flight. In the run that
+  // first failed here (integration-1790759494435) the logout's answer and two 401s from
+  // those polls arrived in the same millisecond, the tab had already been sent to
+  // /login, and the composer this step meant to type into was gone — while the run
+  // before it had no poll 401 at all and passed. So the send is attempted and reported,
+  // and what is asserted is the contract both paths share: a 401 puts the reader in
+  // front of the login form.
   await fill(dummy, 'textarea[aria-label="Message"]', 'This unauthorized message must not be sent');
-  await evaluate(dummy, `document.querySelector('[aria-label="Send message"]').click()`);
+  await api(dummy, '/auth/logout', 'POST');
+  const endedBy = await evaluate(dummy, `(() => {
+    const send = document.querySelector('[aria-label="Send message"]');
+    if (!send) return 'a poll that was already in flight';
+    send.click();
+    return 'the send button';
+  })()`);
+  if (endedBy !== 'the send button') console.log(`NOTE: the session ended via ${endedBy}, so the 401 reached the login form before this step could send`);
   await until(dummy, `location.pathname === '/login' && !!document.querySelector('input[name="identifier"]')`, 'expired session redirects to login');
   await fill(dummy, 'input[name="identifier"]', 'dummy@example.com');
   await fill(dummy, 'input[name="password"]', 'DummyUser123!');
