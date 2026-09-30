@@ -22,9 +22,15 @@ export function useBackend() {
   return value;
 }
 
+// The routes that exist for someone who cannot sign in. They must not be wrapped in
+// the authenticated shell: the provider's own `/users/me` would answer 401 and bounce
+// them to /login before they could be used, which is the one visitor a reset exists
+// for.
+const PUBLIC_ROUTES = ['/login', '/forgot', '/reset'];
+
 export default function BackendProvider({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
-  if (pathname === '/login') return <>{children}</>;
+  if (PUBLIC_ROUTES.includes(pathname)) return <>{children}</>;
   return <AuthenticatedBackend>{children}</AuthenticatedBackend>;
 }
 
