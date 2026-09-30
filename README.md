@@ -122,13 +122,18 @@ They are documented in `DEPLOYMENT.md`.
 cd backend  && go build ./... && go vet ./... && go test ./...
 cd frontend && npm ci && npm run lint && npx tsc --noEmit && npm run build
 cd frontend && npm run test:integration
+node scripts/pin-base-images.mjs
 ```
 
 The last command builds temporary backend and frontend servers, seeds an isolated database
 under `backend/tmp`, and drives headless Chrome through the real UI; it needs Chrome
-installed (`CHROME_PATH` overrides the location). `docker compose config` and
+installed (`CHROME_PATH` overrides the location, and it must be set on Linux — the built-in
+fallback is a Windows path). `docker compose config` and
 `docker compose build` are the container checks, and `npm audit` / `govulncheck ./...` cover
-dependency advisories. The first five commands are what CI runs on every push — see
+dependency advisories. `node scripts/pin-base-images.mjs` asks a different question — whether the
+base-image digests the Dockerfiles and `.gitlab-ci.yml` pin are still what their tags point at, and
+which toolchain they carry — and it reports drift without blocking. Everything except the browser
+suite runs in CI on every push — see
 `.gitlab-ci.yml` (this repository's origin is the school's GitLab) and `.github/workflows/ci.yml`.
 `DEPLOYMENT.md` puts them in release order. The Go suite carries the load smoke — fifty
 concurrent sockets whose broadcast is asserted, sustained throughput, and the rate limiter's
