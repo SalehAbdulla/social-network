@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"errors"
+	"fmt"
 	"image"
 	_ "image/gif"
 	_ "image/jpeg"
@@ -10,6 +11,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 
 	_ "golang.org/x/image/webp"
@@ -75,6 +77,9 @@ func (re *HandlerContext) UploadMedia(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if header.Size > maxUpload {
+		// No measured size here, unlike the image ceiling below: this gate runs before
+		// the type is sniffed, and the request ceiling is this number plus a megabyte,
+		// so the only size it could honestly report is the ceiling itself.
 		re.HandleError(w, r, backend.ErrUploadTooLarge)
 		return
 	}
@@ -90,7 +95,12 @@ func (re *HandlerContext) UploadMedia(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if strings.HasPrefix(mime, "image/") && header.Size > maxImageUpload {
-		re.HandleError(w, r, backend.ErrImageTooLarge)
+		// The refusal names the file's own size as well as the ceiling, so the
+		// composer's toast reads "Image is 12.4 MB; the limit is 10 MB." rather than
+		// about a limit in the abstract. The measurement is rounded to one decimal
+		// place, which is why a file one byte over the ceiling reads as the ceiling
+		// itself; the sentence still says which file was refused.
+		re.HandleError(w, r, backend.WithDetail(backend.ErrImageTooLarge, fmt.Sprintf("Image is %s; the limit is %s.", humanBytes(header.Size), humanBytes(maxImageUpload))))
 		return
 	}
 	if _, err = file.Seek(0, io.SeekStart); err != nil {
@@ -136,6 +146,34 @@ func (re *HandlerContext) UploadMedia(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	respond(w, http.StatusCreated, map[string]string{"url": "/api/v1/media/" + id, "mediaType": strings.SplitN(mime, "/", 2)[0]})
+}
+
+// humanBytes renders a byte count the way a reader expects to see it: "68 B",
+// "1.2 KB", "12.4 MB". One decimal place above bytes, without a trailing ".0".
+//
+// The frontend has its own copy of this rule in `lib/mediaLimits.ts`; the drift
+// check in media_limits_test.go compares the *limits* the two sides enforce, not the
+// wording, because sharing the wording would mean generating one language from the
+// other.
+func humanBytes(bytes int64) string {
+	switch {
+	case bytes < 1024:
+		return strconv.FormatInt(bytes, 10) + " B"
+	case bytes < 1024*1024:
+		return oneDecimal(float64(bytes)/1024) + " KB"
+	default:
+		return oneDecimal(float64(bytes)/(1024*1024)) + " MB"
+	}
+}
+
+// oneDecimal formats to one decimal place and drops a trailing ".0", so a limit of
+// exactly ten megabytes reads as "10 MB" rather than "10.0 MB".
+func oneDecimal(value float64) string {
+	text := strconv.FormatFloat(value, 'f', 1, 64)
+	if strings.HasSuffix(text, ".0") {
+		return strings.TrimSuffix(text, ".0")
+	}
+	return text
 }
 
 func (re *HandlerContext) GetMedia(w http.ResponseWriter, r *http.Request) {
