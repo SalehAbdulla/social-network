@@ -68,8 +68,10 @@ func TestMigrationsRoundTrip(t *testing.T) {
 	assertEventColumns(t, database)
 	assertResetColumns(t, database)
 	version, dirty, err := migrations.Version()
-	if err != nil || dirty || version != 12 {
-		t.Fatalf("expected clean version 12, got %d (dirty=%v, err=%v)", version, dirty, err)
+	// Pinned rather than derived from the directory: a new migration is meant to be noticed
+	// here and its round trip confirmed, so adding one is a deliberate edit to this line.
+	if err != nil || dirty || version != 13 {
+		t.Fatalf("expected clean version 13, got %d (dirty=%v, err=%v)", version, dirty, err)
 	}
 }
 
