@@ -49,9 +49,12 @@ func (re *HandlerContext) PruneOrphanedMedia(grace time.Duration) (MediaCleanupR
 		if err := os.Remove(filepath.Join(re.App.UploadDir, id)); err == nil {
 			result.Files++
 		}
-		// A derivative is a file of its own, and its name is not a UUID, so the sweep below
-		// would treat it as something an operator put there and leave it forever. It goes with
-		// its original, here.
+		// A derivative is a file of its own, and its name is not a UUID, so without this the
+		// sweep below would treat it as something an operator put there and leave it forever.
+		// It goes with its original here rather than waiting for that sweep, which would also
+		// catch it on the next pass: a row that is already known to be unreferenced should not
+		// keep its files for another hour, and a file whose mtime was touched after the grace
+		// window would never be swept at all.
 		for _, variant := range media.Variants() {
 			if err := os.Remove(filepath.Join(re.App.UploadDir, media.FileName(id, variant))); err == nil {
 				result.Files++
