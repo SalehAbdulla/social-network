@@ -3,7 +3,7 @@
 # the same four checks that TODO.md's definition of done names, so a branch
 # cannot land on either host unverified.
 #
-# Two deliberate divergences from the GitHub workflow, both about the runner
+# Three deliberate divergences from the GitHub workflow, all about the runner
 # rather than the checks:
 #
 #   * The containers job is `allow_failure: true`. It is blocking on GitHub.
@@ -15,6 +15,10 @@
 #     — the same pins the Dockerfiles carry, refreshed together by
 #     `scripts/pin-base-images.mjs`, which rewrites both files. That script also
 #     runs here as the `base-images` job and reports when a pin has fallen behind.
+#   * The browser job is `when: manual`, not attached to every pipeline. It takes
+#     several minutes and drives a real browser, which makes it the most
+#     environment-sensitive check in this file; play it from the pipeline view (or
+#     the API) once, and wire it in permanently once its runner is known-good.
 
 default:
   interruptible: true
@@ -96,6 +100,31 @@ base-images:
   allow_failure: true
   script:
     - node scripts/pin-base-images.mjs
+
+browser:
+  stage: checks
+  # Manual and allowed to fail while it is being stabilised. It needs three things
+  # in one container: Go (the harness shells out to `go build`), a C compiler (the
+  # SQLite driver is CGO) and a Chrome binary. Go comes from the image, which also
+  # keeps it on the pinned digest this repository manages — Debian's own
+  # `golang-go` is 1.19, under the `go 1.25` directive in backend/go.mod. Node 22
+  # comes from NodeSource because Debian bookworm ships 18 and the frontend needs
+  # 22; that download is the one unpinned step here.
+  image: golang:1.26-bookworm@sha256:a688600ca24f8a4d3ca77f95b0dd40704a9fc787c826660eb7ba0b641b8b175d
+  when: manual
+  allow_failure: true
+  variables:
+    # Set explicitly rather than relying on the script's fallback list, so the
+    # override path a Linux runner depends on is the one being exercised.
+    CHROME_PATH: /usr/bin/chromium
+  before_script:
+    - apt-get update && apt-get install -y --no-install-recommends ca-certificates chromium curl gnupg
+    - curl -fsSL https://deb.nodesource.com/setup_22.x | bash -
+    - apt-get install -y --no-install-recommends nodejs
+  script:
+    - cd frontend
+    - npm ci
+    - npm run test:integration
 
 containers:
   stage: containers
