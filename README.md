@@ -40,7 +40,12 @@ typing indicators, read receipts, presence, edits and scoped deletion.
 
 **Media** — JPEG, PNG, GIF, WebP, MP4 and WebM uploads with the type sniffed from the
 bytes, images capped at 10 MB and video at 50 MB, and a collector that reclaims
-uploads once the post, comment, story or message pointing at them is gone.
+uploads once the post, comment, story or message pointing at them is gone. Every image
+that can be resized is stored three times: the original, a 480 px thumbnail and a 1600 px
+large version, which the same URL serves when asked with `?size=thumb` or `?size=large`.
+That is why a feed card downloads 46 KB where it used to download a 777 KB phone photo,
+and why an upload with no such file — a GIF that has to keep its animation, a video, a
+picture already narrower than a cap — answers those requests with the original instead.
 
 ## Stack
 
@@ -194,6 +199,14 @@ place the proxy's upgrade path is exercised at concurrency.
   reads the TypeScript module and compares them, so the browser and the server can only move
   together. It checks the numbers, not the wording, and not this document; the limit tables here and
   in `DEPLOYMENT.md` are still kept in step by review.
+- **Derivatives** are the other half of an upload. An image that can be resized is stored three
+  times — the original, a 480 px `_thumb` and a 1600 px `_large` — and one URL answers all three:
+  `GET /api/v1/media/{id}?size=thumb|large|original`, where a missing derivative (an old row, a
+  GIF, a video, a picture already narrower than the cap) is answered with the original. That
+  fallback is what lets the frontend name both candidates in `srcset` without knowing anything
+  about the file, and it is why an unknown `?size=` value is a `400` rather than another quiet
+  full-size answer. The two caps are named in `frontend/src/app/lib/mediaLimits.ts` and enforced in
+  `backend/pkg/media`, with the same drift check holding them together.
 - **Dates** go through `dateLabel` (absolute, in the visitor's locale) or `relativeLabel`
   ("3 hours ago", falling back to the absolute beyond a week, both via `Intl`). Either way the
   element is a `<time dateTime={isoTimestamp(...)} title={dateLabel(...)}>`, so the exact instant
