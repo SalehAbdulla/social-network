@@ -85,6 +85,17 @@ func (db *DB) DeleteSessionRow(token string) error {
 	return err
 }
 
+// DeleteSessionsForUser drops every session of one account. A password reset has
+// no browser of its own to keep signed in, so unlike SaveSession's rotation there
+// is no replacement row to insert — whoever reset the password signs in again.
+func (db *DB) DeleteSessionsForUser(userID string) (int64, error) {
+	result, err := db.Conn.Exec("DELETE FROM session WHERE userId = ?", userID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
+}
+
 // DeleteStaleSessions drops rows that are past their expiry, past the absolute
 // lifetime cap, or idle for longer than the idle window.
 func (db *DB) DeleteStaleSessions(now, absoluteCutoff, idleCutoff time.Time) (int64, error) {
