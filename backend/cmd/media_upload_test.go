@@ -100,10 +100,13 @@ func TestUploadEdgeCases(t *testing.T) {
 	})
 
 	t.Run("image over the 10 MB image ceiling", func(t *testing.T) {
-		oversized := append([]byte("GIF89a"), make([]byte, (10<<20)+1)...)
+		// 12 MB rather than 10 MB + 1: the message rounds to one decimal place, so a
+		// file one byte over the ceiling reads as the ceiling itself. What the case
+		// pins is that the refusal names the file that was refused, not only the rule.
+		oversized := append([]byte("GIF89a"), make([]byte, 12<<20)...)
 		status, message, _ := postMediaFixture(t, server, client, "big.gif", oversized)
-		if status != http.StatusRequestEntityTooLarge || !strings.Contains(message, "10 MB") {
-			t.Fatalf("expected a 413 naming the 10 MB image limit, got %d %q", status, message)
+		if status != http.StatusRequestEntityTooLarge || !strings.Contains(message, "12 MB") || !strings.Contains(message, "limit is 10 MB") {
+			t.Fatalf("expected a 413 naming the file's own size and the 10 MB limit, got %d %q", status, message)
 		}
 	})
 
