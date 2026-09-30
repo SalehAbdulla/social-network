@@ -1,6 +1,7 @@
 'use client';
 
 import { FormEvent, useEffect, useState } from 'react';
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import toast from 'react-hot-toast';
 import { assets } from '../../../public/assets';
@@ -113,6 +114,7 @@ const Login = () => {
           </> : <><Field name="identifier" label="Email or nickname" required /><Field name="password" label="Password" type="password" required /><label className="flex items-center gap-2 text-sm text-slate-600"><input name="rememberMe" type="checkbox" />Remember me</label></>}
           <button disabled={busy} className="w-full rounded-lg bg-blue-600 px-4 py-3 font-medium text-white hover:bg-blue-700 disabled:opacity-50">{busy ? 'Please wait...' : registering ? 'Create account' : 'Sign in'}</button>
           <button type="button" onClick={() => setRegistering(!registering)} className="w-full text-sm text-blue-600">{registering ? 'Already have an account? Sign in' : 'Need an account? Register'}</button>
+          {!registering && <Link href="/forgot" className="block text-center text-sm text-slate-500 hover:text-blue-600">Forgot your password?</Link>}
         </form>
       </div>
     </div>
