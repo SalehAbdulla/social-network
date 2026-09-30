@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
+import { existsSync } from 'node:fs';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 
@@ -8,11 +9,31 @@ const taskDir = process.env.TEST_ARTIFACT_DIR || path.resolve('../backend/tmp/br
 await mkdir(taskDir, { recursive: true });
 const browserProfile = path.join(taskDir, `profile-${Date.now()}`);
 await mkdir(browserProfile);
-const chrome = process.env.CHROME_PATH || 'C:/Program Files/Google/Chrome/Application/chrome.exe';
+// Chrome is not bundled and its executable lives in a different place on each
+// platform, so CHROME_PATH wins wherever it is set — a Linux runner has to set it
+// — and the rest are the usual install locations. Failing here, by name, beats
+// letting a nonexistent binary come back as a spawn error that reads like a
+// broken suite.
+const chrome = [
+  process.env.CHROME_PATH,
+  ...(process.platform === 'win32'
+    ? ['C:/Program Files/Google/Chrome/Application/chrome.exe']
+    : process.platform === 'darwin'
+      ? ['/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
+        '/Applications/Chromium.app/Contents/MacOS/Chromium']
+      : []),
+  '/usr/bin/google-chrome',
+  '/usr/bin/chromium',
+  '/usr/bin/chromium-browser',
+].filter(Boolean).find(candidate => existsSync(candidate));
+assert(chrome, 'No Chrome found. Set CHROME_PATH to the browser executable.');
 const browser = spawn(chrome, ['--headless=new', '--disable-gpu', '--no-first-run', '--no-default-browser-check', '--disable-background-networking', '--remote-debugging-port=0', `--user-data-dir=${browserProfile}`, 'about:blank'], { windowsHide: true, stdio: 'ignore' });
+let browserError;
+browser.on('error', error => { browserError = error; });
 const pause = ms => new Promise(resolve => setTimeout(resolve, ms));
 let port;
 for (let i = 0; i < 100; i++) {
+  if (browserError) throw browserError;
   if (browser.exitCode !== null) throw new Error(`Browser exited: ${browser.exitCode}`);
   try { port = (await readFile(path.join(browserProfile, 'DevToolsActivePort'), 'utf8')).split('\n')[0]; break; } catch { await pause(100); }
 }
@@ -128,6 +149,31 @@ async function fill(page, selector, value) {
 async function button(page, text) {
   await until(page, `[...document.querySelectorAll('button')].some(element => element.textContent.trim() === ${JSON.stringify(text)} && !element.disabled)`, `button ${text}`);
   await evaluate(page, `(() => { const button = [...document.querySelectorAll('button')].find(element => element.textContent.trim() === ${JSON.stringify(text)}); if (!button) throw new Error('Button not found: ' + ${JSON.stringify(text)}); button.click(); })()`);
+}
+// A click on a page that was just created can land before React has attached its
+// handler. The button is in the server-rendered HTML, so the click is accepted and
+// nothing happens — a 60-second stall rather than a failure with a cause. That was
+// measured, not assumed: in the run that failed here the frontend log contained no
+// request for the page the click was meant to open, so the navigation never started.
+// Clicking again while waiting for what the click should cause closes the race
+// without weakening the check, since repeating a navigation click is harmless and
+// the assertion still has to hold. Returns how many clicks it took, so a hiccup is
+// reported instead of hidden.
+async function buttonThen(page, text, expression, label, timeout = 60000) {
+  const end = Date.now() + timeout;
+  let clicks = 0;
+  while (Date.now() < end) {
+    if (await evaluate(page, expression)) return clicks;
+    try {
+      await button(page, text);
+      clicks += 1;
+    } catch {
+      break; // The button left the page, so an earlier click did land.
+    }
+    await pause(500);
+  }
+  await until(page, expression, label, Math.max(1000, end - Date.now()));
+  return clicks;
 }
 async function enter(page, shift = false) {
   await command('Input.dispatchKeyEvent', { type: 'keyDown', key: 'Enter', code: 'Enter', windowsVirtualKeyCode: 13, text: '\r', modifiers: shift ? 8 : 0 }, page);
@@ -695,8 +741,8 @@ try {
   // optional and the backend generates a handle, and the avatar, About me and the
   // visibility choice are present but skippable.
   const newcomer = await createPage(null);
-  await button(newcomer, 'Need an account? Register');
-  await until(newcomer, `!!document.querySelector('input[name="firstName"]')`, 'register form');
+  const registerClicks = await buttonThen(newcomer, 'Need an account? Register', `!!document.querySelector('input[name="firstName"]')`, 'register form');
+  if (registerClicks > 1) console.log(`NOTE: the register link took ${registerClicks} clicks; the first landed before hydration`);
   assert(await evaluate(newcomer, `!document.querySelector('input[name="nickName"]').required`), 'the nickname field must be optional');
   assert(await evaluate(newcomer, `!!document.querySelector('textarea[name="aboutMe"]') && !!document.querySelector('select[name="isPublic"]') && !!document.querySelector('input[aria-label="Add photos"]')`), 'About me, the visibility choice and the avatar picker must be on the form');
   assert(await evaluate(newcomer, `['Nickname', 'About me'].every(text => [...document.querySelectorAll('form label')].some(label => label.textContent.includes(text) && label.textContent.includes('optional')))`), 'nickname and About me must be marked optional');
@@ -718,8 +764,7 @@ try {
   // and the private choice land on the profile, and the photo is uploaded with
   // the session the signup just created.
   const optional = await createPage(null);
-  await button(optional, 'Need an account? Register');
-  await until(optional, `!!document.querySelector('input[name="firstName"]')`, 'second register form');
+  await buttonThen(optional, 'Need an account? Register', `!!document.querySelector('input[name="firstName"]')`, 'second register form');
   await fill(optional, 'input[name="firstName"]', 'Browser');
   await fill(optional, 'input[name="lastName"]', `Optional${stamp}`);
   await fill(optional, 'input[name="nickName"]', `opted_${stamp}`);
