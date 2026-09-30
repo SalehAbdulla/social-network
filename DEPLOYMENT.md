@@ -17,6 +17,24 @@ Put an HTTPS reverse proxy in front of port 4000, preserve the Host and Origin h
 | `PORT` | Listening port, default 5174 |
 | `LOG_LEVEL` | Logging verbosity |
 
+## Password reset
+
+`POST /api/v1/auth/password-reset` starts the flow and `POST /api/v1/auth/password-reset/confirm` redeems the link. The first is the only endpoint in this API that answers the same way whether or not the address exists — `202` with one sentence either way — because "no such account" is a registration oracle. Tokens are 256 random bits and the table stores only a sha256 of one, so a leaked database does not hand over working links. A link is single-use, expires after **30 minutes**, and requesting a new one invalidates the previous link. Redeeming stores the new hash and revokes **every** session the account had, so the visitor signs in again rather than being handed a session by whoever clicked the link. Requests are limited to three per address per fifteen minutes, counted for unknown addresses too: a limit that applied only to registered ones would answer the question the endpoint refuses to answer.
+
+Delivery is configured with SMTP; without a provider the endpoint answers `503` rather than accepting a request whose link will never arrive.
+
+| Backend variable | Purpose |
+| --- | --- |
+| `SMTP_HOST` | Setting it is what enables reset mail; the others are ignored without it |
+| `SMTP_PORT` | Defaults to 587 |
+| `SMTP_USERNAME` / `SMTP_PASSWORD` | Optional. When set, the server must offer AUTH or the send is refused rather than quietly downgraded to unauthenticated |
+| `SMTP_FROM` | Defaults to `no-reply@$SMTP_HOST` |
+
+STARTTLS is used whenever the server advertises it. In development (`APP_ENV` unset) the mailer writes the message to the application log instead, which is how the browser suite completes the flow — and that is precisely why production never constructs that mailer: a reset link in a log file is a working credential in a log file.
+
+Two limits are recorded rather than hidden. Delivery has been exercised against an in-process SMTP stub and against a refused connection, **not** against a real provider, so the first deployment with credentials is the real test. And the answer is uniform in status and body but not in timing — a known address writes a row and talks to a mail server, an unknown one does neither — which is left alone because padding every request with fake latency would slow everyone down to hide a weak signal.
+
+
 The frontend container listens on port 4000. Sessions are stored in the `session` table, so they survive a backend restart. A session expires after 14 days without activity or 30 days after login, whichever comes first, and is revoked by logout, by a subsequent login, or by a password change; expired rows are pruned at startup and then hourly. A password change is the one credential transition the app has — there is no role or permission system to rotate on — so `PUT /api/v1/users/me/password` verifies the current password, stores the new hash, and then rotates the session, which deletes every other session row of that account in the same transaction and hands the replacement cookie to the browser that asked. The replacement cookie is deliberately not persistent, so a remembered login has to be re-established on that browser. An account whose other browser is signed out this way loses its API access on its next request; its open WebSocket closes at that point too, because the client's session-expired handler clears the signed-in user and drops the socket. Session state is therefore shared through the database, but SQLite still serialises writers: run one backend instance and move to a server database before scaling out.
 
 Application request limits are 20 login/register attempts and 1,200 other requests per minute per direct peer. The boundary is tested rather than assumed: `backend/cmd/load_smoke_test.go` sends a full window's worth of requests and checks that the twelve-hundredth is answered and the next is refused with `Retry-After`, so the off-by-one cannot drift unnoticed. The same file loads the realtime path — fifty signed-in members connected at once, every one of which has to receive the same group broadcast, delivered in about 2 ms — and measures sustained throughput across eight workers (about 6,700 requests a second against a local SQLite, reported rather than asserted, because a wall-clock threshold fails in CI for reasons unrelated to the code). Because Next.js proxies requests, deploy additional per-client rate limiting at the public reverse proxy. Do not trust arbitrary client-supplied forwarding headers: Next.js only fills in `X-Forwarded-For` when the client did not send one, so a forged value survives and would hand an attacker a rate-limit bypass.
