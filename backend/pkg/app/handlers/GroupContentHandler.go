@@ -5,6 +5,7 @@ import (
 	"net/http"
 	backend "social-network/backend"
 	"social-network/backend/pkg/models"
+	pkgwebsocket "social-network/backend/pkg/websocket"
 	"strconv"
 	"strings"
 	"time"
@@ -202,7 +203,7 @@ func (re *HandlerContext) groupChanged(groupID int, kind string, extraUsers ...s
 	if err != nil {
 		return
 	}
-	data, _ := json.Marshal(map[string]any{"type": "group_changed", "payload": map[string]any{"groupId": groupID, "kind": kind}})
+	data, _ := json.Marshal(map[string]any{"type": pkgwebsocket.MsgTypeGroupChanged, "payload": map[string]any{"groupId": groupID, "kind": kind}})
 	recipients := make(map[string]bool)
 	for _, member := range members {
 		recipients[member.UserID] = true
