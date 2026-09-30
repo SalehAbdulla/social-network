@@ -137,19 +137,37 @@ remembered.
 
 ## Release checks
 
-`.github/workflows/ci.yml` runs this list on every push and pull request, so it doubles as the pipeline: Go `build`, `vet`, `test` and `govulncheck` for the backend; `npm ci`, `npm run lint`, `npx tsc --noEmit`, `npm run build` and a reported `npm audit` for the frontend; then `docker compose config` and `docker compose build`. By hand:
+`.github/workflows/ci.yml` runs this list on every push and pull request, so it doubles as the pipeline: Go `build`, `vet`, `test` and `govulncheck` for the backend; `npm ci`, `npm run lint`, `npx tsc --noEmit`, `npm run build` and a reported `npm audit` for the frontend; then `docker compose config` and `docker compose build`. `scripts/pin-base-images.mjs` runs there too (`base-images`) and only reports, for the reason given under base image pins below. By hand:
 
 ```sh
 cd backend  && go build ./... && go vet ./... && go test ./...
 cd frontend && npm ci && npm run lint && npx tsc --noEmit && npm run build
 cd frontend && npm run test:integration
+node scripts/pin-base-images.mjs
 ```
+
+Of the container checks, `docker compose config` has been run against this file (2026-09-30, exit 0: it renders both services, the `service_healthy` gate, the loopback-only port binding and the named volume). `docker compose build` has **not** been executed on any host so far, so the images are reviewed rather than built — run it on the first host with a working daemon, together with the clean-host pass in TODO.md.
 
 Browser tests require Chrome (`CHROME_PATH` overrides its executable path). They create an isolated database under backend/tmp and leave logs/screenshots there. They are not part of CI yet: they need a Chrome path on the runner and several minutes, which the workflow keeps separate for now.
 
 ### Dependency advisories
 
-`govulncheck ./...` reports three standard-library findings (`crypto/tls`, `net/http` in an unencrypted HTTP/2 protocol check, and `encoding/asn1` recursion), all fixed in **go1.26.6**. Both the Dockerfile base image (`golang:1.26-bookworm`) and CI install a current 1.26 patch, so rebuilding with an up-to-date toolchain clears them; pinning an older Go patch would keep them, which is why the workflow floats the patch version and CI runs `govulncheck` as a blocking step.
+`govulncheck ./...` reports three standard-library findings (`crypto/tls`, `net/http` in an unencrypted HTTP/2 protocol check, and `encoding/asn1` recursion), all fixed in **go1.26.6**. CI installs a current 1.26 patch, already clears them, and runs `govulncheck` as a blocking step, so the check is what would catch a regression.
+
+### Base image pins
+
+Every upstream image this repository builds on or runs on is pinned by tag *and* digest: `golang:1.26-bookworm@sha256:…` and `debian:bookworm-slim@sha256:…` in `backend/Dockerfile`, `node:22-bookworm-slim@sha256:…` in `frontend/Dockerfile`, and the Go, Node and Docker images in `.gitlab-ci.yml` — including the one the pin check itself runs on. The pinned digest is the multi-arch index rather than a per-architecture manifest, so one pin resolves on amd64 (CI) and on arm64 (an Apple-silicon laptop).
+
+The Dockerfiles used to float their Go patch deliberately, because a current patch is what clears the standard-library findings above. A digest freezes the patch, so the float has been replaced by a pin plus something that notices when the pin is behind:
+
+```sh
+node scripts/pin-base-images.mjs           # 0 current, 1 drift, 2 cannot resolve
+node scripts/pin-base-images.mjs --write   # rewrite the pins in place
+```
+
+It resolves each tag against Docker Hub and prints the toolchain it carries, read out of the image config, which turns "pinned at an opaque digest" into "pinned at go1.26.8 / node22.23.3 / docker27.5.1" — the version that has to be at or above the fix. A drifted pin prints both sides (`(golang1.26.8)  was (golang1.26.7)`). The `base-images` job runs the check in both CI files and only **reports**, because a new upstream patch is not a defect in the commit that notices it: refresh on that report, or monthly, whichever comes first.
+
+Two limits, stated rather than implied. The check needs Docker Hub reachable; exit code 2 means it could not resolve and nothing was changed. And the pinned digests have not yet been used by a `docker build` in this environment — there is no reachable daemon — so the pins are verified to *resolve*, which is a weaker claim than an image that builds.
 
 `npm audit` is clean — 0 vulnerabilities — since the framework bump of 2026-09-28, which moved Next.js from 16.2.12 to **16.3.6** and carried `postcss` and `sharp` with it; the two highs it still showed (`js-yaml`, `nanoid`) were cleared by an in-range `npm audit fix`. It had previously reported four high and one critical, all inside Next.js tooling, with no fix available inside the pinned range. The bump was verified the same day with the full browser suite (24 steps, no runtime exceptions) and a production build, and CI now enforces `npm audit --audit-level=high` rather than only reporting it. Both Next.js packages stay pinned exactly, as they were.
 
