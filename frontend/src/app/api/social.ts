@@ -1,5 +1,6 @@
 import axios from 'axios';
 import api from './axios';
+import { MAX_IMAGE_BYTES, MAX_VIDEO_BYTES, isImageType, isVideoType, oversizeMessage } from '../lib/mediaLimits';
 
 export interface SocialUser {
   userId: string; 
@@ -136,11 +137,19 @@ export async function resetPassword(token: string, password: string, confirmPass
   return result.message;
 }
 
+/**
+ * Uploads one file and answers with its media URL and the type the server stored.
+ *
+ * The checks here repeat what the picker already did, for the paths that do not go
+ * through it — and they answer with the file's own size rather than with the
+ * ceiling alone, so a refusal names the thing the reader chose. The server checks
+ * the same limits again from the bytes themselves; this is the sooner, friendlier
+ * half of a rule that is enforced there.
+ */
 export async function upload(file: File): Promise<{ url: string; mediaType: 'image' | 'video' }> {
-	if (!file.size) throw new Error('The selected file is empty.');
-	if (!['image/jpeg','image/png','image/gif','image/webp','video/mp4','video/webm'].includes(file.type)) throw new Error('Choose a JPEG, PNG, GIF, WebP, MP4 or WebM file.');
-  const limit = file.type.startsWith('image/') ? 10 : 50;
-  if (file.size > limit * 1024 * 1024) throw new Error(`Files must be smaller than ${limit} MB.`);
+  if (!file.size) throw new Error('The selected file is empty.');
+  if (!isImageType(file.type) && !isVideoType(file.type)) throw new Error('Choose a JPEG, PNG, GIF, WebP, MP4 or WebM file.');
+  if (file.size > (isVideoType(file.type) ? MAX_VIDEO_BYTES : MAX_IMAGE_BYTES)) throw new Error(oversizeMessage(file));
   const form = new FormData();
   form.append('file', file);
   return request('/media', 'POST', form);
