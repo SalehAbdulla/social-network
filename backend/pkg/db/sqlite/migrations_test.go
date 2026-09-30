@@ -49,11 +49,12 @@ func TestMigrationsRoundTrip(t *testing.T) {
 	assertSessionColumns(t, database, true)
 	assertCommentColumns(t, database)
 	assertEventColumns(t, database)
+	assertResetColumns(t, database)
 
 	if err := migrations.Down(); err != nil {
 		t.Fatalf("down: %v", err)
 	}
-	for _, table := range []string{"user", "session", "post", "comment", "message", "notification", "media", "follow", "connection", "story", "socialGroup", "groupContent"} {
+	for _, table := range []string{"user", "session", "post", "comment", "message", "notification", "media", "follow", "connection", "story", "socialGroup", "groupContent", "passwordReset"} {
 		if tableExists(t, database, table) {
 			t.Fatalf("table %q survived a full down migration", table)
 		}
@@ -65,9 +66,10 @@ func TestMigrationsRoundTrip(t *testing.T) {
 	assertSessionColumns(t, database, true)
 	assertCommentColumns(t, database)
 	assertEventColumns(t, database)
+	assertResetColumns(t, database)
 	version, dirty, err := migrations.Version()
-	if err != nil || dirty || version != 11 {
-		t.Fatalf("expected clean version 11, got %d (dirty=%v, err=%v)", version, dirty, err)
+	if err != nil || dirty || version != 12 {
+		t.Fatalf("expected clean version 12, got %d (dirty=%v, err=%v)", version, dirty, err)
 	}
 }
 
@@ -170,6 +172,22 @@ func assertEventColumns(t *testing.T, database *sql.DB) {
 	}
 }
 
+// assertResetColumns guards the table 000012 adds. `usedAt` has to be nullable —
+// a NOT NULL default would make every token look already spent — and the hash is
+// the only place the token is kept, so the column must exist under that name.
+func assertResetColumns(t *testing.T, database *sql.DB) {
+	t.Helper()
+	columns := tableColumns(t, database, "passwordReset")
+	for _, name := range []string{"resetId", "userId", "tokenHash", "expiresAt", "usedAt", "createdAt"} {
+		if !columns[name] {
+			t.Fatalf("passwordReset is missing %q after the migration", name)
+		}
+	}
+	if nullable, err := columnIsNullable(database, "passwordReset", "usedAt"); err == nil && !nullable {
+		t.Fatal("passwordReset.usedAt must be nullable, or every token reads as spent")
+	}
+}
+
 func tableColumns(t *testing.T, database *sql.DB, table string) map[string]bool {
 	t.Helper()
 	columns := map[string]bool{}
@@ -192,6 +210,33 @@ func tableColumns(t *testing.T, database *sql.DB, table string) map[string]bool 
 		t.Fatal(err)
 	}
 	return columns
+}
+
+// columnIsNullable reads the notnull flag out of PRAGMA table_info for one column,
+// because "the column exists" and "the column accepts NULL" are different facts
+// and only the second one makes a token spendable.
+func columnIsNullable(database *sql.DB, table, column string) (bool, error) {
+	rows, err := database.Query("PRAGMA table_info(" + table + ")")
+	if err != nil {
+		return false, err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var cid int
+		var name, columnType string
+		var notNull, primaryKey int
+		var defaultValue any
+		if err := rows.Scan(&cid, &name, &columnType, &notNull, &defaultValue, &primaryKey); err != nil {
+			return false, err
+		}
+		if name == column {
+			return notNull == 0, nil
+		}
+	}
+	if err := rows.Err(); err != nil {
+		return false, err
+	}
+	return false, sql.ErrNoRows
 }
 
 func tableExists(t *testing.T, database *sql.DB, table string) bool {
