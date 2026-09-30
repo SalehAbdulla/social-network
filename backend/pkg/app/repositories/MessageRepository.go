@@ -92,11 +92,12 @@ func (db *DB) SaveMessage(senderID string, recipientID string, textMessage strin
 	return msg, nil
 }
 
-func (db *DB) GetChatUsers(currentUserID string) ([]models.ChatUser, error) {
-	// Threads whose participants no longer satisfy the chat rule are hidden, not
-	// deleted: the rows stay in `message` and reappear as soon as either user
-	// follows the other again.
-	query := `
+// chatUsersQuery lists the conversations the viewer can still use. Threads whose
+// participants no longer satisfy the chat rule are hidden, not deleted: the rows stay
+// in `message` and reappear as soon as either user follows the other again. It is a
+// constant so the plan test (query_plan_test.go) explains this text rather than a
+// paraphrase of it.
+const chatUsersQuery = `
         SELECT u.userId,u.nickName,u.firstName,u.lastName,COALESCE(u.avatar,''),MAX(m.createdAt) AS lastMessageTime
         FROM user u JOIN message m ON
             (m.senderId=u.userId AND m.recipientId=?) OR (m.senderId=? AND m.recipientId=u.userId)
@@ -109,7 +110,8 @@ func (db *DB) GetChatUsers(currentUserID string) ([]models.ChatUser, error) {
         ORDER BY lastMessageTime DESC,u.nickName ASC
     `
 
-	rows, err := db.Conn.Query(query, currentUserID, currentUserID, currentUserID, currentUserID, currentUserID, currentUserID)
+func (db *DB) GetChatUsers(currentUserID string) ([]models.ChatUser, error) {
+	rows, err := db.Conn.Query(chatUsersQuery, currentUserID, currentUserID, currentUserID, currentUserID, currentUserID, currentUserID)
 	if err != nil {
 		return nil, realtimeforum.ErrInternal
 	}
