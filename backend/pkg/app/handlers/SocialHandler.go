@@ -14,6 +14,7 @@ import (
 	"social-network/backend/pkg/models"
 	"social-network/backend/pkg/payload"
 	"social-network/backend/pkg/payload/posts"
+	pkgwebsocket "social-network/backend/pkg/websocket"
 )
 
 func respond(w http.ResponseWriter, status int, data any) {
@@ -200,7 +201,7 @@ func (re *HandlerContext) Follow(w http.ResponseWriter, r *http.Request) {
 			re.HandleError(w, r, err)
 			return
 		}
-		re.chatEvent(actor, target, "social_changed", map[string]string{"actorId": actor, "targetId": target})
+		re.chatEvent(actor, target, pkgwebsocket.MsgTypeSocialChanged, map[string]string{"actorId": actor, "targetId": target})
 		respond(w, http.StatusOK, nil)
 		return
 	}
@@ -214,7 +215,7 @@ func (re *HandlerContext) Follow(w http.ResponseWriter, r *http.Request) {
 		kind = "follow_request"
 	}
 	re.socialNotification(actor, target, kind)
-	re.chatEvent(actor, target, "social_changed", map[string]string{"actorId": actor, "targetId": target})
+	re.chatEvent(actor, target, pkgwebsocket.MsgTypeSocialChanged, map[string]string{"actorId": actor, "targetId": target})
 	respond(w, http.StatusOK, map[string]string{"status": status})
 }
 
@@ -237,7 +238,7 @@ func (re *HandlerContext) DecideFollowRequest(w http.ResponseWriter, r *http.Req
 		re.HandleError(w, r, err)
 		return
 	}
-	re.chatEvent(recipient, requester, "social_changed", map[string]string{"actorId": recipient, "targetId": requester})
+	re.chatEvent(recipient, requester, pkgwebsocket.MsgTypeSocialChanged, map[string]string{"actorId": recipient, "targetId": requester})
 	respond(w, http.StatusOK, nil)
 }
 
