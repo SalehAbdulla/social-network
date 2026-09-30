@@ -3,11 +3,12 @@
 Legend: `[x]` verified working on `main` @ `cb91348` unless an item notes local verification · `[ ]` open · **P0** blocks a mandatory
 spec line · **P1** required before release · **P2** polish · **P3** nice to have.
 
-Items closed on 2026-09-28 after that revision carry their own evidence line. The backend ones
-are locally verified with `go build ./...`, `go vet ./...` and `go test ./...`; the frontend
-ones with `npm run lint` (0 errors), `npx tsc --noEmit` and `npm run build`. They are
-uncommitted until reviewed, and the browser smoke suite was not run — see the session note at
-the end of this file.
+Items closed after that revision carry their own evidence line. The backend ones are locally verified
+with `go build ./...`, `go vet ./...` and `go test ./...`; the frontend ones with `npm run lint`
+(0 errors), `npx tsc --noEmit` and `npm run build`, and additionally with the browser suite
+(`npm run test:integration`), which is runnable here through the cached Chrome for Testing build. The
+2026-09-28/30 sessions are **committed and pushed** to `origin/main` as per-file commits, so `git log`
+and the session notes at the end of this file are the two records — the notes are newest-first.
 
 Baseline checks: `go test ./...` passes, `go vet ./...` is clean, both Docker images build
 through `compose.yaml`, and migrations `000001`–`000010` are applied at boot by
@@ -839,7 +840,18 @@ Reference: `GroupHandler.go`, `GroupManagementHandler.go`, `GroupContentHandler.
   protocol. On GitLab that is one job on `node:22-bookworm` with the Go toolchain and `chromium`
   installed and `CHROME_PATH` pointed at it — worth adding as an opt-in job (`when: manual`) first
   so a flaky browser run cannot redden every pipeline. Still open: running it needs a runner, and
-  it was not attempted blind.
+  it was not attempted blind. Updated 2026-09-30: the job is now **written in both CI files** and
+  opt-in — `when: manual` on GitLab, `workflow_dispatch`-only on GitHub — so it cannot redden a pipeline
+  while it is stabilised. Two corrections to the plan above came out of writing it: the GitLab job runs
+  on `golang:1.26-bookworm` rather than `node:22-bookworm`, because Debian's own `golang-go` is 1.19 and
+  under the `go 1.25` directive in `backend/go.mod` while the pinned Go image keeps Go on a digest this
+  repository manages, and Node 22 comes from NodeSource instead (the one unpinned download in that file,
+  called out in the job comment). The third requirement is now named too: a C compiler, because the
+  SQLite driver is CGO. Writing it also surfaced a portability bug nobody had hit — `integration-smoke.mjs`
+  fell back to a hardcoded Windows Chrome path, so a Linux runner without `CHROME_PATH` died under an
+  "Unhandled 'error' event" ENOENT banner; it now probes the usual locations per platform and fails by
+  name. **Still open:** the job has never run on a runner, so its runner half is written and reviewed
+  rather than verified, and it should be wired in permanently only once a run is green.
 - [x] **P2** Mirror `.github/workflows/ci.yml` for the school's GitLab if that is where the
   project is graded. Closed 2026-09-28, and it turned out to matter more than a mirror:
   `git remote -v` has exactly one remote, `https://learn.reboot01.com/git/saabdulla/social-network.git`,
@@ -869,7 +881,14 @@ Reference: `GroupHandler.go`, `GroupManagementHandler.go`, `GroupContentHandler.
   the Docker-on-a-volume equivalent — with the caveat that the Docker half is reviewed but was
   not executed, because the environment had no Docker daemon.
 - [ ] **P2** Verify `docker compose config` and a full `docker compose up --build` on a clean
-  host; record the first-run steps and the expected log lines in `DEPLOYMENT.md`.
+  host; record the first-run steps and the expected log lines in `DEPLOYMENT.md`. Half closed
+  2026-09-30: `docker compose config` **has now been run** and exits 0 against this file, rendering both
+  services, the `service_healthy` gate, the loopback-only port binding and the named volume (a Compose
+  v5.1.4 client answers this without a daemon, which is why it was possible here). The other half is
+  untouched: `docker compose build` / `up --build` has never run anywhere, because the local engine
+  answers HTTP 500 on every API call — Docker Desktop is running but its VM is not serving — so the
+  healthchecks and the Dockerfiles remain reviewed rather than executed. `DEPLOYMENT.md` now separates
+  the two the same way.
 - [x] **P2** Add health/readiness endpoints and container healthchecks (`compose.yaml`
   currently relied only on `depends_on`). Closed 2026-09-28: `GET /api/v1/health` is liveness and
   never touches the database; `GET /api/v1/ready` pings SQLite with a two-second ceiling and answers
@@ -899,7 +918,24 @@ Reference: `GroupHandler.go`, `GroupManagementHandler.go`, `GroupContentHandler.
   with exactly that message, `BACKEND_URL='not a url'` fails as malformed, `http://backend:5174/`
   fails on the slash, and the real build passes with `exit=0` once the variable is back.
   `frontend/README.md` no longer claims a silent default and `DEPLOYMENT.md` records the guard.
-- [ ] **P2** Pin image digests and Go/Node patch versions for reproducible builds.
+- [x] **P2** Pin image digests and Go/Node patch versions for reproducible builds. Closed 2026-09-30
+  by resolving the conflict the item contains rather than obeying it: the Dockerfiles floated the Go
+  patch *because* a current patch clears govulncheck's standard-library findings, so a digest pin
+  freezes exactly that. The float is therefore replaced by a pin **plus** `scripts/pin-base-images.mjs`
+  (`--check` default, `--write` to refresh), which resolves each tag against Docker Hub, rewrites the
+  reference, and reads the toolchain out of the image config — so a pin is not an opaque hash, and a
+  drift prints both sides. Eleven references are pinned: both Dockerfiles and `.gitlab-ci.yml`
+  (including the image the check itself runs on). The pinned digest is the **multi-arch index**, so one
+  pin serves amd64 and arm64. CI's Go/Node specifiers stay floating, on the reasoning that CI is not the
+  artifact that ships, and the new `base-images` job in both pipelines reports drift without blocking.
+  Verified against the live registry: 9 references unpinned → exit 1; `--write` → exit 0; check re-run
+  twice with the tree unchanged; drift forced with the real `golang:1.26.7-bookworm` digest, reported as
+  `(golang1.26.8)  was (golang1.26.7)` and exit 1; a bogus tag exit 2 with nothing written. The bug the
+  first run exposed is fixed: the pattern compared bare hex against `sha256:<hex>`, so a correct pin read
+  as drifted. **Limits, recorded in `DEPLOYMENT.md`:** the check needs Docker Hub (exit 2, and it now
+  names a 429 rate limit explicitly rather than reporting it as a failed resolution), and the pins are
+  verified to *resolve*, not to build — no daemon in this environment. The `docker:27` pin was last
+  confirmed before the rate limit hit, so re-run the check from a clear address.
 - [x] **P2** Ship a sample reverse-proxy config (Caddy or nginx) showing Host/Origin
   preservation and the WebSocket upgrade for `/ws`. Closed 2026-09-28: `deploy/Caddyfile.example`
   terminates TLS, forwards to the loopback-bound frontend, and shows what the proxy has to do that
@@ -1266,6 +1302,48 @@ component classes) are the ones to build on.
   with the exact change list in that section. `canMessage` is still only a type in
   `frontend/src/app/api/social.ts`, so nothing reads the flag yet.
 - No P0 items are open. What is left is the P1/P2/P3 list above.
+
+Changed in the browser-CI session (2026-09-30), for review:
+`frontend/scripts/integration-smoke.mjs`, `.github/workflows/ci.yml`, `.gitlab-ci.yml`, `README.md`,
+`DEPLOYMENT.md`, `frontend/README.md`, `TODO.md`.
+
+The browser-suite-in-CI item got its writable half: both CI files now carry the job **opt-in** —
+`when: manual` in GitLab, `workflow_dispatch`-only on GitHub — with the three things it needs in one
+container named in the job comments (Go, because the harness shells out to `go build`; a C compiler,
+because the SQLite driver is CGO; and a Chrome binary). Writing it turned up a portability bug the item
+implied but nobody had hit: `integration-smoke.mjs` fell back to a hardcoded **Windows** Chrome path, so
+a Linux runner without `CHROME_PATH` died with `spawn … ENOENT` under an "Unhandled 'error' event"
+banner. It now probes the usual install locations per platform and fails by name, verified both ways by
+running the `HEAD` version of the script against the same bogus path. The job itself is still
+**unverified** — it has never run on a runner — so that item stays open, and `DEPLOYMENT.md` says so
+where a deployer will read it.
+
+Changed in the base-image-pin session (2026-09-30), for review:
+`scripts/pin-base-images.mjs` (new), `backend/Dockerfile`, `frontend/Dockerfile`, `.gitlab-ci.yml`,
+`.github/workflows/ci.yml`, `DEPLOYMENT.md`, `README.md`, `TODO.md`.
+
+One Deployment P2 closed by resolving the conflict its own item contains instead of obeying it. The
+Dockerfiles floated the Go patch on purpose — a current patch is what clears govulncheck's
+standard-library findings — so pinning a digest freezes precisely that. The pin therefore arrived with a
+check that notices when it is behind: `scripts/pin-base-images.mjs` resolves each tag against Docker Hub,
+rewrites the pin with `--write`, and reads the toolchain out of the image config, so "pinned at an opaque
+digest" becomes "pinned at go1.26.8 / node22.23.3 / docker27.5.1". Eleven references across both
+Dockerfiles and `.gitlab-ci.yml` now carry the multi-arch index digest, so one pin serves amd64 and
+arm64; the CI toolchain keeps floating, because CI is not the artifact that ships. The check runs in both
+pipelines as `base-images` and only reports — a new upstream patch is not a defect in the commit that
+notices it.
+Evidence, all against the live registry: exit 1 while unpinned, exit 0 after `--write`, the check passing
+twice more with the tree unchanged, drift forced with the real `golang:1.26.7-bookworm` digest (which
+reported "(golang1.26.8)  was (golang1.26.7)" and exited 1), and a bogus tag exiting 2 without touching a
+file. The script's first run caught its own bug: the pattern captured the pin as bare hex where the
+registry reports `sha256:<hex>`, so a correctly pinned file read as drifted and the pinned toolchain could
+not be looked up.
+Two limits are recorded rather than implied: the check needs Docker Hub reachable, and the pins are
+verified to *resolve* rather than to build, because there is still no daemon here. Mid-session Docker Hub
+also started answering **429** to anonymous pulls, which is why the check now names a rate limit instead
+of reporting it as a resolution failure — and why the last confirmation of the `docker:27` pin is worth
+repeating from a clear address.
+
 
 Changed in the build-guard and stories-decision session (2026-09-28), for review:
 `frontend/next.config.ts`, `.github/workflows/ci.yml`, `.gitlab-ci.yml`, `frontend/README.md`,
