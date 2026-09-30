@@ -5,6 +5,7 @@ import toast from 'react-hot-toast';
 import { type Story, errorMessage, request, upload } from '../api/social';
 import { useDialogFocus } from '../lib/useDialogFocus';
 import { usePagedList } from '../lib/usePagedList';
+import { mediaImageProps } from '../lib/mediaVariants';
 import { useBackend } from './BackendProvider';
 import LoadMore from './LoadMore';
 
@@ -90,7 +91,7 @@ function StoryCard({ story, currentUserId, onView, onDelete }: { story: Story; c
     try { await onDelete(); toast.success('Story deleted'); } catch (error) { toast.error(errorMessage(error)); } finally { setDeleting(false); setMenuOpen(false); }
   }
   return <div onClick={() => onView(story)} className="relative aspect-[3/4] h-40 min-w-30 shrink-0 cursor-pointer overflow-hidden rounded-lg bg-linear-to-b from-blue-600 to-teal-700 text-white shadow transition hover:shadow-lg active:scale-95" style={{ backgroundColor: story.backgroundColor }}>
-    {story.mediaType === 'image' && <img src={story.mediaUrl} alt="Story preview" className="absolute inset-0 h-full w-full object-cover opacity-75 transition duration-500 hover:scale-110" />}
+    {story.mediaType === 'image' && <img {...mediaImageProps(story.mediaUrl, '180px')} alt="Story preview" className="absolute inset-0 h-full w-full object-cover opacity-75 transition duration-500 hover:scale-110" />}
     {story.mediaType === 'video' && <video src={story.mediaUrl} muted className="absolute inset-0 h-full w-full object-cover opacity-75" />}
     <div className="absolute inset-0 bg-black/15" />
     {story.avatar ? <img src={story.avatar} alt="" className="absolute left-3 top-3 z-10 size-8 rounded-full border border-white object-cover shadow" /> : <span className="absolute left-3 top-3 z-10 flex size-8 items-center justify-center rounded-full bg-white/25 text-xs font-semibold">{story.nickname.slice(0, 1).toUpperCase()}</span>}
