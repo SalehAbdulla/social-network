@@ -35,6 +35,13 @@ type HandlerContext struct {
 	// LoginLimiter locks an account after repeated failed sign-ins. Tests swap it
 	// for a short window; a nil limiter simply disables the check.
 	LoginLimiter *middleware.AttemptLimiter
+	// ResetLimiter counts reset requests per address, for the same reason: the
+	// endpoint must not become a registration oracle by answering faster, or
+	// differently, for an address that has no account.
+	ResetLimiter *middleware.AttemptLimiter
+	// PasswordResetService is set where the mailer is chosen (cmd/main.go); nil
+	// means this build has no way to deliver a link, and the handlers answer 503.
+	PasswordResetService *service.PasswordResetService
 }
 
 func NewHandlerContext(a *config.AppConfig,
@@ -53,6 +60,7 @@ func NewHandlerContext(a *config.AppConfig,
 		MessageService:      ms,
 		NotificationService: ns,
 		LoginLimiter:        middleware.NewAttemptLimiter(loginMaxFailures, loginFailureWindow),
+		ResetLimiter:        middleware.NewAttemptLimiter(resetRequestsPerWindow, resetRequestWindow),
 	}
 }
 
