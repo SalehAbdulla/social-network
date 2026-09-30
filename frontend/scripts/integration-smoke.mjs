@@ -175,6 +175,22 @@ async function buttonThen(page, text, expression, label, timeout = 60000) {
   await until(page, expression, label, Math.max(1000, end - Date.now()));
   return clicks;
 }
+// The development mailer writes reset links into the backend's log, which is the
+// only place a browser test can read one: the API never returns the token. The line
+// can trail the HTTP response by a moment because the harness pipes the backend's
+// stdout into that file, hence the polling rather than a single read.
+async function resetTokenFromLog(logPath, timeout = 10000) {
+  const deadline = Date.now() + timeout;
+  while (Date.now() < deadline) {
+    try {
+      const text = await readFile(logPath, 'utf8');
+      const matches = [...text.matchAll(/\/reset\?token=([A-Za-z0-9_-]{20,})/g)];
+      if (matches.length) return matches[matches.length - 1][1];
+    } catch { /* The log may not exist yet. */ }
+    await pause(200);
+  }
+  throw new Error(`No reset link reached ${logPath}`);
+}
 async function enter(page, shift = false) {
   await command('Input.dispatchKeyEvent', { type: 'keyDown', key: 'Enter', code: 'Enter', windowsVirtualKeyCode: 13, text: '\r', modifiers: shift ? 8 : 0 }, page);
   await command('Input.dispatchKeyEvent', { type: 'keyUp', key: 'Enter', code: 'Enter', windowsVirtualKeyCode: 13, modifiers: shift ? 8 : 0 }, page);
@@ -791,6 +807,48 @@ try {
   assert(/^\/api\/v1\/media\//.test(optionalProfile.avatar), `the signup photo was not saved: ${JSON.stringify(optionalProfile.avatar)}`);
   assert(await evaluate(optional, `(async () => (await fetch(${JSON.stringify(optionalProfile.avatar)})).ok)()`), 'the signup photo is served');
   console.log('PASS: the optional signup fields reach the profile and the avatar uploads after signup');
+  // Password reset is the one flow that leaves the application, and there is no
+  // inbox here. The backend's development mailer writes the message into its own
+  // log, so the link is read from there — the only way a browser test can hold a
+  // token the server never exposes. The account is the one just created, which
+  // leaves the seeded account that later steps depend on untouched.
+  const resetEmail = `browser-optional-${stamp}@example.com`;
+  // These pages are reached the way /login is reached — Page.navigate directly —
+  // because the shared navigate helper waits for the signed-in shell's sidebar, and
+  // a visitor who cannot sign in has no shell.
+  const forgot = await createPage(null);
+  await command('Page.navigate', { url: base + '/forgot' }, forgot);
+  await until(forgot, `location.pathname === '/forgot' && !!document.querySelector('input[name="email"]')`, 'the forgot form');
+  await fill(forgot, 'input[name="email"]', resetEmail);
+  await button(forgot, 'Send reset link');
+  await until(forgot, `!!document.querySelector('[role="status"]')`, 'the neutral reset answer');
+  const neutral = await evaluate(forgot, `document.querySelector('[role="status"]').innerText`);
+  assert(/If that address has an account/.test(neutral), `the page rewrote the answer: ${neutral}`);
+
+  const resetToken = await resetTokenFromLog(path.join(taskDir, 'backend.log'));
+  const resetPage = await createPage(null);
+  await command('Page.navigate', { url: `${base}/reset?token=${encodeURIComponent(resetToken)}` }, resetPage);
+  await until(resetPage, `location.pathname === '/reset' && !!document.querySelector('input[name="password"]')`, 'the reset form');
+  await fill(resetPage, 'input[name="password"]', 'ResetByLink123!');
+  await fill(resetPage, 'input[name="confirmPassword"]', 'ResetByLink123!');
+  await button(resetPage, 'Set new password');
+  await until(resetPage, `location.pathname === '/login'`, 'the reset sends the visitor to sign in', 15000);
+
+  // The account that was signed in when the reset happened is signed out: a reset
+  // ends every session it had, which is the whole point of the flow.
+  const revoked = await evaluate(optional, `(async () => (await fetch('/api/v1/users/me')).status)()`);
+  assert.equal(revoked, 401, 'a reset must end the sessions the account had');
+
+  const afterReset = await createPage(null);
+  await command('Page.navigate', { url: base + '/login' }, afterReset);
+  await until(afterReset, `!!document.querySelector('input[name="identifier"]')`, 'the sign-in form after a reset');
+  await fill(afterReset, 'input[name="identifier"]', resetEmail);
+  await fill(afterReset, 'input[name="password"]', 'ResetByLink123!');
+  await button(afterReset, 'Sign in');
+  await until(afterReset, `location.pathname === '/'`, 'signing in with the password the link set', 15000);
+  console.log('PASS: the reset link from the mail log sets a new password and signs in');
+
+
 
   await navigate(dummy, '/');
   await until(dummy, `!!document.querySelector('article')`, 'feed ready for scroll');
