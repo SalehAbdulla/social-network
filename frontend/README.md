@@ -99,7 +99,9 @@ Open **http://localhost:4000**, register, and sign in. Anonymous visits and expi
 
 Messages contains People and Groups conversation tabs. Each group opens inside the inbox with Chat, Posts, Events, Media, and Group info tabs. Events appear as cards in the group chat with Going / Not going responses. Owners can update the group name, description and photo, approve requests, remove members, transfer ownership, or delete the group. Members can invite people, leave, and manage their own posts, photos, comments, messages and events. Owners can also delete group content.
 
-Post titles are optional. Images are checked before upload and previewed in bounded square frames without stretching. JPEG, PNG, GIF and WebP are accepted, up to four images and 10 MB per image; PDFs are rejected. Lists grow as you scroll: `LoadMore` presses its own button for you when the end of the list comes into view, one page is in flight at a time, and a throttle window keeps a fast scroll from queueing repeat requests. Chat typing and live refreshes are throttled.
+Post titles are optional. Images are checked before upload and previewed in bounded square frames without stretching; each selected tile also reports the file's own size and, for an image, the canvas measured while checking it, so a rejection is never the first mention of either. JPEG, PNG, GIF and WebP are accepted, up to four images and 10 MB per image; PDFs are rejected. The ceilings are not typed here: they come from `src/app/lib/mediaLimits.ts`, which the backend's `media_limits_test.go` compares against the constants the server enforces, so the two can only change together.
+
+The composer explains itself rather than disabling its button: it names what a publish is still missing ("Add 4 more characters (at least 10).", "Choose at least one follower.") beside the publish button, attaches that reason to the field with `aria-describedby`, and moves the caret there when a publish is refused. The action row is sticky, and Ctrl/Cmd + Enter publishes from the textarea. An unsent post is saved to `localStorage` under `social:post-draft` — keyed to a new post only, cleared when one is published or when Discard is pressed — and what comes back after a refresh is the text and the audience, never the photos, which the notice on screen says. Lists grow as you scroll: `LoadMore` presses its own button for you when the end of the list comes into view, one page is in flight at a time, and a throttle window keeps a fast scroll from queueing repeat requests. Chat typing and live refreshes are throttled.
 
 ## Docker
 
@@ -128,6 +130,11 @@ the modules nothing imports, skipping Next.js route files, which are entry point
 convention. Spot-checking for dead files missed them twice here — a component whose
 only importer is itself dead reads as "used" if the check is done by name — so it is
 worth running after deleting anything.
+
+One check on this side runs from the other one: `cd backend && go test ./pkg/app/handlers/`
+reads `src/app/lib/mediaLimits.ts` and fails by name when its ceilings disagree with the
+constants the server enforces, so raising a limit means changing both files in one commit.
+It is part of `go test ./...`, which the release list runs anyway.
 
 The integration command builds and starts temporary backend and frontend servers
 on available ports, seeds a separate database, and drives two headless Chrome
