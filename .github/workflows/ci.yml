@@ -94,6 +94,21 @@ jobs:
         # are imported but never called are listed and do not fail the job.
         run: govulncheck ./...
 
+  base-images:
+    name: Base-image pins current
+    runs-on: ubuntu-latest
+    # Reports rather than blocks: a new upstream patch release is not a defect in
+    # the commit that notices it. A drift line here means "run the script with
+    # --write and commit the pins". Needs no Docker, only Node and network.
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+      - name: Check base-image pins
+        run: node scripts/pin-base-images.mjs
+
   containers:
     name: Docker Compose build
     runs-on: ubuntu-latest
