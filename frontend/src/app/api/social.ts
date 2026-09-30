@@ -112,6 +112,30 @@ export async function changePassword(currentPassword: string, newPassword: strin
   await request('/users/me/password', 'PUT', { currentPassword, newPassword, confirmPassword });
 }
 
+/** The message both reset endpoints answer with, so the copy lives on the server. */
+export interface ResetMessage { message: string }
+
+/*
+ * Asks the backend to send a reset link. A resolved promise does *not* mean the
+ * address has an account: the answer is the same either way, on purpose, so the
+ * caller must not turn it into "check your inbox, it definitely exists". The
+ * session-expired notification is switched off because these pages are used by
+ * people who cannot sign in — firing it would be nonsense here.
+ */
+export async function requestPasswordReset(email: string): Promise<string> {
+  const result = await request<ResetMessage>('/auth/password-reset', 'POST', { email }, undefined, false);
+  return result.message;
+}
+
+/**
+ * Redeems the token from the link. The backend revokes every session the account
+ * had, this browser included, so the caller sends the visitor back to sign in.
+ */
+export async function resetPassword(token: string, password: string, confirmPassword: string): Promise<string> {
+  const result = await request<ResetMessage>('/auth/password-reset/confirm', 'POST', { token, password, confirmPassword }, undefined, false);
+  return result.message;
+}
+
 export async function upload(file: File): Promise<{ url: string; mediaType: 'image' | 'video' }> {
 	if (!file.size) throw new Error('The selected file is empty.');
 	if (!['image/jpeg','image/png','image/gif','image/webp','video/mp4','video/webm'].includes(file.type)) throw new Error('Choose a JPEG, PNG, GIF, WebP, MP4 or WebM file.');
