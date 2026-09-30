@@ -1330,10 +1330,23 @@ Ordered roughly by value for effort.
   by several components on the same page (`PostForm.tsx:23`, `SideBar.tsx:47`).
 - [ ] **P3** Add a Lighthouse / Core Web Vitals budget and enforce it in CI.
 - [ ] **P3** Add bundle-size reporting to the frontend build.
-- [ ] **P3** Add indexes for the queries introduced by the follow-request and comment-media
+- [x] **P3** Add indexes for the queries introduced by the follow-request and comment-media
   work, and review the feed query with `EXPLAIN QUERY PLAN`. Progress 2026-09-28: 000010 adds
   `comment_userId` for the profile media query; the follow-request side and the feed review
-  are still open.
+  are still open. Closed 2026-09-30 by migration `000013_query_indexes`, after measuring
+  rather than reading: the incoming follow requests scanned 800 rows and sorted them
+  (~22 µs) and are now a covering search with no sort (~9 µs), and the feed's page read
+  every post in the database, evaluated the visibility rule per row and sorted the result
+  (~800 µs at 3 000 posts) where it now walks the index and stops when the page is full
+  (~36 µs). The same review found four more paths scanning and indexed them too — the
+  author's own posts, one post's comments, the unread badge the sidebar polls every fifteen
+  seconds (~90 µs → ~7 µs) and one entity's score (~190 µs → ~6 µs) — and rejected two
+  candidates with reasons: `post(privacy, …)`, which the planner never picks because the
+  visibility predicate is not a simple equality, and `notification(userId, createdAt)`,
+  which measured indistinguishable from the index taken. `query_plan_test.go` asserts the
+  plan each one is responsible for, drops the index to show what the query costs without it,
+  and restores it; the exact plans and numbers are quoted in the migration and in the session
+  note below.
 - [ ] **P3** Add a component gallery (Storybook or a `/dev/components` route) so the
   Instagram-style redesign can be reviewed without clicking through whole flows.
 
@@ -1373,6 +1386,55 @@ component classes) are the ones to build on.
   with the exact change list in that section. `canMessage` is still only a type in
   `frontend/src/app/api/social.ts`, so nothing reads the flag yet.
 - No P0 items are open. What is left is the P1/P2/P3 list above.
+
+Changed in the query-index session (2026-09-30), for review:
+`backend/pkg/db/migrations/sqlite/000013_query_indexes.{up,down}.sql` (new),
+`backend/pkg/app/repositories/query_plan_test.go` (new),
+`backend/pkg/app/repositories/{PostRepository,SocialRepository,CommentRepository,NotificationRepository,MessageRepository}.go`,
+`backend/pkg/db/sqlite/migrations_test.go`, `backend/README.md`, `TODO.md`.
+
+One P3 closed by measuring first and writing the migration second, which changed the answer
+twice. The plan was to index the follow-request queries and review the feed; the review found
+seven read paths scanning, and the item's two were not the worst of them. Before any index
+existed, `EXPLAIN QUERY PLAN` on a seeded scratch database (3 000 posts, 3 000 comments,
+9 000 reactions, 3 000 notifications, 800 follow requests, 900 accounts) showed the feed's
+page as `SCAN p` plus a temporary b-tree for the order (~800 µs), the follow requests as a
+scan and a sort (~22 µs), one post's comment count as a covering scan of every comment
+(~38 µs) with its page a scan plus a sort (~52 µs), the unread count as `SCAN notification`
+(~90 µs, and the sidebar runs it twice every fifteen seconds in every open tab), the
+notifications page (~106 µs) and one entity's reaction total as `SCAN reaction` (~190 µs).
+Two paths were measured too and need nothing, which is the other half of a review: the chat
+list already reaches `message_conversation` through SQLite's multi-index OR, and the likes
+tab reaches the reaction unique index through its leftmost prefix.
+
+Migration 000013 adds six indexes, each with its measurement beside it in the file. The first
+fixture was wrong and the numbers said so: with every notification and every follow request
+belonging to the viewer, a `userId` or `recipientId` filter removed nothing, so the scan
+measured as fast as the index and the evidence proved nothing — spreading those rows across
+the accounts is what made the win visible, and the test now says why. The other finding worth
+recording is a trap: adding `post(createdAt)` alone speeds the feed 22× and makes the profile
+page *slower* (~60 µs → ~310 µs), because the planner then prefers it for the author's posts
+and walks all 3 000 entries to find a handful. The two post indexes are one decision, and the
+migration says so where the next person will read it.
+
+The evidence lives in the test rather than in this note: `query_plan_test.go` asserts the plan
+names the index, drops it to prove the plan changes without it, and restores it from the
+CREATE statement read out of the migration, so an index renamed there fails by name instead of
+quietly measuring nothing. It logs the wall clock on both sides; the plans are asserted and the
+clock is not, because a wall clock is not a contract. Verified by injection as well: taking an
+index out of the migration fails with `feed page does not use post_createdAt` and `follow
+requests does not use connection_recipient_status`, and with them back the package is green.
+The limits are stated in the migration header rather than implied — the numbers are a laptop's,
+median of five runs, and move by ten or twenty per cent between runs; no production-sized
+dataset stands behind them; and the write cost of six indexes is reasoned about (one per
+written table, on tables that take single-row writes) but not measured.
+
+`migrations_test.go` needed one edit, and it is not a weakening: the round-trip test pins the
+final schema version, now 13. The first full run failed with `expected clean version 12, got
+13`, which is the pin doing its job — it exists so that adding a migration is noticed and its
+`down` file exercised, and the round trip over all thirteen passes after the bump. The comment
+added there says so, so the next person knows the edit is deliberate.
+
 
 Changed in the composer-and-limits session (2026-09-30), for review:
 `frontend/src/app/lib/mediaLimits.ts` (new), `frontend/src/app/lib/postDraft.ts` (new),
