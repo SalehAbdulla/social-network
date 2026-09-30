@@ -242,6 +242,6 @@ func (re *HandlerContext) notificationsChanged(userID string) {
 	if re.Hub == nil {
 		return
 	}
-	data, _ := json.Marshal(map[string]any{"type": "notification_changed", "payload": map[string]any{}})
+	data, _ := json.Marshal(map[string]any{"type": pkgwebsocket.MsgTypeNotificationChanged, "payload": map[string]any{}})
 	re.Hub.SendToUser(userID, data)
 }
