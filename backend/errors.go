@@ -36,4 +36,12 @@ var (
 	ErrEmptyUpload    = errors.New("the selected file is empty")
 	ErrUploadTooLarge = errors.New("the file is larger than the 50 MB limit")
 	ErrImageTooLarge  = errors.New("the image is larger than the 10 MB limit")
+	// Reset tokens are single-use and short-lived, and an unusable one answers
+	// the same whether it expired, was already spent or never existed: telling
+	// those apart tells an attacker which tokens were once real.
+	ErrInvalidResetToken = errors.New("this reset link is invalid or has expired")
+	// 503 rather than 500: the server is healthy, it just has no way to deliver a
+	// link — which in production means no SMTP provider is configured, because a
+	// reset link written to a log file is a working credential in a log file.
+	ErrResetUnavailable = errors.New("password reset is not available on this server")
 )
