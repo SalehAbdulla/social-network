@@ -8,6 +8,7 @@ import (
 
 	backend "social-network/backend"
 	"social-network/backend/pkg/payload/message"
+	pkgwebsocket "social-network/backend/pkg/websocket"
 )
 
 func (re *HandlerContext) chatEvent(sender, recipient, event string, data any) {
@@ -57,9 +58,9 @@ func (re *HandlerContext) SendChatMessage(w http.ResponseWriter, r *http.Request
 		return
 	}
 	data := message.MessageDTO{MessageId: saved.MessageId, SenderId: saved.SenderId, RecipientId: saved.RecipientId, TextMessage: saved.TextMessage, TimeStamp: saved.TimeStamp, IsRead: saved.IsRead, MediaURL: saved.MediaURL, MediaType: saved.MediaType, EditedAt: saved.EditedAt}
-	re.chatEvent(sender, req.RecipientID, "message_changed", data)
+	re.chatEvent(sender, req.RecipientID, pkgwebsocket.MsgTypeMessageChanged, data)
 	if notification, err := re.NotificationService.CreateNotification(req.RecipientID, sender, "message", saved.MessageId); err == nil && re.Hub != nil {
-		encoded, _ := json.Marshal(map[string]any{"type": "notification", "payload": notification})
+		encoded, _ := json.Marshal(map[string]any{"type": pkgwebsocket.MsgTypeNotification, "payload": notification})
 		re.Hub.SendToUser(req.RecipientID, encoded)
 	} else if err != nil {
 		re.App.Logger.Error("message notification failed", "error", err)
@@ -92,7 +93,7 @@ func (re *HandlerContext) EditChatMessage(w http.ResponseWriter, r *http.Request
 		re.HandleError(w, r, err)
 		return
 	}
-	re.chatEvent(sender, recipient, "message_changed", map[string]any{"messageId": id, "senderId": sender, "recipientId": recipient})
+	re.chatEvent(sender, recipient, pkgwebsocket.MsgTypeMessageChanged, map[string]any{"messageId": id, "senderId": sender, "recipientId": recipient})
 	respond(w, http.StatusOK, nil)
 }
 
@@ -118,7 +119,7 @@ func (re *HandlerContext) DeleteChatMessage(w http.ResponseWriter, r *http.Reque
 	if scope == "me" {
 		sender, recipient = currentUser(r), currentUser(r)
 	}
-	re.chatEvent(sender, recipient, "message_changed", map[string]any{"messageId": id})
+	re.chatEvent(sender, recipient, pkgwebsocket.MsgTypeMessageChanged, map[string]any{"messageId": id})
 	respond(w, http.StatusOK, nil)
 }
 
@@ -143,7 +144,7 @@ func (re *HandlerContext) ReadChat(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if changed {
-		re.chatEvent(currentUser(r), req.PartnerID, "read_receipt", map[string]string{"readerId": currentUser(r), "partnerId": req.PartnerID})
+		re.chatEvent(currentUser(r), req.PartnerID, pkgwebsocket.MsgTypeReadReceipt, map[string]string{"readerId": currentUser(r), "partnerId": req.PartnerID})
 	}
 	respond(w, http.StatusOK, nil)
 }
