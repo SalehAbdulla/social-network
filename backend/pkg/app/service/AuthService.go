@@ -23,6 +23,7 @@ type AuthService interface {
 	GetMe(userID string) (user.UserDTO, error)
 	NicknameAvailable(nickname string) (bool, error)
 	ChangePassword(userID, currentPassword, newPassword string) (string, error)
+	UserIDByEmail(email string) (string, error)
 }
 
 // RegisteredUser is the account a signup created, including the handle the
@@ -221,6 +222,12 @@ func (s AuthServiceImpl) ChangePassword(userID, currentPassword, newPassword str
 		return "", realtimeforum.ErrInternal
 	}
 	return token, nil
+}
+
+// UserIDByEmail is the lookup the reset flow needs; it lives here so handlers
+// keep talking to one auth surface rather than reaching for the database.
+func (s AuthServiceImpl) UserIDByEmail(email string) (string, error) {
+	return s.db.UserIDByEmail(email)
 }
 
 func (s AuthServiceImpl) GetMe(userID string) (user.UserDTO, error) {
