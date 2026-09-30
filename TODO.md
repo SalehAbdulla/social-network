@@ -1118,7 +1118,9 @@ Reference: `GroupHandler.go`, `GroupManagementHandler.go`, `GroupContentHandler.
   (including `cmd/*_test.go`, `HealthHandler.go` and the new tests) is clean. Left alone a third
   time on purpose: a whitespace-only change across fourteen files would bury the health-endpoint and
   test diff it would land with. It is one command — `cd backend && gofmt -w $(gofmt -l . | grep -v tmp/)` —
-  and it belongs in its own commit.
+  and it belongs in its own commit. Progress 2026-09-30: `pkg/websocket/types.go` is clean now,
+  because it was formatted while its event names were extended rather than as a drive-by — so two
+  real files remain, and eleven that only need a final newline.
 - [x] **P1** Remove the stale Clerk and `NEXT_PUBLIC_DEV_USER` references listed under
   Authentication and Security.
 - [ ] **P1** Keep this file current. The previous revision marked shipped features (group
@@ -1353,14 +1355,47 @@ Ordered roughly by value for effort.
 ### Developer experience
 
 - [ ] **P3** Extend `backend/cmd/seed/main.go` with realistic demo data — users, follows,
-  posts with media, groups, conversations — and document a single `make seed` command.
-- [ ] **P3** Generate an OpenAPI document or an HTTP collection from `backend/cmd/router.go`
-  so the API can be exercised without the UI.
-- [ ] **P3** Add per-branch preview deployments.
-- [ ] **P3** Add a `make` (or `just`) file wrapping the commands already spread across
-  `run.sh`, `DEPLOYMENT.md` and this file.
-- [ ] **P3** Document the WebSocket message protocol (`backend/pkg/websocket/types.go`) in
-  `backend/README.md`: event names, payload shapes and direction of travel.
+  posts with media, groups, conversations — and document a single `make seed` command. Half done
+  2026-09-30: `make seed` exists (and `make seed-demo` for the second account), documented in
+  `README.md` and `make help`. The command itself still creates accounts only — one, or two with
+  `-demo` — and no content. That is deliberate for now: the API tour builds the follows, posts,
+  media, groups and conversations it needs through the API, so a rich fixture would be a second
+  source of demo data to keep in step. The item stays open for whoever wants the seeded version.
+- [x] **P3** Generate an OpenAPI document or an HTTP collection from `backend/cmd/router.go`
+  so the API can be exercised without the UI. Closed 2026-09-30 as `scripts/api-tour.sh`, the
+  second of the item's two options and the one that can be checked here: 88 requests covering all
+  66 patterns in `router.go`, from registration to deleting the group it created, each asserting
+  the status it should get. `backend/cmd/api_tour_test.go` parses both files and fails by name if
+  a route is added, renamed or removed without the tour following. OpenAPI was rejected rather
+  than deferred: schemas cannot be validated in this environment, and a document nobody can check
+  drifts silently, while a tour is verified by being run. Running it corrected four assumptions —
+  register and login are form-encoded where the rest of the API is JSON, a wrong password is a 400
+  and not a 401, a socket upgrade without an `Origin` is a 403, and deleting a post cascades to
+  its comments.
+- [ ] **P3** Add per-branch preview deployments. Left open and untouched 2026-09-30: it needs a
+  CI runner and somewhere to deploy to, so nothing about it can be built or verified here. It is
+  the one Developer experience item that is not a local tool.
+- [x] **P3** Add a `make` (or `just`) file wrapping the commands already spread across
+  `run.sh`, `DEPLOYMENT.md` and this file. Closed 2026-09-30 as a `Makefile`, because make is on
+  every machine this project runs on (GNU make 3.81 here) and `just` is not installed anywhere it
+  has been run. Every target is one line calling something that already existed — `dev`, `status`,
+  `seed`, `seed-demo`, `build`, `lint`, `types`, `test`, `test-race`, `smoke`, `check`, `pin-check`,
+  `compose-config`, `api-tour` — and each was run for this commit except `dev`, which the ports
+  were already holding (see the note in the session log below). There is no `stop` target on
+  purpose: `./run.sh` implements those verbs only through its WSL launcher, so a `stop` here would
+  have started a second copy of the stack.
+- [x] **P3** Document the WebSocket message protocol (`backend/pkg/websocket/types.go`) in
+  `backend/README.md`: event names, payload shapes and direction of travel. Closed 2026-09-30 with
+  the five event names the backend still sent as string literals lifted into `types.go` first, so
+  the protocol is one list rather than a list plus a grep: fifteen event constants in all, six of
+  them client-to-server, eleven server-to-client (typing and typing_stopped travel both ways), plus
+  the client-only `connected`. `pkg/websocket/protocol_doc_test.go`
+  fails by name when a `MsgType` constant or a `*Payload` struct is not in the document, and the
+  other way when the document names something nothing sends. Writing it down found that
+  `send_error` is declared and never produced (so a refused `private_msg` tells its sender
+  nothing), that the `notification` event carries two different payload shapes depending on
+  whether it came from the socket or a REST handler, and that the write pump batches frames with
+  newlines, which a client has to split on.
 
 ## Work in flight and handoff
 
@@ -1386,6 +1421,56 @@ component classes) are the ones to build on.
   with the exact change list in that section. `canMessage` is still only a type in
   `frontend/src/app/api/social.ts`, so nothing reads the flag yet.
 - No P0 items are open. What is left is the P1/P2/P3 list above.
+
+Changed in the developer-experience session (2026-09-30), for review:
+`Makefile` (new), `scripts/api-tour.sh` (new), `backend/cmd/api_tour_test.go` (new),
+`backend/pkg/websocket/protocol_doc_test.go` (new), `backend/pkg/websocket/types.go`,
+`backend/pkg/app/handlers/{ChatMutation,GroupContent,Notification,Social}Handler.go`,
+`backend/README.md`, `README.md`, `frontend/README.md`, `TODO.md`.
+
+Three P3s closed, all of them tools rather than product, and one left alone on purpose. The make
+file is fourteen targets, each one line calling something that already existed; every target was
+run for this commit except `dev`, and `make status` is why: a development server from an earlier
+session still holds ports 4000 and 5174, which is exactly the case `run.sh` refuses to start into.
+`make check` — backend build, vet and test, then frontend lint, types and build — exits 0, with the
+same 19 pre-existing `no-img-element` warnings. There is no `stop` target, and that is a finding
+rather than an omission: `./run.sh` knows those verbs only through the WSL launcher it delegates
+to, so a `stop` here would have started a second stack, which is the sort of thing a wrapper is
+supposed to prevent.
+
+The API tour is the largest piece, and running it corrected four things a guess would have got
+wrong. `POST /auth/register` and `POST /auth/login` read form values (`r.FormValue`) where the rest
+of the API reads JSON. A wrong password is a 400 saying "invalid email or password", not a 401,
+because the request was understood and refused rather than failing to authenticate. A socket
+upgrade with no `Origin` is refused with 403 even when the cookie is valid, which is deliberate and
+now pinned. And deleting a post cascades to its comments: the first version deleted the post first
+and then could not explain a 403 about a comment that no longer existed. The tour runs 88 requests
+across all 66 patterns in `router.go` against a scratch backend, and the coverage check earned its
+place immediately — it found the one route the tour called without annotating it (`POST
+/api/v1/media`, whose request is multipart and so was written outside the helper).
+`backend/cmd/api_tour_test.go` reads both files and fails by name in both directions: a route with
+no call, and a call to a route that does not exist. Its `untoured` map is empty and documented as
+the place an exception has to be written down rather than the test weakened.
+
+OpenAPI was rejected rather than postponed, and that is a decision with a cost worth revisiting if
+a schema validator ever becomes available here: a hand-written schema cannot be validated in this
+environment, and a document nothing checks will drift, while a tour is verified by being run.
+`TODO.md` records the choice in those terms.
+
+The protocol document is the other half. Five event names were still string literals at their send
+sites — `message_changed`, `read_receipt`, `social_changed`, `group_changed` and
+`notification_changed` — so they moved into `types.go` first, which makes "the events this server
+can send" one list instead of a list plus a grep; that file came out of the change formatted, so
+one of the three files the gofmt item names is now clean. Writing the tables found three things
+worth knowing: `send_error` is declared and never produced, so a refused `private_msg` is silent to
+the person who sent it; the `notification` event carries two different payload shapes depending on
+whether a socket or a REST handler sent it, which nobody noticed because the frontend reloads its
+list instead of reading the payload; and the write pump batches frames into one WebSocket message
+separated by newlines, so a client has to split before parsing.
+`pkg/websocket/protocol_doc_test.go` fails by name when a constant or a payload struct is missing
+from the document, and in the other direction when the document names an event nothing sends, with
+the client-only `connected` kept in a list of its own with its reason.
+
 
 Changed in the query-index session (2026-09-30), for review:
 `backend/pkg/db/migrations/sqlite/000013_query_indexes.{up,down}.sql` (new),
