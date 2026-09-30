@@ -63,15 +63,17 @@ backend/
   pkg/app/service/         business rules (privacy, permissions, notifications, sessions)
   pkg/app/repositories/    SQL; the post-visibility fragment lives in PostRepository.go
   pkg/db/migrations/sqlite versioned up/down migrations, applied automatically at boot
-  pkg/websocket/           hub, clients, frame types
+  pkg/websocket/           hub, clients, frame types, and the protocol document in the README
   pkg/config, pkg/logger, pkg/middleware, pkg/models, pkg/payload
 frontend/
   src/app/                 routes (feed, post, profile, messages, groups, notifications, login)
   src/app/components/      UI building blocks, including the dialogs and their focus contract
   src/app/api/             axios client and the typed request helpers
-  src/app/lib/             shared hooks: paging, live refresh, dialog focus
+  src/app/lib/             shared hooks: paging, live refresh, dialog focus, the upload limits
   src/proxy.ts             page-level session gate (the API and /ws are excluded)
   scripts/                 browser smoke suite driven over the Chrome DevTools Protocol
+scripts/                   the API tour, the base-image pin check, the WSL launcher
+make help                  the commands in one place: dev, check, smoke, seed, api-tour, pin-check
 compose.yaml               both services and the social-data volume
 deploy/Caddyfile.example   a sample reverse proxy, reviewed rather than run here
 DEPLOYMENT.md              environment variables, headers, limits, backup, release checklist and checks
@@ -121,14 +123,33 @@ They are documented in `DEPLOYMENT.md`.
 ## Checks
 
 ```sh
+make check          # backend build/vet/test and frontend lint/types/build
+make smoke          # the browser suite, with CHROME_PATH set if Chrome is not in the usual place
+make api-tour       # every route in the API, against a running backend
+make pin-check      # whether the base-image pins still match their tags
+make help           # the rest
+```
+
+`make` wraps the commands below rather than replacing them; each target is one line calling
+something that already existed. They are the same commands CI runs, written down in one place so
+the release list and the pipeline cannot drift: 
+
+```sh
 cd backend  && go build ./... && go vet ./... && go test ./...
 cd frontend && npm ci && npm run lint && npx tsc --noEmit && npm run build
 cd frontend && npm run test:integration
 node scripts/pin-base-images.mjs
 ```
 
-The last command builds temporary backend and frontend servers, seeds an isolated database
-under `backend/tmp`, and drives headless Chrome through the real UI; it needs Chrome
+`make api-tour` is the one that needs a server: it calls every route in `backend/cmd/router.go`
+with the status each should answer, from registration to the group it deletes again, and
+`backend/cmd/api_tour_test.go` fails if the tour and the router ever disagree about what routes
+exist. It is the way to exercise the API without the UI, and it documents two things a client
+author would otherwise learn from a 400: registration and login read form values while the rest of
+the API reads JSON, and a socket upgrade needs an allowed `Origin` or it is refused with 403.
+
+The last command in that block builds temporary backend and frontend servers, seeds an isolated
+database under `backend/tmp`, and drives headless Chrome through the real UI; it needs Chrome
 installed (`CHROME_PATH` overrides the location; the fallbacks are the usual install
 paths per platform, and a Linux runner normally sets it). `docker compose config` and
 `docker compose build` are the container checks, and `npm audit` / `govulncheck ./...` cover
