@@ -1257,8 +1257,23 @@ Ordered roughly by value for effort.
   to equality fails the new test with `500` where `413` is expected, and
   `cmd/media_upload_test.go` asserts both halves of the sentence through the real endpoint.
 - [ ] **P3** Client-side cropping for avatars, covers and post images (square, 4:5, 16:9).
-- [ ] **P3** Generate derivatives on upload (`_thumb`, `_large`) and serve them with `srcset`
-  so the feed stops downloading full-resolution originals.
+- [x] **P3** Generate derivatives on upload (`_thumb`, `_large`) and serve them with `srcset`
+  so the feed stops downloading full-resolution originals. Closed 2026-09-30: `pkg/media` resizes
+  each resizable image into a 480 px `_thumb` and a 1600 px `_large` file beside the original, and
+  `GET /api/v1/media/{id}?size=thumb|large|original` serves them — answered with the original when
+  there is no such file, which is exactly what lets the frontend name both candidates in a `srcset`
+  without knowing anything about the upload. Measured end to end rather than asserted: a 3200×2400
+  JPEG of 777111 bytes is 192994 bytes as `large` and 46584 as `thumb`, and the browser suite now
+  checks that every request for a post's picture carries a `?size=` and that the bare original is
+  never fetched. Four decisions are recorded where they are made rather than implied: no derivative
+  of a video (nothing here decodes one) or of an animated GIF (a still frame is a different picture,
+  not a smaller one), no upscaling at all, and PNG for every non-JPEG source so an alpha channel
+  survives — with the cost of that last one written down, since a photographic PNG derivative is
+  much larger than a JPEG would be. The two caps are named in `frontend/src/app/lib/mediaLimits.ts`
+  and enforced in `pkg/media`, held together by the same drift check as the upload ceilings. The
+  collector takes a derivative with its row and recognises a stray one, which is the leak this
+  change would otherwise have shipped: a `_thumb` name is not a UUID, so the sweep that predates it
+  would have left every derivative behind forever.
 - [ ] **P3** Lightbox viewer with keyboard navigation and swipe, instead of opening the raw
   file in a new tab (`PostCard.tsx:64` uses `target="_blank"`).
 
@@ -1416,6 +1431,54 @@ component classes) are the ones to build on.
   session that registering creates — do not "simplify" that into a register field.
 - P0-4 (notification vs message split) is complete; it touched `SideBar.tsx` and
   `notifications/page.tsx`.
+Changed in the media-derivatives session (2026-09-30), for review:
+`backend/pkg/media/derive.go` (new), `backend/pkg/media/derive_test.go` (new),
+`backend/pkg/app/handlers/{MediaHandler,MediaCleanup}.go`, `backend/cmd/media_derivatives_test.go` (new),
+`backend/pkg/app/handlers/media_limits_test.go`, `frontend/src/app/lib/mediaVariants.ts` (new),
+`frontend/src/app/lib/mediaLimits.ts`, `frontend/src/app/components/{Avatar,PostCard,GroupActivity,DirectConversation,StoriesBar}.tsx`,
+`frontend/src/app/profile/page.tsx`, `frontend/scripts/integration-smoke.mjs`, `README.md`,
+`DEPLOYMENT.md`, `backend/README.md`, `frontend/README.md`, `TODO.md`.
+
+The highest-value item left, and the one I had been putting off because it touches every media read
+path. It is one query parameter: `?size=thumb|large|original` on the route that already exists. That
+single decision is what kept the change small — no migration, no new URL shape, no DTO changes —
+because every media URL stored in a post, comment, story, message, avatar or group row still
+resolves, and an upload with no derivative is answered with the original. The frontend can therefore
+name both candidates in a `srcset` without knowing anything about the file, and an old row needs no
+backfill: the worst case is a download that is bigger than it had to be.
+
+Measured rather than asserted, on a 3200×2400 JPEG (777111 bytes): 192994 bytes as `large` and
+46584 as `thumb`, which the Go tests decode to check the width instead of trusting a length, and the
+same numbers again over HTTP in `cmd/media_derivatives_test.go`. The browser suite carries the
+product claim itself: every request for a post's picture must carry a `?size=`, so a feed no longer
+fetches the bare original — and the fixture is a 1x1 PNG, i.e. an upload that has no derivatives at
+all, which makes it a test of the `srcset` being used for a file with nothing to choose between.
+
+Four refusals are decisions and are documented as such, each with what it costs: no derivative of a
+video (nothing in this toolchain decodes one), none of an animated GIF (a still frame is a different
+picture rather than a smaller one), never an upscale, and PNG for every non-JPEG source so alpha
+survives — that last one makes a photographic PNG derivative much larger than a JPEG would be, which
+is written where the choice is made. The two caps live in `mediaLimits.ts` for the `srcset`
+descriptors and in `pkg/media` for the resizing, and the drift check that already holds the upload
+ceilings together grew two rows to hold these as well.
+
+The part that would have been a bug rather than a feature: a derivative's name is not a UUID, so the
+existing stray sweep would have treated every `_thumb`/`_large` file as something an operator had put
+there and left it behind forever. The collector now removes them with their row and sweeps a stray
+one, and the test asserts that it still refuses to touch `notes_large` and `notes.txt` — the promise
+that sweep has always made is the reason it is careful about names at all. A first version of the
+naming helper also taught me something worth keeping: `notes_large` *is* derivative-shaped, so the
+UUID check belongs to the caller, and the test now says so instead of implying the helper does it.
+
+Honest limits, in the code and the docs rather than only here: the resize is synchronous, so an
+upload is slower and a 12-megapixel photo decodes to about 140 MB of pixels while it is resized (the
+40-megapixel ceiling is what bounds that); storage grows by roughly a third for a photo library; a
+decode failure silently means "no derivative" rather than a failed upload; there is no EXIF-aware
+rotation, so a derivative inherits the original's pixels; and the full-screen story view still asks
+for the original, because that is where the whole picture is wanted. The lightbox item next to this
+one is untouched and stays open — it is about how a picture is opened, not how it is fetched.
+
+
 - P0-2 (comment media) is complete; it touched `PostCard.tsx` and `profile/page.tsx`.
 - P0-3 is complete on the backend; the only missing piece is the frontend guard, handed off
   with the exact change list in that section. `canMessage` is still only a type in
