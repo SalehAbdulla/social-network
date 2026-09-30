@@ -5,25 +5,35 @@ import "encoding/json"
 const (
 	MsgTypePrivateMsg = "private_msg"
 
-	MsgTypeIncomingMsg    = "incoming_msg"
-	MsgTypeUserStatus     = "user_status"
-	MsgTypeNotification   = "notification"
-	MsgTypeSendError      = "send_error"
-	MsgTypeTyping         = "typing"
-	MsgTypeTypingStopped  = "typing_stopped"
-	MsgTypeOpenChat       = "open_chat"
-	MsgTypeCloseChat      = "close_chat"
-	MsgTypeUserOffline    = "user_offline"
+	MsgTypeIncomingMsg   = "incoming_msg"
+	MsgTypeUserStatus    = "user_status"
+	MsgTypeNotification  = "notification"
+	MsgTypeSendError     = "send_error"
+	MsgTypeTyping        = "typing"
+	MsgTypeTypingStopped = "typing_stopped"
+	MsgTypeOpenChat      = "open_chat"
+	MsgTypeCloseChat     = "close_chat"
+	MsgTypeUserOffline   = "user_offline"
+
+	// The five below were string literals at their send sites until the protocol was
+	// written down. They live here so that "the events this server can send" is one
+	// list rather than a list plus a grep, which is what `backend/README.md` documents
+	// and `protocol_doc_test.go` checks.
+	MsgTypeMessageChanged      = "message_changed"
+	MsgTypeReadReceipt         = "read_receipt"
+	MsgTypeSocialChanged       = "social_changed"
+	MsgTypeGroupChanged        = "group_changed"
+	MsgTypeNotificationChanged = "notification_changed"
 )
 
 type WSMessage struct {
-	Type      string          `json:"type"`
-	Payload   json.RawMessage `json:"payload,omitempty"`
-	SenderId  string          `json:"senderId,omitempty"`
-	RecipientId string        `json:"recipientId,omitempty"`
-	Text       string         `json:"text,omitempty"`
-	TimeStamp  string         `json:"timeStamp,omitempty"`
-	SenderNickname string     `json:"senderNickname,omitempty"`
+	Type           string          `json:"type"`
+	Payload        json.RawMessage `json:"payload,omitempty"`
+	SenderId       string          `json:"senderId,omitempty"`
+	RecipientId    string          `json:"recipientId,omitempty"`
+	Text           string          `json:"text,omitempty"`
+	TimeStamp      string          `json:"timeStamp,omitempty"`
+	SenderNickname string          `json:"senderNickname,omitempty"`
 }
 
 type PrivateMsgPayload struct {
@@ -32,25 +42,25 @@ type PrivateMsgPayload struct {
 }
 
 type IncomingMsgPayload struct {
-	MessageId       int    `json:"messageId"`
-	SenderId        string `json:"senderId"`
-	SenderNickname  string `json:"senderNickname"`
-	Text            string `json:"text"`
-	TimeStamp       string `json:"timeStamp"`
+	MessageId      int    `json:"messageId"`
+	SenderId       string `json:"senderId"`
+	SenderNickname string `json:"senderNickname"`
+	Text           string `json:"text"`
+	TimeStamp      string `json:"timeStamp"`
 }
 
 type UserStatusPayload struct {
 	UserId   string `json:"userId"`
-	IsOnline int    `json:"isOnline"` 
+	IsOnline int    `json:"isOnline"`
 }
 
 type NotificationPayload struct {
-	NotificationId  int    `json:"notificationId"`
-	ActorId         string `json:"actorId"`
-	ActorNickname   string `json:"actorNickname"`
-	EntityType      string `json:"entityType"` 
-	EntityId        int    `json:"entityId"`
-	CreatedAt       string `json:"createdAt"`
+	NotificationId int    `json:"notificationId"`
+	ActorId        string `json:"actorId"`
+	ActorNickname  string `json:"actorNickname"`
+	EntityType     string `json:"entityType"`
+	EntityId       int    `json:"entityId"`
+	CreatedAt      string `json:"createdAt"`
 }
 
 type SendErrorPayload struct {
