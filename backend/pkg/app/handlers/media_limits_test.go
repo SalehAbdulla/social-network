@@ -7,6 +7,8 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+
+	"social-network/backend/pkg/media"
 )
 
 // The browser keeps the same ceilings in `frontend/src/app/lib/mediaLimits.ts`, so
@@ -54,6 +56,10 @@ func TestUploadLimitsMatchTheFrontend(t *testing.T) {
 		{"MAX_VIDEO_BYTES", maxUpload},        // the 50 MB file ceiling
 		{"MAX_IMAGE_PIXELS", maxImagePixels},  // the decoded-canvas ceiling
 		{"MAX_ATTACHMENTS", maxCommentImages}, // comments are capped at this server-side
+		// The two derivative caps, which the frontend names in its srcset descriptors
+		// (`mediaVariants.ts`) and the server enforces when it resizes (`pkg/media`).
+		{"THUMB_WIDTH", int64(media.ThumbWidth)},
+		{"LARGE_WIDTH", int64(media.LargeWidth)},
 	} {
 		value, known := frontend[testCase.name]
 		if !known {
