@@ -934,8 +934,13 @@ Reference: `GroupHandler.go`, `GroupManagementHandler.go`, `GroupContentHandler.
   first run exposed is fixed: the pattern compared bare hex against `sha256:<hex>`, so a correct pin read
   as drifted. **Limits, recorded in `DEPLOYMENT.md`:** the check needs Docker Hub (exit 2, and it now
   names a 429 rate limit explicitly rather than reporting it as a failed resolution), and the pins are
-  verified to *resolve*, not to build — no daemon in this environment. The `docker:27` pin was last
-  confirmed before the rate limit hit, so re-run the check from a clear address.
+  verified to *resolve*, not to build — no daemon in this environment. The limit lifted about an hour
+  later and a retry loop that logged every attempt (24 of them) then confirmed **all eleven pins current**
+  with `--check` exit 0, `docker:27` and `docker:27-dind` included. The one digest seen mid-session that
+  no tag pointed at explained itself once asked the registry: `f649…` is a **single-platform image
+  manifest**, not an index — it was the linux/amd64 lookup inside the toolchain read, whose 429 carried
+  the same message shape as a tag lookup, so it read as a tag that had drifted. Nothing had drifted, and
+  the message now names which lookup failed.
 - [x] **P2** Ship a sample reverse-proxy config (Caddy or nginx) showing Host/Origin
   preservation and the WebSocket upgrade for `/ws`. Closed 2026-09-28: `deploy/Caddyfile.example`
   terminates TLS, forwards to the loopback-bound frontend, and shows what the proxy has to do that
