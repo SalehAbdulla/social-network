@@ -126,6 +126,37 @@ func (m *SessionManager) CreateSession(userID, token string) error {
 	return nil
 }
 
+// RevokeAllForUser drops every session of one account, rows and cache both. A
+// password reset needs this rather than CreateSession's rotation: there is no
+// browser to hand a replacement token to, so nothing is kept signed in. A token
+// cached from the database — which is what a restart leaves behind — has to go
+// too, otherwise a revoked session stays usable until its cached expiry, the same
+// gap CreateSession was fixed for. Presence is deliberately untouched: it means
+// "a live WebSocket", and a reset does not close one.
+func (m *SessionManager) RevokeAllForUser(userID string) (int64, error) {
+	m.mu.RLock()
+	store := m.store
+	m.mu.RUnlock()
+
+	var removed int64
+	if store != nil {
+		count, err := store.DeleteSessionsForUser(userID)
+		if err != nil {
+			return 0, err
+		}
+		removed = count
+	}
+
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	for token, owner := range m.TokenToUID {
+		if owner == userID {
+			m.evictLocked(token)
+		}
+	}
+	return removed, nil
+}
+
 // GetUserIdByToken resolves a token from the cache first and falls back to the
 // database, which is what keeps sessions valid across restarts.
 func (m *SessionManager) GetUserIdByToken(token string) (string, bool) {
