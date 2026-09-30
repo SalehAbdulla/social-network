@@ -34,7 +34,8 @@ when the `Origin` header is missing.
 
 ## Run locally
 
-The root `./run.sh` keeps the existing startup behavior outside WSL. Inside WSL,
+The root `./run.sh` keeps the existing startup behavior outside WSL (`make dev` from the repository
+root is the same call, and `make help` lists the rest of the commands). Inside WSL,
 it automatically delegates to `scripts/run-wsl.sh` for the features below.
 
 For WSL, keep the working copy in Ubuntu's filesystem, for example
