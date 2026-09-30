@@ -190,10 +190,16 @@ func (db *DB) UnfollowUser(actor, target string) error {
 	return tx.Commit()
 }
 
-func (db *DB) FollowRequests(recipient string, offset int) ([]models.FollowRequest, error) {
-	rows, err := db.Conn.Query(`SELECT c.requesterId,u.nickName,c.createdAt FROM connection c
+// followRequestsQuery lists the pending requests waiting for a decision, newest
+// first. It is a constant so the plan test (query_plan_test.go) can explain the same
+// text instead of a paraphrase, which is what makes the index it asserts on the index
+// this query uses.
+const followRequestsQuery = `SELECT c.requesterId,u.nickName,c.createdAt FROM connection c
 		JOIN user u ON u.userId=c.requesterId WHERE c.recipientId=? AND c.status='pending'
-		ORDER BY c.createdAt DESC,c.requesterId LIMIT 30 OFFSET ?`, recipient, offset)
+		ORDER BY c.createdAt DESC,c.requesterId LIMIT 30 OFFSET ?`
+
+func (db *DB) FollowRequests(recipient string, offset int) ([]models.FollowRequest, error) {
+	rows, err := db.Conn.Query(followRequestsQuery, recipient, offset)
 	if err != nil {
 		return nil, err
 	}
