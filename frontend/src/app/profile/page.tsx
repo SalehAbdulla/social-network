@@ -19,6 +19,7 @@ import {
 import { useBackend } from '../components/BackendProvider';
 import { usePagedList } from '../lib/usePagedList';
 import { useResource } from '../lib/useResource';
+import { mediaImageProps } from '../lib/mediaVariants';
 
 import Avatar from '../components/Avatar';
 import ChangePassword from '../components/ChangePassword';
@@ -512,7 +513,7 @@ function MediaGrid({ items }: MediaGridProps) {
           href={`/post/${item.postId}`}
         >
           <img
-            src={item.url}
+            {...mediaImageProps(item.url, '(max-width: 640px) 50vw, 360px')}
             alt={item.title}
             className="h-48 w-full rounded-lg object-cover"
           />
