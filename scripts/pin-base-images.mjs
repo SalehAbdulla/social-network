@@ -51,11 +51,16 @@ async function token(repo) {
   return tokens.get(repo);
 }
 
-async function manifest(repo, reference) {
+// `what` names the lookup, because a 429 or 404 on the linux/amd64 manifest and one
+// on the tag read identically otherwise — which is exactly how a rate-limited
+// platform fetch got mistaken for a tag that had drifted.
+async function manifest(repo, reference, what) {
   const response = await fetch(`${REGISTRY}/${repo}/manifests/${reference}`, {
     headers: { Authorization: `Bearer ${await token(repo)}`, Accept: ACCEPT },
   });
-  if (!response.ok) throw new Error(`${repo}:${reference}: HTTP ${response.status}`);
+  if (!response.ok) {
+    throw new Error(`${repo}:${reference} (${what}): HTTP ${response.status}`);
+  }
   return { digest: response.headers.get('Docker-Content-Digest'), body: await response.json() };
 }
 
@@ -63,11 +68,11 @@ async function manifest(repo, reference) {
 // `known` is the index body for that digest when the caller already has it, which
 // saves a request per image against a registry that rate-limits anonymous pulls.
 async function toolchain(repo, digest, known) {
-  const index = known ? { body: known } : await manifest(repo, digest);
+  const index = known ? { body: known } : await manifest(repo, digest, 'index for this digest');
   const amd64 = (index.body.manifests ?? []).find(entry =>
     entry.platform?.os === 'linux' && entry.platform?.architecture === 'amd64');
   if (!amd64) return '';
-  const image = await manifest(repo, amd64.digest);
+  const image = await manifest(repo, amd64.digest, 'linux/amd64 manifest');
   const response = await fetch(`${REGISTRY}/${repo}/blobs/${image.body.config.digest}`, {
     headers: { Authorization: `Bearer ${await token(repo)}` },
   });
@@ -100,7 +105,7 @@ try {
   for (const key of new Set(references.map(reference => `${reference.name}:${reference.tag}`))) {
     const [name, tag] = key.split(':');
     const repo = `library/${name}`;
-    const { digest, body } = await manifest(repo, tag);
+    const { digest, body } = await manifest(repo, tag, 'tag');
     resolved.set(key, { digest, versions: await toolchain(repo, digest, body) });
   }
 } catch (error) {
