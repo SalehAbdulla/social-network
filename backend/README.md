@@ -10,6 +10,18 @@ Two rules worth knowing before touching the chat code. Private messages are only
 
 Run `go test ./...` for backend tests. From `frontend`, run `npm run test:integration` for browser checks against an isolated database.
 
+## Media pipeline
+
+An upload is stored under a fresh UUID, typed from its bytes. If it is an image this toolchain can
+decode, `pkg/media` also writes a 480 px `_thumb` and a 1600 px `_large` file beside it, in the same
+request, and `GET /api/v1/media/{id}` serves whichever of the three `?size=` names — falling back to
+the original when there is no such derivative, which is what lets the frontend put both candidates
+in a `srcset` without knowing anything about the file. `pkg/media` holds the rules and their reasons:
+no derivative of a video or of an animated GIF, never an upscale, JPEG for JPEG sources and PNG for
+everything else so alpha survives. The collector takes the derivatives with the original, and the
+stray sweep recognises a `_thumb`/`_large` name without ever touching a file whose base is not a
+UUID.
+
 `go test ./pkg/app/repositories/` also runs the query-plan check. It seeds a database, prints `EXPLAIN QUERY PLAN` for the read paths behind the feed, the comment list, the notifications list, the chat list, the follow-request list and one entity's score, asserts which index each one leans on, and — for the indexes `000013` creates — drops the index and measures the query again. That last part is why the numbers next to each index in the migration are reproducible rather than asserted: run the package and you get the before and after on your own machine. When you add a query that reads one of those tables, add a case there; a plan that scans says so by name before a user notices.
 
 From the repository root, `docker compose up --build -d` builds separate backend and frontend images. SQLite and uploads persist in the `social-data` volume. See the frontend README for usage.
