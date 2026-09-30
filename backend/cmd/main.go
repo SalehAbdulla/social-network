@@ -77,6 +77,26 @@ func main() {
 			cleanup()
 		}
 	}()
+	// Reset tokens are swept on the same schedule: once a row is past its expiry
+	// it can never be claimed again, so keeping it only keeps a hash around.
+	go func() {
+		purge := func() {
+			removed, err := dbConn.DeleteExpiredPasswordResets(time.Now().UTC())
+			if err != nil {
+				app.Logger.Error("password reset cleanup failed", "error", err)
+				return
+			}
+			if removed > 0 {
+				app.Logger.Info("expired password reset tokens removed", "count", removed)
+			}
+		}
+		purge()
+		ticker := time.NewTicker(time.Hour)
+		defer ticker.Stop()
+		for range ticker.C {
+			purge()
+		}
+	}()
 
 	authService := service.NewAuthService(dbConn)
 	reactService := service.NewReactionService(dbConn)
@@ -88,6 +108,38 @@ func main() {
 	hc := handlers.NewHandlerContext(&app, authService, postService, commentService, reactService, messageService, notificationService)
 	hc.SocialService = &service.SocialService{Repo: dbConn}
 	hc.GroupService = &service.GroupService{Repo: dbConn}
+
+	// Password reset is the one flow that has to leave the machine, so delivery is
+	// a deployment decision: configured SMTP where credentials exist, the log in
+	// development, and deliberately nothing in production — a reset link in a log
+	// file is a working credential in a log file, so production without a provider
+	// refuses the request (503) instead of writing one.
+	var mailer service.Mailer
+	if host := os.Getenv("SMTP_HOST"); host != "" {
+		port := os.Getenv("SMTP_PORT")
+		if port == "" {
+			port = "587"
+		}
+		from := os.Getenv("SMTP_FROM")
+		if from == "" {
+			from = "no-reply@" + host
+		}
+		mailer = service.SMTPMailer{
+			Host:     host,
+			Port:     port,
+			Username: os.Getenv("SMTP_USERNAME"),
+			Password: os.Getenv("SMTP_PASSWORD"),
+			From:     from,
+		}
+	} else if !app.InProduction {
+		mailer = service.LogMailer{Logger: app.Logger}
+	}
+	hc.PasswordResetService = service.NewPasswordResetService(dbConn, service.DefaultSessionManager, mailer, app.FrontendOrigin)
+	if mailer == nil {
+		app.Logger.Warn("password reset is unavailable: set SMTP_HOST to enable it")
+	} else {
+		app.Logger.Info("password reset delivery configured", "delivery", mailer.Describe())
+	}
 	handlers.SetHandlerContext(hc)
 
 	// Uploads that nothing references any more — a deleted post, comment, story
