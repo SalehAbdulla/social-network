@@ -36,6 +36,16 @@ func notificationTypeFilter(column string, types []string) (string, []any) {
 	return column + " IN (" + strings.TrimSuffix(strings.Repeat("?,", len(types)), ",") + ")", args
 }
 
+// notificationPageSelect is the notifications list's projection and joins, shared with
+// the plan test (query_plan_test.go) so the plan it prints is this query's. The type
+// filter and the userId predicate are appended at the call site, both of them dynamic.
+const notificationPageSelect = `
+		SELECT n.notificationId, n.userId, n.actorId, COALESCE(u.nickName, ''), n.entityType, n.entityId, n.isRead, n.createdAt, COALESCE(c.postId, 0)
+		FROM notification n
+		LEFT JOIN user u ON n.actorId = u.userId
+		LEFT JOIN comment c ON n.entityType = 'comment' AND n.entityId = c.commentId
+		WHERE `
+
 func (db *DB) GetNotifications(userID string, offset, limit int, unreadOnly bool, types []string) ([]models.Notification, int, error) {
 	countFilter, countFilterArgs := notificationTypeFilter("entityType", types)
 	countQuery := "SELECT COUNT(*) FROM notification WHERE " + countFilter + " AND userId = ?"
@@ -50,12 +60,7 @@ func (db *DB) GetNotifications(userID string, offset, limit int, unreadOnly bool
 	}
 
 	selectFilter, selectFilterArgs := notificationTypeFilter("n.entityType", types)
-	query := `
-		SELECT n.notificationId, n.userId, n.actorId, COALESCE(u.nickName, ''), n.entityType, n.entityId, n.isRead, n.createdAt, COALESCE(c.postId, 0)
-		FROM notification n
-		LEFT JOIN user u ON n.actorId = u.userId
-		LEFT JOIN comment c ON n.entityType = 'comment' AND n.entityId = c.commentId
-		WHERE ` + selectFilter + ` AND n.userId = ?
+	query := notificationPageSelect + selectFilter + ` AND n.userId = ?
 	`
 	if unreadOnly {
 		query += " AND n.isRead = 0"
