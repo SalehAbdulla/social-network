@@ -155,6 +155,12 @@ place the proxy's upgrade path is exercised at concurrency.
   restart does not sign anyone out. Logging in revokes the previous token, and so does
   changing the password (`PUT /api/v1/users/me/password`), which returns the replacement
   cookie to the browser that made the change.
+- **Password reset** is the one unauthenticated flow that answers identically for an unknown
+  address: `POST /api/v1/auth/password-reset` always answers `202` with the same sentence, and the
+  confirm endpoint takes the token, stores the new password and revokes every session the account
+  had. Tokens are single-use, stored as a sha256, and expire after 30 minutes. It answers `503` when
+  the deployment has no mail provider — `DEPLOYMENT.md` says how to configure one, and why
+  development logs the link instead.
 - **Uploads** are typed by their bytes, not their filename, and are answered `400` for an
   unreadable or empty file and `413` past a size ceiling. An image's declared canvas is capped at
   40 megapixels from its own header, WebP included, and the same allow-list is applied when a file
