@@ -33,6 +33,18 @@ type PostRepository interface {
 // cannot drift apart.
 const postVisibility = `(p.userId = ? OR (p.privacy = 'public' AND (EXISTS (SELECT 1 FROM user u WHERE u.userId = p.userId AND u.isPublic = 1) OR EXISTS (SELECT 1 FROM follow f WHERE f.followerId = ? AND f.followedId = p.userId))) OR (p.privacy = 'followers' AND EXISTS (SELECT 1 FROM follow f WHERE f.followerId = ? AND f.followedId = p.userId)) OR (p.privacy = 'selected' AND EXISTS (SELECT 1 FROM post_selected_follower psf WHERE psf.postId = p.postId AND psf.userId = ?)))`
 
+// postFeedSelect is the feed's projection and joins. It is a constant so the plan
+// test (query_plan_test.go) explains the same text the feed runs — a plan asserted
+// against a paraphrase would keep passing while the real query changed shape. The
+// ORDER BY and LIMIT stay at the call site because both come from the request.
+const postFeedSelect = `
+		SELECT p.postId, p.userId, p.privacy, u.nickName, p.title, p.content,
+			   p.score, p.commentsCounter,
+			   p.createdAt, p.updatedAt, p.imageUrls
+		FROM post p
+		JOIN user u ON p.userId = u.userId
+		WHERE `
+
 func (db *DB) GetPosts(pageNumber int, pageSize int, sortBy string, sortOrder string, viewerID string) ([]models.Post, int, error) {
 	validSortColumns := map[string]string{
 		"createdat": "p.createdAt",
@@ -63,13 +75,7 @@ func (db *DB) GetPosts(pageNumber int, pageSize int, sortBy string, sortOrder st
 
 	offset := (pageNumber - 1) * pageSize
 
-	query := `
-		SELECT p.postId, p.userId, p.privacy, u.nickName, p.title, p.content,
-			   p.score, p.commentsCounter,
-			   p.createdAt, p.updatedAt, p.imageUrls
-		FROM post p
-		JOIN user u ON p.userId = u.userId
-		WHERE ` + postVisibility + `
+	query := postFeedSelect + postVisibility + `
 		ORDER BY ` + column + ` ` + order + `
 		LIMIT ? OFFSET ?
 	`
