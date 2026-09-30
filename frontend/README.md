@@ -132,7 +132,8 @@ worth running after deleting anything.
 The integration command builds and starts temporary backend and frontend servers
 on available ports, seeds a separate database, and drives two headless Chrome
 sessions through the UI. It does not use your development database. Chrome must
-be installed; set `CHROME_PATH` if it is outside its default Windows location.
+be installed; set `CHROME_PATH` if it is outside the usual location for your
+platform.
 Logs, the test database, and screenshots remain in `backend/tmp/integration-*`.
 The temporary servers stop when the check finishes. Go uses `backend/tmp/go-build`
 for its cache unless `GOCACHE` is already set. The frontend it starts builds into
