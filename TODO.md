@@ -1470,6 +1470,14 @@ that sweep has always made is the reason it is careful about names at all. A fir
 naming helper also taught me something worth keeping: `notes_large` *is* derivative-shaped, so the
 UUID check belongs to the caller, and the test now says so instead of implying the helper does it.
 
+Injecting a fault into that collector taught me one more thing about it: neutering the row prune's
+derivative loop alone changed nothing, because the sweep I had just taught about derivative names
+catches the same files on the same pass. Either half is enough for the outcome, so the demonstration
+only fails when both are neutered — and the code comment now says which half exists for which case
+(a row already known to be unreferenced should not wait another hour, and a file whose mtime was
+touched after the grace window would never be swept at all). That is the sort of thing a test cannot
+tell you and a fault can.
+
 Honest limits, in the code and the docs rather than only here: the resize is synchronous, so an
 upload is slower and a 12-megapixel photo decodes to about 140 MB of pixels while it is resized (the
 40-megapixel ceiling is what bounds that); storage grows by roughly a third for a photo library; a
