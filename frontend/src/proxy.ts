@@ -1,7 +1,11 @@
 import { NextResponse, type NextRequest } from 'next/server';
 
 const publicPaths = new Set([
-  '/login', '/favicon.ico', '/favicon.svg', '/logo.svg', '/logo.png',
+  // The credential pages. Someone who cannot sign in has to be able to reach them —
+  // that is what a reset is for — so /forgot and /reset are public here and left out
+  // of BackendProvider's authenticated shell too.
+  '/login', '/forgot', '/reset',
+  '/favicon.ico', '/favicon.svg', '/logo.svg', '/logo.png',
   '/bgImage.png', '/group_users.png', '/sponsored_img.png',
   '/sample_profile.jpg', '/sample_cover.jpg',
 ]);
