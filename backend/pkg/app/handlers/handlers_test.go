@@ -24,6 +24,69 @@ func testContext(t *testing.T, frontendOrigin string) *HandlerContext {
 	}, nil, nil, nil, nil, nil, nil)
 }
 
+// TestWrappedSentinelKeepsItsStatus is the reason the mapping uses errors.Is. The
+// image ceiling wraps its sentinel so the message can name the file's measured size;
+// a wrapped error that fell through to the default branch would answer 500 for a
+// request that is merely too big, which is a worse bug than the wording it was
+// meant to improve. The detail is what the client sees, and the generic 500 must
+// still hide a real failure's text even when it is wrapped.
+func TestWrappedSentinelKeepsItsStatus(t *testing.T) {
+	re := testContext(t, "http://localhost:4000")
+	for _, testCase := range []struct {
+		name     string
+		sentinel error
+		err      error
+		status   int
+		body     string
+	}{
+		{
+			"measured image size",
+			backend.ErrImageTooLarge,
+			backend.WithDetail(backend.ErrImageTooLarge, "Image is 12.4 MB; the limit is 10 MB."),
+			http.StatusRequestEntityTooLarge,
+			"Image is 12.4 MB; the limit is 10 MB.",
+		},
+		{
+			"wrapped bad request",
+			backend.ErrBadRequest,
+			backend.WithDetail(backend.ErrBadRequest, "that follower is not one of yours"),
+			http.StatusBadRequest,
+			"that follower is not one of yours",
+		},
+		{
+			"wrapped internal error",
+			backend.ErrInternal,
+			backend.WithDetail(backend.ErrInternal, "pq: relation \"post\" does not exist"),
+			http.StatusInternalServerError,
+			"internal server error",
+		},
+	} {
+		t.Run(testCase.name, func(t *testing.T) {
+			// The status mapping depends on the sentinel remaining reachable, so that
+			// is asserted directly rather than only through the answer below.
+			if !errors.Is(testCase.err, testCase.sentinel) {
+				t.Fatalf("the detail hid its sentinel from errors.Is")
+			}
+			recorder := httptest.NewRecorder()
+			re.HandleError(recorder, httptest.NewRequest("POST", "/api/v1/media", nil), testCase.err)
+			if recorder.Code != testCase.status {
+				t.Fatalf("expected %d for a wrapped sentinel, got %d", testCase.status, recorder.Code)
+			}
+			var body struct {
+				Success bool   `json:"success"`
+				Error   string `json:"error"`
+				Code    int    `json:"code"`
+			}
+			if err := json.Unmarshal(recorder.Body.Bytes(), &body); err != nil {
+				t.Fatalf("response is not JSON: %s", recorder.Body.String())
+			}
+			if body.Success || body.Code != testCase.status || body.Error != testCase.body {
+				t.Fatalf("unexpected envelope: %+v", body)
+			}
+		})
+	}
+}
+
 // TestHandleErrorStatusContract pins the status every sentinel answers with. The
 // upload ceilings are the easiest entry to regress, because a request past a
 // size limit is well formed and must not be reported as a bad request, and the
