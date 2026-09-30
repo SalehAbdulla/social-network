@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"encoding/json"
+	"errors"
 	"log/slog"
 	"net/http"
 	realtimeforum "social-network/backend"
@@ -33,69 +34,78 @@ func isASCII(s string) bool {
 	return true
 }
 
+// HandleError answers with the envelope for one of this API's sentinels, and
+// switches on them with errors.Is rather than == so a sentinel that arrives wrapped
+// in an ErrDetail keeps its status while the message stays about this request.
+//
+// An unknown error is a 500 whose body says nothing specific, which is deliberate:
+// the text of a real failure can name a file path or a query, and the log line
+// below is where that belongs.
 func (re *HandlerContext) HandleError(w http.ResponseWriter, r *http.Request, err error) {
 
 	var statusCode int
 	var level slog.Level
 
-	switch err {
-	case realtimeforum.ErrAlreadyFollowing, realtimeforum.ErrFollowPending, realtimeforum.ErrReverseFollowPending:
+	switch {
+	case errors.Is(err, realtimeforum.ErrAlreadyFollowing),
+		errors.Is(err, realtimeforum.ErrFollowPending),
+		errors.Is(err, realtimeforum.ErrReverseFollowPending):
 		statusCode = http.StatusConflict
 		level = slog.LevelWarn
-	case realtimeforum.ErrBadRequest:
+	case errors.Is(err, realtimeforum.ErrBadRequest):
 		statusCode = http.StatusBadRequest
 		level = slog.LevelWarn
-	case realtimeforum.ErrUnauthorized:
+	case errors.Is(err, realtimeforum.ErrUnauthorized):
 		statusCode = http.StatusUnauthorized
 		level = slog.LevelWarn
-	case realtimeforum.ErrForbidden:
+	case errors.Is(err, realtimeforum.ErrForbidden):
 		statusCode = http.StatusForbidden
 		level = slog.LevelWarn
-	case realtimeforum.ErrNotFound:
+	case errors.Is(err, realtimeforum.ErrNotFound):
 		statusCode = http.StatusNotFound
 		level = slog.LevelWarn
-	case realtimeforum.ErrMethodNotAllowed:
+	case errors.Is(err, realtimeforum.ErrMethodNotAllowed):
 		statusCode = http.StatusMethodNotAllowed
 		level = slog.LevelWarn
-	case realtimeforum.ErrTooManyRequests:
+	case errors.Is(err, realtimeforum.ErrTooManyRequests):
 		statusCode = http.StatusTooManyRequests
 		level = slog.LevelWarn
-	case realtimeforum.ErrUploadTooLarge, realtimeforum.ErrImageTooLarge:
+	case errors.Is(err, realtimeforum.ErrUploadTooLarge), errors.Is(err, realtimeforum.ErrImageTooLarge):
 		statusCode = http.StatusRequestEntityTooLarge
 		level = slog.LevelWarn
-	case realtimeforum.ErrEmptyUpload:
+	case errors.Is(err, realtimeforum.ErrEmptyUpload):
 		statusCode = http.StatusBadRequest
 		level = slog.LevelWarn
-	case realtimeforum.ErrResetUnavailable:
+	case errors.Is(err, realtimeforum.ErrResetUnavailable):
 		// 503, not 500: nothing is broken, the server simply has no mail provider
 		// and must not pretend it sent a link (see DEPLOYMENT.md).
 		statusCode = http.StatusServiceUnavailable
 		level = slog.LevelWarn
-	case realtimeforum.ErrInternal:
+	case errors.Is(err, realtimeforum.ErrInternal):
 		statusCode = http.StatusInternalServerError
 		level = slog.LevelError
 	default:
 
 		switch {
-		case err == realtimeforum.ErrInvalidEmail,
-			err == realtimeforum.ErrEmailExists,
-			err == realtimeforum.ErrNickName,
-			err == realtimeforum.ErrNickNameLength,
-			err == realtimeforum.ErrPasswordLength,
-			err == realtimeforum.ErrPasswordsDontMatch,
-			err == realtimeforum.ErrInvalidPassForm,
-			err == realtimeforum.ErrInvalidAge,
-			err == realtimeforum.ErrInvalidBirthDate,
-			err == realtimeforum.ErrGender,
-			err == realtimeforum.ErrInvalidCredentials,
-			err == realtimeforum.ErrWrongPassword,
-			err == realtimeforum.ErrTitleLength,
-			err == realtimeforum.ErrContentLength,
-			err == realtimeforum.ErrCommentLength,
-			err == realtimeforum.ErrMissingPostId,
-			err == realtimeforum.ErrNonASCII,
-			err == realtimeforum.ErrInvalidResetToken,
-			err == realtimeforum.ErrBadRequest:
+		case errors.Is(err, realtimeforum.ErrInvalidEmail),
+			errors.Is(err, realtimeforum.ErrEmailExists),
+			errors.Is(err, realtimeforum.ErrNickName),
+			errors.Is(err, realtimeforum.ErrNickNameLength),
+			errors.Is(err, realtimeforum.ErrPasswordLength),
+			errors.Is(err, realtimeforum.ErrPasswordsDontMatch),
+			errors.Is(err, realtimeforum.ErrInvalidPassForm),
+			errors.Is(err, realtimeforum.ErrInvalidAge),
+			errors.Is(err, realtimeforum.ErrInvalidBirthDate),
+			errors.Is(err, realtimeforum.ErrGender),
+			errors.Is(err, realtimeforum.ErrInvalidCredentials),
+			errors.Is(err, realtimeforum.ErrWrongPassword),
+			errors.Is(err, realtimeforum.ErrTitleLength),
+			errors.Is(err, realtimeforum.ErrContentLength),
+			errors.Is(err, realtimeforum.ErrCommentLength),
+			errors.Is(err, realtimeforum.ErrMissingPostId),
+			errors.Is(err, realtimeforum.ErrNonASCII),
+			errors.Is(err, realtimeforum.ErrInvalidResetToken),
+			errors.Is(err, realtimeforum.ErrBadRequest):
 			statusCode = http.StatusBadRequest
 			level = slog.LevelWarn
 		default:
