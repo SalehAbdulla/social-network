@@ -29,6 +29,18 @@ export const MAX_IMAGE_PIXELS = 40000000;
  */
 export const MAX_ATTACHMENTS = 4;
 
+/**
+ * The two derivatives the server keeps for an image upload, in pixels of width:
+ * `?size=thumb` and `?size=large` on a media URL. The server never upscales, so an
+ * upload narrower than a cap has no such derivative and answers with the original —
+ * which is why `srcset` may name both without knowing anything about the file.
+ *
+ * `media_limits_test.go` holds these two numbers against the Go constants in
+ * `pkg/media`, so a cap changed on one side fails the other side's test by name.
+ */
+export const THUMB_WIDTH = 480;
+export const LARGE_WIDTH = 1600;
+
 export const IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
 export const VIDEO_TYPES = ['video/mp4', 'video/webm'];
 
