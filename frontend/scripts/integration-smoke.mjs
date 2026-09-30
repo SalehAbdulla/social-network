@@ -195,6 +195,16 @@ async function enter(page, shift = false) {
   await command('Input.dispatchKeyEvent', { type: 'keyDown', key: 'Enter', code: 'Enter', windowsVirtualKeyCode: 13, text: '\r', modifiers: shift ? 8 : 0 }, page);
   await command('Input.dispatchKeyEvent', { type: 'keyUp', key: 'Enter', code: 'Enter', windowsVirtualKeyCode: 13, modifiers: shift ? 8 : 0 }, page);
 }
+// Ctrl + Enter, through the browser's own key pipeline rather than by calling the
+// handler. Ctrl rather than Meta because the suite runs on every platform and the
+// composer accepts either; the key is delivered to whatever has focus, which is why
+// the step that uses this focuses the textarea first — the same place a reader's
+// caret is when they reach for the shortcut.
+async function enterWithControl(page) {
+  const modifiers = 2; // 1 = Alt, 2 = Ctrl, 4 = Meta, 8 = Shift
+  await command('Input.dispatchKeyEvent', { type: 'keyDown', key: 'Enter', code: 'Enter', windowsVirtualKeyCode: 13, text: '\r', modifiers }, page);
+  await command('Input.dispatchKeyEvent', { type: 'keyUp', key: 'Enter', code: 'Enter', windowsVirtualKeyCode: 13, modifiers }, page);
+}
 async function api(page, route, method = 'GET', body) {
   const result = await evaluate(page, `(async () => { const response = await fetch('/api/v1' + ${JSON.stringify(route)}, { method: ${JSON.stringify(method)}, headers: { 'Content-Type': 'application/json' }, ${body === undefined ? '' : `body: JSON.stringify(${JSON.stringify(body)}),`} credentials: 'include' }); const result = await response.json(); if (!response.ok || !result.success) throw new Error(JSON.stringify(result)); return result.data; })()`);
   return result;
@@ -249,6 +259,11 @@ try {
   const fileNode = await command('DOM.querySelector', { nodeId: document.root.nodeId, selector: 'input[type="file"]' }, dummy);
   await command('DOM.setFileInputFiles', { nodeId: fileNode.nodeId, files: [fixture] }, dummy);
   await until(dummy, `!!document.querySelector('img[alt="Preview of pixel.png"]')`, 'image preview');
+  // The tile reports what was chosen before the upload is spent — the measured
+  // canvas and the file's own size — so a rejection is never the first mention of
+  // either. The fixture is a 1x1 PNG, hence the shape of the expected caption.
+  const tileDetails = await evaluate(dummy, `(() => { const tile = document.querySelector('img[alt="Preview of pixel.png"]').closest('div'); const caption = tile && tile.querySelector('span'); return caption && caption.textContent.trim(); })()`);
+  assert(/^\d+ × \d+ · \d+ B$/.test(String(tileDetails)), `the picker must show the file's dimensions and size, got ${JSON.stringify(tileDetails)}`);
   await button(dummy, 'Publish Post');
   await until(dummy, `location.pathname === '/' && document.body.innerText.includes(${JSON.stringify(`Browser ${stamp}`)})`, 'publish post');
   const created = (await api(dummy, '/posts')).posts.find(post => post.title === `Browser ${stamp}`);
@@ -277,6 +292,42 @@ try {
   assert.deepEqual(edited.imageUrls, created.imageUrls);
   assert.equal(edited.score, 1);
   console.log('PASS: owner edit button, prefilled editor, cancel and save preserve photos and votes');
+
+  // The composer's own contract, measured rather than assumed: the reason a publish
+  // is blocked is on the page and attached to the field it is about, a draft survives
+  // a reload while saying what did not come back, and Ctrl/Cmd + Enter publishes from
+  // the textarea where the text was typed. The storage key here is the one
+  // `lib/postDraft.ts` owns, which is the part of that module a browser can check.
+  const draftKey = 'social:post-draft';
+  await navigate(dummy, '/create-post');
+  await fill(dummy, 'textarea', 'Too short');
+  await until(dummy, `!!document.getElementById('publish-blocked')`, 'the composer names what is missing');
+  const blockedReason = await evaluate(dummy, `document.getElementById('publish-blocked').textContent`);
+  assert(/Add \d+ more character/.test(blockedReason), `the composer must say how much is missing, got ${JSON.stringify(blockedReason)}`);
+  assert.equal(await evaluate(dummy, `document.querySelector('textarea').getAttribute('aria-describedby')`), 'publish-blocked', 'the reason belongs to the field it is about');
+  assert(await evaluate(dummy, `!!document.querySelector('button[title*="Ctrl/Cmd"]')`), 'the shortcut is discoverable on the publish button');
+  await fill(dummy, 'input[placeholder="Give your post a title"]', `Draft ${stamp}`);
+  await until(dummy, `(localStorage.getItem(${JSON.stringify(draftKey)}) || '').includes(${JSON.stringify(`Draft ${stamp}`)})`, 'the draft reaches storage');
+  await command('Page.navigate', { url: base + '/create-post' }, dummy);
+  await until(dummy, `!!document.getElementById('draft-restored')`, 'the draft is offered back after a reload');
+  assert.equal(await evaluate(dummy, `document.querySelector('textarea').value`), 'Too short', 'the restored draft is the text that was typed');
+  assert.equal(await evaluate(dummy, `document.querySelector('input[placeholder="Give your post a title"]').value`), `Draft ${stamp}`);
+  assert(await evaluate(dummy, `!document.querySelector('img[alt^="Preview of"]')`), 'photos cannot survive a reload and must not be implied to');
+  await button(dummy, 'Discard draft');
+  await until(dummy, `!document.getElementById('draft-restored')`, 'discarding removes the notice');
+  assert.equal(await evaluate(dummy, `document.querySelector('textarea').value`), '', 'discarding empties the composer');
+  assert.equal(await evaluate(dummy, `localStorage.getItem(${JSON.stringify(draftKey)})`), null, 'discarding clears the stored draft');
+
+  await fill(dummy, 'textarea', `Composed with the keyboard ${stamp}`);
+  await until(dummy, `!document.getElementById('publish-blocked')`, 'nothing blocks this publish any more');
+  await evaluate(dummy, `document.querySelector('textarea').focus()`);
+  await enterWithControl(dummy);
+  await until(dummy, `location.pathname === '/' && document.body.innerText.includes(${JSON.stringify(`Composed with the keyboard ${stamp}`)})`, 'Ctrl+Enter publishes from the textarea');
+  assert.equal(await evaluate(dummy, `localStorage.getItem(${JSON.stringify(draftKey)})`), null, 'publishing clears the draft');
+  const composed = (await api(dummy, '/posts')).posts.find(post => post.content === `Composed with the keyboard ${stamp}`);
+  assert(composed, 'the post published with the keyboard must exist');
+  await api(dummy, `/posts?id=${composed.postId}`, 'DELETE');
+  console.log('PASS: the composer says what is missing, keeps a draft across a reload, and publishes on Ctrl/Cmd+Enter');
 
   alex = await createPage('alex@example.com');
   await navigate(alex, '/');
@@ -862,7 +913,7 @@ try {
   // Responsive review, measured rather than eyeballed: each surface has to fit
   // the four widths the release list names without horizontal overflow, and the
   // failure message reports the widest node so a regression is actionable.
-  for (const route of ['/messages', `/messages/groups/${group.groupId}`, '/profile', '/notifications', '/discover']) {
+  for (const route of ['/create-post', '/messages', `/messages/groups/${group.groupId}`, '/profile', '/notifications', '/discover']) {
     for (const width of [320, 375, 768, 1440]) {
       await command('Emulation.setDeviceMetricsOverride', { width, height: 900, deviceScaleFactor: 1, mobile: width < 640 }, dummy);
       await navigate(dummy, route);
@@ -878,7 +929,7 @@ try {
     }
   }
   await command('Emulation.setDeviceMetricsOverride', { width: 1440, height: 960, deviceScaleFactor: 1, mobile: false }, dummy);
-  console.log('PASS: messages, group chat, profile, notifications and discover fit 320, 375, 768 and 1440 px');
+  console.log('PASS: the composer, messages, group chat, profile, notifications and discover fit 320, 375, 768 and 1440 px');
   assert.deepEqual(exceptions, [], 'Browser runtime exceptions');
   console.log('PASS: no browser runtime exceptions');
   assert.deepEqual(consoleErrors, [], `Browser console errors: ${JSON.stringify(consoleErrors.slice(0, 5))}`);
