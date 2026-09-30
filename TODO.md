@@ -573,7 +573,7 @@ Reference: `GroupHandler.go`, `GroupManagementHandler.go`, `GroupContentHandler.
   still works. One consequence is documented rather than hidden: an open WebSocket for the revoked
   browser survives until that tab's next request 401s, at which point the client's session-expired
   handler clears the user and drops the socket (`DEPLOYMENT.md`).
-- [ ] **P2** Password reset by email. Split out of the item above on 2026-09-28 so it stays
+- [x] **P2** Password reset by email. Split out of the item above on 2026-09-28 so it stays
   visible instead of being implied by the word "reset". The backend has no mailer and no SMTP
   dependency, so this is a feature rather than a variation: choose a provider, add a
   `passwordReset` table holding a hashed single-use token with a short expiry (15-30 minutes),
@@ -581,6 +581,36 @@ Reference: `GroupHandler.go`, `GroupManagementHandler.go`, `GroupContentHandler.
   already does the hard part — verify, rehash, rotate, revoke the account's other sessions — so
   the reset endpoint can reuse it, but it must not ship without rate limiting and without an
   answer that cannot be used to discover which addresses are registered.
+  **Closed 2026-09-30, as far as code can go.** The provider is **SMTP through `net/smtp`** —
+  standard library, so no new dependency, and not deprecated in this toolchain — behind a `Mailer`
+  interface with a log implementation for development and a refusal for production without
+  credentials. Migration `000012` adds `passwordReset`, which stores only the **sha256** of a 256-bit
+  token: a link is single-use, expires after 30 minutes, and requesting a new one invalidates the old
+  one. Single-use is enforced by claiming the row with one
+  `UPDATE … WHERE usedAt IS NULL AND expiresAt > ?`, so two confirms racing cannot both change a
+  password; a test races four and expects exactly one winner. Redeeming reuses the change flow's hard
+  part and goes further than it: the new hash, then `RevokeAllForUser`, which drops the account's
+  session rows *and* every cached token — a token cached from the database, which is what a restart
+  leaves behind, would otherwise stay usable until its cached expiry.
+  Both properties the item insisted on are pinned by tests rather than by prose. The answer is
+  identical for a known and an unknown address (same status, same sentence, exactly one token written
+  in total), and the limit of three per address per fifteen minutes applies to unknown addresses too,
+  because a limit that only covered registered ones would answer the question the endpoint refuses to
+  answer. A deployment without a provider answers `503`, so a reset link can never be written to a log
+  file in production; a refused delivery deletes the token rather than leaving one nobody holds; and a
+  password the register rules refuse costs no token. The frontend has `/forgot` and `/reset` plus a
+  link on the sign-in form, and the browser suite reads the link out of the development mailer's log —
+  the only way a browser test can hold a token the API never returns — resets a freshly created
+  account, signs in with the new password, and asserts that the session which was signed in when the
+  reset happened now answers 401.
+  Evidence: `go test ./...` across nine packages, plus `-race` on the reset tests; `Mailer_test.go`
+  drives the SMTP client against an in-process stub and pins delivery, AUTH when credentials are
+  configured, refusal when the server cannot authenticate, and failure when the server is unreachable;
+  `npx tsc --noEmit` clean, `npm run lint` 0 errors with the same 19 warnings, `npm run build` passes,
+  and the browser suite is green.
+  **What is left, deliberately:** no real provider has been used — an in-process stub is not a mail
+  service — so the first deployment with credentials is the real test, and the uniform answer is
+  uniform in status and body but not in timing. Both are in `DEPLOYMENT.md`.
 
 ## Reliability and UX
 
@@ -1307,6 +1337,30 @@ component classes) are the ones to build on.
   with the exact change list in that section. `canMessage` is still only a type in
   `frontend/src/app/api/social.ts`, so nothing reads the flag yet.
 - No P0 items are open. What is left is the P1/P2/P3 list above.
+
+Changed in the password-reset session (2026-09-30), for review:
+`backend/pkg/db/migrations/sqlite/000012_password_reset.{up,down}.sql` (new),
+`backend/pkg/app/repositories/{PasswordResetRepository.go (new),SessionRepository,AuthRepository}.go`,
+`backend/pkg/app/service/{PasswordResetService.go (new),Mailer.go (new),SessionManager,AuthService}.go`,
+`backend/pkg/payload/user/PasswordResetDTOs.go` (new), `backend/pkg/app/handlers/{PasswordResetHandler.go (new),HandlerContext,utils}.go`,
+`backend/errors.go`, `backend/cmd/{router,main}.go`, `backend/pkg/db/sqlite/migrations_test.go`,
+`backend/cmd/password_reset_test.go` (new), `backend/pkg/app/service/Mailer_test.go` (new),
+`frontend/src/app/{api/social.ts,login/page.tsx}`, `frontend/src/app/{forgot,reset}/page.tsx` (new),
+`frontend/scripts/integration-smoke.mjs`, `README.md`, `DEPLOYMENT.md`, `TODO.md`.
+
+The last open P2 that could be built here, closed as far as code can go. The item asked for a provider:
+the choice is `net/smtp`, which is standard library (so no new dependency, and it is not deprecated in
+this toolchain) behind a `Mailer` interface, with a log mailer for development and — deliberately —
+nothing for production without SMTP, because a reset link in a log file is a working credential in a log
+file. The token is 256 random bits, only its sha256 is stored, links are single-use and expire in 30
+minutes, and redeeming one revokes every session the account had, cached tokens included: that last part
+is `RevokeAllForUser`, which exists because `SaveSession`'s rotation has no equivalent for a flow with no
+browser to hand a replacement token to. Single-use is a claim-once `UPDATE`, and there is a test that
+races four confirms to prove it. The two properties the item called out — no enumeration oracle, and a
+rate limit that does not itself become one — are pinned by tests that compare the two answers and apply
+the limit to an unknown address as well. Two limits are recorded rather than implied: no real provider
+has been exercised (an in-process stub is not a mail service) and the uniform answer is uniform in status
+and body but not in timing.
 
 Changed in the browser-CI session (2026-09-30), for review:
 `frontend/scripts/integration-smoke.mjs`, `.github/workflows/ci.yml`, `.gitlab-ci.yml`, `README.md`,
