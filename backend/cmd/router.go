@@ -88,8 +88,14 @@ func routes() http.Handler {
 		"POST /api/v1/messages/read":              handlers.HandlerCtx.ReadChat,
 		"GET /api/v1/saved-posts":                 handlers.HandlerCtx.SavedPosts,
 		"GET /api/v1/posts/search":                handlers.HandlerCtx.SearchPosts,
-		"POST /api/v1/posts/{postId}/save":        handlers.HandlerCtx.SavePost,
-		"DELETE /api/v1/posts/{postId}/save":      handlers.HandlerCtx.UnsavePost,
+		"GET /api/v1/hashtags/{tag}":              handlers.HandlerCtx.HashtagPosts,
+		// A handle resolves to a profile, but the route cannot live under `/users/`: a
+		// literal segment there beside `{userId}` collides with `/users/{userId}/media`
+		// and its siblings, which have the same shape, and Go's mux refuses that at
+		// registration rather than at request time.
+		"GET /api/v1/handles/{nickname}":     handlers.HandlerCtx.UserByNickname,
+		"POST /api/v1/posts/{postId}/save":   handlers.HandlerCtx.SavePost,
+		"DELETE /api/v1/posts/{postId}/save": handlers.HandlerCtx.UnsavePost,
 	} {
 		mux.Handle(pattern, pkgmiddleware.AuthMiddleware(handler))
 	}
