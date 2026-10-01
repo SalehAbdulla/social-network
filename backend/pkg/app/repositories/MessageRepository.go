@@ -8,6 +8,9 @@ import (
 type MessageRepository interface {
 	GetChatUsers(currentUserID string) ([]models.ChatUser, error)
 	GetMessages(conversationPartnerID string, currentUserID string, offset int, limit int) ([]models.Message, int, error)
+	// GetConversationMedia is the same thread as GetMessages, filtered to the rows that
+	// carry an attachment: it backs the chat's media tab.
+	GetConversationMedia(conversationPartnerID string, currentUserID string, offset int, limit int) ([]models.Message, int, error)
 	SaveMessage(senderID string, recipientID string, textMessage string, media ...string) (models.Message, error)
 	// CanMessage is implemented alongside the social queries; the message
 	// service uses it to enforce the chat rule in one place.
@@ -64,6 +67,50 @@ func (db *DB) GetMessages(conversationPartnerID string, currentUserID string, of
 		messages = []models.Message{}
 	}
 
+	return messages, totalElements, nil
+}
+
+// GetConversationMedia lists the attachments in one direct conversation, newest first. It is
+// the same thread `GetMessages` reads — the same two participants, the same rule about rows
+// hidden for this viewer — narrowed to the messages that carry an attachment. Nothing here
+// computes a reaction total: a tile in the media tab has no control to draw.
+func (db *DB) GetConversationMedia(conversationPartnerID string, currentUserID string, offset int, limit int) ([]models.Message, int, error) {
+	const mediaFilter = `mediaUrl <> '' AND NOT EXISTS (SELECT 1 FROM hidden_message h WHERE h.messageId=message.messageId AND h.userId=?) AND ((senderId = ? AND recipientId = ?) OR (senderId = ? AND recipientId = ?))`
+
+	var totalElements int
+	if err := db.Conn.QueryRow(
+		"SELECT COUNT(*) FROM message WHERE "+mediaFilter,
+		currentUserID, currentUserID, conversationPartnerID, conversationPartnerID, currentUserID,
+	).Scan(&totalElements); err != nil {
+		return nil, 0, realtimeforum.ErrInternal
+	}
+
+	rows, err := db.Conn.Query(
+		`SELECT messageId, senderId, recipientId, content, createdAt, isRead, mediaUrl, mediaType, editedAt
+		 FROM message WHERE `+mediaFilter+`
+		 ORDER BY createdAt DESC, messageId DESC
+		 LIMIT ? OFFSET ?`,
+		currentUserID, currentUserID, conversationPartnerID, conversationPartnerID, currentUserID, limit, offset,
+	)
+	if err != nil {
+		return nil, 0, realtimeforum.ErrInternal
+	}
+	defer rows.Close()
+
+	var messages []models.Message
+	for rows.Next() {
+		var msg models.Message
+		if err := rows.Scan(&msg.MessageId, &msg.SenderId, &msg.RecipientId, &msg.TextMessage, &msg.TimeStamp, &msg.IsRead, &msg.MediaURL, &msg.MediaType, &msg.EditedAt); err != nil {
+			return nil, 0, realtimeforum.ErrInternal
+		}
+		messages = append(messages, msg)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, 0, realtimeforum.ErrInternal
+	}
+	if messages == nil {
+		messages = []models.Message{}
+	}
 	return messages, totalElements, nil
 }
 
