@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strconv"
 	"time"
 
 	_ "github.com/mattn/go-sqlite3"
@@ -30,6 +31,17 @@ func main() {
 	app.LogLevel = os.Getenv("LOG_LEVEL")
 
 	logger.InitLogger(&app)
+
+	// A machine driving a whole test suite is one direct peer, so the browser harness
+	// raises this; the default is left alone for everyone else.
+	if configured := os.Getenv("RATE_LIMIT_PER_MINUTE"); configured != "" {
+		parsed, err := strconv.Atoi(configured)
+		if err != nil || parsed <= 0 {
+			app.Logger.Error("ignoring invalid RATE_LIMIT_PER_MINUTE", "value", configured)
+		} else {
+			app.RateLimitPerMinute = parsed
+		}
+	}
 
 	backendDir, err := config.BackendDir()
 	if err != nil {
