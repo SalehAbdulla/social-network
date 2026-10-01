@@ -882,6 +882,32 @@ try {
   await until(dummy, `!document.body.innerText.includes(${JSON.stringify(`Edited browser message ${stamp}`)})`, 'delete for everyone');
   console.log('PASS: live typing, messages, read receipts, edits and scoped deletion');
 
+  // The conversation's media tab: the attachments in the thread, and one opening in the same
+  // lightbox the feed uses rather than in a new tab. The attachment is seeded through the API
+  // because the composer path is already covered above.
+  const mediaMessage = await evaluate(dummy, `(async () => {
+    const binary = atob('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aD1sAAAAASUVORK5CYII=');
+    const bytes = new Uint8Array([...binary].map(character => character.charCodeAt(0)));
+    const form = new FormData();
+    form.append('file', new Blob([bytes], { type: 'image/png' }), 'chat-photo.png');
+    const uploaded = await (await fetch('/api/v1/media', { method: 'POST', body: form })).json();
+    const sent = await (await fetch('/api/v1/messages', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ recipientId: ${JSON.stringify(originalAlex.userId)}, text: 'A photo in the chat', mediaUrl: uploaded.data.url, mediaType: uploaded.data.mediaType }) })).json();
+    return sent.data;
+  })()`);
+  assert(mediaMessage?.mediaUrl, `the media message must be sent: ${JSON.stringify(mediaMessage)}`);
+  await navigate(dummy, `/messages/${originalAlex.userId}`);
+  await evaluate(dummy, `[...document.querySelectorAll('nav[aria-label="Conversation tabs"] button')].find(candidate => candidate.textContent === 'Media').click()`);
+  await until(dummy, `!!document.querySelector('button[aria-label="Open attachment 1"]')`, 'the media tab lists the attachment');
+  await evaluate(dummy, `document.querySelector('button[aria-label="Open attachment 1"]').click()`);
+  await until(dummy, `!!document.querySelector('[role="dialog"][aria-label="Conversation media viewer"]')`, 'the attachment opens in the lightbox');
+  await command('Input.dispatchKeyEvent', { type: 'keyDown', key: 'Escape', code: 'Escape', windowsVirtualKeyCode: 27 }, dummy);
+  await until(dummy, `!document.querySelector('[role="dialog"][aria-label="Conversation media viewer"]')`, 'the lightbox closes again');
+  // Back to the thread, because the steps that follow type into the composer and the media
+  // tab does not render one: leaving the conversation on the other tab would break them.
+  await evaluate(dummy, `[...document.querySelectorAll('nav[aria-label="Conversation tabs"] button')].find(candidate => candidate.textContent === 'Chat').click()`);
+  await until(dummy, `!!document.querySelector('textarea[aria-label="Message"]')`, 'the chat tab returns with its composer');
+  console.log('PASS: a conversation lists its attachments, and one opens in the app rather than a new tab');
+
   // Fifty sockets through the frontend proxy at once, with one message that every
   // one of them has to receive: the hub's fan-out and Next's upgrade path are what a
   // single connection cannot exercise, and this is the only place both are real.
