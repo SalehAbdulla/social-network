@@ -193,6 +193,8 @@ POST_A="$(field "$BODY" data.postId)"
 call "$JAR_A" GET "/api/v1/posts?page=1&size=10&sortBy=createdat&sortOrder=desc" 200
 # route: GET /api/v1/post
 call "$JAR_A" GET "/api/v1/post?id=$POST_A" 200
+# route: GET /api/v1/posts/search
+call "$JAR_A" GET "/api/v1/posts/search?q=Tour&page=1&size=10" 200
 # route: PUT /api/v1/posts/{postId}
 call "$JAR_A" PUT "/api/v1/posts/$POST_A" 200 \
 	'{"title":"Tour post, edited","content":"Edited by the API tour.","imageUrls":[],"privacy":"public","selectedFollowerIds":[]}'
