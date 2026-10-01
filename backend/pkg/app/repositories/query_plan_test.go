@@ -213,6 +213,15 @@ func planCases() []struct {
 			"",
 		},
 		{
+			// The hashtag page matches `#tag` with boundaries, which is a GLOB over a
+			// lowercased body — no index can serve a pattern that starts with `*`, so it
+			// scans for the same reason the search does. The empty index is the claim.
+			"hashtag page",
+			postFeedSelect + postVisibility + hashtagFilter + "\n\t\tORDER BY p.createdAt DESC, p.postId DESC\n\t\tLIMIT 10 OFFSET 0",
+			withTail(visible, hashtagGlob("plan"), 10, 0),
+			"",
+		},
+		{
 			"feed count",
 			"SELECT COUNT(*) FROM post p WHERE " + postVisibility,
 			visible,
