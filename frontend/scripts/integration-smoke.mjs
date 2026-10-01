@@ -3,6 +3,53 @@ import { spawn } from 'node:child_process';
 import { existsSync } from 'node:fs';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
+import { deflateSync } from 'node:zlib';
+
+// A PNG written by hand. The downscale check below needs a photo wider than the cap,
+// and nothing in these dependencies encodes one: the fixtures here are all 1x1, and a
+// canvas only exists inside the browser. The format is a signature, an IHDR, a zlib
+// stream of raw scanlines and an IEND, each chunk carrying its own CRC.
+function crc32(buffer) {
+  let crc = 0xFFFFFFFF;
+  for (const byte of buffer) {
+    crc ^= byte;
+    for (let bit = 0; bit < 8; bit++) crc = (crc >>> 1) ^ (0xEDB88320 & -(crc & 1));
+  }
+  return (crc ^ 0xFFFFFFFF) >>> 0;
+}
+
+function pngChunk(type, data) {
+  const length = Buffer.alloc(4);
+  length.writeUInt32BE(data.length);
+  const body = Buffer.concat([Buffer.from(type, 'ascii'), data]);
+  const checksum = Buffer.alloc(4);
+  checksum.writeUInt32BE(crc32(body));
+  return Buffer.concat([length, body, checksum]);
+}
+
+function largePng(width, height) {
+  const header = Buffer.alloc(13);
+  header.writeUInt32BE(width, 0);
+  header.writeUInt32BE(height, 4);
+  header[8] = 8; // bit depth
+  header[9] = 2; // colour type: truecolour RGB
+  const raw = Buffer.alloc(height * (1 + width * 3));
+  let at = 0;
+  for (let y = 0; y < height; y++) {
+    raw[at++] = 0; // filter: none
+    for (let x = 0; x < width; x++) {
+      raw[at++] = (x + y) & 0xFF;
+      raw[at++] = (x * 2) & 0xFF;
+      raw[at++] = (y * 2) & 0xFF;
+    }
+  }
+  return Buffer.concat([
+    Buffer.from([0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A]),
+    pngChunk('IHDR', header),
+    pngChunk('IDAT', deflateSync(raw)),
+    pngChunk('IEND', Buffer.alloc(0)),
+  ]);
+}
 
 const base = process.env.BASE_URL || 'http://localhost:4000';
 const taskDir = process.env.TEST_ARTIFACT_DIR || path.resolve('../backend/tmp/browser-check');
@@ -378,6 +425,31 @@ try {
   assert(composed, 'the post published with the keyboard must exist');
   await api(dummy, `/posts?id=${composed.postId}`, 'DELETE');
   console.log('PASS: the composer says what is missing, keeps a draft across a reload, and publishes on Ctrl/Cmd+Enter');
+
+  // A photo larger than the cap is shrunk in the browser before it is sent, so the bytes
+  // that travel and the bytes kept are the capped ones. The fixture is 2000 px wide — a
+  // phone photo's shape — and the assertion is on what the *server* serves back, since
+  // that is the file the upload actually produced.
+  const largeFixture = path.join(taskDir, 'large.png');
+  await writeFile(largeFixture, largePng(2000, 1500));
+  await navigate(dummy, '/create-post');
+  await fill(dummy, 'textarea', `Downscaled upload ${stamp}`);
+  const largeDocument = await command('DOM.getDocument', {}, dummy);
+  const largeNode = await command('DOM.querySelector', { nodeId: largeDocument.root.nodeId, selector: 'input[type="file"]' }, dummy);
+  await command('DOM.setFileInputFiles', { nodeId: largeNode.nodeId, files: [largeFixture] }, dummy);
+  // The picker decodes the file before it accepts it — that is where the caption's
+  // dimensions come from — so publishing before the preview exists would send a post
+  // with no photo at all. The wait is the same one the smaller fixture above uses.
+  await until(dummy, `!!document.querySelector('img[alt="Preview of large.png"]')`, 'the large photo is attached');
+  await button(dummy, 'Publish Post');
+  await until(dummy, `location.pathname === '/' && document.body.innerText.includes(${JSON.stringify(`Downscaled upload ${stamp}`)})`, 'the large photo publishes');
+  const largePost = (await api(dummy, '/posts')).posts.find(post => post.content === `Downscaled upload ${stamp}`);
+  assert(largePost && largePost.imageUrls.length === 1, `the downscaled post carries its photo: ${JSON.stringify(largePost)}`);
+  const stored = await evaluate(dummy, `(async () => { const image = new Image(); image.src = ${JSON.stringify(largePost.imageUrls[0])}; await image.decode(); return { width: image.naturalWidth, height: image.naturalHeight }; })()`);
+  assert.equal(stored.width, 1600, `a 2000 px upload must be stored at the cap, got ${JSON.stringify(stored)}`);
+  assert.equal(stored.height, 1200, `the aspect ratio must survive the shrink, got ${JSON.stringify(stored)}`);
+  await api(dummy, `/posts?id=${largePost.postId}`, 'DELETE');
+  console.log('PASS: a photo above the cap is downscaled in the browser before it is uploaded');
 
   alex = await createPage('alex@example.com');
   await navigate(alex, '/');
