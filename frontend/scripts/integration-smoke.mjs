@@ -229,7 +229,7 @@ async function checkMessageMenus(page, label) {
 const stamp = String(Date.now());
 let dummy, alex, originalDummy, originalAlex, postId, storyId, mediaURL;
 try {
-  for (const route of ['/', '/saved', '/post/1', '/post/1/edit', '/profile', '/profile/someone', '/messages', '/messages/someone', '/groups', '/groups/1', '/connections', '/discover', '/notifications', '/create-post', '/CreatePost', '/missing-page']) {
+  for (const route of ['/', '/saved', '/search', '/post/1', '/post/1/edit', '/profile', '/profile/someone', '/messages', '/messages/someone', '/groups', '/groups/1', '/connections', '/discover', '/notifications', '/create-post', '/CreatePost', '/missing-page']) {
     const response = await fetch(base + route, { redirect: 'manual' });
     assert.equal(response.status, 307, `Anonymous ${route} must redirect before rendering`);
     assert.equal(new URL(response.headers.get('location'), base).pathname, '/login');
@@ -685,6 +685,27 @@ try {
   // because the heading is styled uppercase and innerText returns rendered text.
   assert(await evaluate(alex, `(() => { const heading = [...document.querySelectorAll('h4')].find(node => node.textContent.trim().toLowerCase() === 'upcoming'); const event = [...document.querySelectorAll('article')].find(node => node.innerText.includes(${JSON.stringify(`Meetup ${stamp}`)})); return !!heading && !!event && (heading.compareDocumentPosition(event) & Node.DOCUMENT_POSITION_FOLLOWING) !== 0; })()`), 'the upcoming event belongs under the Upcoming heading');
   console.log('PASS: group notifications deep-link to the tab that needs attention');
+
+  // The unified search page: one query, three surfaces. People and groups have had a
+  // `q` for a while; the post half is the endpoint this change added, so the
+  // assertion that matters most is that a term only the post carries brings it back.
+  await navigate(dummy, '/search');
+  await until(dummy, `!!document.querySelector('input[aria-label="Search posts, people and groups"]')`, 'search page');
+  await fill(dummy, 'input[aria-label="Search posts, people and groups"]', `Updated ${stamp}`);
+  await button(dummy, 'Search');
+  await until(dummy, `location.search.includes('q=') && document.body.innerText.includes(${JSON.stringify(`Updated ${stamp}`)})`, 'the post search finds the post');
+  await fill(dummy, 'input[aria-label="Search posts, people and groups"]', 'alexdemo');
+  await button(dummy, 'Search');
+  await until(dummy, `document.body.innerText.includes('@alexdemo')`, 'the people half finds Alex');
+  await fill(dummy, 'input[aria-label="Search posts, people and groups"]', `Browser group ${stamp}`);
+  await button(dummy, 'Search');
+  await until(dummy, `document.body.innerText.includes(${JSON.stringify(`Browser group ${stamp}`)})`, 'the group half finds the group');
+  // The terms are kept in this browser and offered back, including after a reload.
+  await navigate(dummy, '/search');
+  await until(dummy, `[...document.querySelectorAll('button')].some(candidate => candidate.textContent.trim() === ${JSON.stringify(`Browser group ${stamp}`)})`, 'the last term is offered back');
+  await command('Page.navigate', { url: base + '/search' }, dummy);
+  await until(dummy, `[...document.querySelectorAll('button')].some(candidate => candidate.textContent.trim() === ${JSON.stringify(`Browser group ${stamp}`)})`, 'the recent term survives a reload');
+  console.log('PASS: one search page looks through posts, people and groups and remembers the terms');
 
   await navigate(dummy, '/');
   await evaluate(dummy, `[...document.querySelectorAll('button')].find(button => button.textContent.includes('Create story')).click()`);
