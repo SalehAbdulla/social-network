@@ -204,6 +204,15 @@ func planCases() []struct {
 		index string
 	}{
 		{
+			// The search adds a LIKE the planner cannot use an index for: the pattern
+			// starts with `%`, so this scans and evaluates the visibility fragment per
+			// row. The empty index is the claim, not an omission.
+			"post search",
+			postFeedSelect + postVisibility + postSearchFilter + "\n\t\tORDER BY p.createdAt DESC, p.postId DESC\n\t\tLIMIT 10 OFFSET 0",
+			withTail(visible, likePattern("plan"), likePattern("plan"), 10, 0),
+			"",
+		},
+		{
 			"feed count",
 			"SELECT COUNT(*) FROM post p WHERE " + postVisibility,
 			visible,
