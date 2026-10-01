@@ -30,6 +30,10 @@ From the repository root, `docker compose up --build -d` builds separate backend
 
 `POST /api/v1/posts/{postId}/save` and `DELETE /api/v1/posts/{postId}/save` add and remove one post from the caller's private list, and `GET /api/v1/saved-posts` pages it. Both writes are idempotent — saving the same post twice, or un-saving one that was never saved, answers 200 with the resulting state rather than a conflict — and saving a post the caller cannot read is a 404, the same answer a read gives, so the endpoint cannot be used to probe for posts. The list runs the same visibility fragment as the feed (`PostRepository.postVisibility`), which is why a post that later becomes unreadable is absent from it rather than a back door to it, and a deleted post takes its row with it through `ON DELETE CASCADE`. Feed and single-post responses carry a viewer-relative `isSaved` for the control on the card.
 
+## Search
+
+`GET /api/v1/posts/search?q=&page=&size=` answers with the posts whose title or content contains the term, newest first, in the feed's response shape and behind the feed's own visibility fragment (`PostRepository.postVisibility`) — so a search is not a second way to read a post. The pattern is escaped by `likePattern`, so a `%` or `_` typed into the box is a character rather than a wildcard, and a blank query is a 400 rather than the `%%` that would match every post. No index can serve it, because the pattern starts with `%`; that is why the query-plan table lists this query with no index instead of claiming one. `GET /api/v1/users?q=` and `GET /api/v1/groups?q=` already answered the other two halves of the page, and `likePattern` is shared by all three now rather than written out in each.
+
 ## WebSocket protocol
 
 The hub is `pkg/websocket` and `pkg/app/handlers/WebSocketHandler.go` is the only reader of a
