@@ -5,6 +5,7 @@ import { PenSquare, RefreshCw } from 'lucide-react';
 import { type Page, type Post } from './api/social';
 import { usePagedList } from './lib/usePagedList';
 import StoriesBar from './components/StoriesBar';
+import SuggestedPeople from './components/SuggestedPeople';
 import PostCard from './components/PostCard';
 import RequestState from './components/RequestState';
 import LoadMore from './components/LoadMore';
@@ -33,6 +34,7 @@ export default function Feed() {
       <Link href="/create-post" className="chat-primary inline-flex items-center gap-2"><PenSquare size={16} />New post</Link>
     </header>
     <StoriesBar />
+    <SuggestedPeople />
     {feed.refreshing && <p role="status" className="flex items-center justify-center gap-2 text-xs font-medium text-slate-400"><RefreshCw size={13} className="animate-spin" aria-hidden="true" />Refreshing your feed…</p>}
     {feed.loading
       ? <PostListSkeleton />
