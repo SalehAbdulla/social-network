@@ -276,7 +276,7 @@ async function checkMessageMenus(page, label) {
 const stamp = String(Date.now());
 let dummy, alex, originalDummy, originalAlex, postId, storyId, mediaURL;
 try {
-  for (const route of ['/', '/saved', '/search', '/post/1', '/post/1/edit', '/profile', '/profile/someone', '/messages', '/messages/someone', '/groups', '/groups/1', '/connections', '/discover', '/notifications', '/create-post', '/CreatePost', '/missing-page']) {
+  for (const route of ['/', '/saved', '/search', '/hashtag/travel', '/u/dummyuser', '/post/1', '/post/1/edit', '/profile', '/profile/someone', '/messages', '/messages/someone', '/groups', '/groups/1', '/connections', '/discover', '/notifications', '/create-post', '/CreatePost', '/missing-page']) {
     const response = await fetch(base + route, { redirect: 'manual' });
     assert.equal(response.status, 307, `Anonymous ${route} must redirect before rendering`);
     assert.equal(new URL(response.headers.get('location'), base).pathname, '/login');
@@ -450,6 +450,23 @@ try {
   assert.equal(stored.height, 1200, `the aspect ratio must survive the shrink, got ${JSON.stringify(stored)}`);
   await api(dummy, `/posts?id=${largePost.postId}`, 'DELETE');
   console.log('PASS: a photo above the cap is downscaled in the browser before it is uploaded');
+
+  // A hashtag and a mention are links, and each goes somewhere real: the tag to its
+  // results page, the mention to the member it names through the handle lookup. The tag
+  // is compared whole by the endpoint, so the fixture uses one only this post carries.
+  const tag = `rebootcheck${stamp}`;
+  await navigate(dummy, '/create-post');
+  await fill(dummy, 'textarea', `A tagged post #${tag} that mentions @alexdemo too.`);
+  await button(dummy, 'Publish Post');
+  await until(dummy, `location.pathname === '/' && !!document.querySelector('a[href="/hashtag/${tag}"]')`, 'the tag is a link on the card');
+  assert(await evaluate(dummy, `!!document.querySelector('a[href="/u/alexdemo"]')`), 'the mention is a link on the card');
+  await evaluate(dummy, `document.querySelector('a[href="/hashtag/${tag}"]').click()`);
+  await until(dummy, `location.pathname === '/hashtag/${tag}' && document.body.innerText.includes(${JSON.stringify(`A tagged post #${tag}`)})`, 'the tag page lists its post');
+  await navigate(dummy, '/');
+  await until(dummy, `!!document.querySelector('a[href="/u/alexdemo"]')`, 'the mention is on the feed');
+  await evaluate(dummy, `document.querySelector('a[href="/u/alexdemo"]').click()`);
+  await until(dummy, `location.pathname.startsWith('/profile/') && document.body.innerText.includes('@alexdemo')`, 'the mention opens the member it names');
+  console.log('PASS: a hashtag opens its results page and a mention opens the member it names');
 
   alex = await createPage('alex@example.com');
   await navigate(alex, '/');
