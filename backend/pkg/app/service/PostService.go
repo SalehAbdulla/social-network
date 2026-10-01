@@ -20,6 +20,10 @@ type PostService interface {
 	SavePost(userID string, postID int) error
 	UnsavePost(userID string, postID int) error
 	GetSavedPosts(pageNumber int, pageSize int, userID string) (posts.PostResponse, error)
+	// SearchPosts is the post half of the search page. It inherits the feed's
+	// visibility rule through the repository, so it can only return posts the
+	// viewer was already allowed to open.
+	SearchPosts(search string, pageNumber int, pageSize int, userID string) (posts.PostResponse, error)
 }
 
 type PostServiceImpl struct {
@@ -60,7 +64,26 @@ func (p PostServiceImpl) GetPosts(pageNumber int, pageSize int, sortBy string, s
 	if err != nil {
 		return posts.PostResponse{}, err
 	}
+	return p.pageResponse(postsModel, totalElements, pageNumber, pageSize, userId)
+}
 
+// SearchPosts is the post half of the search page. The query is the repository's;
+// everything a caller sees is shaped here, so a search result is the same kind of
+// object as a feed card.
+func (p PostServiceImpl) SearchPosts(search string, pageNumber int, pageSize int, userID string) (posts.PostResponse, error) {
+	postsModel, totalElements, err := p.db.SearchPosts(search, pageNumber, pageSize, userID)
+	if err != nil {
+		return posts.PostResponse{}, err
+	}
+	return p.pageResponse(postsModel, totalElements, pageNumber, pageSize, userID)
+}
+
+// pageResponse decorates one page of posts with the viewer-relative flags and the
+// reaction score, and shapes the answer the feed and the search both give. The two
+// differ only in how they obtained their rows, which is why the shaping lives in one
+// place: a page that forgot to fill `isSaved` would draw an empty bookmark on a post
+// the viewer had saved.
+func (p PostServiceImpl) pageResponse(postsModel []models.Post, totalElements, pageNumber, pageSize int, userId string) (posts.PostResponse, error) {
 	// One query settles which of the page's posts this viewer has bookmarked,
 	// rather than one query per card.
 	postIDs := make([]int, len(postsModel))
@@ -80,7 +103,6 @@ func (p PostServiceImpl) GetPosts(pageNumber int, pageSize int, sortBy string, s
 	}
 
 	totalPages := int(math.Ceil(float64(totalElements) / float64(pageSize)))
-	lastPage := pageNumber >= totalPages
 
 	return posts.PostResponse{
 		Posts:         postDTOs,
@@ -88,7 +110,7 @@ func (p PostServiceImpl) GetPosts(pageNumber int, pageSize int, sortBy string, s
 		PageSize:      pageSize,
 		TotalElements: totalElements,
 		TotalPages:    totalPages,
-		LastPage:      lastPage,
+		LastPage:      pageNumber >= totalPages,
 	}, nil
 }
 
