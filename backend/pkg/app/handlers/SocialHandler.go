@@ -76,6 +76,25 @@ func (re *HandlerContext) UserProfile(w http.ResponseWriter, r *http.Request) {
 	if id == "" || id == "me" {
 		id = currentUser(r)
 	}
+	re.writeProfile(w, r, id)
+}
+
+// UserByNickname is how a mention reaches a profile: a linkifier only has the text of an
+// `@handle`, so this turns the handle into the account it names and answers with exactly
+// what `/users/{userId}` would. The masking lives in one place below rather than being
+// copied, so a private profile cannot be read through the mention route instead.
+func (re *HandlerContext) UserByNickname(w http.ResponseWriter, r *http.Request) {
+	id, err := re.SocialService.Repo.UserIDByNickname(r.PathValue("nickname"))
+	if err != nil {
+		re.HandleError(w, r, err)
+		return
+	}
+	re.writeProfile(w, r, id)
+}
+
+// writeProfile answers with one member's profile, as much of it as the viewer is
+// entitled to see.
+func (re *HandlerContext) writeProfile(w http.ResponseWriter, r *http.Request, id string) {
 	u, err := re.SocialService.Repo.SocialProfile(id, currentUser(r))
 	if err != nil {
 		re.HandleError(w, r, err)
