@@ -253,12 +253,17 @@ try {
   await navigate(dummy, '/create-post');
   await fill(dummy, 'input[placeholder="Give your post a title"]', `Browser ${stamp}`);
   await fill(dummy, 'textarea', `Persisted browser integration test ${stamp}`);
+  // Two photos rather than one, so the lightbox below has a set to move through.
+  const pixel = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aD1sAAAAASUVORK5CYII=';
   const fixture = path.join(taskDir, 'pixel.png');
-  await writeFile(fixture, Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aD1sAAAAASUVORK5CYII=', 'base64'));
+  const secondFixture = path.join(taskDir, 'pixel-2.png');
+  await writeFile(fixture, Buffer.from(pixel, 'base64'));
+  await writeFile(secondFixture, Buffer.from(pixel, 'base64'));
   const document = await command('DOM.getDocument', {}, dummy);
   const fileNode = await command('DOM.querySelector', { nodeId: document.root.nodeId, selector: 'input[type="file"]' }, dummy);
-  await command('DOM.setFileInputFiles', { nodeId: fileNode.nodeId, files: [fixture] }, dummy);
+  await command('DOM.setFileInputFiles', { nodeId: fileNode.nodeId, files: [fixture, secondFixture] }, dummy);
   await until(dummy, `!!document.querySelector('img[alt="Preview of pixel.png"]')`, 'image preview');
+  await until(dummy, `!!document.querySelector('img[alt="Preview of pixel-2.png"]')`, 'second image preview');
   // The tile reports what was chosen before the upload is spent — the measured
   // canvas and the file's own size — so a rejection is never the first mention of
   // either. The fixture is a 1x1 PNG, hence the shape of the expected caption.
@@ -306,6 +311,23 @@ try {
   assert.deepEqual(edited.imageUrls, created.imageUrls);
   assert.equal(edited.score, 1);
   console.log('PASS: owner edit button, prefilled editor, cancel and save preserve photos and votes');
+
+  // The lightbox replaces opening the raw file in a new tab: the photo opens in a
+  // dialog, the arrow keys move through the set, Escape closes it, and the focus
+  // goes back to the picture it was opened from. The click is a real mouse event so
+  // the button can hold focus at all — a scripted `.click()` would not.
+  await until(dummy, `!!document.querySelector('button[aria-label="Open image 1 of 2"]')`, 'photos open in a viewer');
+  await clickAt(dummy, 'button[aria-label="Open image 1 of 2"]');
+  await until(dummy, `document.activeElement?.getAttribute('aria-label') === 'Post photos viewer'`, 'the viewer takes focus');
+  assert.equal(await evaluate(dummy, `document.querySelector('[role="dialog"] img').getAttribute('src')`), `${mediaURL}?size=large`, 'the viewer asks for the large derivative');
+  await command('Input.dispatchKeyEvent', { type: 'keyDown', key: 'ArrowRight', code: 'ArrowRight', windowsVirtualKeyCode: 39 }, dummy);
+  await until(dummy, `document.querySelector('[role="dialog"] img').getAttribute('alt') === 'Post photos 2 of 2'`, 'the arrow key advances');
+  await command('Input.dispatchKeyEvent', { type: 'keyDown', key: 'ArrowLeft', code: 'ArrowLeft', windowsVirtualKeyCode: 37 }, dummy);
+  await until(dummy, `document.querySelector('[role="dialog"] img').getAttribute('alt') === 'Post photos 1 of 2'`, 'the arrow key goes back');
+  await command('Input.dispatchKeyEvent', { type: 'keyDown', key: 'Escape', code: 'Escape', windowsVirtualKeyCode: 27 }, dummy);
+  await until(dummy, `!document.querySelector('[role="dialog"][aria-label="Post photos viewer"]')`, 'Escape closes the viewer');
+  await until(dummy, `document.activeElement?.getAttribute('aria-label') === 'Open image 1 of 2'`, 'focus returns to the picture it was opened from');
+  console.log('PASS: a photo opens in a lightbox, moves with the arrow keys and closes on Escape');
 
   // Bookmarks: the control lives on the card, the list has a page of its own, and
   // un-saving from that page drops the row rather than leaving a stale card. Both
