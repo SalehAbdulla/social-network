@@ -1366,9 +1366,31 @@ Ordered roughly by value for effort.
   `PostRepository.GetPosts` ran its per-post `selectedUsers` lookup while its own `*Rows` was still
   open, which deadlocks whenever the pool holds one connection (the tests set `MaxOpenConns(1)`);
   that lookup now runs after the page's rows are closed, and `SavedPosts` does the same.
-- [ ] **P3** Hashtags and @mentions: linkify them in posts, comments and chat, plus a hashtag
+- [x] **P3** Hashtags and @mentions: linkify them in posts, comments and chat, plus a hashtag
   results page. Do this after P0-2, since `CommentHandler.go:114` currently rejects
   non-ASCII comments.
+  Closed 2026-10-01. `lib/linkify.tsx` scans text for `#tags` and `@handles` and renders links;
+  it is a scan rather than a regular expression because the boundary rule is naturally a
+  lookbehind, and a lookbehind is a syntax error in browser versions this app still serves —
+  where the cost would be a page that does not parse rather than one message rendered plainly.
+  It is used in `PostCard` (post bodies and comment text), `DirectConversation` (chat) and
+  `GroupActivity` (group posts and comments). A tag opens `/hashtag/[tag]`, backed by
+  `GET /api/v1/hashtags/{tag}`; a mention opens `/u/[nickname]`, which resolves through
+  `GET /api/v1/handles/{nickname}` and redirects to the profile. **No migration and no tag
+  table:** the tag is matched in the text with `GLOB` over a lowercased, space-padded
+  `title || content`, which is what expresses "not glued to a word on either side" — so `#travel`
+  matches neither `#traveling` nor `abc#travel` — and it means a post written before this is
+  findable by its tag immediately, with no backfill. The handler holds the tag to `[a-z0-9_]`,
+  which is what keeps it out of GLOB's own syntax. Like the text search it scans, so it joins the
+  plan table **with no index**. **Decision:** the handle route cannot live under `/users/` — a
+  literal segment there sits at `{userId}`'s depth in `/users/{userId}/media` and its siblings,
+  and Go's mux refuses the pair at registration — so it answers at `/api/v1/handles/{nickname}`.
+  **Cost recorded:** the tag page indexes posts only, so a tag used solely in a comment or a chat
+  message opens an empty page; indexing those is exactly the tag table this design avoids.
+  Verified: `go build ./...`, `go vet ./...`, `go test ./...` (including the new
+  `cmd/hashtag_test.go`, the plan case and the tour-coverage check both new routes extend),
+  `npm run lint` (0 errors), `npx tsc --noEmit`, `npm run build` (emits both routes),
+  `node scripts/dead-modules.mjs` (0 of 66), and the browser suite.
 - [ ] **P3** Reposts and quote posts in the feed.
 - [x] **P3** Unified search across posts, groups and users in one results page, with recent
   searches kept locally.
@@ -1500,6 +1522,59 @@ component classes) are the ones to build on.
   session that registering creates — do not "simplify" that into a register field.
 - P0-4 (notification vs message split) is complete; it touched `SideBar.tsx` and
   `notifications/page.tsx`.
+Changed in the hashtags session (2026-10-01), for review:
+`backend/pkg/app/repositories/PostRepository.go`,
+`backend/pkg/app/repositories/SocialRepository.go`, `backend/pkg/app/repositories/SavedPostRepository.go`,
+`backend/pkg/app/service/PostService.go`, `backend/pkg/app/handlers/PostHandler.go`,
+`backend/pkg/app/handlers/SocialHandler.go`, `backend/pkg/app/repositories/query_plan_test.go`,
+`backend/cmd/router.go`, `backend/cmd/hashtag_test.go` (new), `scripts/api-tour.sh`,
+`frontend/src/app/lib/linkify.tsx` (new),
+`frontend/src/app/components/{PostCard,DirectConversation,GroupActivity}.tsx`,
+`frontend/src/app/hashtag/[tag]/page.tsx` (new), `frontend/src/app/u/[nickname]/page.tsx` (new),
+`frontend/scripts/integration-smoke.mjs`, `README.md`, `backend/README.md`, `TODO.md`.
+
+One P3 closed. `#tags` and `@handles` are now links wherever the app prints text — post bodies,
+comment text, chat and group posts — and each link lands somewhere real: the tag on its own results
+page, the mention on the member it names.
+
+The design decision worth the words is the one this *doesn't* add. A hashtag is usually a table and
+a write path (extract on create, re-extract on edit, index the tag), and the alternative here is to
+match the tag in the text with `GLOB`. `GLOB` is what makes the boundary rule expressible at all —
+`LIKE` has no character classes, so "not glued to a word on either side" cannot be written with it —
+and matching the text means there is no write path, no migration, and no backfill: a post written
+before this session is findable by its tag the moment it boots. The cost is honest and is written
+down: it scans, exactly as the text search does, so it joins the plan table with **no index** rather
+than claiming one.
+
+Two things the tests found rather than the design. The leading space in
+`lower(' ' || title || ' ' || content || ' ')` is load-bearing: without it a title that *begins*
+with a tag has no character before the `#` for the pattern to match, and the post is silently
+missing from its own page — which is what the title fixture caught. And the handle route could not
+live under `/users/` at all: a literal segment there sits at `{userId}`'s depth in
+`/users/{userId}/media` and its siblings, and Go's mux refuses that pair at registration, which
+showed up as a panic the first time a test built the router. It answers at `/api/v1/handles/{nickname}`
+instead, with the reason in the router beside it.
+
+The frontend half is deliberately a scanner and not a regular expression. The boundary rule is a
+lookbehind, and a lookbehind is a syntax error in browser versions this app still has to serve —
+where the failure mode is not one message rendering plainly, it is a page that does not parse. The
+scan also skips a symbol preceded by a slash, so a URL fragment like `site/#top` stays an address
+rather than becoming a tag, and it never links inside a word, so `someone@host` and `word#tag` are
+left alone.
+
+The third caller also paid for a cleanup: the feed, the search and the hashtag page return the same
+eleven-column projection, so their three copies of the scan loop (and of the single-connection
+comment above it) are now one `scanPostPage`. A column added to `postFeedSelect` no longer has to be
+added in three places to keep working.
+
+Evidence: `go build ./...`, `go vet ./...` and `go test ./...` — the new `cmd/hashtag_test.go`
+(boundaries, case, visibility, an unknown tag, and a tag that is not a tag), the nickname lookup
+including the masking it shares with `/users/{userId}`, the plan case and the tour-coverage check
+both new routes extend — then `npm run lint` (0 errors), `npx tsc --noEmit`, `npm run build`, which
+emits `/hashtag/[tag]` and `/u/[nickname]`, `node scripts/dead-modules.mjs` (0 of 66), and the
+browser suite, whose new step publishes a tagged post, follows the tag to its page, and follows the
+mention to the profile. 37 steps, exit 0.
+
 Changed in the downscale session (2026-10-01), for review:
 `frontend/src/app/lib/downscale.ts` (new), `frontend/src/app/api/social.ts`,
 `frontend/scripts/integration-smoke.mjs`, `README.md`, `frontend/README.md`, `TODO.md`.
