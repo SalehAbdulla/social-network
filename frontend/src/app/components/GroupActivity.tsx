@@ -11,6 +11,7 @@ import { useBackend } from './BackendProvider';
 import ChatComposer from './ChatComposer';
 import MessageActions from './MessageActions';
 import ImagePicker from './ImagePicker';
+import Lightbox from './Lightbox';
 import Loading from './Loading';
 import LoadMore from './LoadMore';
 import { mediaImageProps } from '../lib/mediaVariants';
@@ -76,6 +77,9 @@ export default function GroupActivity({ groupId, kind = 'timeline', parentId = 0
   // A background refresh folds the newest page in, so a scrolled-up reader keeps
   // the history they already opened.
   useLiveRefresh(resource.refresh, groupId);
+  // The group photo a reader opened, if any. A tile carries one picture, so the viewer it
+  // opens is a set of one and the arrows stay away.
+  const [viewer, setViewer] = useState<string | null>(null);
   const bottom = useRef<HTMLDivElement>(null);
   const nearBottom = useRef(true);
   const items = resource.items;
@@ -121,7 +125,7 @@ export default function GroupActivity({ groupId, kind = 'timeline', parentId = 0
             <div className="flex items-center justify-between gap-3"><span className={`text-xs font-semibold ${ownMessage ? 'text-teal-100' : 'text-teal-800'}`}>{mine ? 'You' : displayName(item)}</span>{(mine || isOwner) && <MessageActions label="Group item actions">{mine && <button className="chat-menu" onClick={() => { setEditing(item); setComposer(null); }}>Edit</button>}<button disabled={busy} className="chat-menu text-red-600" onClick={() => void mutate(() => request(`/groups/${groupId}/content/${item.kind}/${item.id}?parentId=${item.parentId}`, 'DELETE'))}>Delete</button></MessageActions>}</div>
             {item.kind === 'events' && <div className="flex items-start gap-3"><div className="rounded-xl bg-teal-100 p-3 text-teal-700"><CalendarDays size={24} /></div><div><span className="text-[10px] font-semibold uppercase tracking-wider text-teal-700">Group event</span><h3 className="font-semibold text-slate-900">{item.title}</h3><p className="mt-1 text-xs text-slate-500">{dateLabel(item.startsAt)}</p></div></div>}
             <p className="whitespace-pre-wrap break-words text-sm leading-relaxed">{linkify(item.content)}</p>
-            {item.mediaUrl && <a href={item.mediaUrl} target="_blank" rel="noreferrer" className="block"><img {...mediaImageProps(item.mediaUrl, '(max-width: 768px) 100vw, 480px')} alt="Group photo" className="aspect-square max-h-96 w-full rounded-xl bg-slate-100 object-contain" /></a>}
+            {item.mediaUrl && <button type="button" aria-label="Open this group photo" onClick={() => setViewer(item.mediaUrl)} className="block w-full cursor-zoom-in"><img {...mediaImageProps(item.mediaUrl, '(max-width: 768px) 100vw, 480px')} alt="Group photo" className="aspect-square max-h-96 w-full rounded-xl bg-slate-100 object-contain" /></button>}
             {item.kind === 'events' && <div className="space-y-3 border-t border-slate-100 pt-3"><p className="text-xs text-slate-500">{item.going} going · {item.notGoing} not going</p><div className="flex flex-wrap gap-2">{['going', 'not_going'].map(status => <button key={status} disabled={busy} aria-pressed={item.rsvp === status} className={`flex items-center gap-1 ${item.rsvp === status ? 'chat-primary' : 'chat-secondary'}`} onClick={() => void mutate(() => request(`/groups/${groupId}/events/${item.id}/rsvp`, 'PUT', { status }))}>{item.rsvp === status && <Check size={14} />}{status === 'going' ? 'Going' : 'Not going'}</button>)}</div></div>}
             <time className={`block text-right text-[10px] ${ownMessage ? 'text-teal-100' : 'text-slate-400'}`}>{dateLabel(item.createdAt)}</time>
             {item.kind === 'posts' && kind !== 'media' && <PostComments groupId={groupId} parentId={item.id} isOwner={isOwner} />}
@@ -134,5 +138,6 @@ export default function GroupActivity({ groupId, kind = 'timeline', parentId = 0
       const media = file ? await upload(file) : null;
       await request(`/groups/${groupId}/content/messages`, 'POST', { content: text, mediaUrl: media?.url || '' }); saved();
     }} />}
+    {viewer && <Lightbox images={[viewer]} startIndex={0} label="Group photos" onClose={() => setViewer(null)} />}
   </div>;
 }
