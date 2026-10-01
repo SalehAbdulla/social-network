@@ -1447,8 +1447,34 @@ Ordered roughly by value for effort.
   viewer-relative score, the toggle, and the trigger asserted against the table itself),
   `npm run lint` (0 errors), `npx tsc --noEmit`, `npm run build`, `node scripts/dead-modules.mjs`
   (0 of 67), and the browser suite. **Still open in this item:** an image lightbox in chat and
-  group content (`Lightbox` exists and is wired into posts and comments; those two surfaces still
-  open a new tab), voice notes, and a shared media tab per conversation.
+  group content, voice notes, and a shared media tab per conversation — the first and third of
+  which are done in the paragraph below.
+
+  Progress 2026-10-01 (chat media): **the media tab and the lightbox wiring are done.**
+  `GET /api/v1/messages/media?partnerId=&offset=` lists a direct conversation's attachments,
+  newest first, in its own small `ConversationMediaItem` rather than a `MessageDTO` — a tile needs
+  the attachment and its time and nothing else, which is the choice the profile media tab's
+  `MediaItem` already made. It runs the same `CanMessage` rule and the same hidden-for-me rule as
+  the thread, so the tab cannot show media from a conversation the reader may not open.
+  `DirectConversation` gained a `Chat` / `Media` control, and the tab's tiles open in the app's
+  `Lightbox` — as do a bubble's attachment and a group post's photo, the two `target="_blank"`
+  sites the lightbox session left behind. **Verified:** `go build ./...`, `go vet ./...`,
+  `go test ./...` (every package green, including attachments-only, newest-first, both
+  participants, hidden-for-me excluded, an outsider refused, and the tour's new route),
+  `npx tsc --noEmit`, `npm run build`, `npm run lint` and `npm run test:integration`.
+  The suite's new step, "a conversation lists its attachments, and one opens in the app rather
+  than a new tab", runs after the thread steps and **returns the conversation to its Chat tab**
+  at the end: the media tab renders no composer, so leaving it selected broke the composer step
+  that follows — which is what the step's first run caught.
+  Running the suite also surfaced a second, older problem it did not cause. The browser suite is
+  one peer (browser to Next proxy to backend) and had grown to about 1,100 requests in the
+  busiest minute against the documented 1,200, so the responsive review at the end drew 429s.
+  The ceiling is now configurable — `RATE_LIMIT_PER_MINUTE`, defaulting to the tested 1,200 and
+  falling back to that default when it is absent, unparseable or not positive, so a zero budget
+  can never read as "unlimited" — and `frontend/scripts/run-integration.mjs` raises it, because a
+  machine driving a whole suite from one address is not a person. `cmd/load_smoke_test.go` pins
+  both the default boundary and the override, and `DEPLOYMENT.md` states the knob and that the
+  login/register budget is deliberately not part of it. **Still open in this item:** voice notes.
 - [ ] **P3** Activity digest — a weekly summary email or in-app card of followers, comments
   and group activity.
 - [ ] **P3** Web push notifications through a service worker for backgrounded tabs.
@@ -1556,6 +1582,60 @@ component classes) are the ones to build on.
   session that registering creates — do not "simplify" that into a register field.
 - P0-4 (notification vs message split) is complete; it touched `SideBar.tsx` and
   `notifications/page.tsx`.
+Changed in the chat-media session (2026-10-01), for review:
+`backend/pkg/payload/message/ConversationMediaDTO.go` (new),
+`backend/pkg/app/repositories/MessageRepository.go`, `backend/pkg/app/service/MessageService.go`,
+`backend/pkg/app/handlers/MessageHandler.go`, `backend/cmd/router.go`,
+`backend/cmd/conversation_media_test.go` (new), `scripts/api-tour.sh`,
+`frontend/src/app/api/social.ts`, `frontend/src/app/components/DirectConversation.tsx`,
+`frontend/src/app/components/GroupActivity.tsx`, `frontend/scripts/integration-smoke.mjs`,
+`backend/cmd/security.go`, `backend/cmd/main.go`, `backend/pkg/config/AppConfig.go`,
+`backend/cmd/load_smoke_test.go`, `frontend/scripts/run-integration.mjs`, `DEPLOYMENT.md`,
+`README.md`, `backend/README.md`, `TODO.md`.
+
+The second half of "Chat extras", and the two `target="_blank"` sites the lightbox session left
+behind. A direct conversation now has a Media tab, and every attachment in the chat — on a bubble,
+in the tab, and on a group post — opens in the app's own viewer.
+
+The endpoint is deliberately a narrow one. It reads the same thread `GetMessages` reads, with the
+same `CanMessage` rule and the same rule about rows hidden for this viewer, and narrows it to the
+rows that carry an attachment; that means the tab cannot become a way to see media from a
+conversation the reader may not open. It answers with its own small type rather than a
+`MessageDTO`, because a tile needs the attachment and its time and nothing more — the same choice
+the profile media tab made with `MediaItem`, and the reason the reaction totals added last session
+do not leak into a view that has no control to draw them with.
+
+This session ran what the previous one could not, and both gaps it recorded are now closed — with
+one of them paying for itself. `npm run lint` is clean and the browser suite went green end to end,
+but the suite's **first** run of the new step failed for a reason worth keeping: the step left the
+conversation on the Media tab, and the media tab renders no composer, so the composer step that
+follows had nothing to type into. The step now returns to the Chat tab before it finishes, which is
+a fix to the step rather than to the feature.
+
+The second failure was not this session's to cause, and it is the more interesting one. With the
+new step in place the suite failed deterministically in the responsive review at the end — 429s,
+not a broken assertion. The ceiling is real and documented (1,200 non-auth requests a minute per
+direct peer, pinned by `cmd/load_smoke_test.go`), but it is per *peer*, and the whole browser suite
+arrives as one: the browser talks to Next, Next proxies to the backend, so every step shares a
+single bucket. By this run the suite's busiest minute was about 1,100 of those 1,200, which is why
+the step after it — twelve extra requests was enough — tipped it over, and why the earlier
+`integration-1790871395305` run peaked at 685 and never noticed. Raising the tested 1,200 to make a
+test pass would have been the wrong repair: that number is a security control with a test on its
+boundary. So the ceiling became configurable instead. `RATE_LIMIT_PER_MINUTE` moves it per instance,
+defaults to 1,200, and falls back to that default when it is absent, unparseable or not positive —
+a zero budget must never read as "unlimited" — and `run-integration.mjs` sets it to 6,000, because a
+machine driving a full suite from one address is not the traffic the limit is aimed at. The login
+and register budget, and the per-account lockout, are deliberately not configurable. Both halves are
+pinned: the twelve-hundredth-answers-twelve-hundred-and-first-is-refused test still runs on the
+default, and a new `TestConfiguredRateLimitMovesTheBoundary` proves a configured value actually
+moves the middleware's boundary rather than being read and ignored.
+
+The rest of the suite is verified rather than reviewed this time. `go test ./...` is green across
+every package, including the new `cmd/conversation_media_test.go` — the filter, the order, both
+participants, hidden-for-me, an outsider's 403 and the missing partner's 400 — plus the
+tour-coverage check the new route extends, `npx tsc --noEmit`, `npm run build`, `npm run lint`, and
+`npm run test:integration` through to the end.
+
 Changed in the message-reaction session (2026-10-01), for review:
 `backend/pkg/app/repositories/ReactionRepository.go`,
 `backend/pkg/app/repositories/MessageRepository.go`,
