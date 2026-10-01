@@ -24,6 +24,8 @@ type PostService interface {
 	// visibility rule through the repository, so it can only return posts the
 	// viewer was already allowed to open.
 	SearchPosts(search string, pageNumber int, pageSize int, userID string) (posts.PostResponse, error)
+	// HashtagPosts is one tag's results page, in the same shape as the feed.
+	HashtagPosts(tag string, pageNumber int, pageSize int, userID string) (posts.PostResponse, error)
 }
 
 type PostServiceImpl struct {
@@ -72,6 +74,15 @@ func (p PostServiceImpl) GetPosts(pageNumber int, pageSize int, sortBy string, s
 // object as a feed card.
 func (p PostServiceImpl) SearchPosts(search string, pageNumber int, pageSize int, userID string) (posts.PostResponse, error) {
 	postsModel, totalElements, err := p.db.SearchPosts(search, pageNumber, pageSize, userID)
+	if err != nil {
+		return posts.PostResponse{}, err
+	}
+	return p.pageResponse(postsModel, totalElements, pageNumber, pageSize, userID)
+}
+
+// HashtagPosts is one tag's results page, in the same shape as the feed and the search.
+func (p PostServiceImpl) HashtagPosts(tag string, pageNumber int, pageSize int, userID string) (posts.PostResponse, error) {
+	postsModel, totalElements, err := p.db.HashtagPosts(tag, pageNumber, pageSize, userID)
 	if err != nil {
 		return posts.PostResponse{}, err
 	}
