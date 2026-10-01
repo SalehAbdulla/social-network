@@ -41,7 +41,8 @@ going are reminded once.
 **Notifications and chat** — group invitations, join requests, group events, follow
 requests and comments raise notifications; private messages raise a different event.
 Both arrive live over `/ws` and both are counted separately in the sidebar. Chat has
-typing indicators, read receipts, presence, edits and scoped deletion.
+typing indicators, read receipts, presence, edits, scoped deletion, and a reaction on
+any message that both sides of the conversation can see.
 
 **Media** — JPEG, PNG, GIF, WebP, MP4 and WebM uploads with the type sniffed from the
 bytes, images capped at 10 MB and video at 50 MB, and a collector that reclaims
