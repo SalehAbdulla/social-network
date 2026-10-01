@@ -26,15 +26,22 @@ func (db *DB) GetMessages(conversationPartnerID string, currentUserID string, of
 		return nil, 0, realtimeforum.ErrInternal
 	}
 
+	// The two subqueries answer for one message each: its reaction total, and the
+	// reader's own reaction. They ride the (entityType, entityId) index 000013 added, so
+	// a page of messages costs one indexed lookup per row rather than a second query.
+	// The reader's `?` sits in the SELECT list, which is why it is the first argument
+	// below rather than the last: bind order follows the text, not the meaning.
 	query := `
-		SELECT messageId, senderId, recipientId, content, createdAt, isRead, mediaUrl, mediaType, editedAt
+		SELECT messageId, senderId, recipientId, content, createdAt, isRead, mediaUrl, mediaType, editedAt,
+			(SELECT COALESCE(SUM(r.score), 0) FROM reaction r WHERE r.entityType = 'message' AND r.entityId = message.messageId),
+			(SELECT COALESCE(SUM(r.score), 0) FROM reaction r WHERE r.entityType = 'message' AND r.entityId = message.messageId AND r.userId = ?)
 		FROM message
 		WHERE NOT EXISTS (SELECT 1 FROM hidden_message h WHERE h.messageId=message.messageId AND h.userId=?) AND ((senderId = ? AND recipientId = ?) OR (senderId = ? AND recipientId = ?))
 		ORDER BY createdAt DESC, messageId DESC
 		LIMIT ? OFFSET ?
 	`
 
-	rows, err := db.Conn.Query(query, currentUserID, currentUserID, conversationPartnerID, conversationPartnerID, currentUserID, limit, offset)
+	rows, err := db.Conn.Query(query, currentUserID, currentUserID, currentUserID, conversationPartnerID, conversationPartnerID, currentUserID, limit, offset)
 	if err != nil {
 		return nil, 0, realtimeforum.ErrInternal
 	}
@@ -43,7 +50,7 @@ func (db *DB) GetMessages(conversationPartnerID string, currentUserID string, of
 	var messages []models.Message
 	for rows.Next() {
 		var msg models.Message
-		if err := rows.Scan(&msg.MessageId, &msg.SenderId, &msg.RecipientId, &msg.TextMessage, &msg.TimeStamp, &msg.IsRead, &msg.MediaURL, &msg.MediaType, &msg.EditedAt); err != nil {
+		if err := rows.Scan(&msg.MessageId, &msg.SenderId, &msg.RecipientId, &msg.TextMessage, &msg.TimeStamp, &msg.IsRead, &msg.MediaURL, &msg.MediaType, &msg.EditedAt, &msg.Score, &msg.UserScore); err != nil {
 			return nil, 0, realtimeforum.ErrInternal
 		}
 		messages = append(messages, msg)
