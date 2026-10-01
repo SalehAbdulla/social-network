@@ -102,47 +102,14 @@ func (db *DB) SavedPosts(userID string, pageNumber int, pageSize int) ([]models.
 	}
 	defer rows.Close()
 
-	var posts []models.Post
-	for rows.Next() {
-		var post models.Post
-		// Every row here is bookmarked by the viewer by definition.
-		post.IsSaved = true
-		if err := rows.Scan(
-			&post.PostId,
-			&post.UserId,
-			&post.Privacy,
-			&post.Nickname,
-			&post.Title,
-			&post.Content,
-			&post.Score,
-			&post.CommentsCounter,
-			&post.CreatedAt,
-			&post.UpdatedAt,
-			&post.ImageURLs,
-		); err != nil {
-			return nil, 0, err
-		}
-		posts = append(posts, post)
-	}
-	if err := rows.Err(); err != nil {
+	posts, err := db.scanPostPage(rows, userID)
+	if err != nil {
 		return nil, 0, err
 	}
-	// Closed before the per-post lookup for the same reason GetPosts does it: the
-	// pool can hold a single connection, and `selectedUsers` would wait for the one
-	// this *Rows is still holding. The `defer` above covers the loop's early returns.
-	if err := rows.Close(); err != nil {
-		return nil, 0, err
-	}
+	// Every row here is bookmarked by the viewer by definition; the scan deliberately
+	// knows nothing about bookmarks, so the flag is set after it rather than inside it.
 	for i := range posts {
-		if posts[i].UserId == userID {
-			posts[i].SelectedUsers, err = db.selectedUsers(posts[i].PostId)
-			if err != nil {
-				return nil, 0, err
-			}
-		}
-	}
-	if posts == nil {
-		posts = []models.Post{}
+		posts[i].IsSaved = true
 	}
 	return posts, totalElements, nil
 }
