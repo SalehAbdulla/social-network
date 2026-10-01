@@ -2,9 +2,9 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
-import { ArrowDown, ArrowUp, MessageCircle, Share2, Trash2, Pencil } from 'lucide-react';
+import { ArrowDown, ArrowUp, Bookmark, MessageCircle, Share2, Trash2, Pencil } from 'lucide-react';
 import toast from 'react-hot-toast';
-import { type Post, type Comment, dateLabel, errorMessage, isoTimestamp, relativeLabel, request, upload } from '../api/social';
+import { type Post, type Comment, dateLabel, errorMessage, isoTimestamp, relativeLabel, request, savePost, unsavePost, upload } from '../api/social';
 import { useBackend } from './BackendProvider';
 import { usePagedList } from '../lib/usePagedList';
 import { mediaImageProps } from '../lib/mediaVariants';
@@ -92,12 +92,14 @@ function Comments({ post, onCountChange }: { post: Post; onCountChange: (delta: 
     <LoadMore loading={comments.loadingMore} hasMore={comments.hasMore} onLoadMore={comments.loadMore} label="Load more comments" endLabel={null} className="py-2" />
   </div>;
 }
-export default function PostCard({ post, fetchPosts, onPostRemoved }: {
+export default function PostCard({ post, fetchPosts, onPostRemoved, onUnsaved }: {
   post: Post;
   /** Refetch fallback for surfaces that are not list-backed, such as the single post page. */
   fetchPosts?: () => void;
   /** Preferred: drop the deleted row in place so a long list does not jump. */
   onPostRemoved?: (postId: number) => void;
+  /** Called when this card un-saves a post, so the saved list can drop the row. */
+  onUnsaved?: (postId: number) => void;
 }) {
   const { user } = useBackend();
   const [showComments, setShowComments] = useState(true);
@@ -106,6 +108,9 @@ export default function PostCard({ post, fetchPosts, onPostRemoved }: {
   // the deltas this card saw instead of forcing a feed-wide refetch.
   const [commentDelta, setCommentDelta] = useState(0);
   const [busy, setBusy] = useState(false);
+  // The bookmark flag is viewer-relative and comes from the server with the post,
+  // so the button starts in the right state and only changes once this card asks.
+  const [saved, setSaved] = useState(post.isSaved);
   const vote = reaction || post;
   const commentCount = Math.max(0, post.commentsCounter + commentDelta);
   async function react(score: number) {
@@ -124,6 +129,22 @@ export default function PostCard({ post, fetchPosts, onPostRemoved }: {
       toast.error(errorMessage(error));
     } finally { setBusy(false); }
   }
+  async function toggleSave() {
+    if (busy) return;
+    setBusy(true);
+    // Optimistic like the vote arrows: the icon fills now and goes back, with a
+    // message, if the write fails. The server is idempotent, so a double click is
+    // a state rather than a conflict.
+    const next = !saved;
+    setSaved(next);
+    try {
+      if (next) await savePost(post.postId); else { await unsavePost(post.postId); onUnsaved?.(post.postId); }
+      toast.success(next ? 'Post saved' : 'Removed from saved');
+    } catch (error) {
+      setSaved(!next);
+      toast.error(errorMessage(error));
+    } finally { setBusy(false); }
+  }
   async function remove() {
     if (busy) return;
     setBusy(true);
@@ -136,7 +157,7 @@ export default function PostCard({ post, fetchPosts, onPostRemoved }: {
     <div className="flex items-center justify-between"><Link href={`/profile/${post.userId}`} className="flex items-center gap-3"><Avatar name={post.nickname} /><div><p className="font-semibold">@{post.nickname}</p><p className="text-xs text-slate-400"><time dateTime={isoTimestamp(post.createdAt)} title={dateLabel(post.createdAt)}>{relativeLabel(post.createdAt)}</time></p></div></Link>{post.userId === user.userId && <div className="flex items-center gap-1"><Link href={`/post/${post.postId}/edit`} aria-label="Edit post" title="Edit post" className="flex size-9 items-center justify-center rounded-full text-slate-400 transition hover:bg-slate-100 hover:text-blue-600"><Pencil size={18} /></Link><button disabled={busy} aria-label="Delete post" title="Delete post" className="flex size-9 items-center justify-center rounded-full text-slate-400 transition hover:bg-red-50 hover:text-red-600" onClick={() => void remove()}><Trash2 size={18} /></button></div>}</div>
     {post.title && <Link href={`/post/${post.postId}`} className="block text-lg font-semibold hover:text-blue-700">{post.title}</Link>}<p className="whitespace-pre-wrap break-words text-slate-700">{post.content}</p><span className="inline-block rounded-full bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-600">{PRIVACY_LABEL[post.privacy]}</span>
     {!!post.imageUrls?.length && <div className={`grid gap-2 ${post.imageUrls.length > 1 ? 'grid-cols-2' : ''}`}>{post.imageUrls.map(url => <a key={url} href={url} target="_blank" rel="noreferrer"><img {...mediaImageProps(url, post.imageUrls.length > 1 ? '(max-width: 640px) 50vw, 320px' : '(max-width: 768px) 100vw, 640px')} alt="Post attachment" className="aspect-square max-h-[540px] w-full rounded-xl bg-slate-50 object-contain" /></a>)}</div>}
-    <div className="flex items-center gap-4 border-t border-border pt-3 text-sm text-slate-500"><button disabled={busy} aria-label="Upvote post" onClick={() => void react(1)} className={`flex items-center gap-1 rounded-full px-2 py-1 transition hover:bg-slate-100 ${vote.userScore === 1 ? 'text-blue-600' : ''}`}><ArrowUp size={20} />{vote.score}</button><button disabled={busy} aria-label="Downvote post" onClick={() => void react(-1)} className={`flex items-center gap-1 rounded-full px-2 py-1 transition hover:bg-slate-100 ${vote.userScore === -1 ? 'text-blue-600' : ''}`}><ArrowDown size={20} /></button><button aria-expanded={showComments} onClick={() => setShowComments(!showComments)} className="flex items-center gap-1.5 rounded-full px-2 py-1 transition hover:bg-slate-100"><MessageCircle size={19} />{commentCount} comments</button><button aria-label="Share post" className="ml-auto flex size-9 items-center justify-center rounded-full transition hover:bg-slate-100" onClick={async () => { try { await navigator.clipboard.writeText(`${location.origin}/post/${post.postId}`); toast.success('Post link copied'); } catch { toast.error('Could not copy the link'); } }}><Share2 size={18} /></button></div>
+    <div className="flex items-center gap-4 border-t border-border pt-3 text-sm text-slate-500"><button disabled={busy} aria-label="Upvote post" onClick={() => void react(1)} className={`flex items-center gap-1 rounded-full px-2 py-1 transition hover:bg-slate-100 ${vote.userScore === 1 ? 'text-blue-600' : ''}`}><ArrowUp size={20} />{vote.score}</button><button disabled={busy} aria-label="Downvote post" onClick={() => void react(-1)} className={`flex items-center gap-1 rounded-full px-2 py-1 transition hover:bg-slate-100 ${vote.userScore === -1 ? 'text-blue-600' : ''}`}><ArrowDown size={20} /></button><button aria-expanded={showComments} onClick={() => setShowComments(!showComments)} className="flex items-center gap-1.5 rounded-full px-2 py-1 transition hover:bg-slate-100"><MessageCircle size={19} />{commentCount} comments</button><button disabled={busy} aria-label={saved ? 'Remove from saved' : 'Save post'} aria-pressed={saved} title={saved ? 'Remove from saved' : 'Save post'} onClick={() => void toggleSave()} className={`flex items-center gap-1 rounded-full px-2 py-1 transition hover:bg-slate-100 ${saved ? 'text-blue-600' : ''}`}><Bookmark size={19} fill={saved ? 'currentColor' : 'none'} /></button><button aria-label="Share post" className="ml-auto flex size-9 items-center justify-center rounded-full transition hover:bg-slate-100" onClick={async () => { try { await navigator.clipboard.writeText(`${location.origin}/post/${post.postId}`); toast.success('Post link copied'); } catch { toast.error('Could not copy the link'); } }}><Share2 size={18} /></button></div>
     {showComments && <Comments post={post} onCountChange={delta => setCommentDelta(value => value + delta)} />}
   </article>;
 }
