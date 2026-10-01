@@ -49,6 +49,8 @@ large version, which the same URL serves when asked with `?size=thumb` or `?size
 That is why a feed card downloads 46 KB where it used to download a 777 KB phone photo,
 and why an upload with no such file — a GIF that has to keep its animation, a video, a
 picture already narrower than a cap — answers those requests with the original instead.
+Clicking a photo on a post or a comment opens it in a full-screen viewer rather than a
+new tab, with the arrow keys, the on-screen arrows and a swipe moving through the set.
 
 ## Stack
 
