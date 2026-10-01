@@ -1312,7 +1312,28 @@ Ordered roughly by value for effort.
 
 ### Product extras
 
-- [ ] **P3** Bookmarks / saved posts with a Saved tab (small migration plus a private list).
+- [x] **P3** Bookmarks / saved posts with a Saved tab (small migration plus a private list).
+  Closed 2026-10-01. Migration `000014_saved_posts` adds `savedPost(userId, postId, createdAt)`
+  with the pair as the primary key — so a second save is one row, not two — plus a
+  `(userId, createdAt DESC)` index for the list. Three routes back it: `POST` and
+  `DELETE /api/v1/posts/{postId}/save` and `GET /api/v1/saved-posts`. Both writes are idempotent
+  (`ON CONFLICT DO NOTHING`), so the endpoint answers with the resulting state rather than a
+  conflict. The list reuses `postVisibility`, so a saved post the viewer can no longer read drops
+  out instead of becoming a back door, and saving an unreadable post is a 404 — the same answer a
+  read gives, which keeps the endpoint from being a way to probe for posts. Feed and single-post
+  responses gained a viewer-relative `isSaved`, filled by one page-wide lookup rather than one
+  query per card. **Decision, in place of the item's "Saved tab":** the private list is its own
+  `/saved` route behind a shell nav entry, because the profile page is shared with every other
+  member's profile and a private list cannot live on it. Frontend: `PostCard` gained the bookmark
+  control (optimistic, like the vote arrows), the `/saved` page pages with `usePagedList`, and
+  un-saving from that page drops the row. Verified: `go build ./...`, `go vet ./...`,
+  `go test ./...` (all packages), `npm run lint` (0 errors), `npx tsc --noEmit`, `npm run build`
+  (emits `/saved`), the new `cmd/saved_post_test.go`, and the full browser suite, which passed with
+  the new step `PASS: a post is saved from its card, listed on the private Saved page, and dropped
+  when un-saved` and `/saved` added to the anonymous-redirect sweep. **Also fixed while here:**
+  `PostRepository.GetPosts` ran its per-post `selectedUsers` lookup while its own `*Rows` was still
+  open, which deadlocks whenever the pool holds one connection (the tests set `MaxOpenConns(1)`);
+  that lookup now runs after the page's rows are closed, and `SavedPosts` does the same.
 - [ ] **P3** Hashtags and @mentions: linkify them in posts, comments and chat, plus a hashtag
   results page. Do this after P0-2, since `CommentHandler.go:114` currently rejects
   non-ASCII comments.
@@ -1431,6 +1452,49 @@ component classes) are the ones to build on.
   session that registering creates — do not "simplify" that into a register field.
 - P0-4 (notification vs message split) is complete; it touched `SideBar.tsx` and
   `notifications/page.tsx`.
+Changed in the bookmarks session (2026-10-01), for review:
+`backend/pkg/db/migrations/sqlite/000014_saved_posts.{up,down}.sql` (new),
+`backend/pkg/app/repositories/SavedPostRepository.go` (new),
+`backend/pkg/app/repositories/PostRepository.go`, `backend/pkg/app/service/PostService.go`,
+`backend/pkg/app/handlers/SavedPostHandler.go` (new), `backend/pkg/models/Post.go`,
+`backend/pkg/payload/posts/PostDTO.go`, `backend/cmd/router.go`,
+`backend/cmd/saved_post_test.go` (new), `backend/pkg/db/sqlite/migrations_test.go`,
+`scripts/api-tour.sh`, `frontend/src/app/api/social.ts`,
+`frontend/src/app/components/PostCard.tsx`, `frontend/src/app/components/SideBar.tsx`,
+`frontend/src/app/saved/page.tsx` (new), `frontend/scripts/integration-smoke.mjs`,
+`README.md`, `backend/README.md`, `TODO.md`.
+
+One P3 closed, the highest-value item left in Product extras. It is one migration and three
+routes: a bookmark is a row keyed on `(userId, postId)`, and the list is the feed's projection
+filtered by the same `postVisibility` fragment, so none of the privacy rules had to change to keep
+bookmarks from leaking a post the viewer cannot read. The two writes are idempotent on purpose —
+`ON CONFLICT DO NOTHING` for the insert, a plain delete for the removal — because a bookmark button
+is pressed twice by accident and a 409 there would be noise; the answer is the resulting state, not
+a change. A save of an unreadable post goes through `CanViewPost` first and answers 404, which is
+the answer `GetPostByID` gives, so the endpoint cannot be used to learn that a post exists.
+
+The one design choice worth recording: the item said "Saved tab", and the list is a `/saved` route
+instead, behind a nav entry — the profile page renders *other* members' profiles too, so a private
+list has no business being a tab on it. The feed and single-post DTOs carry a viewer-relative
+`isSaved`; `GetPosts` fills it for a whole page with one `SavedPostIDs` query rather than one per
+card, while `GetPostByID` uses the single-row `IsPostSaved`.
+
+The session also found and fixed a latent deadlock that had nothing to do with bookmarks:
+`PostRepository.GetPosts` issued its per-post `selectedUsers` query *inside* the loop that was still
+iterating the feed's own `*Rows`, which waits forever when the pool holds a single connection —
+exactly what `integrationServer` configures (`SetMaxOpenConns(1)`). The new test hit it immediately
+by reading the feed as the post's author, which is the branch that runs the lookup. The rows are now
+closed before that loop, with a comment saying why, and `SavedPosts` mirrors the order;
+`defer rows.Close()` still covers the early returns inside the scan loop, so nothing leaks.
+
+Evidence: `go build ./...`, `go vet ./...` and `go test ./...` across every package, including the
+tour-coverage check (`cmd/api_tour_test.go`), which the three new routes extend, and the migration
+round trip, whose pinned version moved 13 → 14. Frontend: `npm run lint` (0 errors),
+`npx tsc --noEmit`, `npm run build` (now emits `/saved`), and the full browser suite, which passed
+end to end and named the new step: "a post is saved from its card, listed on the private Saved page,
+and dropped when un-saved" — and `/saved` joined the anonymous-redirect sweep, so the session gate
+on the new route is pinned rather than assumed.
+
 Changed in the media-derivatives session (2026-09-30), for review:
 `backend/pkg/media/derive.go` (new), `backend/pkg/media/derive_test.go` (new),
 `backend/pkg/app/handlers/{MediaHandler,MediaCleanup}.go`, `backend/cmd/media_derivatives_test.go` (new),
