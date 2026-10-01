@@ -297,6 +297,21 @@ try {
   assert.equal(originalDummy.nickname, 'dummyuser');
   console.log('PASS: authenticated frontend loads through the same-origin proxy');
 
+  // The feed's "People you may know" rail: it offers members the viewer does not follow,
+  // and following one from it takes them out of the rail. The follow is undone at the end,
+  // because the request flows later in this suite start from nobody following anybody.
+  await until(dummy, `!!document.querySelector('section[aria-label="People you may know"]')`, 'the feed offers people to follow', 15000);
+  const suggestion = (await api(dummy, '/users?q=alexdemo')).find(person => person.nickname === 'alexdemo');
+  assert(suggestion, 'Alex must be someone the rail can offer');
+  await until(dummy, `document.querySelector('section[aria-label="People you may know"]').innerText.includes('@alexdemo')`, 'the rail offers Alex');
+  await evaluate(dummy, `[...document.querySelectorAll('section[aria-label="People you may know"] button')].find(candidate => candidate.textContent === 'Follow').click()`);
+  await until(dummy, `!(document.querySelector('section[aria-label="People you may know"]')?.innerText || '').includes('@alexdemo')`, 'the followed member leaves the rail');
+  assert(await evaluate(dummy, `(async () => (await (await fetch('/api/v1/users/me')).json()).data.following.includes(${JSON.stringify(suggestion.userId)}))()`), 'following from the rail must reach the account');
+  await api(dummy, `/users/${suggestion.userId}/follow`, 'DELETE');
+  await navigate(dummy, '/');
+  await until(dummy, `(document.querySelector('section[aria-label="People you may know"]')?.innerText || '').includes('@alexdemo')`, 'unfollowing offers the member again');
+  console.log('PASS: the feed offers people you may know, and following one takes them out of it');
+
   await navigate(dummy, '/create-post');
   await fill(dummy, 'input[placeholder="Give your post a title"]', `Browser ${stamp}`);
   await fill(dummy, 'textarea', `Persisted browser integration test ${stamp}`);
