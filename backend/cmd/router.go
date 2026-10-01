@@ -86,6 +86,9 @@ func routes() http.Handler {
 		"PUT /api/v1/messages/{id}":               handlers.HandlerCtx.EditChatMessage,
 		"DELETE /api/v1/messages/{id}":            handlers.HandlerCtx.DeleteChatMessage,
 		"POST /api/v1/messages/read":              handlers.HandlerCtx.ReadChat,
+		"GET /api/v1/saved-posts":                 handlers.HandlerCtx.SavedPosts,
+		"POST /api/v1/posts/{postId}/save":        handlers.HandlerCtx.SavePost,
+		"DELETE /api/v1/posts/{postId}/save":      handlers.HandlerCtx.UnsavePost,
 	} {
 		mux.Handle(pattern, pkgmiddleware.AuthMiddleware(handler))
 	}
