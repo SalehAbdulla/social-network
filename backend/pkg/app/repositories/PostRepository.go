@@ -1,6 +1,8 @@
 package repositories
 
 import (
+	"database/sql"
+
 	realtimeforum "social-network/backend"
 	"social-network/backend/pkg/models"
 )
@@ -26,6 +28,10 @@ type PostRepository interface {
 	// first, filtered by the same visibility fragment as the feed — so searching
 	// cannot become a way to read a post the viewer is not allowed to open.
 	SearchPosts(search string, pageNumber int, pageSize int, viewerID string) ([]models.Post, int, error)
+	// HashtagPosts is one tag's results page. It runs the same visibility fragment
+	// again: a hashtag is a way to find posts, never a way to read ones the viewer
+	// could not have opened.
+	HashtagPosts(tag string, pageNumber int, pageSize int, viewerID string) ([]models.Post, int, error)
 }
 
 // postVisibility decides who may read a post. The three levels differ on purpose:
@@ -98,10 +104,27 @@ func (db *DB) GetPosts(pageNumber int, pageSize int, sortBy string, sortOrder st
 	}
 	defer rows.Close()
 
-	var posts []models.Post
+	posts, err := db.scanPostPage(rows, viewerID)
+	if err != nil {
+		return nil, 0, err
+	}
+	return posts, totalElements, nil
+}
+
+// scanPostPage reads every row of a `postFeedSelect` page and fills the audience list
+// for the viewer's own posts. It is one function because three read paths — the feed,
+// the search and the hashtag page — return exactly this projection, and a column added
+// to `postFeedSelect` should not have to be added to three scan lists to keep working.
+//
+// The rows are closed before the per-post lookup, on purpose: the pool can hold a
+// single connection (the tests set MaxOpenConns(1)), and a query issued while this
+// *Rows is still open would wait for the connection it is holding. The callers' `defer
+// rows.Close()` still covers the early returns inside the loop.
+func (db *DB) scanPostPage(rows *sql.Rows, viewerID string) ([]models.Post, error) {
+	posts := []models.Post{}
 	for rows.Next() {
 		var post models.Post
-		err := rows.Scan(
+		if err := rows.Scan(
 			&post.PostId,
 			&post.UserId,
 			&post.Privacy,
@@ -113,37 +136,27 @@ func (db *DB) GetPosts(pageNumber int, pageSize int, sortBy string, sortOrder st
 			&post.CreatedAt,
 			&post.UpdatedAt,
 			&post.ImageURLs,
-		)
-		if err != nil {
-			return nil, 0, err
+		); err != nil {
+			return nil, err
 		}
 		posts = append(posts, post)
 	}
-
-	if err = rows.Err(); err != nil {
-		return nil, 0, err
+	if err := rows.Err(); err != nil {
+		return nil, err
 	}
-	// The page's rows are closed before the per-post lookup below, on purpose: the
-	// pool can be as small as one connection (the tests set MaxOpenConns(1)), and a
-	// query issued while this *Rows is still open would wait for the connection it
-	// is holding. `defer` above still covers the early returns inside the loop.
-	if err = rows.Close(); err != nil {
-		return nil, 0, err
+	if err := rows.Close(); err != nil {
+		return nil, err
 	}
 	for i := range posts {
 		if posts[i].UserId == viewerID {
+			var err error
 			posts[i].SelectedUsers, err = db.selectedUsers(posts[i].PostId)
 			if err != nil {
-				return nil, 0, err
+				return nil, err
 			}
 		}
 	}
-
-	if posts == nil {
-		posts = []models.Post{}
-	}
-
-	return posts, totalElements, nil
+	return posts, nil
 }
 
 // postSearchFilter is the predicate a search adds to the visibility rule. The two
@@ -182,45 +195,60 @@ func (db *DB) SearchPosts(search string, pageNumber int, pageSize int, viewerID 
 	}
 	defer rows.Close()
 
-	var posts []models.Post
-	for rows.Next() {
-		var post models.Post
-		if err := rows.Scan(
-			&post.PostId,
-			&post.UserId,
-			&post.Privacy,
-			&post.Nickname,
-			&post.Title,
-			&post.Content,
-			&post.Score,
-			&post.CommentsCounter,
-			&post.CreatedAt,
-			&post.UpdatedAt,
-			&post.ImageURLs,
-		); err != nil {
-			return nil, 0, err
-		}
-		posts = append(posts, post)
-	}
-	if err := rows.Err(); err != nil {
+	posts, err := db.scanPostPage(rows, viewerID)
+	if err != nil {
 		return nil, 0, err
 	}
-	// Closed before the per-post audience lookup, for the single-connection reason
-	// GetPosts documents: the pool can hold one connection, and `selectedUsers`
-	// would wait for the one this *Rows is holding.
-	if err := rows.Close(); err != nil {
+	return posts, totalElements, nil
+}
+
+// hashtagFilter matches a `#tag` in a post's title or body with hashtag boundaries:
+// the tag may not be glued to a word on either side, so `#travel` matches neither
+// `#traveling` nor `abc#travel`. SQLite's GLOB is what makes that expressible — LIKE
+// has no character classes — which is why the haystack is lowercased first (GLOB is
+// case-sensitive) and padded with a space at each end, so a tag can sit at the very
+// start or the very end of the text. That leading pad is load-bearing: without it a
+// title that *begins* with `#tag` has no character before the `#` to match, and the
+// post is silently missing from its own tag page. The handler has already restricted
+// the tag to `[a-z0-9_]`, and that is what keeps it out of GLOB's own syntax.
+const hashtagFilter = ` AND lower(' ' || p.title || ' ' || p.content || ' ') GLOB ?`
+
+// hashtagGlob is the pattern one tag is looked for with: anything, a character that is
+// not part of a word, the tag, a character that is not part of a word, anything.
+func hashtagGlob(tag string) string {
+	return "*[^a-z0-9_]#" + tag + "[^a-z0-9_]*"
+}
+
+// HashtagPosts is the hashtag results page: the posts carrying one tag, newest first,
+// behind the feed's own visibility rule. It scans, like the text search does and for
+// the same reason — a pattern beginning with `*` can use no index, which is why the
+// plan table lists both with no index rather than claiming one. Nothing is stored, so
+// a post written before this existed is findable by its tag immediately.
+func (db *DB) HashtagPosts(tag string, pageNumber int, pageSize int, viewerID string) ([]models.Post, int, error) {
+	pattern := hashtagGlob(tag)
+
+	var totalElements int
+	if err := db.Conn.QueryRow(
+		"SELECT COUNT(*) FROM post p WHERE "+postVisibility+hashtagFilter,
+		viewerID, viewerID, viewerID, viewerID, pattern,
+	).Scan(&totalElements); err != nil {
 		return nil, 0, err
 	}
-	for i := range posts {
-		if posts[i].UserId == viewerID {
-			posts[i].SelectedUsers, err = db.selectedUsers(posts[i].PostId)
-			if err != nil {
-				return nil, 0, err
-			}
-		}
+
+	offset := (pageNumber - 1) * pageSize
+	query := postFeedSelect + postVisibility + hashtagFilter + `
+		ORDER BY p.createdAt DESC, p.postId DESC
+		LIMIT ? OFFSET ?
+	`
+	rows, err := db.Conn.Query(query, viewerID, viewerID, viewerID, viewerID, pattern, pageSize, offset)
+	if err != nil {
+		return nil, 0, err
 	}
-	if posts == nil {
-		posts = []models.Post{}
+	defer rows.Close()
+
+	posts, err := db.scanPostPage(rows, viewerID)
+	if err != nil {
+		return nil, 0, err
 	}
 	return posts, totalElements, nil
 }
