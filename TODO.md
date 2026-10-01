@@ -1430,6 +1430,25 @@ Ordered roughly by value for effort.
   the row disappear.
 - [ ] **P3** Chat extras: message reactions, an image lightbox, voice notes, and a shared
   media tab per conversation.
+  Progress 2026-10-01: **message reactions are done.** The `reaction` table is already
+  polymorphic and `000013` already indexed `(entityType, entityId)`, so this needed a permission
+  rather than a new surface: `entityType = "message"` is allowed, and
+  `ReactionRepository.reactionTarget` answers with the entity's own read rule — a message names
+  the caller as one of its two participants, and anyone else gets a 404 rather than a 403 so the
+  endpoint stays useless as an existence oracle. No new route: `POST /api/v1/reactions` already
+  existed and is already toured. A message keeps **no** denormalised score column (posts and
+  comments have one); the chat list computes the total and the reader's own score with two
+  subqueries that ride that index — which is why the reader's `?` sits in the SELECT list and is
+  therefore the first bind argument rather than the last. `000015` adds the cleanup that was
+  missing: deleting a message takes its reactions with it, the way deleting a comment already
+  did. Frontend: a reaction control on each bubble, optimistic like the post arrows, with the
+  count visible to both sides of the conversation. Verified: `go build ./...`, `go vet ./...`,
+  `go test ./...` (including the new `cmd/message_reaction_test.go` — the permission, the
+  viewer-relative score, the toggle, and the trigger asserted against the table itself),
+  `npm run lint` (0 errors), `npx tsc --noEmit`, `npm run build`, `node scripts/dead-modules.mjs`
+  (0 of 67), and the browser suite. **Still open in this item:** an image lightbox in chat and
+  group content (`Lightbox` exists and is wired into posts and comments; those two surfaces still
+  open a new tab), voice notes, and a shared media tab per conversation.
 - [ ] **P3** Activity digest — a weekly summary email or in-app card of followers, comments
   and group activity.
 - [ ] **P3** Web push notifications through a service worker for backgrounded tabs.
@@ -1537,6 +1556,51 @@ component classes) are the ones to build on.
   session that registering creates — do not "simplify" that into a register field.
 - P0-4 (notification vs message split) is complete; it touched `SideBar.tsx` and
   `notifications/page.tsx`.
+Changed in the message-reaction session (2026-10-01), for review:
+`backend/pkg/app/repositories/ReactionRepository.go`,
+`backend/pkg/app/repositories/MessageRepository.go`,
+`backend/pkg/app/service/ReactionService.go`, `backend/pkg/app/service/MessageService.go`,
+`backend/pkg/models/Message.go`, `backend/pkg/payload/message/MessageDTO.go`,
+`backend/pkg/db/migrations/sqlite/000015_message_reaction_cleanup.{up,down}.sql` (new),
+`backend/pkg/db/sqlite/migrations_test.go`, `backend/cmd/message_reaction_test.go` (new),
+`scripts/api-tour.sh`, `frontend/src/app/api/social.ts`,
+`frontend/src/app/components/DirectConversation.tsx`, `frontend/scripts/integration-smoke.mjs`,
+`README.md`, `backend/README.md`, `TODO.md`.
+
+One item advanced rather than closed: "Chat extras" lists reactions, an image lightbox, voice
+notes and a shared media tab, and this is the first of the four.
+
+What made it small is that the machinery was already general. `reaction` is keyed by
+`(userId, entityType, entityId)` and `000013` already indexed `(entityType, entityId)` for the
+score lookups, and `POST /api/v1/reactions` is already the endpoint the feed uses — so the change
+is a *permission* rather than a surface: a message is readable by exactly its two participants,
+and anyone else is answered not found, which is the same answer an unreadable post gives and the
+reason the endpoint cannot be used to learn that a message exists.
+
+Two details are worth the words because both would otherwise look like mistakes. A message keeps
+**no denormalised score column** the way posts and comments do — the chat list computes the total
+and the reader's own score with two subqueries over that index. The reader's bind parameter
+therefore sits in the SELECT list, which means it is the *first* argument to `Query` and not the
+last; that ordering is now written above the query, because it is exactly the kind of thing a
+later edit gets wrong silently. And the cleanup is a **trigger**, not a foreign key, because
+`reaction.entityId` is shared by three kinds of row and so cannot reference one table: `000002`
+gave comments and messages their cleanup triggers and left reactions-on-a-message out only because
+nothing could react to one yet. `000015` closes that gap, and the test asserts it against the
+table itself, since an orphaned reaction is invisible through the API.
+
+One drive-by, precedented rather than incidental: `ReactionService.go` came out of this change
+formatted (its imports were unordered and it had no final newline). It was on the `gofmt` item's
+list of files with a real problem, and formatting a file you are already changing is what that
+list asks for — the same thing happened to `pkg/websocket/types.go` when its event names were
+extended — so the list is now down to one real file.
+
+Evidence: `go build ./...`, `go vet ./...` and `go test ./...` — including the new
+`cmd/message_reaction_test.go` (the permission from both sides and from an outsider, the
+viewer-relative score, the toggle, and the trigger against the table) and the migration round
+trip, whose pinned version moved 14 → 15 — then `npm run lint` (0 errors), `npx tsc --noEmit`,
+`npm run build`, `node scripts/dead-modules.mjs` (0 of 67), and the browser suite, whose new step
+is "a chat message can be reacted to and un-reacted, and the total belongs to the message".
+
 Changed in the suggestion-rail session (2026-10-01), for review:
 `frontend/src/app/components/SuggestedPeople.tsx` (new), `frontend/src/app/page.tsx`,
 `frontend/scripts/integration-smoke.mjs`, `README.md`, `TODO.md`.
