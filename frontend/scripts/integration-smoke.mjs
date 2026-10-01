@@ -855,6 +855,18 @@ try {
   await until(dummy, `document.querySelector('textarea[aria-label="Message"]').value === ''`, 'second direct message sent');
   assert(await evaluate(dummy, `document.activeElement === document.querySelector('textarea[aria-label="Message"]')`), 'Direct composer keeps focus after mouse sends');
   await checkMessageMenus(dummy, 'Message actions');
+
+  // Reacting to a message: the heart is the reader's own and the total is shared, and it
+  // is the same reaction endpoint the feed uses. The reaction is taken back at the end of
+  // the step, so what follows still deletes the message from a clean slate.
+  const bubble = `[...document.querySelectorAll('article')].find(item => item.innerText.includes(${JSON.stringify(`Browser message ${stamp}`)}))`;
+  await until(dummy, `!!(${bubble})?.querySelector('button[aria-label="React to this message"]')`, 'the message offers a reaction');
+  await evaluate(dummy, `(${bubble})?.querySelector('button[aria-label="React to this message"]').click()`);
+  await until(dummy, `!!(${bubble})?.querySelector('button[aria-label="Remove your reaction to this message"]')`, 'the reaction registers on the message');
+  assert.equal(await evaluate(dummy, `(async () => { const page = await (await fetch('/api/v1/messages?partnerId=${originalAlex.userId}')).json(); return page.data.messages.find(item => item.messageId === ${sentMessages[0].messageId})?.score; })()`), 1, 'the reaction total reaches the message');
+  await evaluate(dummy, `(${bubble})?.querySelector('button[aria-label="Remove your reaction to this message"]').click()`);
+  await until(dummy, `!!(${bubble})?.querySelector('button[aria-label="React to this message"]')`, 'the reaction is taken back');
+  console.log('PASS: a chat message can be reacted to and un-reacted, and the total belongs to the message');
   assert.equal(sentMessages[0].textMessage, `Browser message ${stamp}\nSecond line`);
   await evaluate(dummy, `document.querySelector('summary[aria-label="Message actions"]').click()`);
   await button(dummy, 'Edit message');
