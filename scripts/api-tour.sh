@@ -197,7 +197,14 @@ call "$JAR_A" GET "/api/v1/post?id=$POST_A" 200
 call "$JAR_A" GET "/api/v1/posts/search?q=Tour&page=1&size=10" 200
 # route: PUT /api/v1/posts/{postId}
 call "$JAR_A" PUT "/api/v1/posts/$POST_A" 200 \
-	'{"title":"Tour post, edited","content":"Edited by the API tour.","imageUrls":[],"privacy":"public","selectedFollowerIds":[]}'
+	'{"title":"Tour post, edited","content":"Edited by the API tour. #reboot","imageUrls":[],"privacy":"public","selectedFollowerIds":[]}'
+
+# The post now carries a hashtag, so the tag page has something to answer with. A tag
+# that nothing carries is an empty page rather than an error, which is the other half.
+# route: GET /api/v1/hashtags/{tag}
+call "$JAR_A" GET "/api/v1/hashtags/reboot?page=1&size=10" 200
+# route: GET /api/v1/hashtags/{tag}
+call "$JAR_A" GET "/api/v1/hashtags/nothingcarriesthis" 200
 
 # An upload first, so the post can carry an image and the media route has something to serve.
 # route: POST /api/v1/media
@@ -241,6 +248,12 @@ call "$JAR_A" DELETE "/api/v1/posts/$POST_A/save" 200
 call "$JAR_A" GET "/api/v1/users?page=1" 200
 # route: GET /api/v1/users/{userId}
 call "$JAR_A" GET "/api/v1/users/$USER_B" 200
+# A mention only has the text of a handle, so this is the route that turns one into the
+# account it names; an unknown handle is a 404 rather than an empty profile.
+# route: GET /api/v1/handles/{nickname}
+call "$JAR_A" GET "/api/v1/handles/tourb$STAMP" 200
+# route: GET /api/v1/handles/{nickname}
+call "$JAR_A" GET "/api/v1/handles/nobody$STAMP" 404
 # route: PUT /api/v1/users/me
 call "$JAR_A" PUT /api/v1/users/me 200 \
 	"{\"firstName\":\"Tour\",\"lastName\":\"One\",\"nickname\":\"toura$STAMP\",\"aboutMe\":\"Touring the API.\",\"isPublic\":true}"
