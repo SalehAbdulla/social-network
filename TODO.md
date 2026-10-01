@@ -1228,9 +1228,27 @@ Ordered roughly by value for effort.
   dozen bytes is refused with 400, and a 64×64 WebP is accepted and served as `image/webp`.
 - [ ] **P3** Enforce minimum dimensions and aspect ratios per purpose: square avatar at least
   200×200, cover at least 800×300, post media between 1:2 and 2:1.
-- [ ] **P3** Client-side downscale before upload (canvas, ~1600 px on the long edge, quality
+- [x] **P3** Client-side downscale before upload (canvas, ~1600 px on the long edge, quality
   ~0.85), skipping animated GIFs so they stay animated. This cuts upload time and storage
   for phone photos, which are the common case.
+  Closed 2026-10-01. `lib/downscale.ts` re-encodes a photo wider or taller than the cap before it
+  is sent, and `api/social.ts` runs every upload through it — so the composer, an avatar, a cover,
+  a chat attachment and a group photo all send the capped bytes. The cap is `LARGE_WIDTH`, the
+  server's own `large` derivative, rather than a new number: it is the version a viewer actually
+  asks for, and `media_limits_test.go` already holds it against `pkg/media`. The encoding mirrors
+  that package as well — a JPEG source stays a JPEG at 0.85, everything else becomes a PNG so an
+  alpha channel survives, since a transparent avatar put through a JPEG encoder comes out as a
+  black box. **Decisions:** a GIF is skipped whole, because a still frame of an animation is a
+  different picture — the reason the server writes no derivative of one either; nothing is ever
+  enlarged; and every browser failure mode (an undecodable file, a canvas with no context, a null
+  blob) returns the original, because a missing optimisation costs a bigger upload while a broken
+  one costs a post. The 10 MB ceiling is still checked on the file the reader chose, because
+  `ImagePicker` already refuses an oversize selection with that sentence — two gates that agreed
+  are better than one quietly reversing the other. Verified: `npm run lint` (0 errors),
+  `npx tsc --noEmit`, `npm run build`, `node scripts/dead-modules.mjs` (0 of 63), and the browser
+  suite, whose fixture is a 2000×1500 PNG written by hand — a signature, an IHDR, a zlib stream of
+  scanlines and an IEND, because nothing in the dependencies encodes one — and which asserts the
+  file the *server* serves back is 1600×1200.
 - [x] **P3** Show each selected file's dimensions and size in `ImagePicker` before upload, so
   a rejection is never a surprise. Closed 2026-09-30: an overlay caption on each tile reports
   `1440 × 1080 · 2.4 MB`, taken from the decode the check already performs (a video's numbers
@@ -1482,6 +1500,44 @@ component classes) are the ones to build on.
   session that registering creates — do not "simplify" that into a register field.
 - P0-4 (notification vs message split) is complete; it touched `SideBar.tsx` and
   `notifications/page.tsx`.
+Changed in the downscale session (2026-10-01), for review:
+`frontend/src/app/lib/downscale.ts` (new), `frontend/src/app/api/social.ts`,
+`frontend/scripts/integration-smoke.mjs`, `README.md`, `frontend/README.md`, `TODO.md`.
+
+One P3 closed, and the first change in this run with no backend half at all. A photo wider than the
+1600 px cap is now re-encoded in the browser before it leaves, so the bytes that travel and the
+bytes that are kept are the ones a viewer will ask for. It needed no new number, which is most of
+why it was cheap to add: the cap is `LARGE_WIDTH`, already exported for `srcset` and
+already held to `pkg/media` by `media_limits_test.go`, so nothing new has to be kept in step with
+the server.
+
+Two rules are borrowed rather than invented, both from `pkg/media`. A JPEG source stays a JPEG, at
+0.85; everything else becomes a PNG so an alpha channel survives — a transparent avatar run through
+a JPEG encoder is a black box with a border, which is exactly the failure the backend's rule was
+written to avoid. And a GIF is skipped whole: a still frame of an animation is a different picture,
+not a smaller one, which is the same reason the server writes no derivative of one. Where the two
+differ is deliberate: the server has a decoder it trusts, while the browser here is allowed to fail.
+An undecodable file, a canvas with no 2-D context and a null blob each return the original, because
+a missing optimisation costs a slightly bigger upload and a broken one costs the post — and an
+upload path that can be broken by its own optimisation is worse than an upload path with none.
+
+The size ceiling stays where it was, on the file the reader chose rather than on the shrink. It
+would be easy to reverse that and let a 12 MB photo through because it would have fitted, but
+`ImagePicker` already refuses that file with its own sentence, and two gates that disagree about
+what is allowed is how a limit stops being one. The decision is written next to the check.
+
+Verified in the only place this can be: the browser. The fixture is a 2000×1500 PNG, and it had to
+be constructed — the dependencies here have no encoder and every other fixture is 1x1 — so the suite
+writes one by hand (signature, IHDR, a zlib stream of raw scanlines, IEND, each chunk with its CRC)
+and then asserts what the *server* serves back is 1600×1200, which is a check of the upload rather
+than of the intended arithmetic. `npm run lint` (0 errors), `npx tsc --noEmit`, `npm run build` and
+`node scripts/dead-modules.mjs` (0 of 63) are clean, and the suite passed 36 steps.
+
+One caveat recorded rather than re-run away: the first run of the suite after this change failed in
+the follow-request step ("cancel removes incoming request"), which never touches the upload path, and
+passed unchanged on the next run; the failure was in a socket-driven assertion on dummy's page, so it
+is noted here as a flake rather than presented as a clean sweep.
+
 Changed in the unified-search session (2026-10-01), for review:
 `backend/pkg/app/repositories/like.go` (new),
 `backend/pkg/app/repositories/{PostRepository,GroupRepository,SocialRepository}.go`,
