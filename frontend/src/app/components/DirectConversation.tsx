@@ -1,4 +1,6 @@
 'use client';
+
+import { linkify } from '../lib/linkify';
 import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { ArrowLeft, Check, CheckCheck } from 'lucide-react';
@@ -90,7 +92,7 @@ export default function DirectConversation({ partner, person }: { partner: strin
         const mine = message.senderId === user.userId;
         return <div key={message.messageId} className={`flex ${mine ? 'justify-end' : 'justify-start'}`}><article className={`max-w-[90%] rounded-2xl px-4 py-3 shadow-sm sm:max-w-[75%] ${mine ? 'rounded-br-sm bg-teal-700 text-white' : 'rounded-bl-sm border border-slate-100 bg-white text-slate-800'}`}>
           {message.mediaUrl && (message.mediaType === 'video' ? <video src={message.mediaUrl} controls className="mb-2 max-h-80 rounded-xl" /> : <a href={message.mediaUrl} target="_blank" rel="noreferrer"><img {...mediaImageProps(message.mediaUrl, '320px')} alt="Message attachment" className="mb-2 max-h-80 rounded-xl object-contain" /></a>)}
-          <p className="whitespace-pre-wrap break-words text-sm leading-relaxed">{message.textMessage}</p>
+          <p className="whitespace-pre-wrap break-words text-sm leading-relaxed">{linkify(message.textMessage)}</p>
           <div className={`mt-2 flex items-center justify-end gap-1 text-[10px] ${mine ? 'text-teal-100' : 'text-slate-400'}`}><time>{dateLabel(message.timeStamp)}</time>{message.editedAt && <span>· edited</span>}{mine && (message.isRead ? <CheckCheck size={14} aria-label="Read" /> : <Check size={14} aria-label="Sent" />)}
             <MessageActions label="Message actions">{mine && <><button className="chat-menu" disabled={busy} onClick={() => setEditing(message)}>Edit message</button><button className="chat-menu text-red-600" disabled={busy} onClick={() => void remove(message.messageId, 'everyone')}>Delete for everyone</button></>}<button className="chat-menu" disabled={busy} onClick={() => void remove(message.messageId, 'me')}>Delete for me</button></MessageActions>
           </div>
