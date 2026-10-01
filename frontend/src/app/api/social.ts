@@ -48,6 +48,9 @@ export interface ChatMessage {
   // Viewer-relative, like a post's: the message's reaction total, and this reader's own.
   score: number; userScore: number;
 }
+/** One attachment in a direct conversation, from the chat's media tab. */
+export interface ConversationMedia { messageId: number; mediaUrl: string; mediaType: string; timeStamp: string }
+
 export interface Notification {
   notificationId: number; actorId: string; actorNickname: string; entityType: string; entityId: number; postId?: number; isRead: number; createdAt: string;
 }
