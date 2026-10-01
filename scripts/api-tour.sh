@@ -323,6 +323,10 @@ call "$JAR_A" GET /api/v1/messages/users 200
 call "$JAR_A" GET "/api/v1/messages?partnerId=$USER_B&page=1&size=20" 200
 # route: POST /api/v1/messages/read
 call "$JAR_B" POST /api/v1/messages/read 200 "{\"partnerId\":\"$USER_A\"}"
+# A reaction on a message is a participant's alone, and it is here rather than anywhere else
+# because the delete below is what proves the reaction goes with the message.
+# route: POST /api/v1/reactions
+call "$JAR_B" POST /api/v1/reactions 200 "{\"entityType\":\"message\",\"entityId\":$MESSAGE_A,\"score\":1}"
 # route: DELETE /api/v1/messages/{id}
 call "$JAR_A" DELETE "/api/v1/messages/$MESSAGE_A?scope=me" 200
 
