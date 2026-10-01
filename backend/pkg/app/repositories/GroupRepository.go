@@ -2,7 +2,6 @@ package repositories
 
 import (
 	"database/sql"
-	"strings"
 
 	backend "social-network/backend"
 	"social-network/backend/pkg/models"
@@ -36,7 +35,7 @@ func (db *DB) CreateGroup(ownerID, title, description string, imageURL ...string
 }
 
 func (db *DB) Groups(userID, search string, offset int, joinedOnly bool) ([]models.Group, error) {
-	pattern := "%" + strings.ReplaceAll(strings.ReplaceAll(strings.ReplaceAll(search, "\\", "\\\\"), "%", "\\%"), "_", "\\_") + "%"
+	pattern := likePattern(search)
 	rows, err := db.Conn.Query(`SELECT g.groupId,g.ownerId,trim(u.firstName || ' ' || u.lastName),g.title,g.description,g.imageUrl,
         (SELECT COUNT(*) FROM socialGroupMember gm WHERE gm.groupId=g.groupId),
         EXISTS(SELECT 1 FROM socialGroupMember mine WHERE mine.groupId=g.groupId AND mine.userId=?),
