@@ -3,7 +3,6 @@ package repositories
 import (
 	"database/sql"
 	"errors"
-	"strings"
 
 	backend "social-network/backend"
 	"social-network/backend/pkg/models"
@@ -98,7 +97,7 @@ func (db *DB) CanViewPrivateProfile(viewerID, profileID string) (bool, error) {
 }
 
 func (db *DB) DiscoverUsers(currentID, search string, offset int) ([]models.SocialUser, error) {
-	pattern := "%" + strings.ReplaceAll(strings.ReplaceAll(strings.ReplaceAll(search, "\\", "\\\\"), "%", "\\%"), "_", "\\_") + "%"
+	pattern := likePattern(search)
 	ids, err := db.stringList(`SELECT userId FROM user WHERE userId != ? AND (nickName LIKE ? ESCAPE '\' OR firstName || ' ' || lastName LIKE ? ESCAPE '\' OR aboutMe LIKE ? ESCAPE '\' OR location LIKE ? ESCAPE '\') ORDER BY nickName LIMIT 30 OFFSET ?`, currentID, pattern, pattern, pattern, pattern, offset)
 	if err != nil {
 		return nil, err
