@@ -24,7 +24,10 @@ public profile happens immediately.
 GIFs per post, comments with their own image, and reaction scores. Stories expire
 after 24 hours. An unsent post is kept in the browser, so a refresh does not lose the
 text or the audience chosen for it; the composer says what a publish is still missing
-instead of disabling its button, and Ctrl/Cmd + Enter publishes.
+instead of disabling its button, and Ctrl/Cmd + Enter publishes. Any post can also be
+bookmarked: the list is private to the member and lives at `/saved`, and because it runs
+the same three privacy levels as the feed, a saved post that later becomes unreadable
+simply drops out of it.
 
 **Groups** — create, browse, join by request or invitation, post, comment, share
 media, schedule events with Going / Not going replies, chat together, transfer
