@@ -3,6 +3,7 @@ package handlers
 import (
 	"encoding/json"
 	"net/http"
+	"regexp"
 	realtimeforum "social-network/backend"
 	"social-network/backend/pkg/middleware"
 	"social-network/backend/pkg/payload"
@@ -277,6 +278,38 @@ func (re *HandlerContext) SearchPosts(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	response, err := re.PostService.SearchPosts(search, pageNumber, pageSize, userID)
+	if err != nil {
+		re.HandleError(w, r, err)
+		return
+	}
+	respond(w, http.StatusOK, response)
+}
+
+// hashtagTag is everything a hashtag may be made of. Restricting the tag here is what
+// keeps it out of the GLOB pattern the repository builds — that pattern's own syntax is
+// `[`, `]` and `*` — and it is the same set the browser's linkifier accepts, so a link
+// and a query agree about where a tag ends.
+var hashtagTag = regexp.MustCompile(`^[a-z0-9_]+$`)
+
+// HashtagPosts is one tag's results page: `/api/v1/hashtags/{tag}`. The linkifier sends
+// the tag lowercased, and a typed URL is lowercased here too, because the comparison is
+// made against a lowercased body — so the same page answers either way.
+func (re *HandlerContext) HashtagPosts(w http.ResponseWriter, r *http.Request) {
+	tag := strings.ToLower(strings.TrimSpace(r.PathValue("tag")))
+	if !hashtagTag.MatchString(tag) {
+		re.HandleError(w, r, realtimeforum.ErrBadRequest)
+		return
+	}
+	pageNumber, pageSize, ok := re.pageParams(w, r)
+	if !ok {
+		return
+	}
+	userID := currentUser(r)
+	if userID == "" {
+		re.HandleError(w, r, realtimeforum.ErrUnauthorized)
+		return
+	}
+	response, err := re.PostService.HashtagPosts(tag, pageNumber, pageSize, userID)
 	if err != nil {
 		re.HandleError(w, r, err)
 		return
