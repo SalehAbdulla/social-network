@@ -26,6 +26,8 @@ export interface Post {
   postId: number; userId: string; nickname: string; title: string; content: string;
   imageUrls: string[]; privacy: 'public' | 'followers' | 'selected'; selectedFollowerIds?: string[];
   score: number; userScore: number; commentsCounter: number; createdAt: string; updatedAt: string;
+  // Viewer-relative: true when the signed-in member has this post bookmarked.
+  isSaved: boolean;
 }
 export interface Page<T> { posts: T[]; totalPages: number; totalElements: number; lastPage: boolean }
 export interface Comment {
@@ -156,6 +158,20 @@ export async function upload(file: File): Promise<{ url: string; mediaType: 'ima
 }
 
 export function displayName(user: { firstName: string; lastName: string; nickname?: string }) { return `${user.firstName} ${user.lastName}`.trim() || user.nickname || 'Member'; }
+
+/**
+ * Bookmarks. Both writes are idempotent on the server — saving a post that is
+ * already saved, or un-saving one that is not, answers 200 with the resulting
+ * state — so the caller only has to decide what to show while the request is in
+ * flight, not guard against a double click.
+ */
+export async function savePost(postId: number): Promise<void> {
+  await request(`/posts/${postId}/save`, 'POST');
+}
+
+export async function unsavePost(postId: number): Promise<void> {
+  await request(`/posts/${postId}/save`, 'DELETE');
+}
 
 /**
  * SQLite timestamps are UTC and do not include a zone suffix, so a bare date is
