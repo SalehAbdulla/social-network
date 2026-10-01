@@ -10,6 +10,23 @@ import (
 	"time"
 )
 
+// defaultRateLimitPerMinute is the tested boundary: `cmd/load_smoke_test.go` sends a
+// full window's worth of requests and pins that the twelve-hundredth is answered and the
+// next is refused, so raising this number would be a change to a contract rather than a
+// tweak. A deployment can override it per instance through RATE_LIMIT_PER_MINUTE, which
+// is a deployment's business rather than a test's — see DEPLOYMENT.md.
+const defaultRateLimitPerMinute = 1200
+
+// effectiveRateLimitPerMinute is the ceiling for one direct peer: the configured value,
+// or the default when none was configured (which is every test that builds an AppConfig
+// by hand, including the one that pins the boundary).
+func effectiveRateLimitPerMinute() int {
+	if app.RateLimitPerMinute > 0 {
+		return app.RateLimitPerMinute
+	}
+	return defaultRateLimitPerMinute
+}
+
 // Limits are per direct peer. Forwarded headers are deliberately not trusted;
 // deployments should also enforce per-client limits at their reverse proxy.
 func Security(next http.Handler) http.Handler {
@@ -49,7 +66,7 @@ func Security(next http.Handler) http.Handler {
 		if err != nil {
 			peer = r.RemoteAddr
 		}
-		limit := 1200
+		limit := effectiveRateLimitPerMinute()
 		key := peer
 		if r.URL.Path == "/api/v1/auth/login" || r.URL.Path == "/api/v1/auth/register" {
 			limit = 20
