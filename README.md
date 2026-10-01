@@ -17,7 +17,9 @@ bcrypt password hashing; HttpOnly cookie sessions that survive a restart, with a
 change that rotates the session and signs out the account's other browsers. Profiles
 show followers/following, posts, and a media tab that merges post and comment photos.
 Following a private profile is a request the owner accepts or declines; following a
-public profile happens immediately.
+public profile happens immediately. Discovery has two doors: the Discover page, and the
+"People you may know" rail the feed shows, which offers a few members you do not follow
+yet and a button to change that.
 
 **Posts, comments and reactions** — three privacy levels (`public`, `followers` for
 "almost private", `selected` for "only the followers you pick"), up to four images or
