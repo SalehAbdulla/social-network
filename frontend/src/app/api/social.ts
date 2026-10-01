@@ -45,6 +45,8 @@ export interface ChatUser { userId: string; nickname: string; firstName: string;
 export interface ChatMessage {
   messageId: number; senderId: string; recipientId: string; textMessage: string; timeStamp: string;
   isRead: number; mediaUrl: string; mediaType: string; editedAt: string;
+  // Viewer-relative, like a post's: the message's reaction total, and this reader's own.
+  score: number; userScore: number;
 }
 export interface Notification {
   notificationId: number; actorId: string; actorNickname: string; entityType: string; entityId: number; postId?: number; isRead: number; createdAt: string;
