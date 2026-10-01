@@ -1,6 +1,7 @@
 import axios from 'axios';
 import api from './axios';
 import { MAX_IMAGE_BYTES, MAX_VIDEO_BYTES, isImageType, isVideoType, oversizeMessage } from '../lib/mediaLimits';
+import { prepareUpload } from '../lib/downscale';
 
 export interface SocialUser {
   userId: string; 
@@ -152,8 +153,14 @@ export async function upload(file: File): Promise<{ url: string; mediaType: 'ima
   if (!file.size) throw new Error('The selected file is empty.');
   if (!isImageType(file.type) && !isVideoType(file.type)) throw new Error('Choose a JPEG, PNG, GIF, WebP, MP4 or WebM file.');
   if (file.size > (isVideoType(file.type) ? MAX_VIDEO_BYTES : MAX_IMAGE_BYTES)) throw new Error(oversizeMessage(file));
+  // The shrink happens here rather than at each caller, so the composer, an avatar, a
+  // cover, a chat attachment and a group photo all send the capped bytes. The ceiling
+  // above is on the file the reader chose, on purpose: the picker already refuses an
+  // oversize selection with that exact sentence, and a second gate that quietly
+  // reversed it would leave the two disagreeing about what is allowed.
+  const prepared = await prepareUpload(file);
   const form = new FormData();
-  form.append('file', file);
+  form.append('file', prepared);
   return request('/media', 'POST', form);
 }
 
