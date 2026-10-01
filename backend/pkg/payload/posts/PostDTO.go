@@ -12,6 +12,9 @@ type PostDTO struct {
 	Score           int      `json:"score"`
 	CommentsCounter int      `json:"commentsCounter"`
 	UserScore       int      `json:"userScore"`
-	CreatedAt       string   `json:"createdAt"`
-	UpdatedAt       string   `json:"updatedAt"`
+	// IsSaved is viewer-relative: true when the signed-in member has this post in
+	// their bookmark list. The frontend uses it to draw the save control.
+	IsSaved   bool   `json:"isSaved"`
+	CreatedAt string `json:"createdAt"`
+	UpdatedAt string `json:"updatedAt"`
 }
