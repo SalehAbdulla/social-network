@@ -256,3 +256,30 @@ func (re *HandlerContext) UpdatePost(w http.ResponseWriter, r *http.Request) {
 	}
 	respond(w, http.StatusOK, post)
 }
+
+// SearchPosts is the post half of the search page: `/api/v1/posts/search?q=`. A
+// blank query is refused rather than answered, because the empty pattern it would
+// become (`%%`) matches every post — so an accidental submit would read the whole
+// feed back rather than nothing.
+func (re *HandlerContext) SearchPosts(w http.ResponseWriter, r *http.Request) {
+	search := strings.TrimSpace(r.URL.Query().Get("q"))
+	if search == "" {
+		re.HandleError(w, r, realtimeforum.ErrBadRequest)
+		return
+	}
+	pageNumber, pageSize, ok := re.pageParams(w, r)
+	if !ok {
+		return
+	}
+	userID := currentUser(r)
+	if userID == "" {
+		re.HandleError(w, r, realtimeforum.ErrUnauthorized)
+		return
+	}
+	response, err := re.PostService.SearchPosts(search, pageNumber, pageSize, userID)
+	if err != nil {
+		re.HandleError(w, r, err)
+		return
+	}
+	respond(w, http.StatusOK, response)
+}
