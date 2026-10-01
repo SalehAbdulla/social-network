@@ -21,4 +21,8 @@ type Post struct {
 	CommentsCounter int      `json:"commentsCounter"`
 	CreatedAt       string   `json:"createdAt"`
 	UpdatedAt       string   `json:"updatedAt"`
+	// IsSaved is viewer-relative and filled in by PostService, not by the SQL
+	// projection: whether a post is bookmarked is a second lookup keyed on the
+	// reader, so it is carried here rather than folded into every post query.
+	IsSaved bool `json:"-"`
 }
