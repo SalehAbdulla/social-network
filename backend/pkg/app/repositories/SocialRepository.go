@@ -63,6 +63,23 @@ func (db *DB) SocialProfile(id string, viewers ...string) (models.SocialUser, er
 	return u, err
 }
 
+// UserIDByNickname resolves a handle to the account it belongs to, which is what a
+// mention needs: the linkifier only has the text of an `@handle`, and the profile route
+// is keyed by id. The comparison ignores case on both sides — a nickname is stored as it
+// was typed, and a mention in the middle of a sentence must not require the reader to
+// reproduce the capitalisation.
+func (db *DB) UserIDByNickname(nickname string) (string, error) {
+	var id string
+	err := db.Conn.QueryRow("SELECT userId FROM user WHERE lower(nickName) = lower(?)", nickname).Scan(&id)
+	if errors.Is(err, sql.ErrNoRows) {
+		return "", backend.ErrNotFound
+	}
+	if err != nil {
+		return "", err
+	}
+	return id, nil
+}
+
 // CanMessage reports whether actor may start or continue a private chat with
 // target: the spec allows it when at least one of them follows the other, and a
 // public profile is reachable by anyone. A missing target reports ErrNotFound so
