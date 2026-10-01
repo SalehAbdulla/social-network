@@ -63,6 +63,8 @@ func (m MessageServiceImpl) GetMessages(conversationPartnerID string, currentUse
 			TextMessage: msg.TextMessage,
 			TimeStamp:   msg.TimeStamp,
 			IsRead:      msg.IsRead,
+			Score:       msg.Score,
+			UserScore:   msg.UserScore,
 		}
 	}
 
