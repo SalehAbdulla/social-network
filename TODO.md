@@ -1352,8 +1352,24 @@ Ordered roughly by value for effort.
   results page. Do this after P0-2, since `CommentHandler.go:114` currently rejects
   non-ASCII comments.
 - [ ] **P3** Reposts and quote posts in the feed.
-- [ ] **P3** Unified search across posts, groups and users in one results page, with recent
+- [x] **P3** Unified search across posts, groups and users in one results page, with recent
   searches kept locally.
+  Closed 2026-10-01. `/search` asks the three surfaces separately rather than through one merged
+  query, because each already has its own rule about what the viewer may see: people and groups had
+  `?q=` (`DiscoverUsers`, `Groups`), and the post half is new — `GET /api/v1/posts/search?q=&page=&size=`,
+  which runs `postFeedSelect` + `postVisibility` with `LIKE ? ESCAPE '\'` on the title and the
+  content, so a search is not a second way in. The pattern is escaped in one place now
+  (`repositories/like.go`), and the two inline copies in `GroupRepository`/`SocialRepository` were
+  folded into it as a pure refactor: three searches that escape differently is how a search for
+  `50%` returns the whole table. A blank `q` is a 400, because the empty pattern it would become
+  matches every post. The page keeps recent terms in `localStorage` (`lib/recentSearches.ts`,
+  re-validated on read like `postDraft.ts`) and offers them as chips. `query_plan_test.go` gained
+  the search as a case with **no index**, which is the claim rather than an omission: a leading `%`
+  cannot use one, so the query scans and evaluates the fragment per row. Verified: `go build ./...`,
+  `go vet ./...`, `go test ./...` (including the new `cmd/search_test.go` and the plan test),
+  `npm run lint` (0 errors), `npx tsc --noEmit`, `npm run build`, `node scripts/dead-modules.mjs`
+  (0 of 62), and the browser suite, which added `/search` to the anonymous sweep and asserts the
+  page by name.
 - [ ] **P3** Mute and block a user, enforced in the feed, profile, chat and notifications.
 - [ ] **P3** Story replies and a "seen by" list; archive expired stories instead of letting
   the row disappear.
@@ -1466,6 +1482,41 @@ component classes) are the ones to build on.
   session that registering creates — do not "simplify" that into a register field.
 - P0-4 (notification vs message split) is complete; it touched `SideBar.tsx` and
   `notifications/page.tsx`.
+Changed in the unified-search session (2026-10-01), for review:
+`backend/pkg/app/repositories/like.go` (new),
+`backend/pkg/app/repositories/{PostRepository,GroupRepository,SocialRepository}.go`,
+`backend/pkg/app/service/PostService.go`, `backend/pkg/app/handlers/PostHandler.go`,
+`backend/pkg/app/repositories/query_plan_test.go`, `backend/cmd/router.go`,
+`backend/cmd/search_test.go` (new), `scripts/api-tour.sh`,
+`frontend/src/app/lib/recentSearches.ts` (new), `frontend/src/app/search/page.tsx` (new),
+`frontend/src/app/components/SideBar.tsx`, `frontend/scripts/integration-smoke.mjs`,
+`README.md`, `backend/README.md`, `TODO.md`.
+
+One P3 closed. The page is three answers rather than one query on purpose: people and groups
+already had a `q`, and each endpoint carries its own rule about what the viewer may see — merging
+them would mean re-implementing the post rule inside the merge, which is exactly how a search
+becomes a way around the privacy levels. So the only new backend surface is the post half, and it is
+the feed's own projection and fragment with one extra predicate on top.
+
+Two decisions are worth the words. A blank `q` is a 400: the pattern it would become is `%%`, which
+matches every post, so an accidental submit would read the feed back rather than nothing. And the
+query is listed in the plan table with **no index**, which is a measurement rather than an omission
+— the pattern starts with `%`, so nothing can serve it and the fragment is evaluated per row,
+exactly as the feed was before 000013. Writing that case down is what stops a later reader from
+adding an index the planner would never pick.
+
+The one cleanup the change enabled: `likePattern` is now a function rather than the same escaping
+expression written inline in `GroupRepository` and `SocialRepository`. The third use is what made it
+worth extracting, and the two existing sites were switched to it in the same change, so there is one
+rule instead of two copies and a newcomer — the failure mode being a search for `50%` that returns
+the whole table.
+
+Evidence: `go build ./...`, `go vet ./...` and `go test ./...` (the new `cmd/search_test.go`, the
+plan test, and the tour-coverage check the new route extends), `npm run lint` (0 errors),
+`npx tsc --noEmit`, `npm run build`, `node scripts/dead-modules.mjs` (0 of 62), and the browser
+suite, which sweeps `/search` anonymously and asserts the page by name: one query, three surfaces,
+and the term offered back after a reload.
+
 Changed in the lightbox session (2026-10-01), for review:
 `frontend/src/app/components/Lightbox.tsx` (new), `frontend/src/app/components/PostCard.tsx`,
 `frontend/scripts/integration-smoke.mjs`, `README.md`, `TODO.md`.
