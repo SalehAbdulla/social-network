@@ -3,7 +3,7 @@
 import { linkify } from '../lib/linkify';
 import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
-import { ArrowLeft, Check, CheckCheck } from 'lucide-react';
+import { ArrowLeft, Check, CheckCheck, Heart } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { type ChatUser, type ChatMessage, type SocketEvent, dateLabel, displayName, errorMessage, request, upload } from '../api/social';
 import { useBackend } from './BackendProvider';
@@ -77,6 +77,24 @@ export default function DirectConversation({ partner, person }: { partner: strin
     try { await request(`/messages/${id}?scope=${scope}`, 'DELETE'); thread.reload(); }
     catch (error) { toast.error(errorMessage(error)); } finally { setBusy(false); }
   }
+  async function react(message: ChatMessage) {
+    if (busy) return;
+    setBusy(true);
+    // Optimistic like the post arrows: the heart fills now and the server's total replaces
+    // the guess when it answers, so a click is not a round trip of nothing happening. A
+    // failure puts the previous numbers back and says why.
+    const previous = { score: message.score, userScore: message.userScore };
+    const userScore = message.userScore === 1 ? 0 : 1;
+    thread.update(items => items.map(item => item.messageId === message.messageId
+      ? { ...item, score: item.score + (userScore - item.userScore), userScore } : item));
+    try {
+      const result = await request<{ totalScore: number }>('/reactions', 'POST', { entityType: 'message', entityId: message.messageId, score: 1 });
+      thread.update(items => items.map(item => item.messageId === message.messageId ? { ...item, score: result.totalScore, userScore } : item));
+    } catch (error) {
+      thread.update(items => items.map(item => item.messageId === message.messageId ? { ...item, ...previous } : item));
+      toast.error(errorMessage(error));
+    } finally { setBusy(false); }
+  }
   return <section className="flex h-full min-h-0 flex-1 flex-col" aria-label={`Chat with ${name}`}>
     <header className="flex shrink-0 items-center gap-3 border-b border-slate-200 bg-white px-4 py-4">
       <Link href="/messages" aria-label="Back to conversations" className="chat-icon md:hidden"><ArrowLeft size={20} /></Link>
@@ -93,7 +111,7 @@ export default function DirectConversation({ partner, person }: { partner: strin
         return <div key={message.messageId} className={`flex ${mine ? 'justify-end' : 'justify-start'}`}><article className={`max-w-[90%] rounded-2xl px-4 py-3 shadow-sm sm:max-w-[75%] ${mine ? 'rounded-br-sm bg-teal-700 text-white' : 'rounded-bl-sm border border-slate-100 bg-white text-slate-800'}`}>
           {message.mediaUrl && (message.mediaType === 'video' ? <video src={message.mediaUrl} controls className="mb-2 max-h-80 rounded-xl" /> : <a href={message.mediaUrl} target="_blank" rel="noreferrer"><img {...mediaImageProps(message.mediaUrl, '320px')} alt="Message attachment" className="mb-2 max-h-80 rounded-xl object-contain" /></a>)}
           <p className="whitespace-pre-wrap break-words text-sm leading-relaxed">{linkify(message.textMessage)}</p>
-          <div className={`mt-2 flex items-center justify-end gap-1 text-[10px] ${mine ? 'text-teal-100' : 'text-slate-400'}`}><time>{dateLabel(message.timeStamp)}</time>{message.editedAt && <span>· edited</span>}{mine && (message.isRead ? <CheckCheck size={14} aria-label="Read" /> : <Check size={14} aria-label="Sent" />)}
+          <div className={`mt-2 flex items-center justify-end gap-1 text-[10px] ${mine ? 'text-teal-100' : 'text-slate-400'}`}><button type="button" disabled={busy} aria-label={message.userScore === 1 ? 'Remove your reaction to this message' : 'React to this message'} aria-pressed={message.userScore === 1} onClick={() => void react(message)} className={`mr-1 flex items-center gap-0.5 rounded-full px-1.5 py-0.5 transition hover:bg-black/5 ${message.userScore === 1 ? 'font-semibold' : ''}`}><Heart size={13} fill={message.userScore === 1 ? 'currentColor' : 'none'} aria-hidden="true" />{message.score > 0 && <span>{message.score}</span>}</button><time>{dateLabel(message.timeStamp)}</time>{message.editedAt && <span>· edited</span>}{mine && (message.isRead ? <CheckCheck size={14} aria-label="Read" /> : <Check size={14} aria-label="Sent" />)}
             <MessageActions label="Message actions">{mine && <><button className="chat-menu" disabled={busy} onClick={() => setEditing(message)}>Edit message</button><button className="chat-menu text-red-600" disabled={busy} onClick={() => void remove(message.messageId, 'everyone')}>Delete for everyone</button></>}<button className="chat-menu" disabled={busy} onClick={() => void remove(message.messageId, 'me')}>Delete for me</button></MessageActions>
           </div>
         </article></div>;
