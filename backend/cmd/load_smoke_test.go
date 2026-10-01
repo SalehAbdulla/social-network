@@ -147,3 +147,54 @@ func TestRateLimitBoundaryThroughTheMiddleware(t *testing.T) {
 		t.Fatal("a limited response has to say when to try again")
 	}
 }
+
+// The ceiling is configurable because the browser harness is a machine driving a whole
+// test suite from one direct peer, and it legitimately needs more headroom in a minute
+// than a person does. The default stays exactly what the boundary test above pins, so
+// what this covers is the knob: the resolution rule, and that a configured value really
+// does move the middleware's boundary instead of being read and ignored.
+func TestConfiguredRateLimitMovesTheBoundary(t *testing.T) {
+	previous := app.RateLimitPerMinute
+	t.Cleanup(func() { app.RateLimitPerMinute = previous })
+
+	server, _ := integrationServer(t, true, false)
+	client := newIntegrationClient(t, server)
+
+	// A value that cannot be honoured falls back to the tested default rather than to no
+	// limit at all: a zero budget must never be read as "unlimited".
+	app.RateLimitPerMinute = 0
+	if resolved := effectiveRateLimitPerMinute(); resolved != rateLimitPerMinute {
+		t.Fatalf("an unset limit resolved to %d, want the default %d", resolved, rateLimitPerMinute)
+	}
+	app.RateLimitPerMinute = -1
+	if resolved := effectiveRateLimitPerMinute(); resolved != rateLimitPerMinute {
+		t.Fatalf("a negative limit resolved to %d, want the default %d", resolved, rateLimitPerMinute)
+	}
+
+	// Its own server above, and the bucket is built inside Security, so this is a fresh
+	// peer budget even though the go test process shares one address.
+	const configured = 5
+	app.RateLimitPerMinute = configured
+	for request := 1; request <= configured; request++ {
+		response, err := client.client.Get(server.URL + "/api/v1/health")
+		if err != nil {
+			t.Fatal(err)
+		}
+		io.Copy(io.Discard, response.Body)
+		response.Body.Close()
+		if response.StatusCode != http.StatusOK {
+			t.Fatalf("request %d of %d was answered %d, so the configured limit sits below %d",
+				request, configured, response.StatusCode, configured)
+		}
+	}
+	response, err := client.client.Get(server.URL + "/api/v1/health")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer response.Body.Close()
+	io.Copy(io.Discard, response.Body)
+	if response.StatusCode != http.StatusTooManyRequests {
+		t.Fatalf("request %d was answered %d, want 429: the configured limit was ignored",
+			configured+1, response.StatusCode)
+	}
+}
