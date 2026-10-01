@@ -15,6 +15,11 @@ type PostService interface {
 	UpdatePost(postID int, userID string, title string, content string, privacy string, selectedUsers []string, imageURLs ...string) (posts.PostDTO, error)
 	GetPostByID(postId int, userId string) (posts.PostDTO, error)
 	DeletePost(postId int, userID string) error
+	// Bookmarks. SavePost refuses a post the account cannot read, so a save never
+	// confirms the existence of something the viewer is not allowed to see.
+	SavePost(userID string, postID int) error
+	UnsavePost(userID string, postID int) error
+	GetSavedPosts(pageNumber int, pageSize int, userID string) (posts.PostResponse, error)
 }
 
 type PostServiceImpl struct {
@@ -42,6 +47,7 @@ func mapPostToDTO(post models.Post, userScore int) posts.PostDTO {
 		Score:           post.Score,
 		CommentsCounter: post.CommentsCounter,
 		UserScore:       userScore,
+		IsSaved:         post.IsSaved,
 		CreatedAt:       post.CreatedAt,
 		UpdatedAt:       post.UpdatedAt,
 		Privacy:         post.Privacy,
@@ -55,8 +61,20 @@ func (p PostServiceImpl) GetPosts(pageNumber int, pageSize int, sortBy string, s
 		return posts.PostResponse{}, err
 	}
 
+	// One query settles which of the page's posts this viewer has bookmarked,
+	// rather than one query per card.
+	postIDs := make([]int, len(postsModel))
+	for i, post := range postsModel {
+		postIDs[i] = post.PostId
+	}
+	saved, err := p.db.SavedPostIDs(userId, postIDs)
+	if err != nil {
+		return posts.PostResponse{}, err
+	}
+
 	postDTOs := make([]posts.PostDTO, len(postsModel))
 	for i, post := range postsModel {
+		post.IsSaved = saved[post.PostId]
 		userScore, _ := p.reactionService.GetUserScore(userId, "post", post.PostId)
 		postDTOs[i] = mapPostToDTO(post, userScore)
 	}
@@ -79,8 +97,63 @@ func (p PostServiceImpl) GetPostByID(postId int, userId string) (posts.PostDTO, 
 	if err != nil {
 		return posts.PostDTO{}, err
 	}
+	// GetPostByID is the single-post path, so the saved flag is one lookup rather
+	// than the page-wide query GetPosts uses.
+	saved, err := p.db.IsPostSaved(userId, postId)
+	if err != nil {
+		return posts.PostDTO{}, err
+	}
+	post.IsSaved = saved
 	userScore, _ := p.reactionService.GetUserScore(userId, "post", postId)
 	return mapPostToDTO(post, userScore), nil
+}
+
+// SavePost bookmarks a post for one account. The post has to be readable by that
+// account first, so saving goes through the same visibility fragment every other
+// read path uses and answers 404 for a post the viewer may not see — the same
+// answer GetPostByID gives, which is what keeps this from being a way to probe
+// for posts that exist.
+func (p PostServiceImpl) SavePost(userID string, postID int) error {
+	allowed, err := p.db.CanViewPost(postID, userID)
+	if err != nil {
+		return err
+	}
+	if !allowed {
+		return realtimeforum.ErrNotFound
+	}
+	return p.db.SavePost(userID, postID)
+}
+
+func (p PostServiceImpl) UnsavePost(userID string, postID int) error {
+	return p.db.UnsavePost(userID, postID)
+}
+
+// GetSavedPosts is the bookmark list, in the feed's response shape so the same
+// paging contract holds. Every row is bookmarked by definition, so `isSaved` is
+// true throughout; the list is filtered by the same visibility rule as the feed,
+// which is why it is built here rather than by selecting ids and re-reading them.
+func (p PostServiceImpl) GetSavedPosts(pageNumber int, pageSize int, userID string) (posts.PostResponse, error) {
+	savedPosts, totalElements, err := p.db.SavedPosts(userID, pageNumber, pageSize)
+	if err != nil {
+		return posts.PostResponse{}, err
+	}
+
+	postDTOs := make([]posts.PostDTO, len(savedPosts))
+	for i, post := range savedPosts {
+		userScore, _ := p.reactionService.GetUserScore(userID, "post", post.PostId)
+		postDTOs[i] = mapPostToDTO(post, userScore)
+	}
+
+	totalPages := int(math.Ceil(float64(totalElements) / float64(pageSize)))
+
+	return posts.PostResponse{
+		Posts:         postDTOs,
+		PageNumber:    pageNumber,
+		PageSize:      pageSize,
+		TotalElements: totalElements,
+		TotalPages:    totalPages,
+		LastPage:      pageNumber >= totalPages,
+	}, nil
 }
 
 func (p PostServiceImpl) DeletePost(postId int, userID string) error {
