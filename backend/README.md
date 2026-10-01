@@ -40,6 +40,10 @@ From the repository root, `docker compose up --build -d` builds separate backend
 
 `GET /api/v1/handles/{nickname}` is what a `@handle` link opens: it resolves a handle to the account it names, ignoring case on both sides, and answers with the same profile and the same masking as `/users/{userId}` — the masking is shared code rather than a second copy, so a private profile cannot be read through the handle route instead. It cannot live under `/users/`: a literal segment there sits at the same depth as `{userId}` in `/users/{userId}/media` and its siblings, and Go's mux refuses that pair at registration.
 
+## Reactions
+
+One table serves three kinds of row, because `reaction` is keyed by `(userId, entityType, entityId)` and `000013` indexes `(entityType, entityId)`: `post`, `comment` and — since this session — `message`. `POST /api/v1/reactions` is the only way in, and the permission is the entity's own read rule: a post must pass `CanViewPost`, a comment `CanViewComment`, and a message must name the caller as one of its two participants. A target the caller may not read answers **404** rather than 403, so the endpoint cannot be used to learn that a row exists. Sending `+1` twice removes the reaction — that is the toggle the buttons on a post and a chat message both rely on. `post` and `comment` keep a denormalised `score` column that this endpoint maintains; a message deliberately does not, and the chat list reads its total from the table through the index instead. `000015` adds the cleanup a message was missing: deleting it takes its reactions with it, the way deleting a comment already does — and it has to be a trigger, because `reaction.entityId` is shared by three kinds of row and so cannot be a foreign key.
+
 ## WebSocket protocol
 
 The hub is `pkg/websocket` and `pkg/app/handlers/WebSocketHandler.go` is the only reader of a
