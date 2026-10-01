@@ -14,6 +14,14 @@ type PostRepository interface {
 	CanViewPost(postID int, viewerID string) (bool, error)
 	ValidateSelectedFollowers(ownerID string, selectedIDs []string) error
 	DeletePost(postId int, userId string) error
+	// Bookmarks live on this interface because a saved post is still a post: the
+	// same visibility fragment decides what the list may show, and PostService
+	// already holds this repository. They are implemented in SavedPostRepository.go.
+	SavePost(userID string, postID int) error
+	UnsavePost(userID string, postID int) error
+	IsPostSaved(userID string, postID int) (bool, error)
+	SavedPostIDs(userID string, postIDs []int) (map[int]bool, error)
+	SavedPosts(userID string, pageNumber int, pageSize int) ([]models.Post, int, error)
 }
 
 // postVisibility decides who may read a post. The three levels differ on purpose:
@@ -105,17 +113,26 @@ func (db *DB) GetPosts(pageNumber int, pageSize int, sortBy string, sortOrder st
 		if err != nil {
 			return nil, 0, err
 		}
-		if post.UserId == viewerID {
-			post.SelectedUsers, err = db.selectedUsers(post.PostId)
-			if err != nil {
-				return nil, 0, err
-			}
-		}
 		posts = append(posts, post)
 	}
 
 	if err = rows.Err(); err != nil {
 		return nil, 0, err
+	}
+	// The page's rows are closed before the per-post lookup below, on purpose: the
+	// pool can be as small as one connection (the tests set MaxOpenConns(1)), and a
+	// query issued while this *Rows is still open would wait for the connection it
+	// is holding. `defer` above still covers the early returns inside the loop.
+	if err = rows.Close(); err != nil {
+		return nil, 0, err
+	}
+	for i := range posts {
+		if posts[i].UserId == viewerID {
+			posts[i].SelectedUsers, err = db.selectedUsers(posts[i].PostId)
+			if err != nil {
+				return nil, 0, err
+			}
+		}
 	}
 
 	if posts == nil {
