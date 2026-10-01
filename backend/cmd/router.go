@@ -87,6 +87,7 @@ func routes() http.Handler {
 		"DELETE /api/v1/messages/{id}":            handlers.HandlerCtx.DeleteChatMessage,
 		"POST /api/v1/messages/read":              handlers.HandlerCtx.ReadChat,
 		"GET /api/v1/saved-posts":                 handlers.HandlerCtx.SavedPosts,
+		"GET /api/v1/posts/search":                handlers.HandlerCtx.SearchPosts,
 		"POST /api/v1/posts/{postId}/save":        handlers.HandlerCtx.SavePost,
 		"DELETE /api/v1/posts/{postId}/save":      handlers.HandlerCtx.UnsavePost,
 	} {
