@@ -1338,7 +1338,22 @@ Ordered roughly by value for effort.
   `frontend/src/app/globals.css` (radius, shadow, spacing, `--color-ring`) so restyling is a
   one-file change. The `chat-*` component classes there are the model to follow.
 - [ ] **P3** Dark mode from a `prefers-color-scheme` token set, with the toggle persisted.
-- [ ] **P3** "People you may know" rail on the feed, built from `GET /api/v1/users`.
+- [x] **P3** "People you may know" rail on the feed, built from `GET /api/v1/users`.
+  Closed 2026-10-01. `components/SuggestedPeople.tsx` reads the same list Discover does and does
+  the one thing that endpoint cannot do for itself: it drops everyone the viewer already follows
+  or has already asked to follow, and it keeps a small local list of members it has just acted on,
+  because `user.following` cannot answer for a *request* — a private profile is not followed until
+  it is accepted. The rail renders nothing at all when it has nothing to offer, loading included,
+  so the feed never grows a heading with no people under it. Following from it refreshes the
+  signed-in user and the member leaves the rail; the browser step follows Alex and then un-follows
+  him, so the request flows later in that suite still start from nobody following anybody.
+  **Deliberately not a suggestion engine:** the list arrives ordered by handle, which is what the
+  item asked for — it names `GET /api/v1/users` — and a friends-of-friends ranking would need a
+  query of its own (a count over `follow` joined to the viewer's own follows, ordered by it), so it
+  is left as its own task rather than implied by this title. Verified: `npm run lint` (0 errors),
+  `npx tsc --noEmit`, `npm run build`, `node scripts/dead-modules.mjs` (0 of 67), and the browser
+  suite, whose new step is `PASS: the feed offers people you may know, and following one takes them
+  out of it`.
 - [ ] **P3** Empty-state illustrations for the feed, notifications, messages and groups
   instead of plain text.
 
@@ -1522,6 +1537,37 @@ component classes) are the ones to build on.
   session that registering creates — do not "simplify" that into a register field.
 - P0-4 (notification vs message split) is complete; it touched `SideBar.tsx` and
   `notifications/page.tsx`.
+Changed in the suggestion-rail session (2026-10-01), for review:
+`frontend/src/app/components/SuggestedPeople.tsx` (new), `frontend/src/app/page.tsx`,
+`frontend/scripts/integration-smoke.mjs`, `README.md`, `TODO.md`.
+
+One P3 closed, frontend-only, the smallest surface of this run of sessions. The feed now carries a
+rail of members the viewer does not follow yet, with a button that follows them — or asks to, for a
+private profile — and takes them out of the rail.
+
+The filtering is the whole feature, and it is the part `/users` cannot do for itself. That endpoint
+already leaves the signed-in user out, but it cannot know that the viewer follows someone, has
+asked to, or has just acted on a row in this rail. So the component drops the first two using the
+viewer's own list, and remembers the third locally — because `user.following` is not updated by a
+*request* until the target accepts it, and the failure mode there is a card that refuses to go
+away. The distinction is written where the state lives.
+
+What it deliberately is not is a suggestion engine. A friends-of-friends score is a real feature —
+one query, a count over `follow` joined to the viewer's own follows, ordered by it — and the item
+named `GET /api/v1/users`, so this is a rail over that list rather than a ranking pretending to be
+one. The difference is recorded in `TODO.md` so the title does not over-promise.
+
+Two smaller decisions. The rail renders nothing at all when it has nothing to offer, loading
+included: a heading with no people under it is worse than no heading, and it is what every visit
+would otherwise open with. And the browser step un-follows at the end of itself, because this
+suite's follow-request flows later assume nobody follows anybody — checking a rail is not worth
+changing what those assertions mean.
+
+Evidence: `npm run lint` (0 errors), `npx tsc --noEmit`, `npm run build`, and
+`node scripts/dead-modules.mjs` (0 of 67). The browser suite passed end to end with the new step by
+name: "the feed offers people you may know, and following one takes them out of it". No backend
+change, so no Go test or tour line was needed for this one.
+
 Changed in the hashtags session (2026-10-01), for review:
 `backend/pkg/app/repositories/PostRepository.go`,
 `backend/pkg/app/repositories/SocialRepository.go`, `backend/pkg/app/repositories/SavedPostRepository.go`,
