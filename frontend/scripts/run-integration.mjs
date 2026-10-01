@@ -66,7 +66,7 @@ try {
   const base = `http://127.0.0.1:${frontendPort}`;
   const backendURL = `http://127.0.0.1:${backendPort}`;
   const api = start('backend', executable, [], {
-    cwd: taskDir, env: { ...env, PORT: String(backendPort), APP_ENV: 'development', FRONTEND_ORIGIN: base, UPLOAD_DIR: path.join(taskDir, 'uploads') },
+    cwd: taskDir, env: { ...env, PORT: String(backendPort), APP_ENV: 'development', FRONTEND_ORIGIN: base, UPLOAD_DIR: path.join(taskDir, 'uploads'), RATE_LIMIT_PER_MINUTE: '6000' },
   });
   // Readiness is the endpoint the backend exposes for exactly this question, and
   // it fails while the database is unreachable — a stronger signal than waiting
