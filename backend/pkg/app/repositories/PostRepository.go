@@ -22,6 +22,10 @@ type PostRepository interface {
 	IsPostSaved(userID string, postID int) (bool, error)
 	SavedPostIDs(userID string, postIDs []int) (map[int]bool, error)
 	SavedPosts(userID string, pageNumber int, pageSize int) ([]models.Post, int, error)
+	// SearchPosts finds posts whose title or content contains a term, newest
+	// first, filtered by the same visibility fragment as the feed — so searching
+	// cannot become a way to read a post the viewer is not allowed to open.
+	SearchPosts(search string, pageNumber int, pageSize int, viewerID string) ([]models.Post, int, error)
 }
 
 // postVisibility decides who may read a post. The three levels differ on purpose:
@@ -139,6 +143,85 @@ func (db *DB) GetPosts(pageNumber int, pageSize int, sortBy string, sortOrder st
 		posts = []models.Post{}
 	}
 
+	return posts, totalElements, nil
+}
+
+// postSearchFilter is the predicate a search adds to the visibility rule. The two
+// `?` are the same escaped pattern, once for the title and once for the body; the
+// ESCAPE clause is what makes likePattern's escapes mean anything.
+const postSearchFilter = ` AND (p.title LIKE ? ESCAPE '\' OR p.content LIKE ? ESCAPE '\')`
+
+// SearchPosts answers a text query with the posts whose title or content matches
+// it, newest first. It runs the feed's own projection and visibility fragment, so
+// the page it returns is a page of posts the viewer could have opened anyway; the
+// search adds a predicate rather than a second way in.
+//
+// No index can serve this: the pattern starts with `%`, so SQLite has to look at
+// every post and evaluate the fragment per row, exactly as the feed did before
+// 000013 — which is why the plan test names this query with an empty index rather
+// than claiming one. Measured rather than assumed; it is in that table.
+func (db *DB) SearchPosts(search string, pageNumber int, pageSize int, viewerID string) ([]models.Post, int, error) {
+	pattern := likePattern(search)
+
+	var totalElements int
+	if err := db.Conn.QueryRow(
+		"SELECT COUNT(*) FROM post p WHERE "+postVisibility+postSearchFilter,
+		viewerID, viewerID, viewerID, viewerID, pattern, pattern,
+	).Scan(&totalElements); err != nil {
+		return nil, 0, err
+	}
+
+	offset := (pageNumber - 1) * pageSize
+	query := postFeedSelect + postVisibility + postSearchFilter + `
+		ORDER BY p.createdAt DESC, p.postId DESC
+		LIMIT ? OFFSET ?
+	`
+	rows, err := db.Conn.Query(query, viewerID, viewerID, viewerID, viewerID, pattern, pattern, pageSize, offset)
+	if err != nil {
+		return nil, 0, err
+	}
+	defer rows.Close()
+
+	var posts []models.Post
+	for rows.Next() {
+		var post models.Post
+		if err := rows.Scan(
+			&post.PostId,
+			&post.UserId,
+			&post.Privacy,
+			&post.Nickname,
+			&post.Title,
+			&post.Content,
+			&post.Score,
+			&post.CommentsCounter,
+			&post.CreatedAt,
+			&post.UpdatedAt,
+			&post.ImageURLs,
+		); err != nil {
+			return nil, 0, err
+		}
+		posts = append(posts, post)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, 0, err
+	}
+	// Closed before the per-post audience lookup, for the single-connection reason
+	// GetPosts documents: the pool can hold one connection, and `selectedUsers`
+	// would wait for the one this *Rows is holding.
+	if err := rows.Close(); err != nil {
+		return nil, 0, err
+	}
+	for i := range posts {
+		if posts[i].UserId == viewerID {
+			posts[i].SelectedUsers, err = db.selectedUsers(posts[i].PostId)
+			if err != nil {
+				return nil, 0, err
+			}
+		}
+	}
+	if posts == nil {
+		posts = []models.Post{}
+	}
 	return posts, totalElements, nil
 }
 
