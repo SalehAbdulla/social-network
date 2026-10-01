@@ -36,6 +36,17 @@ func (db *DB) reactionTarget(userId, entityType string, entityId int) error {
 			return realtimeforum.ErrNotFound
 		}
 		return nil
+	case "message":
+		// A message is readable by exactly its two participants, so that is the whole
+		// rule: anyone else is answered not found, the same as an unreadable post.
+		sender, recipient, err := db.MessageParticipants(entityId)
+		if err != nil {
+			return realtimeforum.ErrNotFound
+		}
+		if userId != sender && userId != recipient {
+			return realtimeforum.ErrNotFound
+		}
+		return nil
 	default:
 		return realtimeforum.ErrBadRequest
 	}
@@ -113,6 +124,9 @@ func (db *DB) UpsertReaction(userId string, entityType string, entityId int, sco
 			`UPDATE comment SET score = ? WHERE commentId = ?`,
 			totalScore, entityId,
 		)
+		// A message has no denormalised column to keep: the chat list reads the total
+		// from the reaction table through the (entityType, entityId) index, which is why
+		// nothing here matches "message" rather than that case being forgotten.
 	}
 	if err != nil {
 		return 0, realtimeforum.ErrInternal
