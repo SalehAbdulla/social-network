@@ -1274,8 +1274,22 @@ Ordered roughly by value for effort.
   collector takes a derivative with its row and recognises a stray one, which is the leak this
   change would otherwise have shipped: a `_thumb` name is not a UUID, so the sweep that predates it
   would have left every derivative behind forever.
-- [ ] **P3** Lightbox viewer with keyboard navigation and swipe, instead of opening the raw
+- [x] **P3** Lightbox viewer with keyboard navigation and swipe, instead of opening the raw
   file in a new tab (`PostCard.tsx:64` uses `target="_blank"`).
+  Closed 2026-10-01. New `components/Lightbox.tsx`: a labelled modal dialog that shows the picture
+  at the large derivative (`mediaVariant(url, 'large')` — that function's own comment names a
+  lightbox as its caller), moves through the set with the arrow keys, the on-screen arrows and a
+  horizontal swipe, wraps around, closes on Escape or a backdrop click, and is a dialog rather
+  than a div: it locks the page behind it, traps Tab, takes focus while it is open and hands it
+  back to the control that opened it. `PostCard` now draws post photos and comment photos as
+  buttons that open it, which removes both `target="_blank"` sites from that file. **Decision:**
+  chat (`DirectConversation.tsx`) and group (`GroupActivity.tsx`) images keep their `target="_blank"`
+  links for now — the item named `PostCard`, and those two surfaces would each need their own
+  browser coverage rather than an untested change. Verified: `npm run lint` (0 errors),
+  `npx tsc --noEmit`, `npm run build`, `node scripts/dead-modules.mjs` (0 of 60), and the browser
+  suite, whose composer now uploads two photos and which asserts the new step by name — the viewer
+  opens on the large derivative, takes focus, ArrowRight and ArrowLeft move through the set, and
+  Escape closes it and restores focus to the picture it was opened from.
 
 ### Instagram-like UI
 
@@ -1452,6 +1466,37 @@ component classes) are the ones to build on.
   session that registering creates — do not "simplify" that into a register field.
 - P0-4 (notification vs message split) is complete; it touched `SideBar.tsx` and
   `notifications/page.tsx`.
+Changed in the lightbox session (2026-10-01), for review:
+`frontend/src/app/components/Lightbox.tsx` (new), `frontend/src/app/components/PostCard.tsx`,
+`frontend/scripts/integration-smoke.mjs`, `README.md`, `TODO.md`.
+
+One P3 closed, and the first frontend-only change in a while. A photo on a post or a comment used
+to open the raw file in a new tab; it now opens in the application. The viewer is deliberately a
+dialog rather than a styled `div`: it labels itself, takes focus while it is open, traps Tab, locks
+the page behind it, and hands focus back to the picture it was opened from — which is the part a
+viewer is usually missing, and the reason the browser check drives it with a real mouse click
+(`clickAt`) rather than a scripted `.click()`, which would never focus the button in the first
+place. The arrows and the arrow keys move through the set and wrap, Escape and a click on the
+backdrop close it, and a horizontal swipe does the same on touch; the counter and the arrows only
+appear when there is more than one picture, because a set of one has nowhere to move to.
+
+The image it fetches is the `large` derivative. That is not a new decision so much as the one
+`mediaVariant` already documented: its comment says the single-size call is for "a lightbox, say,
+which is deliberately the whole thing". The viewer is that caller now, and it inherits the same
+fallback the grid has — an upload with no such file is answered with the original.
+
+Two things are written down rather than left implied. The item named `PostCard.tsx`, so that is
+where the change stops: `DirectConversation.tsx` and `GroupActivity.tsx` still open their images in
+a new tab, and each would need its own browser coverage before it moves. And the composer step in
+the smoke suite now uploads two photos instead of one, because a single picture cannot show that
+the arrow keys move — with one, the controls are not drawn at all, which is the behaviour the same
+step asserts for the counter.
+
+Evidence: `npm run lint` (0 errors), `npx tsc --noEmit`, `npm run build`, and
+`node scripts/dead-modules.mjs`, which reports 0 modules with no importer out of 60 source files.
+The browser suite passed end to end with the new step by name: "a photo opens in a lightbox, moves
+with the arrow keys and closes on Escape".
+
 Changed in the bookmarks session (2026-10-01), for review:
 `backend/pkg/db/migrations/sqlite/000014_saved_posts.{up,down}.sql` (new),
 `backend/pkg/app/repositories/SavedPostRepository.go` (new),
