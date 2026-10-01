@@ -229,7 +229,7 @@ async function checkMessageMenus(page, label) {
 const stamp = String(Date.now());
 let dummy, alex, originalDummy, originalAlex, postId, storyId, mediaURL;
 try {
-  for (const route of ['/', '/post/1', '/post/1/edit', '/profile', '/profile/someone', '/messages', '/messages/someone', '/groups', '/groups/1', '/connections', '/discover', '/notifications', '/create-post', '/CreatePost', '/missing-page']) {
+  for (const route of ['/', '/saved', '/post/1', '/post/1/edit', '/profile', '/profile/someone', '/messages', '/messages/someone', '/groups', '/groups/1', '/connections', '/discover', '/notifications', '/create-post', '/CreatePost', '/missing-page']) {
     const response = await fetch(base + route, { redirect: 'manual' });
     assert.equal(response.status, 307, `Anonymous ${route} must redirect before rendering`);
     assert.equal(new URL(response.headers.get('location'), base).pathname, '/login');
@@ -306,6 +306,20 @@ try {
   assert.deepEqual(edited.imageUrls, created.imageUrls);
   assert.equal(edited.score, 1);
   console.log('PASS: owner edit button, prefilled editor, cancel and save preserve photos and votes');
+
+  // Bookmarks: the control lives on the card, the list has a page of its own, and
+  // un-saving from that page drops the row rather than leaving a stale card. Both
+  // writes are idempotent on the server, so the waits are on the resulting state.
+  await until(dummy, `!!document.querySelector('button[aria-label="Save post"]')`, 'the save control is on the post');
+  await evaluate(dummy, `document.querySelector('button[aria-label="Save post"]').click()`);
+  await until(dummy, `(async () => (await (await fetch('/api/v1/saved-posts?page=1&size=10')).json()).data.posts.some(post => post.postId === ${postId}))()`, 'the post reaches the saved list');
+  await until(dummy, `!!document.querySelector('button[aria-label="Remove from saved"]')`, 'the control reflects the saved state');
+  await navigate(dummy, '/saved');
+  await until(dummy, `document.body.innerText.includes(${JSON.stringify(`Updated ${stamp}`)})`, 'the saved page lists the bookmarked post');
+  await evaluate(dummy, `document.querySelector('button[aria-label="Remove from saved"]').click()`);
+  await until(dummy, `!document.body.innerText.includes(${JSON.stringify(`Updated ${stamp}`)})`, 'un-saving drops the row');
+  assert.equal(await evaluate(dummy, `(async () => (await (await fetch('/api/v1/saved-posts?page=1&size=10')).json()).data.totalElements)()`), 0, 'the saved list is empty after un-saving');
+  console.log('PASS: a post is saved from its card, listed on the private Saved page, and dropped when un-saved');
 
   // The composer's own contract, measured rather than assumed: the reason a publish
   // is blocked is on the page and attached to the field it is about, a draft survives
