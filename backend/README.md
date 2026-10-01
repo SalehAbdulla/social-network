@@ -44,6 +44,10 @@ From the repository root, `docker compose up --build -d` builds separate backend
 
 One table serves three kinds of row, because `reaction` is keyed by `(userId, entityType, entityId)` and `000013` indexes `(entityType, entityId)`: `post`, `comment` and — since this session — `message`. `POST /api/v1/reactions` is the only way in, and the permission is the entity's own read rule: a post must pass `CanViewPost`, a comment `CanViewComment`, and a message must name the caller as one of its two participants. A target the caller may not read answers **404** rather than 403, so the endpoint cannot be used to learn that a row exists. Sending `+1` twice removes the reaction — that is the toggle the buttons on a post and a chat message both rely on. `post` and `comment` keep a denormalised `score` column that this endpoint maintains; a message deliberately does not, and the chat list reads its total from the table through the index instead. `000015` adds the cleanup a message was missing: deleting it takes its reactions with it, the way deleting a comment already does — and it has to be a trigger, because `reaction.entityId` is shared by three kinds of row and so cannot be a foreign key.
 
+## Chat media
+
+`GET /api/v1/messages/media?partnerId=&offset=` is the media tab of a direct conversation: the same thread as `GET /api/v1/messages`, narrowed to the rows that carry an attachment, behind the same `CanMessage` rule and the same hidden-for-me rule — so the tab cannot show media from a thread the reader may not open, and cannot become a way around either. It answers with a small `ConversationMediaItem` (id, url, type, time) rather than a `MessageDTO`, because a tile needs nothing else; the profile media tab made the same choice with its own `MediaItem`. The frontend opens those attachments in the app's `Lightbox`, and so does a bubble's attachment and a group post's photo — the two `target="_blank"` sites the lightbox session left behind.
+
 ## WebSocket protocol
 
 The hub is `pkg/websocket` and `pkg/app/handlers/WebSocketHandler.go` is the only reader of a
