@@ -321,6 +321,8 @@ call "$JAR_A" PUT "/api/v1/messages/$MESSAGE_A" 200 '{"text":"A message from the
 call "$JAR_A" GET /api/v1/messages/users 200
 # route: GET /api/v1/messages
 call "$JAR_A" GET "/api/v1/messages?partnerId=$USER_B&page=1&size=20" 200
+# route: GET /api/v1/messages/media
+call "$JAR_A" GET "/api/v1/messages/media?partnerId=$USER_B" 200
 # route: POST /api/v1/messages/read
 call "$JAR_B" POST /api/v1/messages/read 200 "{\"partnerId\":\"$USER_A\"}"
 # A reaction on a message is a participant's alone, and it is here rather than anywhere else
