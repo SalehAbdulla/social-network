@@ -58,7 +58,10 @@ left alone there — a still frame of an animation is a different picture, not a
 
 **Search** — one page looks through people, groups and posts at once. The post half runs
 the same privacy rule as the feed, so a search only ever returns posts you could have
-opened, and the terms you tried are kept in your browser and offered back.
+opened, and the terms you tried are kept in your browser and offered back. `#hashtags`
+and `@mentions` are links wherever text is shown — posts, comments, group posts and chat:
+a tag opens a page of the posts carrying it, matched as a whole word and behind the same
+privacy rule, and a mention opens the member it names.
 
 ## Stack
 
