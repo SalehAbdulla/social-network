@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Bell, CirclePlus, Compass, House, MessageSquare, UserRound, ChevronLeft, ChevronRight, LogOut, X } from 'lucide-react';
+import { Bell, Bookmark, CirclePlus, Compass, House, MessageSquare, UserRound, ChevronLeft, ChevronRight, LogOut, X } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { displayName, errorMessage, request } from '../api/social';
 import { useBackend } from './BackendProvider';
@@ -63,7 +63,7 @@ export default function Sidebar({ isSideBarOpen, setSideBarOpen, isCollapsed, se
   }, [reloadCount, reloadMessages]);
   const links = [
     { href: '/', label: 'Feed', icon: House }, { href: '/messages', label: 'Messages', icon: MessageSquare },
-    { href: '/discover', label: 'Discover', icon: Compass },
+    { href: '/discover', label: 'Discover', icon: Compass }, { href: '/saved', label: 'Saved', icon: Bookmark },
     { href: '/notifications', label: 'Notifications', icon: Bell }, { href: '/profile', label: 'Profile', icon: UserRound },
   ];
   async function logout() {
