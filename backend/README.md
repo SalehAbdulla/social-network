@@ -34,6 +34,12 @@ From the repository root, `docker compose up --build -d` builds separate backend
 
 `GET /api/v1/posts/search?q=&page=&size=` answers with the posts whose title or content contains the term, newest first, in the feed's response shape and behind the feed's own visibility fragment (`PostRepository.postVisibility`) — so a search is not a second way to read a post. The pattern is escaped by `likePattern`, so a `%` or `_` typed into the box is a character rather than a wildcard, and a blank query is a 400 rather than the `%%` that would match every post. No index can serve it, because the pattern starts with `%`; that is why the query-plan table lists this query with no index instead of claiming one. `GET /api/v1/users?q=` and `GET /api/v1/groups?q=` already answered the other two halves of the page, and `likePattern` is shared by all three now rather than written out in each.
 
+## Hashtags and mentions
+
+`GET /api/v1/hashtags/{tag}` is the page a `#tag` link opens: the posts whose title or body carries that tag, newest first, in the feed's shape and behind the same visibility fragment as the feed. Nothing is stored and there is no backfill to run — the tag is matched in the text with `GLOB` over a lowercased `' ' || title || ' ' || content || ' '`. `GLOB` is what makes the boundary rule expressible (`LIKE` has no character classes): the tag may not be glued to a word on either side, so `#travel` matches neither `#traveling` nor `abc#travel`, and the space padded onto each end is what lets a tag sit at the very start of a title. The handler restricts the tag to `[a-z0-9_]` before it reaches the pattern, which is also what keeps it out of `GLOB`'s own syntax. It scans, so it is listed in the query-plan table with no index, beside the text search and for the same reason.
+
+`GET /api/v1/handles/{nickname}` is what a `@handle` link opens: it resolves a handle to the account it names, ignoring case on both sides, and answers with the same profile and the same masking as `/users/{userId}` — the masking is shared code rather than a second copy, so a private profile cannot be read through the handle route instead. It cannot live under `/users/`: a literal segment there sits at the same depth as `{userId}` in `/users/{userId}/media` and its siblings, and Go's mux refuses that pair at registration.
+
 ## WebSocket protocol
 
 The hub is `pkg/websocket` and `pkg/app/handlers/WebSocketHandler.go` is the only reader of a
