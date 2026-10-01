@@ -5,7 +5,7 @@ import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { ArrowLeft, Check, CheckCheck, Heart } from 'lucide-react';
 import toast from 'react-hot-toast';
-import { type ChatUser, type ChatMessage, type SocketEvent, dateLabel, displayName, errorMessage, request, upload } from '../api/social';
+import { type ChatUser, type ChatMessage, type ConversationMedia, type SocketEvent, dateLabel, displayName, errorMessage, request, upload } from '../api/social';
 import { useBackend } from './BackendProvider';
 import { usePagedList } from '../lib/usePagedList';
 import { useResource } from '../lib/useResource';
@@ -13,12 +13,15 @@ import { useLiveRefresh } from '../lib/useLiveRefresh';
 import Avatar from './Avatar';
 import ChatComposer from './ChatComposer';
 import MessageActions from './MessageActions';
+import Lightbox from './Lightbox';
 import LoadMore from './LoadMore';
 import Loading from './Loading';
 import { mediaImageProps } from '../lib/mediaVariants';
 
 // `/messages` is capped at 10 rows per request by the backend.
 const MESSAGES_PER_PAGE = 10;
+// The backend sends 30 attachments a request for the media tab.
+const MEDIA_PER_PAGE = 30;
 
 export default function DirectConversation({ partner, person }: { partner: string; person?: ChatUser }) {
   const { user, connected, sendEvent } = useBackend();
@@ -29,6 +32,20 @@ export default function DirectConversation({ partner, person }: { partner: strin
     pageSize: MESSAGES_PER_PAGE,
     normalize: (raw, { page, pageSize }) => ({ items: raw.messages, hasMore: page * pageSize < raw.totalElements }),
     keyOf: message => message.messageId,
+  });
+  const [tab, setTab] = useState<'chat' | 'media'>('chat');
+  // The set the viewer was opened over: the media tab's tiles step through one another,
+  // while an attachment on a single bubble opens on its own.
+  const [viewer, setViewer] = useState<{ images: string[]; index: number } | null>(null);
+  // The media tab reads its own endpoint — the same thread, narrowed to the attachments — and
+  // only while the tab is open, so a conversation nobody switched to does not pay for it.
+  const media = usePagedList<ConversationMedia, { media: ConversationMedia[]; totalElements: number }>({
+    key: `/messages/media?partnerId=${encodeURIComponent(partner)}`,
+    pageQuery: page => `&offset=${(page - 1) * MEDIA_PER_PAGE}`,
+    pageSize: MEDIA_PER_PAGE,
+    normalize: (raw, { page, pageSize }) => ({ items: raw.media, hasMore: page * pageSize < raw.totalElements }),
+    keyOf: item => item.messageId,
+    enabled: tab === 'media',
   });
   const profile = useResource<ChatUser>(`/users/${encodeURIComponent(partner)}`, !person);
   const contact = person || profile.data;
@@ -101,6 +118,8 @@ export default function DirectConversation({ partner, person }: { partner: strin
       <Link href={`/profile/${partner}`} className="flex min-w-0 items-center gap-3"><Avatar name={name} avatarUrl={contact?.avatar} /><div className="min-w-0"><h2 className="truncate font-semibold text-slate-900">{name}</h2><p className="text-xs text-slate-500">{typing ? 'Typing…' : person?.isOnline ? 'Online' : 'Offline'}</p></div></Link>
       <span className={`ml-auto h-2 w-2 shrink-0 rounded-full ${connected ? 'bg-emerald-500' : 'bg-amber-400'}`} title={connected ? 'Connected' : 'Reconnecting'} />
     </header>
+    <nav aria-label="Conversation tabs" className="flex shrink-0 gap-1 border-b border-slate-200 bg-white px-3">{([['chat', 'Chat'], ['media', 'Media']] as const).map(([value, label]) => <button key={value} type="button" aria-pressed={tab === value} onClick={() => setTab(value)} className={`border-b-2 px-3 py-2 text-sm ${tab === value ? 'border-teal-600 font-semibold text-teal-700' : 'border-transparent text-slate-500 hover:text-slate-800'}`}>{label}</button>)}</nav>
+    {tab === 'chat' && <>
     <div ref={scroller} onScroll={() => { const el = scroller.current; if (el) nearBottom.current = el.scrollHeight - el.scrollTop - el.clientHeight < 120; }} className="chat-background min-h-0 flex-1 overflow-y-auto p-4 sm:p-6">
       {(thread.items.length > 0 || thread.loadingMore) && <LoadMore loading={thread.loadingMore} hasMore={thread.hasMore} onLoadMore={thread.loadMore} label="Load earlier messages" endLabel={null} className="py-2" />}
       {thread.loading && <Loading height={80} />}
@@ -109,7 +128,7 @@ export default function DirectConversation({ partner, person }: { partner: strin
       <div className="space-y-4">{[...thread.items].reverse().map(message => {
         const mine = message.senderId === user.userId;
         return <div key={message.messageId} className={`flex ${mine ? 'justify-end' : 'justify-start'}`}><article className={`max-w-[90%] rounded-2xl px-4 py-3 shadow-sm sm:max-w-[75%] ${mine ? 'rounded-br-sm bg-teal-700 text-white' : 'rounded-bl-sm border border-slate-100 bg-white text-slate-800'}`}>
-          {message.mediaUrl && (message.mediaType === 'video' ? <video src={message.mediaUrl} controls className="mb-2 max-h-80 rounded-xl" /> : <a href={message.mediaUrl} target="_blank" rel="noreferrer"><img {...mediaImageProps(message.mediaUrl, '320px')} alt="Message attachment" className="mb-2 max-h-80 rounded-xl object-contain" /></a>)}
+          {message.mediaUrl && (message.mediaType === 'video' ? <video src={message.mediaUrl} controls className="mb-2 max-h-80 rounded-xl" /> : <button type="button" aria-label="Open this attachment" onClick={() => setViewer({ images: [message.mediaUrl], index: 0 })} className="mb-2 block cursor-zoom-in"><img {...mediaImageProps(message.mediaUrl, '320px')} alt="Message attachment" className="max-h-80 rounded-xl object-contain" /></button>)}
           <p className="whitespace-pre-wrap break-words text-sm leading-relaxed">{linkify(message.textMessage)}</p>
           <div className={`mt-2 flex items-center justify-end gap-1 text-[10px] ${mine ? 'text-teal-100' : 'text-slate-400'}`}><button type="button" disabled={busy} aria-label={message.userScore === 1 ? 'Remove your reaction to this message' : 'React to this message'} aria-pressed={message.userScore === 1} onClick={() => void react(message)} className={`mr-1 flex items-center gap-0.5 rounded-full px-1.5 py-0.5 transition hover:bg-black/5 ${message.userScore === 1 ? 'font-semibold' : ''}`}><Heart size={13} fill={message.userScore === 1 ? 'currentColor' : 'none'} aria-hidden="true" />{message.score > 0 && <span>{message.score}</span>}</button><time>{dateLabel(message.timeStamp)}</time>{message.editedAt && <span>· edited</span>}{mine && (message.isRead ? <CheckCheck size={14} aria-label="Read" /> : <Check size={14} aria-label="Sent" />)}
             <MessageActions label="Message actions">{mine && <><button className="chat-menu" disabled={busy} onClick={() => setEditing(message)}>Edit message</button><button className="chat-menu text-red-600" disabled={busy} onClick={() => void remove(message.messageId, 'everyone')}>Delete for everyone</button></>}<button className="chat-menu" disabled={busy} onClick={() => void remove(message.messageId, 'me')}>Delete for me</button></MessageActions>
@@ -118,5 +137,18 @@ export default function DirectConversation({ partner, person }: { partner: strin
       })}</div><div ref={bottom} />
     </div>
     <ChatComposer allowVideo key={editing?.messageId || 'new'} initialText={editing?.textMessage} editing={!!editing} onCancel={() => setEditing(null)} onSend={send} onTyping={active => sendEvent({ type: active ? 'typing' : 'typing_stopped', payload: { senderId: user.userId, recipientId: partner } })} />
+    </>}
+    {tab === 'media' && <div className="chat-background min-h-0 flex-1 overflow-y-auto p-4 sm:p-6">
+      {media.loading && <Loading height={80} />}
+      {media.error && <button className="chat-secondary" onClick={media.reload}>Retry loading media</button>}
+      {media.settled && !media.error && media.items.length === 0 && <p className="py-12 text-center text-sm text-slate-500">No photos or videos in this conversation yet.</p>}
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">{media.items.map((item, index) => <button key={item.messageId} type="button" aria-label={`Open attachment ${index + 1}`} onClick={() => setViewer({ images: media.items.map(entry => entry.mediaUrl), index })} className="cursor-zoom-in overflow-hidden rounded-xl">
+        {item.mediaType === 'video'
+          ? <video src={item.mediaUrl} className="aspect-square w-full bg-slate-100 object-contain" />
+          : <img {...mediaImageProps(item.mediaUrl, '(max-width: 640px) 50vw, 240px')} alt="Conversation attachment" className="aspect-square w-full bg-slate-100 object-contain" />}
+      </button>)}</div>
+      {media.items.length > 0 && <LoadMore loading={media.loadingMore} hasMore={media.hasMore} onLoadMore={media.loadMore} label="Load more media" />}
+    </div>}
+    {viewer && <Lightbox images={viewer.images} startIndex={viewer.index} label="Conversation media" onClose={() => setViewer(null)} />}
   </section>;
 }
