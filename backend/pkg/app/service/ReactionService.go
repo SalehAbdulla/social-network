@@ -2,8 +2,8 @@ package service
 
 import (
 	realtimeforum "social-network/backend"
-	"social-network/backend/pkg/payload/reaction"
 	db "social-network/backend/pkg/app/repositories"
+	"social-network/backend/pkg/payload/reaction"
 )
 
 type ReactionService interface {
@@ -26,7 +26,7 @@ func (r ReactionServiceImpl) GetUserScore(userId string, entityType string, enti
 }
 
 func (r ReactionServiceImpl) UpsertReaction(userId string, entityType string, entityId int, score int) (reaction.ReactionResponse, error) {
-	if entityType != "post" && entityType != "comment" {
+	if entityType != "post" && entityType != "comment" && entityType != "message" {
 		return reaction.ReactionResponse{}, realtimeforum.ErrBadRequest
 	}
 
