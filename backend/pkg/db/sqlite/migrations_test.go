@@ -50,11 +50,12 @@ func TestMigrationsRoundTrip(t *testing.T) {
 	assertCommentColumns(t, database)
 	assertEventColumns(t, database)
 	assertResetColumns(t, database)
+	assertSavedPostColumns(t, database)
 
 	if err := migrations.Down(); err != nil {
 		t.Fatalf("down: %v", err)
 	}
-	for _, table := range []string{"user", "session", "post", "comment", "message", "notification", "media", "follow", "connection", "story", "socialGroup", "groupContent", "passwordReset"} {
+	for _, table := range []string{"user", "session", "post", "comment", "message", "notification", "media", "follow", "connection", "story", "socialGroup", "groupContent", "passwordReset", "savedPost"} {
 		if tableExists(t, database, table) {
 			t.Fatalf("table %q survived a full down migration", table)
 		}
@@ -67,11 +68,12 @@ func TestMigrationsRoundTrip(t *testing.T) {
 	assertCommentColumns(t, database)
 	assertEventColumns(t, database)
 	assertResetColumns(t, database)
+	assertSavedPostColumns(t, database)
 	version, dirty, err := migrations.Version()
 	// Pinned rather than derived from the directory: a new migration is meant to be noticed
 	// here and its round trip confirmed, so adding one is a deliberate edit to this line.
-	if err != nil || dirty || version != 13 {
-		t.Fatalf("expected clean version 13, got %d (dirty=%v, err=%v)", version, dirty, err)
+	if err != nil || dirty || version != 14 {
+		t.Fatalf("expected clean version 14, got %d (dirty=%v, err=%v)", version, dirty, err)
 	}
 }
 
@@ -187,6 +189,19 @@ func assertResetColumns(t *testing.T, database *sql.DB) {
 	}
 	if nullable, err := columnIsNullable(database, "passwordReset", "usedAt"); err == nil && !nullable {
 		t.Fatal("passwordReset.usedAt must be nullable, or every token reads as spent")
+	}
+}
+
+// assertSavedPostColumns guards the table 000014 adds. The pair is the primary
+// key — that is what makes a second save one row rather than two — and createdAt
+// has to be there, because the saved list is ordered by when a post was saved.
+func assertSavedPostColumns(t *testing.T, database *sql.DB) {
+	t.Helper()
+	columns := tableColumns(t, database, "savedPost")
+	for _, name := range []string{"userId", "postId", "createdAt"} {
+		if !columns[name] {
+			t.Fatalf("savedPost is missing %q after the migration", name)
+		}
 	}
 }
 
