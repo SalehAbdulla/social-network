@@ -52,6 +52,10 @@ picture already narrower than a cap — answers those requests with the original
 Clicking a photo on a post or a comment opens it in a full-screen viewer rather than a
 new tab, with the arrow keys, the on-screen arrows and a swipe moving through the set.
 
+**Search** — one page looks through people, groups and posts at once. The post half runs
+the same privacy rule as the feed, so a search only ever returns posts you could have
+opened, and the terms you tried are kept in your browser and offered back.
+
 ## Stack
 
 | Layer | Choice |
