@@ -221,6 +221,18 @@ call "$JAR_B" PUT "/api/v1/posts/comments/$COMMENT_B" 200 '{"content":"A comment
 # route: POST /api/v1/reactions
 call "$JAR_B" POST /api/v1/reactions 200 "{\"entityType\":\"comment\",\"entityId\":$COMMENT_B,\"score\":1}"
 
+# --- saved posts --------------------------------------------------------------------------------
+
+# A bookmark is private to the account that made it, so the tour saves A's own post, lists it and
+# removes it again. Both writes answer with the state they produced rather than with a change,
+# which is why saving twice would be a 200 too.
+# route: POST /api/v1/posts/{postId}/save
+call "$JAR_A" POST "/api/v1/posts/$POST_A/save" 200
+# route: GET /api/v1/saved-posts
+call "$JAR_A" GET "/api/v1/saved-posts?page=1&size=10" 200
+# route: DELETE /api/v1/posts/{postId}/save
+call "$JAR_A" DELETE "/api/v1/posts/$POST_A/save" 200
+
 # --- following, including the request a private profile needs ---------------------------------
 
 # route: GET /api/v1/users
