@@ -537,6 +537,20 @@ try {
   assert(freshComment.dateTime && freshComment.title, `the exact instant stays on the element: ${JSON.stringify(freshComment)}`);
   console.log('PASS: a comment carries an uploaded photo, renders it and stores its URL');
 
+  // On a phone the same comment area is a bottom drawer rather than the inline list: shut
+  // until the reader asks for it, opened by the comment button, dismissed with Escape.
+  await command('Emulation.setDeviceMetricsOverride', { width: 390, height: 844, deviceScaleFactor: 1, mobile: true }, alex);
+  await navigate(alex, `/post/${postId}`);
+  await until(alex, `!!document.querySelector('button[aria-label="Show comments"]')`, 'comment button on a phone');
+  assert(!(await evaluate(alex, `!!document.querySelector('#comment-${postId}')`)), 'comments are not inline on a phone');
+  await evaluate(alex, `document.querySelector('button[aria-label="Show comments"]').click()`);
+  await until(alex, `!!document.querySelector('[role="dialog"][aria-label="Comments"]')`, 'the comment drawer opens');
+  assert(await evaluate(alex, `!!document.querySelector('[role="dialog"][aria-label="Comments"] #comment-${postId}')`), 'the drawer holds the composer');
+  await command('Input.dispatchKeyEvent', { type: 'keyDown', key: 'Escape', code: 'Escape', windowsVirtualKeyCode: 27 }, alex);
+  await until(alex, `!document.querySelector('[role="dialog"][aria-label="Comments"]')`, 'Escape closes the drawer');
+  await command('Emulation.setDeviceMetricsOverride', { width: 1440, height: 960, deviceScaleFactor: 1, mobile: false }, alex);
+  console.log('PASS: on a phone the comments open as a bottom drawer and close on Escape');
+
   // The profile media tab lists comment photos next to post photos. The tile asks for one of
   // the server's derivatives rather than the original, so what identifies the photo here is its
   // URL up to the `?size=` — asserting the bare URL would now be asserting that the grid
