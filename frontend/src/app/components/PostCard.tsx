@@ -2,9 +2,9 @@
 
 import { linkify } from '../lib/linkify';
 
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import Link from 'next/link';
-import { ArrowDown, ArrowUp, Bookmark, MessageCircle, Share2, Trash2, Pencil } from 'lucide-react';
+import { ArrowDown, ArrowUp, Bookmark, Heart, MessageCircle, Share2, Trash2, Pencil } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { type Post, type Comment, dateLabel, errorMessage, isoTimestamp, relativeLabel, request, savePost, unsavePost, upload } from '../api/social';
 import { useBackend } from './BackendProvider';
@@ -17,6 +17,9 @@ import LoadMore from './LoadMore';
 import Loading from './Loading';
 
 const COMMENTS_PER_PAGE = 10;
+// A second tap on a photo inside this window reads as a double-tap (like) rather
+// than a second attempt to open the lightbox.
+const DOUBLE_TAP_MS = 300;
 
 const PRIVACY_LABEL: Record<Post['privacy'], string> = {
   public: 'Public',
@@ -120,6 +123,12 @@ export default function PostCard({ post, fetchPosts, onPostRemoved, onUnsaved }:
   const [saved, setSaved] = useState(post.isSaved);
   // Which post photo is open in the viewer, if any.
   const [viewer, setViewer] = useState<number | null>(null);
+  // A double-tap like: the burst id plus the photo it should appear over, so the
+  // heart lands on the picture the reader tapped rather than the middle of the grid.
+  const [burst, setBurst] = useState<{ id: number; position: number } | null>(null);
+  // Remembers the last tap on a photo so a second tap inside the window reads as a
+  // double-tap (like) instead of arming the lightbox a second time.
+  const lastTap = useRef<{ position: number; at: number; timer: ReturnType<typeof setTimeout> | null }>({ position: -1, at: 0, timer: null });
   const vote = reaction || post;
   const commentCount = Math.max(0, post.commentsCounter + commentDelta);
   async function react(score: number) {
@@ -137,6 +146,23 @@ export default function PostCard({ post, fetchPosts, onPostRemoved, onUnsaved }:
       setReaction(previous);
       toast.error(errorMessage(error));
     } finally { setBusy(false); }
+  }
+  // A double-tap on a photo likes it. A single tap still opens the lightbox, so the
+  // two gestures share one click handler and a short window: the first tap arms the
+  // lightbox, and a second tap inside the window cancels it and likes instead.
+  function handleMediaTap(position: number, timeStamp: number) {
+    const previous = lastTap.current;
+    if (previous.position === position && timeStamp - previous.at <= DOUBLE_TAP_MS) {
+      if (previous.timer) clearTimeout(previous.timer);
+      lastTap.current = { position: -1, at: 0, timer: null };
+      if (!busy && vote.userScore !== 1) {
+        setBurst({ id: timeStamp, position });
+        void react(1);
+      }
+      return;
+    }
+    if (previous.timer) clearTimeout(previous.timer);
+    lastTap.current = { position, at: timeStamp, timer: setTimeout(() => setViewer(position), DOUBLE_TAP_MS) };
   }
   async function toggleSave() {
     if (busy) return;
@@ -165,7 +191,7 @@ export default function PostCard({ post, fetchPosts, onPostRemoved, onUnsaved }:
   return <article className="space-y-4 rounded-2xl border border-border bg-card p-5 shadow-sm transition hover:shadow-md">
     <div className="flex items-center justify-between"><Link href={`/profile/${post.userId}`} className="flex items-center gap-3"><Avatar name={post.nickname} /><div><p className="font-semibold">@{post.nickname}</p><p className="text-xs text-slate-400"><time dateTime={isoTimestamp(post.createdAt)} title={dateLabel(post.createdAt)}>{relativeLabel(post.createdAt)}</time></p></div></Link>{post.userId === user.userId && <div className="flex items-center gap-1"><Link href={`/post/${post.postId}/edit`} aria-label="Edit post" title="Edit post" className="flex size-9 items-center justify-center rounded-full text-slate-400 transition hover:bg-slate-100 hover:text-blue-600"><Pencil size={18} /></Link><button disabled={busy} aria-label="Delete post" title="Delete post" className="flex size-9 items-center justify-center rounded-full text-slate-400 transition hover:bg-red-50 hover:text-red-600" onClick={() => void remove()}><Trash2 size={18} /></button></div>}</div>
     {post.title && <Link href={`/post/${post.postId}`} className="block text-lg font-semibold hover:text-blue-700">{post.title}</Link>}<p className="whitespace-pre-wrap break-words text-slate-700">{linkify(post.content)}</p><span className="inline-block rounded-full bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-600">{PRIVACY_LABEL[post.privacy]}</span>
-    {!!post.imageUrls?.length && <div className={`grid gap-2 ${post.imageUrls.length > 1 ? 'grid-cols-2' : ''}`}>{post.imageUrls.map((url, position) => <button key={url} type="button" aria-label={`Open image ${position + 1} of ${post.imageUrls.length}`} onClick={() => setViewer(position)} className="block w-full cursor-zoom-in"><img {...mediaImageProps(url, post.imageUrls.length > 1 ? '(max-width: 640px) 50vw, 320px' : '(max-width: 768px) 100vw, 640px')} alt="Post attachment" className="aspect-square max-h-[540px] w-full rounded-xl bg-slate-50 object-contain" /></button>)}</div>}
+    {!!post.imageUrls?.length && <div className={`grid gap-2 ${post.imageUrls.length > 1 ? 'grid-cols-2' : ''}`}>{post.imageUrls.map((url, position) => <button key={url} type="button" aria-label={`Open image ${position + 1} of ${post.imageUrls.length}`} onClick={(event) => handleMediaTap(position, event.timeStamp)} className="relative block w-full cursor-zoom-in touch-manipulation"><img {...mediaImageProps(url, post.imageUrls.length > 1 ? '(max-width: 640px) 50vw, 320px' : '(max-width: 768px) 100vw, 640px')} alt="Post attachment" className="aspect-square max-h-[540px] w-full rounded-xl bg-slate-50 object-contain" />{burst?.position === position && <span key={burst.id} aria-hidden="true" onAnimationEnd={() => setBurst(null)} className="heart-burst text-red-500"><Heart size={80} fill="currentColor" strokeWidth={0} /></span>}</button>)}</div>}
     <div className="flex items-center gap-4 border-t border-border pt-3 text-sm text-slate-500"><button disabled={busy} aria-label="Upvote post" onClick={() => void react(1)} className={`flex items-center gap-1 rounded-full px-2 py-1 transition hover:bg-slate-100 ${vote.userScore === 1 ? 'text-blue-600' : ''}`}><ArrowUp size={20} />{vote.score}</button><button disabled={busy} aria-label="Downvote post" onClick={() => void react(-1)} className={`flex items-center gap-1 rounded-full px-2 py-1 transition hover:bg-slate-100 ${vote.userScore === -1 ? 'text-blue-600' : ''}`}><ArrowDown size={20} /></button><button aria-expanded={showComments} onClick={() => setShowComments(!showComments)} className="flex items-center gap-1.5 rounded-full px-2 py-1 transition hover:bg-slate-100"><MessageCircle size={19} />{commentCount} comments</button><button disabled={busy} aria-label={saved ? 'Remove from saved' : 'Save post'} aria-pressed={saved} title={saved ? 'Remove from saved' : 'Save post'} onClick={() => void toggleSave()} className={`flex items-center gap-1 rounded-full px-2 py-1 transition hover:bg-slate-100 ${saved ? 'text-blue-600' : ''}`}><Bookmark size={19} fill={saved ? 'currentColor' : 'none'} /></button><button aria-label="Share post" className="ml-auto flex size-9 items-center justify-center rounded-full transition hover:bg-slate-100" onClick={async () => { try { await navigator.clipboard.writeText(`${location.origin}/post/${post.postId}`); toast.success('Post link copied'); } catch { toast.error('Could not copy the link'); } }}><Share2 size={18} /></button></div>
     {showComments && <Comments post={post} onCountChange={delta => setCommentDelta(value => value + delta)} />}
     {viewer !== null && <Lightbox images={post.imageUrls} startIndex={viewer} label="Post photos" onClose={() => setViewer(null)} />}
