@@ -1188,9 +1188,18 @@ Ordered roughly by value for effort.
 
 ### Composer and preview
 
-- [ ] **P3** Live post preview in `PostForm.tsx`: render the draft exactly as `PostCard` does
+- [x] **P3** Live post preview in `PostForm.tsx`: render the draft exactly as `PostCard` does
   (avatar, handle, timestamp, title, content, image grid, privacy chip), side by side with
-  the form on `lg:` and behind a toggle on mobile.
+  the form on `lg:` and behind a toggle on mobile. Closed 2026-10-02: a new `PostPreview`
+  component renders those six elements in `PostCard`'s shell with the theme tokens
+  (`bg-card`/`text-text`/`text-muted`/`border-border`/`bg-surface-2`/`bg-card-2`), linkifying
+  the draft text and drawing just-picked files from object URLs with the same create/revoke
+  lifecycle as `ImagePicker.Preview`. The composer is now `max-w-6xl` with the form and the
+  preview side by side on `lg:` (`lg:grid-cols-2`) and the card behind a `lg:hidden` "Preview"
+  toggle on mobile. The privacy chip and the composer's `<select>` now share one `PRIVACY_LABEL`
+  exported from `api/social.ts`, so the chip, the select and the feed cannot drift. Verified
+  with `npx tsc --noEmit`, `npm run lint` (0 errors) and `npm run build`; the browser suite
+  needs Chrome, which this environment does not have.
 - [ ] **P3** Preview step before publishing, so the author sees the post the way the chosen
   audience will before committing.
 - [ ] **P3** Audience banner in the preview: "Visible to your followers", or the selected
