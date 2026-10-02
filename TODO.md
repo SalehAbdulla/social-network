@@ -1323,9 +1323,17 @@ Ordered roughly by value for effort.
 - [ ] **P3** Adopt an Instagram-style shell: slim top app bar with search and the notification
   bell, plus a bottom tab bar on mobile, replacing the off-canvas drawer in `SideBar.tsx`.
   Keep the current sidebar as the `lg:` variant so nothing is lost.
-- [ ] **P3** Media-first feed cards: full-bleed media that is square by default, with a row of
+- [x] **P3** Media-first feed cards: full-bleed media that is square by default, with a row of
   icons (heart, comment, share, save) instead of the up/down vote arrows and text buttons in
   `PostCard.tsx:65`. Keep `POST /api/v1/reactions` underneath so no backend change is needed.
+  Closed 2026-10-02: post media now bleeds edge-to-edge (`-mx-5` inside an `overflow-hidden`
+  card) and renders as filled squares (`aspect-square` + `object-cover` on `bg-card-2`), and the
+  action row is four icons — heart (like toggle, `text-danger` when set, keeps the reaction
+  score), comment (keeps the count), share and save (`text-brand-1` when set). The post downvote
+  arrow is gone from the UI (comment up/down votes are unchanged), and `POST /api/v1/reactions`
+  still backs the like. The smoke test's reaction step now clicks `Like post` instead of
+  `Upvote post`. Verified with `npx tsc --noEmit`, `npm run lint` (0 errors) and `npm run build`;
+  the browser suite needs Chrome, which this environment does not have.
 - [x] **P3** Double-tap to like with a heart burst, wired to the existing reaction endpoint,
   with optimistic state instead of the current refetch. Closed 2026-10-02: a double-tap on a
   feed photo likes it (score +1) and plays a scaling, fading heart over the tapped picture.
