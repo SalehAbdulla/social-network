@@ -1367,8 +1367,25 @@ Ordered roughly by value for effort.
   version moved 15 → 16), `npm run lint` (0 errors), `npx tsc --noEmit`, `npm run build`, and the
   browser suite end to end, whose story step now asserts the ring turns when the story opens and
   that the server records the view for that reader.
-- [ ] **P3** Comment sheet: a bottom drawer on mobile instead of the always-open inline list
-  in `PostCard.tsx:41`.
+- [x] **P3** Comment sheet: a bottom drawer on mobile instead of the always-open inline list
+  in `PostCard.tsx:41`. Closed 2026-10-02: a post's comments are now inline and open on a wide
+  screen, as before, and a **bottom drawer on a phone** — shut until the reader taps the comment
+  button, then a `role="dialog"` panel with a grab handle, a title, a close button, a backdrop
+  and the same `Comments` inside, so reading, writing and voting are identical either way. The
+  keyboard contract is `useDialogFocus` (focus moves in, Tab cycles, Escape closes, the page
+  behind freezes) — the same hook the story viewer and the navigation drawer use — and the
+  backdrop is a **sibling** of the panel, because `backdrop-filter` makes an element the
+  containing block of a `position: fixed` descendant and a wrapping backdrop would anchor the
+  sheet to itself. **The decision that shaped this:** which of the two renders depends on the
+  viewport, which no class can express for a drawer that must not be in the DOM until it is
+  opened, so a new `lib/useMediaQuery.ts` reads `(min-width: 1024px)` in an effect (the way
+  `ThemeProvider` reads storage and `SideBar` reads its breakpoint) and returns `false` on the
+  first render so hydration cannot mismatch. `showComments` became a tri-state — `null` means
+  "follow the viewport", and once the reader has opened or closed the list their own choice
+  wins, so a resize never overrules them. Verified: `npx tsc --noEmit`, `npm run lint`
+  (0 errors), `npm run build`, `node scripts/dead-modules.mjs` (0 of 69), and the browser suite,
+  whose new step is `PASS: on a phone the comments open as a bottom drawer and close on Escape`
+  and whose existing `Post comments open by default` assertion still holds on the wide screen.
 - [ ] **P3** Instagram-style profile header — avatar on the left, posts/followers/following
   stats on the right — and a 3-column square grid replacing `MediaGrid`'s two-column
   `h-48` tiles (`profile/page.tsx:412`).
