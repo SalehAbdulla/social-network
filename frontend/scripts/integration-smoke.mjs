@@ -557,8 +557,18 @@ try {
   // downloads full-resolution originals, which is the opposite of what the app is for.
   await navigate(alex, '/profile');
   await until(alex, `!!document.querySelector('[aria-label="Profile statistics"]')`, 'own profile');
+  // The header carries the Instagram shape: a posts count beside followers and following,
+  // and the number is the profile resource's own rather than a guess from the loaded page.
+  const ownProfileData = await api(alex, '/users/me');
+  const shownPostCount = await evaluate(alex, `Number((document.querySelector('[aria-label="Post count"]')?.innerText.match(/[0-9]+/) || [NaN])[0])`);
+  assert.equal(shownPostCount, ownProfileData.postCount, `the header shows the profile's own post count: ${shownPostCount} vs ${ownProfileData.postCount}`);
   await evaluate(alex, `[...document.querySelectorAll('button')].find(item => item.textContent.trim() === 'media').click()`);
   await until(alex, `[...document.querySelectorAll('a[href="/post/${postId}"] img')].some(image => { const src = image.getAttribute('src') || ''; return src.startsWith(${JSON.stringify(commentPhoto)}) && src.includes('size='); })`, 'comment photo in the profile media tab');
+  // The grid is three columns of squares rather than two columns of fixed-height rectangles.
+  const mediaGrid = await evaluate(alex, `(() => { const grid = document.querySelector('[data-media-grid]'); const tile = grid.querySelector('img'); const box = tile.getBoundingClientRect(); return { columns: getComputedStyle(grid).gridTemplateColumns.split(' ').length, square: Math.abs(box.width - box.height) < 1.5, width: Math.round(box.width) }; })()`);
+  assert.equal(mediaGrid.columns, 3, `the media grid is three columns: ${JSON.stringify(mediaGrid)}`);
+  assert(mediaGrid.square, `the media tiles are square: ${JSON.stringify(mediaGrid)}`);
+  console.log('PASS: the profile header counts posts and the media tab is a three-column square grid');
   console.log('PASS: the profile media tab lists the comment photo');
 
   // Upload edge cases through the same-origin path the composers use: an empty
