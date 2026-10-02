@@ -1380,8 +1380,16 @@ Ordered roughly by value for effort.
   `npx tsc --noEmit`, `npm run build`, `node scripts/dead-modules.mjs` (0 of 67), and the browser
   suite, whose new step is `PASS: the feed offers people you may know, and following one takes them
   out of it`.
-- [ ] **P3** Empty-state illustrations for the feed, notifications, messages and groups
-  instead of plain text.
+- [x] **P3** Empty-state illustrations for the feed, notifications, messages and groups
+  instead of plain text. Closed 2026-10-02: `RequestState` now takes an optional `variant`
+  (`feed` | `notifications` | `messages` | `groups`) that draws a small lucide icon in a
+  tinted circle above the message, plus optional `children` for a call-to-action link, and it
+  moved onto the theme tokens (`border-border`/`bg-card`/`text-muted`/`bg-surface-2`). The feed
+  (`Inbox`), notifications (`Bell`), messages (`MessageCircle`) and groups (`Users`) empty
+  states now use it; the two plain `<p>` list empties in `messages/page.tsx` were converted to
+  `RequestState` (the "Start a new conversation" link is kept as a child). Existing `empty=`
+  callers render unchanged. Verified with `npx tsc --noEmit`, `npm run lint` (0 errors) and
+  `npm run build`; the browser suite needs Chrome, which this environment does not have.
 
 ### Product extras
 
