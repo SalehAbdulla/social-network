@@ -51,11 +51,12 @@ func TestMigrationsRoundTrip(t *testing.T) {
 	assertEventColumns(t, database)
 	assertResetColumns(t, database)
 	assertSavedPostColumns(t, database)
+	assertStoryViewColumns(t, database)
 
 	if err := migrations.Down(); err != nil {
 		t.Fatalf("down: %v", err)
 	}
-	for _, table := range []string{"user", "session", "post", "comment", "message", "notification", "media", "follow", "connection", "story", "socialGroup", "groupContent", "passwordReset", "savedPost"} {
+	for _, table := range []string{"user", "session", "post", "comment", "message", "notification", "media", "follow", "connection", "story", "storyView", "socialGroup", "groupContent", "passwordReset", "savedPost"} {
 		if tableExists(t, database, table) {
 			t.Fatalf("table %q survived a full down migration", table)
 		}
@@ -69,11 +70,12 @@ func TestMigrationsRoundTrip(t *testing.T) {
 	assertEventColumns(t, database)
 	assertResetColumns(t, database)
 	assertSavedPostColumns(t, database)
+	assertStoryViewColumns(t, database)
 	version, dirty, err := migrations.Version()
 	// Pinned rather than derived from the directory: a new migration is meant to be noticed
 	// here and its round trip confirmed, so adding one is a deliberate edit to this line.
-	if err != nil || dirty || version != 15 {
-		t.Fatalf("expected clean version 15, got %d (dirty=%v, err=%v)", version, dirty, err)
+	if err != nil || dirty || version != 16 {
+		t.Fatalf("expected clean version 16, got %d (dirty=%v, err=%v)", version, dirty, err)
 	}
 }
 
@@ -201,6 +203,20 @@ func assertSavedPostColumns(t *testing.T, database *sql.DB) {
 	for _, name := range []string{"userId", "postId", "createdAt"} {
 		if !columns[name] {
 			t.Fatalf("savedPost is missing %q after the migration", name)
+		}
+	}
+}
+
+// assertStoryViewColumns guards the table 000016 adds. The pair is the primary key —
+// that is what makes a second view of the same story one row rather than two — and it has
+// to point at both the story and the account, or deleting either would leave the row
+// behind for the listing query to filter out by hand.
+func assertStoryViewColumns(t *testing.T, database *sql.DB) {
+	t.Helper()
+	columns := tableColumns(t, database, "storyView")
+	for _, name := range []string{"storyId", "userId", "viewedAt"} {
+		if !columns[name] {
+			t.Fatalf("storyView is missing %q after the migration", name)
 		}
 	}
 }
