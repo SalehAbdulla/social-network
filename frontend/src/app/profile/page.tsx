@@ -307,90 +307,105 @@ function ProfileHeader({
       </div>
 
       <div className="space-y-4 p-6">
-        {/* Avatar + Actions */}
-        <div className="flex items-center justify-between gap-4">
+        {/* Instagram shape: the avatar on the left, with the handle, the actions and the
+            counts stacked on the right, and the name and bio below the pair. On a phone the
+            same row simply narrows. */}
+        <div className="flex items-center gap-6 sm:items-start">
           <Avatar
             name={displayName(profile)}
             avatarUrl={profile.avatar}
             size={80}
           />
 
-          {isOwnProfile ? (
-            <div className="flex flex-wrap gap-2">
-              <button
-                type="button"
-                onClick={onEdit}
-                className="rounded-lg border border-slate-200 px-4 py-2"
-              >
-                Edit profile
-              </button>
-              <button
-                type="button"
-                onClick={onChangePassword}
-                className="rounded-lg border border-slate-200 px-4 py-2"
-              >
-                Change password
-              </button>
+          <div className="min-w-0 flex-1 space-y-3">
+            <div className="flex flex-wrap items-center gap-3">
+              <p className="text-lg font-semibold text-slate-800">
+                @{profile.nickname}
+              </p>
+
+              {isOwnProfile ? (
+                <div className="flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    onClick={onEdit}
+                    className="rounded-lg border border-slate-200 px-4 py-2"
+                  >
+                    Edit profile
+                  </button>
+                  <button
+                    type="button"
+                    onClick={onChangePassword}
+                    className="rounded-lg border border-slate-200 px-4 py-2"
+                  >
+                    Change password
+                  </button>
+                </div>
+              ) : (
+                <ProfileActions
+                  pendingOutgoing={pendingOutgoing}
+                  pendingIncoming={profile.pendingIncoming}
+                  canMessage={profile.canMessage === true}
+                  isFollowing={isFollowing}
+                  isFollowingBusy={isFollowingBusy}
+                  profileId={profile.userId}
+                  onToggleFollow={onToggleFollow}
+                />
+              )}
             </div>
-          ) : (
-            <ProfileActions
-              pendingOutgoing={pendingOutgoing}
-              pendingIncoming={profile.pendingIncoming}
-              canMessage={profile.canMessage === true}
-              isFollowing={isFollowing}
-              isFollowingBusy={isFollowingBusy}
-              profileId={profile.userId}
-              onToggleFollow={onToggleFollow}
-            />
-          )}
+
+            {/* Statistics. The post count is its own labelled element; the followers and
+                following pair keeps the `Profile statistics` label it had, so the new count
+                is readable without changing what that row already answers. */}
+            <div className="flex flex-wrap gap-5 text-sm">
+              {/* The post count comes from this profile's own resource rather than from
+                  `profileOwner`: the provider's copy of the signed-in user is only re-read
+                  after a follow, so it would be stale here after writing a post, while this
+                  resource is fetched whenever the page is opened. */}
+              <span aria-label="Post count">
+                <b>{profile.postCount}</b> posts
+              </span>
+
+              <div aria-label="Profile statistics" className="flex flex-wrap gap-5">
+                <button
+                  type="button"
+                  disabled={!canOpenFollowLists}
+                  onClick={() => onOpenFollowList('followers')}
+                  className={canOpenFollowLists ? 'hover:underline' : 'cursor-default'}
+                >
+                  <b>{profileOwner.followers.length}</b> followers
+                </button>
+
+                <button
+                  type="button"
+                  disabled={!canOpenFollowLists}
+                  onClick={() => onOpenFollowList('following')}
+                  className={canOpenFollowLists ? 'hover:underline' : 'cursor-default'}
+                >
+                  <b>{profileOwner.following.length}</b> following
+                </button>
+              </div>
+            </div>
+          </div>
         </div>
 
-        {/* Name */}
-        <div>
+        {/* Name, bio and meta */}
+        <div className="space-y-1">
           <h1 className="text-2xl font-bold">
             {displayName(profile)}
           </h1>
 
-          <p className="text-slate-500">
-            @{profile.nickname}
+          {/* Bio */}
+          {profile.bio && (
+            <p className="whitespace-pre-wrap wrap-break-word">
+              {profile.bio}
+            </p>
+          )}
+
+          {/* Location / Joined */}
+          <p className="min-w-0 text-sm text-slate-400 [overflow-wrap:anywhere]">
+            {profile.location && `${profile.location} • `}
+            Joined {dateLabel(profile.createdAt)}
           </p>
-        </div>
-
-        {/* Bio */}
-        {profile.bio && (
-          <p className="whitespace-pre-wrap wrap-break-word">
-            {profile.bio}
-          </p>
-        )}
-
-        {/* Location / Joined */}
-        <p className="min-w-0 text-sm text-slate-400 [overflow-wrap:anywhere]">
-          {profile.location && `${profile.location} • `}
-          Joined {dateLabel(profile.createdAt)}
-        </p>
-
-        {/* Statistics */}
-        <div
-          aria-label="Profile statistics"
-          className="flex flex-wrap gap-5 text-sm"
-        >
-          <button
-            type="button"
-            disabled={!canOpenFollowLists}
-            onClick={() => onOpenFollowList('followers')}
-            className={canOpenFollowLists ? 'hover:underline' : 'cursor-default'}
-          >
-            <b>{profileOwner.followers.length}</b> followers
-          </button>
-
-          <button
-            type="button"
-            disabled={!canOpenFollowLists}
-            onClick={() => onOpenFollowList('following')}
-            className={canOpenFollowLists ? 'hover:underline' : 'cursor-default'}
-          >
-            <b>{profileOwner.following.length}</b> following
-          </button>
         </div>
       </div>
     </section>
@@ -506,16 +521,17 @@ type MediaGridProps = {
 
 function MediaGrid({ items }: MediaGridProps) {
   return (
-    <div className="grid grid-cols-2 gap-3">
+    <div data-media-grid className="grid grid-cols-3 gap-1">
       {items.map((item) => (
         <Link
           key={`${item.postId}-${item.url}`}
           href={`/post/${item.postId}`}
+          className="group relative block overflow-hidden bg-slate-100"
         >
           <img
-            {...mediaImageProps(item.url, '(max-width: 640px) 50vw, 360px')}
+            {...mediaImageProps(item.url, '(max-width: 640px) 33vw, 320px')}
             alt={item.title}
-            className="h-48 w-full rounded-lg object-cover"
+            className="aspect-square w-full object-cover transition duration-300 group-hover:scale-105"
           />
         </Link>
       ))}

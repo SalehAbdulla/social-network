@@ -16,6 +16,9 @@ export interface SocialUser {
   createdAt: string;
   followers: string[]; 
   following: string[];
+  // Viewer-relative: the posts this viewer may read, so the header's count and the
+  // page below it always agree.
+  postCount: number;
   pendingIncoming: boolean;
   pendingOutgoing: boolean;
   // Viewer-relative: the backend only allows a private chat when at least one of
