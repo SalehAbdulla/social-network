@@ -1345,8 +1345,28 @@ Ordered roughly by value for effort.
   an already-liked photo is a no-op, and a single tap still opens the lightbox after the window.
   Verified with `npx tsc --noEmit`, `npm run lint` (0 errors) and `npm run build`; the browser
   suite needs Chrome, which this environment does not have.
-- [ ] **P3** Story ring with the brand gradient around avatars in `StoriesBar`, plus a
-  seen/unseen state driven by `story` rows.
+- [x] **P3** Story ring with the brand gradient around avatars in `StoriesBar`, plus a
+  seen/unseen state driven by `story` rows. Closed 2026-10-02: every card's author avatar now
+  wears a ring — `.story-ring` (the brand gradient, `--ui-brand-1` → `--ui-brand-2`) while the
+  story is new to the viewer and `.story-ring-seen` (`--ui-border`) once they have opened it,
+  so "new" reads at a glance and both states follow the theme with no second palette. The
+  state is carried on `data-story-ring` for the tests, since a gradient has no text to assert
+  on. **The seen state is per account, not per browser**, so it is not `localStorage`: migration
+  `000016_story_views` adds `storyView(storyId, userId, viewedAt)` with the pair as the primary
+  key — a second view is one row — and `ON DELETE CASCADE` on both columns, and `GET /api/v1/stories`
+  now answers a viewer-relative `viewed` folded in with a single `LEFT JOIN` on that key (the
+  choice `isSaved` already made for a post). `POST /api/v1/stories/{id}/view` records a view,
+  idempotently (`ON CONFLICT DO NOTHING`), and 404s a story that is unknown or expired — the
+  same answer a read gives — so it cannot confirm that a dead story exists. `StoriesBar` flips
+  the ring optimistically through `stories.update` and sends the mark best-effort, falling back
+  to a reload so a failed write leaves the server's answer on screen rather than a lie; opening
+  a story the viewer auto-advances into marks it the same way. Verified: `go build ./...`,
+  `go vet ./...`, `go test ./...` (including the new `cmd/story_view_test.go` — unseen to
+  everyone at first, seen for the reader alone, one row after two views, 404 for an unknown *and*
+  an expired story, and the cascade on delete — and the migration round trip, whose pinned
+  version moved 15 → 16), `npm run lint` (0 errors), `npx tsc --noEmit`, `npm run build`, and the
+  browser suite end to end, whose story step now asserts the ring turns when the story opens and
+  that the server records the view for that reader.
 - [ ] **P3** Comment sheet: a bottom drawer on mobile instead of the always-open inline list
   in `PostCard.tsx:41`.
 - [ ] **P3** Instagram-style profile header — avatar on the left, posts/followers/following
