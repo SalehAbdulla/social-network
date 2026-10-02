@@ -6,7 +6,7 @@ import { useRef, useState } from 'react';
 import Link from 'next/link';
 import { ArrowDown, ArrowUp, Bookmark, Heart, MessageCircle, Share2, Trash2, Pencil } from 'lucide-react';
 import toast from 'react-hot-toast';
-import { type Post, type Comment, dateLabel, errorMessage, isoTimestamp, relativeLabel, request, savePost, unsavePost, upload } from '../api/social';
+import { type Post, type Comment, PRIVACY_LABEL, dateLabel, errorMessage, isoTimestamp, relativeLabel, request, savePost, unsavePost, upload } from '../api/social';
 import { useBackend } from './BackendProvider';
 import { usePagedList } from '../lib/usePagedList';
 import { mediaImageProps } from '../lib/mediaVariants';
@@ -20,12 +20,6 @@ const COMMENTS_PER_PAGE = 10;
 // A second tap on a photo inside this window reads as a double-tap (like) rather
 // than a second attempt to open the lightbox.
 const DOUBLE_TAP_MS = 300;
-
-const PRIVACY_LABEL: Record<Post['privacy'], string> = {
-  public: 'Public',
-  followers: 'Followers only',
-  selected: 'Selected followers',
-};
 
 function Comments({ post, onCountChange }: { post: Post; onCountChange: (delta: number) => void }) {
   const { user } = useBackend();
