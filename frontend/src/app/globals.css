@@ -154,6 +154,30 @@ button:not(:disabled) { cursor: pointer; }
   display: none;
 }
 
+/* Double-tap-to-like heart burst: a solid heart that scales in over the tapped
+   photo and fades. The element also carries `text-red-500`, so the fill follows the
+   danger token (light or dark). Sized and centred with negative margins so the
+   keyframe can own `transform` for the scale without fighting the centring. */
+.heart-burst {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 5rem;
+  height: 5rem;
+  margin: -2.5rem 0 0 -2.5rem;
+  pointer-events: none;
+  filter: drop-shadow(0 6px 18px color-mix(in srgb, var(--ui-danger) 45%, transparent));
+  animation: heart-burst 750ms ease-out forwards;
+}
+
+@keyframes heart-burst {
+  0%   { transform: scale(0); opacity: 0; }
+  15%  { transform: scale(1.25); opacity: 1; }
+  30%  { transform: scale(1); opacity: 1; }
+  65%  { transform: scale(1.05); opacity: 0.9; }
+  100% { transform: scale(1); opacity: 0; }
+}
+
 @theme {
   --radius-DEFAULT: 16px;
   --radius-sm: 11px;
