@@ -130,7 +130,7 @@ export default function Notifications() {
       <h2 className="text-lg font-semibold text-text">Activity</h2>
       {notifications.loading && <RowsSkeleton />}
       {notifications.items.map(item => <NotificationCard key={item.notificationId} item={item} busy={busy} mark={mark} />)}
-      {notifications.settled && !notifications.error && notifications.items.length === 0 && <RequestState empty="You're all caught up." />}
+      {notifications.settled && !notifications.error && notifications.items.length === 0 && <RequestState variant="notifications" empty="You're all caught up." />}
       {notifications.items.length > 0 && <LoadMore loading={notifications.loadingMore} hasMore={notifications.hasMore} onLoadMore={notifications.loadMore} label="Load more notifications" />}
     </div>
   </div>;
