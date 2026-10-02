@@ -109,6 +109,10 @@ func (re *HandlerContext) writeProfile(w http.ResponseWriter, r *http.Request, i
 		if !visible {
 			u.FirstName, u.LastName, u.Bio, u.Avatar, u.CoverPhoto, u.Location = "", "", "", "", "", ""
 			u.Followers, u.Following = []string{}, []string{}
+			// The count is masked with the lists above rather than left to the fragment:
+			// a `selected` grant can keep a post readable to someone who may not read the
+			// profile at all, and a count that moved with it would leak that it exists.
+			u.PostCount = 0
 		}
 	}
 	respond(w, http.StatusOK, u)

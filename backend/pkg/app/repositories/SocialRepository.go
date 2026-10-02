@@ -49,6 +49,17 @@ func (db *DB) SocialProfile(id string, viewers ...string) (models.SocialUser, er
 			return u, err
 		}
 	}
+	// The header's post count. It runs the same fragment the posts list does, so the number
+	// and the page below it cannot disagree — and it means a viewer who may not read a post
+	// is not counted for it, which is why a private profile shows the owner their own total
+	// and everyone else whatever is actually visible to them.
+	viewer := id
+	if len(viewers) > 0 {
+		viewer = viewers[0]
+	}
+	if err := db.Conn.QueryRow("SELECT COUNT(*) FROM post p WHERE p.userId = ? AND "+postVisibility, id, viewer, viewer, viewer, viewer).Scan(&u.PostCount); err != nil {
+		return u, err
+	}
 	if len(viewers) > 0 && viewers[0] != id {
 		// The third flag is the chat rule seen from viewers[0]: the profile is
 		// public, or either user follows the other.

@@ -1,20 +1,24 @@
 package models
 
 type SocialUser struct {
-	UserID          string   `json:"userId"`
-	Nickname        string   `json:"nickname"`
-	FirstName       string   `json:"firstName"`
-	LastName        string   `json:"lastName"`
-	Bio             string   `json:"bio"`
-	Avatar          string   `json:"avatar"`
-	CoverPhoto      string   `json:"coverPhoto"`
-	Location        string   `json:"location"`
-	IsPublic        bool     `json:"isPublic"`
-	CreatedAt       string   `json:"createdAt"`
-	Followers       []string `json:"followers"`
-	Following       []string `json:"following"`
-	PendingIncoming bool     `json:"pendingIncoming"`
-	PendingOutgoing bool     `json:"pendingOutgoing"`
+	UserID     string   `json:"userId"`
+	Nickname   string   `json:"nickname"`
+	FirstName  string   `json:"firstName"`
+	LastName   string   `json:"lastName"`
+	Bio        string   `json:"bio"`
+	Avatar     string   `json:"avatar"`
+	CoverPhoto string   `json:"coverPhoto"`
+	Location   string   `json:"location"`
+	IsPublic   bool     `json:"isPublic"`
+	CreatedAt  string   `json:"createdAt"`
+	Followers  []string `json:"followers"`
+	Following  []string `json:"following"`
+	// PostCount is viewer-relative, like the two lists it sits beside: it counts the
+	// posts this viewer may read, through the feed's own visibility fragment, so the
+	// number on the profile header is the number of posts the page below can show.
+	PostCount       int  `json:"postCount"`
+	PendingIncoming bool `json:"pendingIncoming"`
+	PendingOutgoing bool `json:"pendingOutgoing"`
 	// CanMessage is viewer-relative: true when the viewer may start a private
 	// chat with this user (public profile or a follow in either direction).
 	CanMessage bool `json:"canMessage"`
