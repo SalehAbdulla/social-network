@@ -16,6 +16,7 @@ import GroupInvitations from '../components/GroupInvitations';
 import ImagePicker from '../components/ImagePicker';
 import Loading from '../components/Loading';
 import LoadMore from '../components/LoadMore';
+import RequestState from '../components/RequestState';
 
 const GROUPS_PER_PAGE = 30;
 
@@ -82,13 +83,13 @@ export default function MessagesInboxPage() {
             {browsingGroups && <p className="px-3 pb-2 text-xs font-semibold text-slate-500">Discover groups</p>}
             {groups.loading && <Loading height={80} />}
             {groups.items.map(group => <Link key={group.groupId} href={`/messages/groups/${group.groupId}`} className={`mb-1 flex items-center gap-3 rounded-xl p-3 ${String(group.groupId) === groupId ? 'bg-teal-50' : 'hover:bg-slate-50'}`}><Avatar name={group.title} avatarUrl={group.imageUrl} size={44} /><div className="min-w-0 flex-1"><p className="truncate text-sm font-semibold text-slate-800">{group.title}</p><p className="mt-1 truncate text-xs text-slate-500">{group.isMember ? `${group.memberCount} members` : group.joinRequested ? 'Request pending' : 'Discover · Request to join'}</p></div></Link>)}
-            {groups.settled && groups.items.length === 0 && <p className="px-4 py-8 text-center text-sm text-slate-500">{browsingGroups ? 'No groups found.' : search ? 'No matching groups.' : 'Your joined groups will appear here. Find a group to join or create your own.'}</p>}
+            {groups.settled && groups.items.length === 0 && <RequestState variant="groups" empty={browsingGroups ? 'No groups found.' : search ? 'No matching groups.' : 'Your joined groups will appear here. Find a group to join or create your own.'} />}
             {groups.items.length > 0 && <LoadMore loading={groups.loadingMore} hasMore={groups.hasMore} onLoadMore={groups.loadMore} label="Load more groups" endLabel={null} className="py-1" />}
             {groups.error && <button className="chat-secondary" onClick={groups.reload}>Retry groups</button>}
           </> : <>
             {users.loading && <Loading height={80} />}
             {people?.map(person => <Link key={person.userId} href={`/messages/${person.userId}`} className={`mb-1 flex items-center gap-3 rounded-xl p-3 ${partner === person.userId ? 'bg-teal-50' : 'hover:bg-slate-50'}`}><div className="relative shrink-0"><Avatar name={displayName(person)} avatarUrl={person.avatar} size={44} />{!!person.isOnline && <span className="absolute bottom-0 right-0 h-3 w-3 rounded-full border-2 border-white bg-emerald-500" />}</div><div className="min-w-0 flex-1"><p className="truncate text-sm font-semibold text-slate-800">{displayName(person)}</p><p className="mt-1 text-xs text-slate-500">{person.isOnline ? 'Online now' : person.lastMessageTime ? 'Continue your conversation' : 'Start a conversation'}</p></div></Link>)}
-            {people?.length === 0 && <p className="p-4 text-center text-sm text-slate-500">{search ? 'No matching conversations.' : 'Your conversations will appear here after your first message.'}<Link href="/discover" className="mt-3 block font-medium text-teal-700">Start a new conversation</Link></p>}
+            {people?.length === 0 && <RequestState variant="messages" empty={search ? 'No matching conversations.' : 'Your conversations will appear here after your first message.'}><Link href="/discover" className="font-medium text-teal-700">Start a new conversation</Link></RequestState>}
             {users.error && <button className="chat-secondary" onClick={users.reload}>Retry conversations</button>}
           </>}
         </div>
