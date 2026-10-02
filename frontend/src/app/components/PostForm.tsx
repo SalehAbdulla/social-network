@@ -4,10 +4,12 @@ import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import toast from 'react-hot-toast';
-import { type FollowLists, type Post, displayName, errorMessage, request, upload } from '../api/social';
+import { Eye } from 'lucide-react';
+import { type FollowLists, type Post, PRIVACY_LABEL, displayName, errorMessage, request, upload } from '../api/social';
 import { useBackend } from './BackendProvider';
 import Avatar from './Avatar';
 import ImagePicker from './ImagePicker';
+import PostPreview from './PostPreview';
 import { useResource } from '../lib/useResource';
 import { clearPostDraft, draftHasContent, readPostDraft, writePostDraft } from '../lib/postDraft';
 
@@ -42,6 +44,10 @@ export default function PostForm({ post }: { post?: Post }) {
   const [hydrated, setHydrated] = useState(false);
   const [restoredDraft, setRestoredDraft] = useState(false);
   const [published, setPublished] = useState(false);
+  // Whether the live preview is shown on mobile; on `lg:` it is always beside the form.
+  const [showPreview, setShowPreview] = useState(false);
+  // Object URLs for the files just picked, so the preview can draw them before upload.
+  const [filePreviews, setFilePreviews] = useState<string[]>([]);
   const titleField = useRef<HTMLInputElement>(null);
   const contentField = useRef<HTMLTextAreaElement>(null);
   const followersField = useRef<HTMLFieldSetElement>(null);
@@ -74,6 +80,16 @@ export default function PostForm({ post }: { post?: Post }) {
     const timer = window.setTimeout(() => writePostDraft({ title, content, privacy, selectedFollowerIds: selectedFollowers, savedAt: Date.now() }), DRAFT_SAVE_DELAY);
     return () => window.clearTimeout(timer);
   }, [isNewPost, hydrated, published, title, content, privacy, selectedFollowers]);
+
+  // Object URLs follow the same create/revoke lifecycle as `ImagePicker.Preview`, so a
+  // removed file does not leave a blob behind and the preview never draws a stale one.
+  // The assignment is deferred a tick for the same reason `Preview` defers its `src`:
+  // setting state synchronously inside an effect body is discouraged by the hooks rules.
+  useEffect(() => {
+    const urls = images.map(file => URL.createObjectURL(file));
+    const timer = window.setTimeout(() => setFilePreviews(urls), 0);
+    return () => { window.clearTimeout(timer); urls.forEach(url => URL.revokeObjectURL(url)); };
+  }, [images]);
 
   const hasMedia = images.length > 0 || existingImages.length > 0;
   const audience = selectedFollowers.filter(id => followers.data?.followers.some(person => person.userId === id));
@@ -146,15 +162,19 @@ export default function PostForm({ post }: { post?: Post }) {
     event.preventDefault();
     void publish();
   }
-  return <div className="mx-auto max-w-2xl p-6 sm:p-8 space-y-6"><h1 className="text-3xl font-bold">{post ? 'Edit Post' : 'Create Post'}</h1>
+  return <div className="mx-auto max-w-6xl p-6 sm:p-8 space-y-6">
+    <div className="flex flex-wrap items-center justify-between gap-3">
+      <h1 className="text-3xl font-bold">{post ? 'Edit Post' : 'Create Post'}</h1>
+      <button type="button" onClick={() => setShowPreview(current => !current)} aria-expanded={showPreview} aria-controls="post-preview" className="chat-secondary inline-flex items-center gap-2 lg:hidden"><Eye size={16} aria-hidden="true" />{showPreview ? 'Hide preview' : 'Preview'}</button>
+    </div>
     {/* `noValidate` hands the checks to `publish()`, which explains itself; the
         fields keep `required`/`minLength` as a description for assistive technology
         rather than as the thing that decides. */}
-    <form onSubmit={event => { event.preventDefault(); void publish(); }} onKeyDown={shortcut} noValidate className="rounded-xl bg-white p-6 shadow-sm space-y-5"><div className="flex items-center gap-3"><Avatar name={displayName(user)} avatarUrl={user.avatar} /><div><p className="font-medium">{displayName(user)}</p><p className="text-sm text-slate-500">@{user.nickname}</p></div></div>
+    <div className="lg:grid lg:grid-cols-2 lg:gap-6 lg:items-start"><form onSubmit={event => { event.preventDefault(); void publish(); }} onKeyDown={shortcut} noValidate className="rounded-xl bg-white p-6 shadow-sm space-y-5"><div className="flex items-center gap-3"><Avatar name={displayName(user)} avatarUrl={user.avatar} /><div><p className="font-medium">{displayName(user)}</p><p className="text-sm text-slate-500">@{user.nickname}</p></div></div>
     {restoredDraft && <p role="status" id="draft-restored" className="flex flex-wrap items-center gap-3 rounded-lg border border-border bg-surface-2 px-3 py-2 text-sm text-muted">Draft restored. The text and the audience came back; photos did not.<button type="button" onClick={discardDraft} className="font-medium text-brand-1 underline">Discard draft</button></p>}
     <label className="block text-sm font-medium">Title (optional)<input ref={titleField} minLength={MIN_TITLE} maxLength={30} value={title} onChange={event => setTitle(event.target.value)} className="mt-2 w-full rounded-lg border border-slate-200 p-3" placeholder="Give your post a title" /></label>
     <label className="block text-sm font-medium">Your post<textarea ref={contentField} required={!hasMedia} minLength={hasMedia ? 0 : MIN_CONTENT} maxLength={500} rows={6} value={content} onChange={event => setContent(event.target.value)} aria-describedby={blocker ? 'publish-blocked' : undefined} className="mt-2 w-full rounded-lg border border-slate-200 p-3" placeholder="What's happening?" /></label>
-    <label className="block text-sm font-medium">Post privacy<select value={privacy} onChange={event => setPrivacy(event.target.value as typeof privacy)} className="mt-2 block w-full rounded-lg border border-slate-200 p-3"><option value="public">Public</option><option value="followers">Followers only</option><option value="selected">Selected followers</option></select></label>
+    <label className="block text-sm font-medium">Post privacy<select value={privacy} onChange={event => setPrivacy(event.target.value as typeof privacy)} className="mt-2 block w-full rounded-lg border border-slate-200 p-3">{Object.entries(PRIVACY_LABEL).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label>
     {privacy === 'selected' && <fieldset ref={followersField} tabIndex={-1} className="rounded-lg border border-slate-200 p-3">
       <legend className="px-1 text-sm font-medium">Choose followers</legend>
       {followers.loading && <p role="status" className="text-sm text-slate-500">Loading followers...</p>}
@@ -183,5 +203,5 @@ export default function PostForm({ post }: { post?: Post }) {
       </div>
       {blocker && <p id="publish-blocked" className="text-xs text-muted">{blocker.message}</p>}
     </div>
-  </form></div>;
+  </form><section id="post-preview" aria-label="Post preview" className={showPreview ? 'block' : 'hidden lg:block'}><p className="mb-3 text-sm font-medium text-muted">Preview</p><PostPreview user={user} title={title} content={content} privacy={privacy} imageUrls={[...existingImages, ...filePreviews]} createdAt={post?.createdAt} /></section></div></div>;
 }
