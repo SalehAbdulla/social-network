@@ -1386,9 +1386,36 @@ Ordered roughly by value for effort.
   (0 errors), `npm run build`, `node scripts/dead-modules.mjs` (0 of 69), and the browser suite,
   whose new step is `PASS: on a phone the comments open as a bottom drawer and close on Escape`
   and whose existing `Post comments open by default` assertion still holds on the wide screen.
-- [ ] **P3** Instagram-style profile header — avatar on the left, posts/followers/following
+- [x] **P3** Instagram-style profile header — avatar on the left, posts/followers/following
   stats on the right — and a 3-column square grid replacing `MediaGrid`'s two-column
-  `h-48` tiles (`profile/page.tsx:412`).
+  `h-48` tiles (`profile/page.tsx:412`). Closed 2026-10-02: the header now puts the avatar on
+  the left with the handle, the actions and the counts stacked on its right, and the name, bio
+  and join date below the pair; the media tab is `grid-cols-3 gap-1` with `aspect-square`
+  `object-cover` tiles in an `overflow-hidden` link (a hover zoom), replacing the two-column
+  `h-48` rectangles. **The posts count did not exist**, and a 3-column grid beside a made-up
+  number would have been worse than no number, so this is not a purely visual change: a
+  **viewer-relative `postCount`** was added to the profile resource — `SocialUser.PostCount`,
+  computed in `SocialRepository.SocialProfile` with the **feed's own `postVisibility` fragment**
+  (`SELECT COUNT(*) FROM post p WHERE p.userId=? AND <fragment>`), so the number on the header
+  equals the posts the page under it can actually show, and a post the viewer may not read is
+  not counted for them. **It is deliberately not `posts.items.length`**, which is only the pages
+  loaded so far, nor the provider's `/users/me` copy, which is re-read after a follow and so
+  would be stale here right after writing a post; the profile resource is the one this page
+  already fetches on open. **Decision:** `writeProfile` zeroes the count alongside the name,
+  avatar and follower lists when the viewer may not read the profile — masking it rather than
+  leaving it to the fragment, because a `selected` grant can keep a post readable to someone who
+  may not read the profile at all and a count that still moved would leak that the post exists.
+  **Layout note:** the followers/following pair keeps the `aria-label="Profile statistics"` it
+  had and the posts count sits in its own `aria-label="Post count"` element beside it, so the
+  new number is queryable without changing what the existing checks read from that row. Verified:
+  `go build ./...`, `go vet ./...`, `go test ./...` (including the new `cmd/profile_post_count_test.go`
+  — zero for a fresh account, the owner's three, a non-follower's two while the profile is
+  public, masked to zero when it turns private, restored to three for a follower once it is public
+  again, and the count agreeing with the posts list — and the new `query_plan_test.go` case
+  `profile post count`, which rides `post_userId_createdAt`), `npx tsc --noEmit`, `npm run lint`
+  (0 errors), `npm run build`, `node scripts/dead-modules.mjs` (0 of 69), and the browser suite,
+  whose new step is `PASS: the profile header counts posts and the media tab is a three-column
+  square grid` and whose existing `Profile statistics` follow/unfollow assertions still pass.
 - [x] **P3** Skeleton loaders for the feed and the profile list (`Skeletons.tsx`,
   `PostListSkeleton`, `CardGridSkeleton`, `RowsSkeleton`); `Loading.tsx` is now a small
   centred spinner that honours its `height` instead of stretching to the viewport.
