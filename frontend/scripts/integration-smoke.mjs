@@ -336,8 +336,8 @@ try {
   const created = (await api(dummy, '/posts')).posts.find(post => post.title === `Browser ${stamp}`);
   assert(created); postId = created.postId; mediaURL = created.imageUrls[0]; assert(mediaURL);
   await navigate(dummy, `/post/${postId}`);
-  await until(dummy, `!!document.querySelector('button[aria-label="Upvote post"]')`, 'post details');
-  await evaluate(dummy, `document.querySelector('button[aria-label="Upvote post"]').click()`);
+  await until(dummy, `!!document.querySelector('button[aria-label="Like post"]')`, 'post details');
+  await evaluate(dummy, `document.querySelector('button[aria-label="Like post"]').click()`);
   await until(dummy, `(async () => (await (await fetch('/api/v1/post?id=${postId}')).json()).data.score === 1)()`, 'post reaction');
   console.log('PASS: post creation, image upload, detail page and reaction persist');
 
@@ -491,7 +491,7 @@ try {
   assert.equal((await api(alex, '/messages/users')).length, 0);
   assert(await evaluate(alex, `!!document.querySelector('a[aria-label="New message"]')`));
   await navigate(alex, `/post/${postId}`);
-  await until(alex, `!!document.querySelector('button[aria-label="Upvote post"]')`, 'other author post');
+  await until(alex, `!!document.querySelector('button[aria-label="Like post"]')`, 'other author post');
   assert(!(await evaluate(alex, `!!document.querySelector('a[aria-label="Edit post"]')`)));
   await navigate(alex, `/post/${postId}/edit`);
   await until(alex, `document.body.innerText.includes('You can only edit your own posts.')`, 'non-owner editor denied');
