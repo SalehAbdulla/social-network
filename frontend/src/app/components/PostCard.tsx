@@ -2,12 +2,14 @@
 
 import { linkify } from '../lib/linkify';
 
-import { useRef, useState } from 'react';
+import { useRef, useState, type ReactNode } from 'react';
 import Link from 'next/link';
-import { ArrowDown, ArrowUp, Bookmark, Heart, MessageCircle, Share2, Trash2, Pencil } from 'lucide-react';
+import { ArrowDown, ArrowUp, Bookmark, Heart, MessageCircle, Share2, Trash2, Pencil, X } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { type Post, type Comment, PRIVACY_LABEL, dateLabel, errorMessage, isoTimestamp, relativeLabel, request, savePost, unsavePost, upload } from '../api/social';
 import { useBackend } from './BackendProvider';
+import { useMediaQuery } from '../lib/useMediaQuery';
+import { useDialogFocus } from '../lib/useDialogFocus';
 import { usePagedList } from '../lib/usePagedList';
 import { mediaImageProps } from '../lib/mediaVariants';
 import Avatar from './Avatar';
@@ -96,6 +98,32 @@ function Comments({ post, onCountChange }: { post: Post; onCountChange: (delta: 
     {viewer && <Lightbox images={viewer.images} startIndex={viewer.index} label="Comment photos" onClose={() => setViewer(null)} />}
   </div>;
 }
+
+/**
+ * The comment area as a phone sees it: a bottom drawer, so opening a thread does not push
+ * the post it belongs to off the screen. It holds the same `Comments` and only changes
+ * where they sit, so nothing about reading, writing or voting on a comment differs
+ * between the two.
+ *
+ * The dialog contract — focus moves in, Tab cycles inside, Escape closes, the page behind
+ * is frozen — is `useDialogFocus`, the same hook the story viewer and the navigation
+ * drawer use. The backdrop is a sibling of the panel rather than its parent: `backdrop-
+ * filter` makes an element the containing block for `position: fixed` descendants, so a
+ * backdrop wrapping the panel would anchor the sheet to the backdrop instead of the
+ * viewport. `lg:hidden` is a safety net for the one frame between a resize and the media
+ * query being read, when this branch is still the one rendering.
+ */
+function CommentSheet({ onClose, children }: { onClose: () => void; children: ReactNode }) {
+  const sheet = useDialogFocus<HTMLDivElement>(onClose);
+  return <>
+    <div aria-hidden="true" onClick={onClose} className="fixed inset-0 z-40 bg-slate-950/40 backdrop-blur-sm lg:hidden" />
+    <div ref={sheet} tabIndex={-1} role="dialog" aria-modal="true" aria-label="Comments" className="fixed inset-x-0 bottom-0 z-50 max-h-[85vh] overflow-y-auto rounded-t-2xl border-t border-border bg-card p-4 shadow-2xl lg:hidden">
+      <span aria-hidden="true" className="mx-auto mb-3 block h-1 w-10 rounded-full bg-border" />
+      <div className="mb-2 flex items-center justify-between"><h2 className="text-base font-semibold text-text">Comments</h2><button type="button" aria-label="Close comments" onClick={onClose} className="flex size-8 items-center justify-center rounded-full text-muted transition hover:bg-surface-2"><X size={18} /></button></div>
+      {children}
+    </div>
+  </>;
+}
 export default function PostCard({ post, fetchPosts, onPostRemoved, onUnsaved }: {
   post: Post;
   /** Refetch fallback for surfaces that are not list-backed, such as the single post page. */
@@ -106,7 +134,13 @@ export default function PostCard({ post, fetchPosts, onPostRemoved, onUnsaved }:
   onUnsaved?: (postId: number) => void;
 }) {
   const { user } = useBackend();
-  const [showComments, setShowComments] = useState(true);
+  // A wide screen keeps the comment list inline and open, as it always was; a phone gets
+  // it as a bottom drawer that stays shut until the reader asks for it. `null` is "follow
+  // the viewport", decided here at render rather than by an effect that would overrule a
+  // reader who has already opened or closed the list — once they have, their choice wins.
+  const wide = useMediaQuery('(min-width: 1024px)');
+  const [commentsOpen, setCommentsOpen] = useState<boolean | null>(null);
+  const showComments = commentsOpen ?? wide;
   const [reaction, setReaction] = useState<{ score: number; userScore: number } | null>(null);
   // Comments mutate their own list, so the counter tracks the server value plus
   // the deltas this card saw instead of forcing a feed-wide refetch.
@@ -158,6 +192,15 @@ export default function PostCard({ post, fetchPosts, onPostRemoved, onUnsaved }:
     if (previous.timer) clearTimeout(previous.timer);
     lastTap.current = { position, at: timeStamp, timer: setTimeout(() => setViewer(position), DOUBLE_TAP_MS) };
   }
+  // Named rather than inline so the two branches of the comment render share one pair of
+  // callbacks: the counter moves the same way and closing is the same act whether the
+  // comments are inline or in the drawer.
+  function bumpComments(delta: number) {
+    setCommentDelta(value => value + delta);
+  }
+  function closeComments() {
+    setCommentsOpen(false);
+  }
   async function toggleSave() {
     if (busy) return;
     setBusy(true);
@@ -186,8 +229,10 @@ export default function PostCard({ post, fetchPosts, onPostRemoved, onUnsaved }:
     <div className="flex items-center justify-between"><Link href={`/profile/${post.userId}`} className="flex items-center gap-3"><Avatar name={post.nickname} /><div><p className="font-semibold">@{post.nickname}</p><p className="text-xs text-slate-400"><time dateTime={isoTimestamp(post.createdAt)} title={dateLabel(post.createdAt)}>{relativeLabel(post.createdAt)}</time></p></div></Link>{post.userId === user.userId && <div className="flex items-center gap-1"><Link href={`/post/${post.postId}/edit`} aria-label="Edit post" title="Edit post" className="flex size-9 items-center justify-center rounded-full text-slate-400 transition hover:bg-slate-100 hover:text-blue-600"><Pencil size={18} /></Link><button disabled={busy} aria-label="Delete post" title="Delete post" className="flex size-9 items-center justify-center rounded-full text-slate-400 transition hover:bg-red-50 hover:text-red-600" onClick={() => void remove()}><Trash2 size={18} /></button></div>}</div>
     {post.title && <Link href={`/post/${post.postId}`} className="block text-lg font-semibold hover:text-blue-700">{post.title}</Link>}<p className="whitespace-pre-wrap break-words text-slate-700">{linkify(post.content)}</p><span className="inline-block rounded-full bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-600">{PRIVACY_LABEL[post.privacy]}</span>
     {!!post.imageUrls?.length && <div className={`-mx-5 grid gap-2 ${post.imageUrls.length > 1 ? 'grid-cols-2' : ''}`}>{post.imageUrls.map((url, position) => <button key={url} type="button" aria-label={`Open image ${position + 1} of ${post.imageUrls.length}`} onClick={(event) => handleMediaTap(position, event.timeStamp)} className="relative block w-full cursor-zoom-in touch-manipulation"><img {...mediaImageProps(url, post.imageUrls.length > 1 ? '(max-width: 640px) 50vw, 320px' : '(max-width: 768px) 100vw, 640px')} alt="Post attachment" className="aspect-square w-full bg-card-2 object-cover" />{burst?.position === position && <span key={burst.id} aria-hidden="true" onAnimationEnd={() => setBurst(null)} className="heart-burst text-red-500"><Heart size={80} fill="currentColor" strokeWidth={0} /></span>}</button>)}</div>}
-    <div className="flex items-center gap-1 border-t border-border pt-3 text-muted"><button disabled={busy} aria-label={vote.userScore === 1 ? 'Unlike post' : 'Like post'} aria-pressed={vote.userScore === 1} onClick={() => void react(1)} className={`flex items-center gap-1.5 rounded-full p-2 transition hover:bg-surface-2 ${vote.userScore === 1 ? 'text-danger' : ''}`}><Heart size={22} fill={vote.userScore === 1 ? 'currentColor' : 'none'} /><span className="text-sm font-medium">{vote.score}</span></button><button aria-expanded={showComments} aria-label={showComments ? 'Hide comments' : 'Show comments'} onClick={() => setShowComments(!showComments)} className="flex items-center gap-1.5 rounded-full p-2 transition hover:bg-surface-2"><MessageCircle size={22} /><span className="text-sm font-medium">{commentCount}</span></button><button aria-label="Share post" className="rounded-full p-2 transition hover:bg-surface-2" onClick={async () => { try { await navigator.clipboard.writeText(`${location.origin}/post/${post.postId}`); toast.success('Post link copied'); } catch { toast.error('Could not copy the link'); } }}><Share2 size={22} /></button><button disabled={busy} aria-label={saved ? 'Remove from saved' : 'Save post'} aria-pressed={saved} title={saved ? 'Remove from saved' : 'Save post'} onClick={() => void toggleSave()} className={`ml-auto rounded-full p-2 transition hover:bg-surface-2 ${saved ? 'text-brand-1' : ''}`}><Bookmark size={22} fill={saved ? 'currentColor' : 'none'} /></button></div>
-    {showComments && <Comments post={post} onCountChange={delta => setCommentDelta(value => value + delta)} />}
+    <div className="flex items-center gap-1 border-t border-border pt-3 text-muted"><button disabled={busy} aria-label={vote.userScore === 1 ? 'Unlike post' : 'Like post'} aria-pressed={vote.userScore === 1} onClick={() => void react(1)} className={`flex items-center gap-1.5 rounded-full p-2 transition hover:bg-surface-2 ${vote.userScore === 1 ? 'text-danger' : ''}`}><Heart size={22} fill={vote.userScore === 1 ? 'currentColor' : 'none'} /><span className="text-sm font-medium">{vote.score}</span></button><button aria-expanded={showComments} aria-label={showComments ? 'Hide comments' : 'Show comments'} onClick={() => setCommentsOpen(!showComments)} className="flex items-center gap-1.5 rounded-full p-2 transition hover:bg-surface-2"><MessageCircle size={22} /><span className="text-sm font-medium">{commentCount}</span></button><button aria-label="Share post" className="rounded-full p-2 transition hover:bg-surface-2" onClick={async () => { try { await navigator.clipboard.writeText(`${location.origin}/post/${post.postId}`); toast.success('Post link copied'); } catch { toast.error('Could not copy the link'); } }}><Share2 size={22} /></button><button disabled={busy} aria-label={saved ? 'Remove from saved' : 'Save post'} aria-pressed={saved} title={saved ? 'Remove from saved' : 'Save post'} onClick={() => void toggleSave()} className={`ml-auto rounded-full p-2 transition hover:bg-surface-2 ${saved ? 'text-brand-1' : ''}`}><Bookmark size={22} fill={saved ? 'currentColor' : 'none'} /></button></div>
+    {showComments && (wide
+      ? <Comments post={post} onCountChange={bumpComments} />
+      : <CommentSheet onClose={closeComments}><Comments post={post} onCountChange={bumpComments} /></CommentSheet>)}
     {viewer !== null && <Lightbox images={post.imageUrls} startIndex={viewer} label="Post photos" onClose={() => setViewer(null)} />}
   </article>;
 }
