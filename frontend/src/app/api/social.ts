@@ -48,6 +48,9 @@ export interface MediaItem { url: string; postId: number; title: string; created
 export interface Story {
   storyId: number; userId: string; nickname: string; avatar: string; content: string;
   mediaUrl: string; mediaType: 'text' | 'image' | 'video'; backgroundColor: string; createdAt: string; expiresAt: string;
+  // Viewer-relative, like a post's `isSaved`: false until this account has opened the
+  // story, which is what the ring in the strip is drawn from.
+  viewed: boolean;
 }
 export interface ChatUser { userId: string; nickname: string; firstName: string; lastName: string; avatar: string; isOnline: number; lastMessageTime: string }
 export interface ChatMessage {

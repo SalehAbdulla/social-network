@@ -817,6 +817,15 @@ try {
   await button(dummy, 'Share story');
   await until(dummy, `!document.querySelector('[role="dialog"]') && document.body.innerText.includes(${JSON.stringify(`Browser story ${stamp}`)})`, 'create story');
   storyId = (await api(dummy, '/stories')).find(story => story.content === `Browser story ${stamp}`).storyId;
+  // A story nobody has opened wears the unseen (gradient) ring...
+  assert.equal(await evaluate(dummy, `document.querySelector('[data-story-ring]')?.dataset.storyRing`), 'unseen', 'a fresh story wears the unseen ring');
+  // ...and opening it is what turns the ring and records the view for this reader alone.
+  await evaluate(dummy, `document.querySelector('[data-story-ring]').closest('div').click()`);
+  await until(dummy, `document.querySelector('[role="dialog"][aria-label="Story"]') !== null`, 'the story opens');
+  assert.equal(await evaluate(dummy, `document.querySelector('[data-story-ring]')?.dataset.storyRing`), 'seen', 'opening a story turns its ring');
+  await evaluate(dummy, `document.querySelector('button[aria-label="Close story"]').click()`);
+  await until(dummy, `document.querySelector('[role="dialog"]') === null`, 'the story closes');
+  assert.equal((await api(dummy, '/stories')).find(story => story.storyId === storyId).viewed, true, 'the view is recorded for this reader');
   await navigate(dummy, '/profile');
   await until(dummy, `document.body.innerText.includes('Edit profile')`, 'profile loaded');
   await button(dummy, 'Edit profile');

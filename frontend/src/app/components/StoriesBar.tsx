@@ -53,13 +53,26 @@ export default function StoriesBar() {
   const [viewing, setViewing] = useState<Story | null>(null);
   const [deleting, setDeleting] = useState(false);
   const reload = stories.reload;
+  // Opening a story is also the moment it stops being new: the ring turns immediately,
+  // because a round trip should not decide whether a ring the reader just opened stays lit.
+  // The write is best-effort — a mark that fails falls back to a reload, which puts the
+  // ring back where the server says it belongs rather than leaving a lie on screen.
+  function markViewed(storyId: number) {
+    stories.update(list => list.map(story => (story.storyId === storyId ? { ...story, viewed: true } : story)));
+    void request(`/stories/${storyId}/view`, 'POST').catch(() => reload());
+  }
+  function viewStory(story: Story) {
+    setViewing(story);
+    if (!story.viewed) markViewed(story.storyId);
+  }
   function showNextStory() {
     const items = stories.items;
     const index = viewing ? items.findIndex(story => story.storyId === viewing.storyId) : -1;
     if (index < 0) return;
     // Running off the end of the loaded strip asks for the next page instead of
-    // closing the viewer, so a long story row can be watched end to end.
-    if (index < items.length - 1) setViewing(items[index + 1]);
+    // closing the viewer, so a long story row can be watched end to end. A story the
+    // viewer advances into is being displayed, so it is marked seen the same way.
+    if (index < items.length - 1) viewStory(items[index + 1]);
     else stories.loadMore();
   }
   function showPreviousStory() {
@@ -75,7 +88,7 @@ export default function StoriesBar() {
   }, [reload]);
   return <section className="space-y-3"><div ref={strip} className="no-scrollbar flex gap-4 overflow-x-auto pb-2">
     <button onClick={() => setCreating(true)} className="flex aspect-[3/4] h-40 min-w-30 shrink-0 flex-col items-center justify-center rounded-lg border-2 border-dashed border-blue-200 bg-linear-to-b from-blue-50 to-white text-sm text-slate-700 shadow-sm transition hover:shadow-md"><span className="mb-3 flex size-10 items-center justify-center rounded-full bg-blue-600 text-white"><Plus size={20} /></span><span className="font-medium">Create story</span></button>
-    {stories.items.map(story => <StoryCard key={story.storyId} story={story} currentUserId={user.userId} onView={setViewing} onDelete={async () => { await request(`/stories/${story.storyId}`, 'DELETE'); reload(); if (viewing?.storyId === story.storyId) setViewing(null); }} />)}
+    {stories.items.map(story => <StoryCard key={story.storyId} story={story} currentUserId={user.userId} onView={viewStory} onDelete={async () => { await request(`/stories/${story.storyId}`, 'DELETE'); reload(); if (viewing?.storyId === story.storyId) setViewing(null); }} />)}
     <LoadMore compact className="h-40 w-24" label="Load more stories" endLabel={null} loading={stories.loadingMore} hasMore={stories.hasMore} onLoadMore={stories.loadMore} />
   </div>
     {creating && <CreateStory close={() => setCreating(false)} saved={reload} />}
@@ -94,7 +107,14 @@ function StoryCard({ story, currentUserId, onView, onDelete }: { story: Story; c
     {story.mediaType === 'image' && <img {...mediaImageProps(story.mediaUrl, '180px')} alt="Story preview" className="absolute inset-0 h-full w-full object-cover opacity-75 transition duration-500 hover:scale-110" />}
     {story.mediaType === 'video' && <video src={story.mediaUrl} muted className="absolute inset-0 h-full w-full object-cover opacity-75" />}
     <div className="absolute inset-0 bg-black/15" />
-    {story.avatar ? <img src={story.avatar} alt="" className="absolute left-3 top-3 z-10 size-8 rounded-full border border-white object-cover shadow" /> : <span className="absolute left-3 top-3 z-10 flex size-8 items-center justify-center rounded-full bg-white/25 text-xs font-semibold">{story.nickname.slice(0, 1).toUpperCase()}</span>}
+    {/* The author avatar wears the seen/unseen ring. `data-story-ring` carries the state
+        the ring is drawn from, which is also what the browser suite reads — the way it
+        reads `data-message-actions` — because a gradient has no text to assert on. The
+        ring keeps the avatar's old drop shadow, and the avatar a white collar, so both the
+        ring and the face stay readable over any story's background colour. */}
+    <span data-story-ring={story.viewed ? 'seen' : 'unseen'} className={`absolute left-3 top-3 z-10 flex rounded-full p-[2px] shadow ${story.viewed ? 'story-ring-seen' : 'story-ring'}`}>
+      {story.avatar ? <img src={story.avatar} alt="" className="size-8 rounded-full border-2 border-white object-cover" /> : <span className="flex size-8 items-center justify-center rounded-full bg-white/25 text-xs font-semibold">{story.nickname.slice(0, 1).toUpperCase()}</span>}
+    </span>
     {story.mediaType === 'text' && <p className="absolute left-3 right-3 top-16 z-10 line-clamp-4 text-sm text-white/80">{story.content}</p>}
     <span className="absolute inset-x-0 bottom-0 z-10 truncate bg-black/40 p-2 text-xs">@{story.nickname}</span>
     {story.userId === currentUserId && <div className="absolute right-2 top-2 z-20" onClick={event => event.stopPropagation()}><button aria-label="Story options" onClick={() => setMenuOpen(value => !value)} className="text-white"><MoreVertical size={18} /></button>{menuOpen && <button disabled={deleting} onClick={() => void remove()} className="absolute right-0 mt-1 flex items-center gap-1 rounded bg-white px-3 py-2 text-xs text-red-600 shadow"><Trash2 size={14} />Delete</button>}</div>}

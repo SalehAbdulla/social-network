@@ -124,6 +124,15 @@
   .chat-menu { @apply block w-full rounded-lg px-3 py-2 text-left text-text hover:bg-surface-2 disabled:opacity-40; }
   .chat-background { background-color: var(--ui-chat-bg); background-image: radial-gradient(var(--ui-chat-dots) 0.7px, transparent 0.7px); background-size: 18px 18px; }
 
+  /* The ring around a story author's avatar in the stories strip. A story the viewer has
+     not opened wears the brand gradient — the one colour both themes already define through
+     --ui-brand-1/2 — and one they have opened drops to the border colour, so "new" is
+     legible at a glance without a second palette to maintain. The gradient is a background
+     behind a padded circle rather than a `border-image`, which cannot follow a rounded
+     shape. */
+  .story-ring { background-image: linear-gradient(135deg, var(--ui-brand-1), var(--ui-brand-2)); }
+  .story-ring-seen { background-color: var(--ui-border); }
+
   /* Frosted glass. Use `glass` over patterned backgrounds and `glass-strong`
      for controls and panels that need their content to stay legible. */
   .glass, .glass-strong {
