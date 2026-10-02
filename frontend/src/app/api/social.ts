@@ -30,6 +30,14 @@ export interface Post {
   // Viewer-relative: true when the signed-in member has this post bookmarked.
   isSaved: boolean;
 }
+
+/** The three privacy levels, worded the way the feed chip and the composer show them. */
+export const PRIVACY_LABEL: Record<Post['privacy'], string> = {
+  public: 'Public',
+  followers: 'Followers only',
+  selected: 'Selected followers',
+};
+
 export interface Page<T> { posts: T[]; totalPages: number; totalElements: number; lastPage: boolean }
 export interface Comment {
   commentId: number; postId: number; userId: string; nickname: string; commentText: string;
