@@ -14,9 +14,12 @@ what was built, how it is laid out, and how to run it.
 **Accounts and profiles** — register with the five mandatory fields plus an optional
 nickname (generated when left blank), avatar, About Me and a public/private choice;
 bcrypt password hashing; HttpOnly cookie sessions that survive a restart, with a password
-change that rotates the session and signs out the account's other browsers. Profiles
-show followers/following, posts, and a media tab that merges post and comment photos.
-Following a private profile is a request the owner accepts or declines; following a
+change that rotates the session and signs out the account's other browsers. Profiles put the
+avatar beside the counts — posts, followers and following — with the name and bio under them,
+and the media tab is a three-column grid of squares. The post count is viewer-relative, the
+same as the two follower counts: it is the posts the person looking may read, so the number
+and the list under it cannot disagree. Following a private profile is a request the owner
+accepts or declines; following a
 public profile happens immediately. Discovery has two doors: the Discover page, and the
 "People you may know" rail the feed shows, which offers a few members you do not follow
 yet and a button to change that.

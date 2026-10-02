@@ -26,6 +26,10 @@ UUID.
 
 From the repository root, `docker compose up --build -d` builds separate backend and frontend images. SQLite and uploads persist in the `social-data` volume. See the frontend README for usage.
 
+## Profiles
+
+`GET /api/v1/users/{userId}` (and `/users/me`, and the mention route `GET /api/v1/handles/{nickname}`) answers with the member's profile, including a **viewer-relative** `postCount`. It is computed with the same `postVisibility` fragment the posts list uses, so the number on the header and the page under it cannot disagree, and a post the viewer may not read is not counted for them. A profile the viewer may not read masks the count along with the name, avatar and follower lists in `writeProfile` — it is zeroed there rather than left to the fragment, because a `selected` grant can keep a post readable to someone who may not read the profile at all, and a count that still moved would leak that the post exists. The count rides `post_userId_createdAt` (it is the posts list's own fragment over one author), which `query_plan_test.go` asserts as its own case.
+
 ## Bookmarks
 
 `POST /api/v1/posts/{postId}/save` and `DELETE /api/v1/posts/{postId}/save` add and remove one post from the caller's private list, and `GET /api/v1/saved-posts` pages it. Both writes are idempotent — saving the same post twice, or un-saving one that was never saved, answers 200 with the resulting state rather than a conflict — and saving a post the caller cannot read is a 404, the same answer a read gives, so the endpoint cannot be used to probe for posts. The list runs the same visibility fragment as the feed (`PostRepository.postVisibility`), which is why a post that later becomes unreadable is absent from it rather than a back door to it, and a deleted post takes its row with it through `ON DELETE CASCADE`. Feed and single-post responses carry a viewer-relative `isSaved` for the control on the card.
