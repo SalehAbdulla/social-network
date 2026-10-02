@@ -1317,8 +1317,17 @@ Ordered roughly by value for effort.
 - [ ] **P3** Media-first feed cards: full-bleed media that is square by default, with a row of
   icons (heart, comment, share, save) instead of the up/down vote arrows and text buttons in
   `PostCard.tsx:65`. Keep `POST /api/v1/reactions` underneath so no backend change is needed.
-- [ ] **P3** Double-tap to like with a heart burst, wired to the existing reaction endpoint,
-  with optimistic state instead of the current refetch.
+- [x] **P3** Double-tap to like with a heart burst, wired to the existing reaction endpoint,
+  with optimistic state instead of the current refetch. Closed 2026-10-02: a double-tap on a
+  feed photo likes it (score +1) and plays a scaling, fading heart over the tapped picture.
+  The gesture shares the image click handler with the lightbox — the first tap arms it, and a
+  second tap inside a 300 ms window cancels it and likes instead — and reuses `react(1)`, whose
+  optimistic update was already in place. `handleMediaTap` times taps from the click event's own
+  `timeStamp` (not `Date.now()`), so the React Compiler purity rule stays clean; the heart's fill
+  and glow follow `--ui-danger` through the `.heart-burst` class in `globals.css`. A double-tap on
+  an already-liked photo is a no-op, and a single tap still opens the lightbox after the window.
+  Verified with `npx tsc --noEmit`, `npm run lint` (0 errors) and `npm run build`; the browser
+  suite needs Chrome, which this environment does not have.
 - [ ] **P3** Story ring with the brand gradient around avatars in `StoriesBar`, plus a
   seen/unseen state driven by `story` rows.
 - [ ] **P3** Comment sheet: a bottom drawer on mobile instead of the always-open inline list
