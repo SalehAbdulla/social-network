@@ -48,6 +48,12 @@ One table serves three kinds of row, because `reaction` is keyed by `(userId, en
 
 `GET /api/v1/messages/media?partnerId=&offset=` is the media tab of a direct conversation: the same thread as `GET /api/v1/messages`, narrowed to the rows that carry an attachment, behind the same `CanMessage` rule and the same hidden-for-me rule — so the tab cannot show media from a thread the reader may not open, and cannot become a way around either. It answers with a small `ConversationMediaItem` (id, url, type, time) rather than a `MessageDTO`, because a tile needs nothing else; the profile media tab made the same choice with its own `MediaItem`. The frontend opens those attachments in the app's `Lightbox`, and so does a bubble's attachment and a group post's photo — the two `target="_blank"` sites the lightbox session left behind.
 
+## Stories and the seen ring
+
+`GET /api/v1/stories` lists the live stories newest first, each with a viewer-relative `viewed` boolean — the flag the frontend draws the ring around an author's avatar from. It is the same idea as a post's `isSaved`: the flag belongs to the account that asked, not to the story. It is folded in with a `LEFT JOIN` on `storyView` keyed on `(storyId, userId)`, which is that table's primary key, so the join is one lookup per story rather than a query per row.
+
+`POST /api/v1/stories/{id}/view` records that the caller opened a story, and answers 200 whether or not it was a first view — the write is `ON CONFLICT DO NOTHING`, so a repeat is a state rather than a conflict, which is what lets the strip flip the ring optimistically and send the mark best-effort. A story that is unknown or expired answers **404**, the same answer a read gives, so the endpoint cannot be used to confirm that a dead story exists; the expiry is checked before the write for exactly that reason. `000016` adds the `storyView` table, keyed on the pair so a second view is one row, with `ON DELETE CASCADE` on both columns — deleting the story *or* the account takes its views with it, which is what the `storyView_userId` index is for, because the cascade deletes by `userId` alone and the primary key starts at `storyId`.
+
 ## WebSocket protocol
 
 The hub is `pkg/websocket` and `pkg/app/handlers/WebSocketHandler.go` is the only reader of a

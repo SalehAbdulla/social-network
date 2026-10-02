@@ -24,7 +24,9 @@ yet and a button to change that.
 **Posts, comments and reactions** — three privacy levels (`public`, `followers` for
 "almost private", `selected` for "only the followers you pick"), up to four images or
 GIFs per post, comments with their own image, and reaction scores. Stories expire
-after 24 hours. An unsent post is kept in the browser, so a refresh does not lose the
+after 24 hours, and the strip draws a gradient ring around an author's avatar until
+you open their story — the "seen" state is kept per account on the server, so it
+follows you to another device. An unsent post is kept in the browser, so a refresh does not lose the
 text or the audience chosen for it; the composer says what a publish is still missing
 instead of disabling its button, and Ctrl/Cmd + Enter publishes. Any post can also be
 bookmarked: the list is private to the member and lives at `/saved`, and because it runs
