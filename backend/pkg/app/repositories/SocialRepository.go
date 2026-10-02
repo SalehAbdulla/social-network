@@ -353,8 +353,12 @@ func (db *DB) CreateStory(s models.Story) (int, error) {
 	return int(id), err
 }
 
-func (db *DB) Stories(offset int) ([]models.Story, error) {
-	rows, err := db.Conn.Query(`SELECT s.storyId,s.userId,u.nickName,COALESCE(u.avatar,''),s.content,s.mediaUrl,s.mediaType,s.backgroundColor,s.createdAt,s.expiresAt FROM story s JOIN user u ON u.userId=s.userId WHERE s.expiresAt > datetime('now') ORDER BY s.createdAt DESC,s.storyId DESC LIMIT 30 OFFSET ?`, offset)
+// Stories lists the live stories, newest first, with the viewer-relative `viewed` flag
+// already folded in. The flag rides a LEFT JOIN on `storyView` rather than a second query
+// per row, and the join is keyed on `(storyId, userId)` — the table's primary key — so it
+// costs one lookup per story and nothing when there are no views.
+func (db *DB) Stories(offset int, viewerID string) ([]models.Story, error) {
+	rows, err := db.Conn.Query(`SELECT s.storyId,s.userId,u.nickName,COALESCE(u.avatar,''),s.content,s.mediaUrl,s.mediaType,s.backgroundColor,s.createdAt,s.expiresAt,(v.userId IS NOT NULL) FROM story s JOIN user u ON u.userId=s.userId LEFT JOIN storyView v ON v.storyId=s.storyId AND v.userId=? WHERE s.expiresAt > datetime('now') ORDER BY s.createdAt DESC,s.storyId DESC LIMIT 30 OFFSET ?`, viewerID, offset)
 	if err != nil {
 		return nil, err
 	}
@@ -362,12 +366,28 @@ func (db *DB) Stories(offset int) ([]models.Story, error) {
 	stories := []models.Story{}
 	for rows.Next() {
 		var s models.Story
-		if err := rows.Scan(&s.StoryID, &s.UserID, &s.Nickname, &s.Avatar, &s.Content, &s.MediaURL, &s.MediaType, &s.BackgroundColor, &s.CreatedAt, &s.ExpiresAt); err != nil {
+		if err := rows.Scan(&s.StoryID, &s.UserID, &s.Nickname, &s.Avatar, &s.Content, &s.MediaURL, &s.MediaType, &s.BackgroundColor, &s.CreatedAt, &s.ExpiresAt, &s.Viewed); err != nil {
 			return nil, err
 		}
 		stories = append(stories, s)
 	}
 	return stories, rows.Err()
+}
+
+// MarkStoryViewed records that the viewer has opened a live story. It is idempotent — the
+// write is `ON CONFLICT DO NOTHING`, so opening the same story again is a state rather
+// than an error — but it still refuses a story that is unknown or expired with the same
+// `ErrNotFound` a read would give, so the endpoint cannot confirm that a dead story exists.
+func (db *DB) MarkStoryViewed(storyID int, viewerID string) error {
+	var live bool
+	if err := db.Conn.QueryRow("SELECT EXISTS(SELECT 1 FROM story WHERE storyId=? AND expiresAt > datetime('now'))", storyID).Scan(&live); err != nil {
+		return err
+	}
+	if !live {
+		return backend.ErrNotFound
+	}
+	_, err := db.Conn.Exec("INSERT INTO storyView (storyId,userId) VALUES (?,?) ON CONFLICT DO NOTHING", storyID, viewerID)
+	return err
 }
 
 func affected(result sql.Result, err error) error {

@@ -322,12 +322,27 @@ func (re *HandlerContext) Stories(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	items, err := re.SocialService.Repo.Stories(offset)
+	items, err := re.SocialService.Repo.Stories(offset, currentUser(r))
 	if err != nil {
 		re.HandleError(w, r, err)
 		return
 	}
 	respond(w, http.StatusOK, items)
+}
+
+// MarkStoryViewed records that the caller opened a story, so the stories strip can draw a
+// "seen" ring. It answers 200 for a story already viewed (the write is a state, not a
+// change) and 404 for one that is unknown or expired, the same answer a read gives.
+func (re *HandlerContext) MarkStoryViewed(w http.ResponseWriter, r *http.Request) {
+	id, ok := re.resourceID(w, r)
+	if !ok {
+		return
+	}
+	if err := re.SocialService.ViewStory(id, currentUser(r)); err != nil {
+		re.HandleError(w, r, err)
+		return
+	}
+	respond(w, http.StatusOK, nil)
 }
 
 func (re *HandlerContext) CreateStory(w http.ResponseWriter, r *http.Request) {

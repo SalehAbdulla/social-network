@@ -133,3 +133,14 @@ func (s *SocialService) AddStory(story models.Story) (int, error) {
 	}
 	return s.Repo.CreateStory(story)
 }
+
+// ViewStory records that a viewer opened a story, which the stories strip turns into a
+// "seen" ring. There is no audience to check — a live story is readable by any signed-in
+// member (see `CanViewMedia`) — so the rule this owns is the one the repository enforces:
+// only a live story can be marked, and the write is idempotent.
+func (s *SocialService) ViewStory(storyID int, viewerID string) error {
+	if storyID < 1 || viewerID == "" {
+		return backend.ErrBadRequest
+	}
+	return s.Repo.MarkStoryViewed(storyID, viewerID)
+}

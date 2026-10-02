@@ -37,4 +37,9 @@ type Story struct {
 	BackgroundColor string `json:"backgroundColor"`
 	CreatedAt       string `json:"createdAt"`
 	ExpiresAt       string `json:"expiresAt"`
+	// Viewer-relative, like a post's `isSaved`: whether the account that asked for this
+	// listing has a `storyView` row for the story. The stories strip draws the brand
+	// gradient ring around an author avatar when this is false and a muted one when it
+	// is true, so the flag is filled by the listing query rather than stored here.
+	Viewed bool `json:"viewed"`
 }

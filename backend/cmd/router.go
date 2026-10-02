@@ -79,6 +79,7 @@ func routes() http.Handler {
 		"DELETE /api/v1/users/{userId}/follow":    handlers.HandlerCtx.Follow,
 		"GET /api/v1/stories":                     handlers.HandlerCtx.Stories,
 		"POST /api/v1/stories":                    handlers.HandlerCtx.CreateStory,
+		"POST /api/v1/stories/{id}/view":          handlers.HandlerCtx.MarkStoryViewed,
 		"DELETE /api/v1/stories/{id}":             handlers.HandlerCtx.DeleteStory,
 		"POST /api/v1/media":                      handlers.HandlerCtx.UploadMedia,
 		"GET /api/v1/media/{id}":                  handlers.HandlerCtx.GetMedia,
