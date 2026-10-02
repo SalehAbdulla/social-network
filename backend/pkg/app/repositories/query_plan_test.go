@@ -241,6 +241,14 @@ func planCases() []struct {
 			"post_userId_createdAt",
 		},
 		{
+			// The profile header's post count is the posts list's own fragment, so it
+			// rides the same (userId, createdAt, postId) index that list rides.
+			"profile post count",
+			"SELECT COUNT(*) FROM post p WHERE p.userId = ? AND " + postVisibility,
+			withTail([]any{viewer}, visible...),
+			"post_userId_createdAt",
+		},
+		{
 			"likes tab",
 			"SELECT CAST(p.postId AS TEXT) FROM post p JOIN reaction r ON r.entityType='post' AND r.entityId=p.postId" +
 				" WHERE r.userId=? AND r.score=1 AND p.userId=? AND " + postVisibility +
