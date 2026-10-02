@@ -40,7 +40,7 @@ export default function Feed() {
       ? <PostListSkeleton />
       : <>
         {feed.items.map(post => <PostCard key={post.postId} post={post} onPostRemoved={postId => feed.update(items => items.filter(item => item.postId !== postId))} />)}
-        {feed.settled && !feed.error && feed.items.length === 0 && <RequestState empty="No posts yet. Share your first post to get started." />}
+        {feed.settled && !feed.error && feed.items.length === 0 && <RequestState variant="feed" empty="No posts yet. Share your first post to get started." />}
         {feed.settled && !feed.error && feed.items.length === 0 && <Link href="/create-post" className="block text-center text-blue-600">Create a post</Link>}
         {feed.items.length > 0 && <LoadMore loading={feed.loadingMore} hasMore={feed.hasMore} onLoadMore={feed.loadMore} label={`Load${feed.items.length > FEED_PAGE_SIZE ? ' more' : ' older'} posts`} />}
       </>}
