@@ -506,6 +506,18 @@ try {
   assert(!(await evaluate(alex, `!!document.querySelector('input[placeholder="Give your post a title"]')`)));
   await navigate(alex, `/post/${postId}`);
   await until(alex, `!!document.querySelector('article')`, 'Alex post details');
+  // A post's insights belong to its author: the panel is on the post page for the account that
+  // wrote it, absent for everyone else, and the endpoint itself refuses a non-author rather than
+  // answering the same numbers to whoever asks. The post here is `dummy`'s and already carries
+  // one reaction from the step above, so the numbers have something to report.
+  await navigate(dummy, `/post/${postId}`);
+  await until(dummy, `!!document.querySelector('section[aria-label="Post insights"]')`, 'the author sees the insights panel');
+  const insightsText = await evaluate(dummy, `document.querySelector('section[aria-label="Post insights"]').innerText`);
+  assert(/Reach:\s*[0-9]+/.test(insightsText), `the panel reports a reach number: ${JSON.stringify(insightsText)}`);
+  assert(/Reactions:\s*[0-9]+/.test(insightsText), `the panel reports a reaction total: ${JSON.stringify(insightsText)}`);
+  assert(!(await evaluate(alex, `!!document.querySelector('section[aria-label="Post insights"]')`)), 'insights are not offered to anyone but the author');
+  assert.equal(await evaluate(alex, `(async () => (await fetch('/api/v1/posts/${postId}/insights')).status)()`), 403, 'the insights endpoint refuses a non-author');
+  console.log("PASS: a post's insights belong to its author alone");
   assert(await evaluate(alex, `!!document.querySelector('#comment-${postId}')`), 'Post comments open by default');
   await fill(alex, `#comment-${postId}`, `Browser comment ${stamp}`);
   await button(alex, 'Comment');
