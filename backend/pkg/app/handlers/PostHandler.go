@@ -8,6 +8,7 @@ import (
 	"social-network/backend/pkg/middleware"
 	"social-network/backend/pkg/payload"
 	"social-network/backend/pkg/payload/posts"
+	pkgwebsocket "social-network/backend/pkg/websocket"
 	"strconv"
 	"strings"
 )
@@ -185,6 +186,25 @@ func (re *HandlerContext) CreatePost(w http.ResponseWriter, r *http.Request) {
 		Data:    response,
 		Message: "Post created successfully",
 	})
+
+	re.notifyPostPublished(userID)
+}
+
+// notifyPostPublished tells connected readers the feed moved on, so a client can offer a
+// reload instead of replacing what the reader is looking at. The frame is deliberately
+// empty and addressed to everyone but the author: carrying an identity or a post id would
+// hand every connected account a fact the feed's own `postVisibility` rule may withhold —
+// a private profile's post, or one restricted to chosen followers — and the author is
+// skipped because their own publish just navigated them to a feed that already shows it.
+func (re *HandlerContext) notifyPostPublished(authorID string) {
+	if re.Hub == nil {
+		return
+	}
+	data, err := json.Marshal(map[string]any{"type": pkgwebsocket.MsgTypePostChanged, "payload": map[string]any{}})
+	if err != nil {
+		return
+	}
+	re.Hub.BroadcastToAllExcept(data, authorID)
 }
 
 func (re *HandlerContext) postInput(w http.ResponseWriter, r *http.Request, userID string) (CreatePostRequest, bool) {
