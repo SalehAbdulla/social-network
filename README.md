@@ -32,8 +32,12 @@ after 24 hours, and the strip draws a gradient ring around an author's avatar un
 you open their story — the "seen" state is kept per account on the server, so it
 follows you to another device. An unsent post is kept in the browser, so a refresh does not lose the
 text or the audience chosen for it; the composer says what a publish is still missing
-instead of disabling its button, and Ctrl/Cmd + Enter publishes. Any post can also be
-bookmarked: the list is private to the member and lives at `/saved`, and because it runs
+instead of disabling its button, and Ctrl/Cmd + Enter publishes. Beside the form it
+previews the draft exactly as the card will draw it, under a banner that names the
+audience the draft has chosen — "Visible to everyone", or the followers it picks by
+name, or, once the author's own profile is private, the reminder that even a public
+post then reaches only those followers. Any post can also be bookmarked: the list
+is private to the member and lives at `/saved`, and because it runs
 the same three privacy levels as the feed, a saved post that later becomes unreadable
 simply drops out of it.
 
