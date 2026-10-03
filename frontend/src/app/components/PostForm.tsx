@@ -93,6 +93,10 @@ export default function PostForm({ post }: { post?: Post }) {
 
   const hasMedia = images.length > 0 || existingImages.length > 0;
   const audience = selectedFollowers.filter(id => followers.data?.followers.some(person => person.userId === id));
+  // The chosen followers in their own words, for the preview's audience banner. It is
+  // the same set `publish` sends, so the banner cannot name someone the post would not
+  // actually reach — a restored draft can hold an id that has since been unfollowed.
+  const audienceNames = (followers.data?.followers || []).filter(person => selectedFollowers.includes(person.userId)).map(person => displayName(person));
 
   /**
    * What stops this draft from being publishable, or null when nothing does.
@@ -203,5 +207,5 @@ export default function PostForm({ post }: { post?: Post }) {
       </div>
       {blocker && <p id="publish-blocked" className="text-xs text-muted">{blocker.message}</p>}
     </div>
-  </form><section id="post-preview" aria-label="Post preview" className={showPreview ? 'block' : 'hidden lg:block'}><p className="mb-3 text-sm font-medium text-muted">Preview</p><PostPreview user={user} title={title} content={content} privacy={privacy} imageUrls={[...existingImages, ...filePreviews]} createdAt={post?.createdAt} /></section></div></div>;
+  </form><section id="post-preview" aria-label="Post preview" className={showPreview ? 'block' : 'hidden lg:block'}><p className="mb-3 text-sm font-medium text-muted">Preview</p><PostPreview user={user} title={title} content={content} privacy={privacy} imageUrls={[...existingImages, ...filePreviews]} createdAt={post?.createdAt} selectedNames={audienceNames} /></section></div></div>;
 }
