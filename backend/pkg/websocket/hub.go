@@ -90,6 +90,26 @@ func (h *Hub) BroadcastToAll(message []byte) {
 	}
 }
 
+// BroadcastToAllExcept is BroadcastToAll minus one account. "Everyone but the one who
+// caused it" is a real case — the feed's new-posts notice must not be offered to the
+// author whose own redirect just loaded the page — and saying it here beats making the
+// caller walk GetOnlineUsers and skip an id.
+func (h *Hub) BroadcastToAllExcept(message []byte, excludeUserID string) {
+	h.mu.RLock()
+	defer h.mu.RUnlock()
+	for userID, clients := range h.clients {
+		if userID == excludeUserID {
+			continue
+		}
+		for client := range clients {
+			select {
+			case client.Send <- message:
+			default:
+			}
+		}
+	}
+}
+
 func (h *Hub) broadcastUserStatus(userID string, isOnline int, excludeUserID string) {
 	data, err := json.Marshal(map[string]any{"type": MsgTypeUserStatus, "payload": UserStatusPayload{UserId: userID, IsOnline: isOnline}})
 	if err != nil {
