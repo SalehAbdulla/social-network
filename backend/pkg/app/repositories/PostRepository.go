@@ -14,6 +14,10 @@ type PostRepository interface {
 	DoesPostExists(postId int) error
 	GetPostByID(postId int, viewerID string) (models.Post, error)
 	CanViewPost(postID int, viewerID string) (bool, error)
+	// PostInsights is the author-facing numbers for one post, in one round trip. It is
+	// not viewer-relative, so it says nothing about who is asking; the caller decides
+	// who may ask (PostService.PostInsights allows only the post's author).
+	PostInsights(postID int) (models.PostInsights, error)
 	ValidateSelectedFollowers(ownerID string, selectedIDs []string) error
 	DeletePost(postId int, userId string) error
 	// Bookmarks live on this interface because a saved post is still a post: the
