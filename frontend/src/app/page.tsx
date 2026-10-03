@@ -9,6 +9,7 @@ import SuggestedPeople from './components/SuggestedPeople';
 import PostCard from './components/PostCard';
 import RequestState from './components/RequestState';
 import LoadMore from './components/LoadMore';
+import NewPostsNotice from './components/NewPostsNotice';
 import { PostListSkeleton } from './components/Skeletons';
 
 const FEED_PAGE_SIZE = 10;
@@ -35,6 +36,9 @@ export default function Feed() {
     </header>
     <StoriesBar />
     <SuggestedPeople />
+    {/* Offered, not imposed: a post that arrives over the socket raises this pill, and
+        the reader chooses when to fold the newest page in. */}
+    <NewPostsNotice onReload={feed.refresh} />
     {feed.refreshing && <p role="status" className="flex items-center justify-center gap-2 text-xs font-medium text-slate-400"><RefreshCw size={13} className="animate-spin" aria-hidden="true" />Refreshing your feed…</p>}
     {feed.loading
       ? <PostListSkeleton />
