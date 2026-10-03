@@ -186,4 +186,3 @@ func TestHubBroadcastExceptSkipsTheNamedUser(t *testing.T) {
 	}
 	expectNoFrame(t, author)
 }
-
