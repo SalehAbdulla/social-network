@@ -242,6 +242,13 @@ call "$JAR_A" GET "/api/v1/saved-posts?page=1&size=10" 200
 # route: DELETE /api/v1/posts/{postId}/save
 call "$JAR_A" DELETE "/api/v1/posts/$POST_A/save" 200
 
+# --- a post's insights, which belong to its author ----------------------------------------------
+
+# The numbers describe how far the post reaches and how it has been received, so the endpoint is
+# answered for A's own post — and refused for B, which the tour asserts rather than describes.
+# route: GET /api/v1/posts/{postId}/insights
+call "$JAR_A" GET "/api/v1/posts/$POST_A/insights" 200
+
 # --- following, including the request a private profile needs ---------------------------------
 
 # route: GET /api/v1/users
