@@ -412,6 +412,14 @@ try {
   // `lib/postDraft.ts` owns, which is the part of that module a browser can check.
   const draftKey = 'social:post-draft';
   await navigate(dummy, '/create-post');
+  // The audience banner is the part of the preview that is about the reader rather than
+  // the look: it must say who can read the draft, not merely repeat the privacy label.
+  // This account is public, so `public` reaches everyone and `followers` does not; the
+  // `selected` wording is asserted later, where a follower exists to name.
+  await until(dummy, `document.querySelector('[aria-label="Audience"]')?.innerText.includes('Visible to everyone')`, 'a public post on a public profile reaches everyone');
+  await fill(dummy, 'main select', 'followers');
+  await until(dummy, `document.querySelector('[aria-label="Audience"]')?.innerText.includes('Visible to your followers')`, 'the banner follows the audience the draft chooses');
+  await fill(dummy, 'main select', 'public');
   await fill(dummy, 'textarea', 'Too short');
   await until(dummy, `!!document.getElementById('publish-blocked')`, 'the composer names what is missing');
   const blockedReason = await evaluate(dummy, `document.getElementById('publish-blocked').textContent`);
@@ -632,6 +640,7 @@ try {
   await until(dummy, `!!document.querySelector('input[aria-label="Alex Demo"]')`, 'named follower choice');
   assert(!(await evaluate(dummy, `document.querySelector('fieldset').innerText`)).includes(originalAlex.userId));
   await evaluate(dummy, `document.querySelector('input[aria-label="Alex Demo"]').click()`);
+  await until(dummy, `document.querySelector('[aria-label="Audience"]')?.innerText.includes('Alex Demo')`, 'the preview names the follower the post is going to');
   await button(dummy, 'Save changes');
   await until(dummy, `location.pathname === '/post/${postId}' && !!document.querySelector('article')`, 'saved audience');
   const restricted = await api(dummy, `/post?id=${postId}`);
@@ -666,6 +675,13 @@ try {
   await api(alex, `/users/${originalDummy.userId}/follow`, 'DELETE');
   const privateOwner = await api(dummy, '/users/me');
   await api(dummy, '/users/me', 'PUT', { ...privateOwner, isPublic: false });
+  // The banner must not promise "everyone" for a public post on a private profile: the
+  // server's rule for a public post still requires the viewer to follow the author, so
+  // the wording has to narrow with the profile and say why.
+  await navigate(dummy, '/create-post');
+  await until(dummy, `!!document.querySelector('main select')`, 'the composer for a private profile');
+  await fill(dummy, 'main select', 'public');
+  await until(dummy, `document.querySelector('[aria-label="Audience"]')?.innerText.includes('Your profile is private')`, 'a private profile narrows even a public post');
   await navigate(dummy, '/notifications');
   await navigate(alex, `/profile/${originalDummy.userId}`);
   await button(alex, 'Follow');
