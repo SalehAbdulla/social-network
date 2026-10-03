@@ -128,6 +128,7 @@ npm run lint
 npx tsc --noEmit
 npm run build
 npm run test:integration
+npm run size
 node scripts/dead-modules.mjs
 ```
 
@@ -136,6 +137,13 @@ the modules nothing imports, skipping Next.js route files, which are entry point
 convention. Spot-checking for dead files missed them twice here — a component whose
 only importer is itself dead reads as "used" if the check is done by name — so it is
 worth running after deleting anything.
+
+`bundle-size.mjs` reports what one build ships, per route and in total. It reads the
+`<route>_client-reference-manifest.js` files the build writes rather than analysing bundles, so
+it needs no extra dependency and reports the chunks the browser is actually told to fetch; a
+shared chunk is counted in every route that loads it, and the framework is a separate line
+because it is nobody's to trim. `npm run build` runs it at the end, so a build always says what it
+produced; `npm run size` prints the same report on its own, for a build that already exists.
 
 One check on this side runs from the other one: `cd backend && go test ./pkg/app/handlers/`
 reads `src/app/lib/mediaLimits.ts` and fails by name when its ceilings disagree with the
