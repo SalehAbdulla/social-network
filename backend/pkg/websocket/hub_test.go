@@ -164,3 +164,26 @@ func TestHubAnnouncesPresenceAndClosesEveryoneOnStop(t *testing.T) {
 		t.Fatal("stopping the hub must close every client channel")
 	}
 }
+
+// TestHubBroadcastExceptSkipsTheNamedUser pins the rule the feed's new-posts notice
+// relies on: every connected account hears the broadcast, and the one that caused it
+// does not.
+func TestHubBroadcastExceptSkipsTheNamedUser(t *testing.T) {
+	hub := newTestHub(t)
+	watcher, author := testClient(hub, "sam"), testClient(hub, "alex")
+	hub.Register <- watcher
+	waitFor(t, "the watcher", func() bool { return hub.IsUserOnline("sam") })
+	hub.Register <- author
+	// The author registering announces them to the watcher, so drain that frame first.
+	if status := decodeStatus(t, receive(t, watcher)); status.Payload.UserId != "alex" {
+		t.Fatalf("unexpected presence frame: %+v", status)
+	}
+	waitFor(t, "the author", func() bool { return hub.IsUserOnline("alex") })
+
+	hub.BroadcastToAllExcept([]byte("new post"), "alex")
+	if got := string(receive(t, watcher)); got != "new post" {
+		t.Fatalf("the watcher should have heard the broadcast, got %q", got)
+	}
+	expectNoFrame(t, author)
+}
+
