@@ -1202,9 +1202,30 @@ Ordered roughly by value for effort.
   needs Chrome, which this environment does not have.
 - [ ] **P3** Preview step before publishing, so the author sees the post the way the chosen
   audience will before committing.
-- [ ] **P3** Audience banner in the preview: "Visible to your followers", or the selected
+- [x] **P3** Audience banner in the preview: "Visible to your followers", or the selected
   names for `privacy === 'selected'`, plus a note when the post will be hidden from a
-  private-profile follower.
+  private-profile follower. Closed 2026-10-03: the live preview now carries an audience
+  banner **above** the card rather than inside it — the article has to stay the draft
+  exactly as `PostCard` draws it, and a card has no such banner — worded by one new
+  helper, `audienceSummary` in `frontend/src/app/api/social.ts` beside `PRIVACY_LABEL`.
+  The helper is written against the server's `postVisibility` clause rather than the
+  three labels, because two things there are easy to get wrong: a `public` post reaches
+  everyone only while the *author's* profile is public, and nothing about the *viewer's*
+  own privacy ever narrows a post. So a public post on a private profile is worded
+  "Visible to your followers" with the note that a private profile reaches only those
+  who follow it, `followers` is "Visible to your followers", and `selected` names the
+  chosen followers (up to two, then "and N others", so a long list stays one line).
+  **Corrected rather than obeyed:** the item's note reads "hidden from a private-profile
+  follower", but the SQL keys on the *author's* `isPublic` and on whether the viewer
+  follows the author — never on the viewer's own profile privacy — so the note belongs to
+  the author's profile and is worded that way. **Decision:** the names the banner shows
+  are `PostForm`'s already-filtered `audience`, the same set `publish` sends, so a draft
+  restored for someone who has since unfollowed cannot be named as reached. It sits in a
+  `role="status"` region labelled `Audience`, so a change to the audience is announced.
+  Verified: `npx tsc --noEmit`, `npm run lint` (0 errors), `npm run build`, and the
+  browser suite, whose composer step asserts "Visible to everyone" then "Visible to your
+  followers" as the select moves, whose audience-edit step asserts the `selected` banner
+  names Alex, and whose private-profile section asserts the narrowing note.
 - [ ] **P3** Instagram-style modal composer launched from the sidebar and the feed, keeping
   `/create-post` as a deep link (currently the only entry point is
   `Sidebar.tsx:79` → `create-post/page.tsx`).
