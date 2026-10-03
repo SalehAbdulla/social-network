@@ -41,6 +41,48 @@ export const PRIVACY_LABEL: Record<Post['privacy'], string> = {
   selected: 'Selected followers',
 };
 
+/**
+ * Who will actually be able to read a draft, in the reader's words.
+ *
+ * This is a wording, not a rule: the rule lives in the server's `postVisibility`
+ * clause (`backend/pkg/app/repositories/PostRepository.go`), and this function is
+ * written against it rather than against the three labels above. Two things follow
+ * from that clause and are easy to get wrong:
+ *
+ * - a `public` post reaches everyone only while the *author's* profile is public;
+ *   once it is private, even a public post needs the viewer to follow the author;
+ * - nothing about the *viewer's* own profile privacy ever narrows a post — the SQL
+ *   keys on the author's `isPublic` and on whether the viewer follows the author —
+ *   so the only profile whose privacy changes the answer is the author's.
+ *
+ * Keep the mapping here and in that clause in step; there is deliberately one place
+ * for the sentence so the composer and any future reader cannot word it differently.
+ */
+export function audienceSummary({ privacy, authorIsPublic, selectedNames }: {
+  privacy: Post['privacy'];
+  authorIsPublic: boolean;
+  selectedNames: string[];
+}): { headline: string; note?: string } {
+  if (privacy === 'selected') {
+    return { headline: selectedNames.length ? `Visible to ${listNames(selectedNames)}` : 'Visible to the followers you choose' };
+  }
+  if (privacy === 'followers') return { headline: 'Visible to your followers' };
+  if (!authorIsPublic) {
+    return {
+      headline: 'Visible to your followers',
+      note: 'Your profile is private, so even a public post still reaches only the people who follow you.',
+    };
+  }
+  return { headline: 'Visible to everyone' };
+}
+
+/** Up to two names, then a count, so the banner stays one line for a long list. */
+function listNames(names: string[]): string {
+  if (names.length <= 2) return names.join(' and ');
+  const others = names.length - 2;
+  return `${names.slice(0, 2).join(', ')} and ${others} other${others === 1 ? '' : 's'}`;
+}
+
 export interface Page<T> { posts: T[]; totalPages: number; totalElements: number; lastPage: boolean }
 export interface Comment {
   commentId: number; postId: number; userId: string; nickname: string; commentText: string;
