@@ -1676,7 +1676,19 @@ Ordered roughly by value for effort.
 - [ ] **P3** Deduplicate requests: `/users/me` and `/users/me/follows` are fetched separately
   by several components on the same page (`PostForm.tsx:23`, `SideBar.tsx:47`).
 - [ ] **P3** Add a Lighthouse / Core Web Vitals budget and enforce it in CI.
-- [ ] **P3** Add bundle-size reporting to the frontend build.
+- [x] **P3** Add bundle-size reporting to the frontend build. Closed 2026-10-03:
+  `frontend/scripts/bundle-size.mjs`, run at the end of `npm run build` and again by
+  `npm run size`. It reads the `<route>_client-reference-manifest.js` files Next writes into
+  `.next/server/app` rather than analysing the bundles, so it needs no extra dependency — the
+  frontend still has none for this — and it reports the chunks the browser is actually told to
+  fetch, per route and in total, with the shared framework kept as its own line because it is not
+  any one route's to trim. A chunk shared by several routes is counted once per route that loads
+  it, and the largest chunks are listed by the routes that pull them, which is where a size
+  problem is actionable. The first report on this tree reads: 25 routes, 3 213.0 kB of route
+  JavaScript summed, 1 514.3 kB of CSS, and 538.6 kB of framework in 6 chunks every route
+  loads. **Decision:** it is a report, not a gate — the budget item below is the one that would
+  fail a build. Verified by running it against a real build (`npm run build` prints it) and the
+  rest of the suite unchanged: `npx tsc --noEmit`, `npm run lint` (0 errors), `go test ./...`.
 - [x] **P3** Add indexes for the queries introduced by the follow-request and comment-media
   work, and review the feed query with `EXPLAIN QUERY PLAN`. Progress 2026-09-28: 000010 adds
   `comment_userId` for the profile media query; the follow-request side and the feed review
