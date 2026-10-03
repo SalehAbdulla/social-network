@@ -1443,8 +1443,29 @@ Ordered roughly by value for effort.
 - [x] **P3** Infinite scroll for the feed and the grid: `LoadMore.tsx` observes a sentinel and
   keeps a real button for keyboard and screen-reader users. The remaining work is
   virtualising very long lists (see the performance section).
-- [ ] **P3** Sticky feed header with a "new posts" pill that appears when posts arrive over
-  the socket, instead of a full reload.
+- [x] **P3** Sticky feed header with a "new posts" pill that appears when posts arrive over
+  the socket, instead of a full reload. Closed 2026-10-03: a new server event, `post_changed`,
+  is sent from `POST /api/v1/posts` to **every connected account except the author** through a
+  new `Hub.BroadcastToAllExcept`, and `components/NewPostsNotice.tsx` raises a sticky pill on
+  it whose press calls the feed's existing `refresh` — which *merges* page 1 rather than
+  resetting the list, so the pages a reader already scrolled through survive. The frame
+  carries **no payload**: an empty notice says only "the feed moved on", so it cannot hand
+  every connected account a fact `postVisibility` may withhold (a private profile's post, a
+  `selected` one); the author is skipped so their own publish does not immediately offer them
+  a reload of the feed their redirect just loaded. It deliberately does not go through
+  `useLiveRefresh`, which reloads a surface — the point here is to offer rather than impose,
+  so the subscription is `lib/useSocketEvent.ts` (new) and the state is per-feed.
+  **Decision on the header:** the pill is `sticky top-0` and the page header above it was left
+  as it is; pinning the title row too would drag the stories strip and the suggestion rail up
+  the viewport on every scroll, which is not what "sticky" is for here. **Decision on the
+  count:** the pill says "New posts" with no number, because the frame has none and the server
+  cannot know how many of the nudges a given reader may read. Verified: `go build ./...`,
+  `go vet ./...`, `go test ./...` (including the new `TestHubBroadcastExceptSkipsTheNamedUser`
+  and `protocol_doc_test.go`, whose README table gained the event), `npx tsc --noEmit`,
+  `npm run lint` (0 errors), `npm run build`, and the browser suite, whose new step is
+  `PASS: a post created elsewhere raises a "New posts" pill instead of replacing the feed` —
+  it publishes as the second account, asserts the author is *not* offered the pill, presses
+  dummy's pill and asserts the new post appears while the pill goes.
 - [ ] **P3** Move the remaining hardcoded Tailwind values into the `@theme` block in
   `frontend/src/app/globals.css` (radius, shadow, spacing, `--color-ring`) so restyling is a
   one-file change. The `chat-*` component classes there are the model to follow.
