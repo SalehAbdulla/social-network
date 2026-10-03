@@ -475,5 +475,3 @@ func TestPasswordResetTokenCannotBeRedeemedTwiceAtOnce(t *testing.T) {
 		t.Fatalf("expected one winner and %d refusals, got %d winners and %d refusals", racers-1, succeeded, refused)
 	}
 }
-
-
