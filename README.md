@@ -39,7 +39,10 @@ name, or, once the author's own profile is private, the reminder that even a pub
 post then reaches only those followers. Any post can also be bookmarked: the list
 is private to the member and lives at `/saved`, and because it runs
 the same three privacy levels as the feed, a saved post that later becomes unreadable
-simply drops out of it.
+simply drops out of it. The feed does not replace what a reader is looking at when a post
+arrives over the socket: a sticky "New posts" pill appears, and pressing it is what folds
+the newest page in. It is never offered to the author, whose own publish has already
+loaded the page they are on.
 
 **Groups** — create, browse, join by request or invitation, post, comment, share
 media, schedule events with Going / Not going replies, chat together, transfer
