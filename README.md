@@ -42,7 +42,9 @@ the same three privacy levels as the feed, a saved post that later becomes unrea
 simply drops out of it. The feed does not replace what a reader is looking at when a post
 arrives over the socket: a sticky "New posts" pill appears, and pressing it is what folds
 the newest page in. It is never offered to the author, whose own publish has already
-loaded the page they are on.
+loaded the page they are on. The post's author also sees its insights — how many accounts
+its audience rule actually admits, its reactions and comments, and how those reactions
+fall across the days they arrived — and no one else is offered them.
 
 **Groups** — create, browse, join by request or invitation, post, comment, share
 media, schedule events with Going / Not going replies, chat together, transfer
