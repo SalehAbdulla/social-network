@@ -1108,7 +1108,7 @@ Reference: `GroupHandler.go`, `GroupManagementHandler.go`, `GroupContentHandler.
   the check became a script instead of a guess: `frontend/scripts/dead-modules.mjs` resolves every
   relative import to its target and reports what nothing imports, which is now documented in
   `frontend/README.md` and reports 0 of 53 source files.
-- [ ] **P3** Run `gofmt` over the files it does not currently accept. Corrected 2026-09-28 after
+- [x] **P3** Run `gofmt` over the files it does not currently accept. Corrected 2026-09-28 after
   measuring instead of trusting this line: `cd backend && gofmt -l .` lists fourteen files, not two.
   Only three have a real formatting problem — `pkg/websocket/types.go` (misaligned struct tags and
   continuation lines), and `pkg/app/service/ReactionService.go` with
@@ -1120,7 +1120,14 @@ Reference: `GroupHandler.go`, `GroupManagementHandler.go`, `GroupContentHandler.
   test diff it would land with. It is one command — `cd backend && gofmt -w $(gofmt -l . | grep -v tmp/)` —
   and it belongs in its own commit. Progress 2026-09-30: `pkg/websocket/types.go` is clean now,
   because it was formatted while its event names were extended rather than as a drive-by — so two
-  real files remain, and eleven that only need a final newline.
+  real files remain, and eleven that only need a final newline. **Closed 2026-10-03**: the sweep
+  finally has a commit of its own and nothing to bury, so the command above was run over the twelve
+  files it named. `gofmt -l . | grep -v tmp/` now answers nothing, and the diff is what this line
+  predicted — space-indented imports and statement spacing in `SessionManager_test.go`, and a
+  trailing blank line at end-of-file in eleven others. `git diff --ignore-all-space` over the sweep
+  showed only those two trailing blank lines, which is the proof that no statement moved rather than
+  a promise that it did not; `go build ./...`, `go vet ./...` and `go test ./...` are unchanged and
+  green. It still lands as one commit rather than twelve, which is what this entry asked for.
 - [x] **P1** Remove the stale Clerk and `NEXT_PUBLIC_DEV_USER` references listed under
   Authentication and Security.
 - [ ] **P1** Keep this file current. The previous revision marked shipped features (group
@@ -1628,7 +1635,29 @@ Ordered roughly by value for effort.
 - [ ] **P3** Activity digest — a weekly summary email or in-app card of followers, comments
   and group activity.
 - [ ] **P3** Web push notifications through a service worker for backgrounded tabs.
-- [ ] **P3** Post analytics for the author: reach per privacy level, reactions over time.
+- [x] **P3** Post analytics for the author: reach per privacy level, reactions over time. Closed
+  2026-10-03: `GET /api/v1/posts/{postId}/insights`, author-only, answers in one round trip —
+  `reach` (the audience the post's rule actually admits, and which rule that was), the reaction
+  total split into up and down, the comment count, and `days`, the reactions grouped by the day
+  each row was written. The audience is computed from the post's own row and its author's
+  `isPublic` rather than against a viewer, because the question here is "how many people", and it
+  mirrors `postVisibility` rather than the privacy label: a `public` post by a private profile is
+  reported as `followers`, and `selected` counts the grant. **Decision on the refusals:** read
+  access is decided first, so a post the caller may not open answers the same 404 a read gives and
+  the route cannot confirm that a post exists; a post they may read but did not write answers 403,
+  the answer `UpdatePost` already gives for "not yours". **Decision on the days:** they are grouped
+  by the UTC date of `reaction.createdAt`, and the table keeps one row per account per post (its
+  unique key), so the series shows when a reaction was last written rather than counting a changed
+  vote twice — recorded because "reactions over time" can be read either way. Frontend:
+  `components/PostInsights.tsx` on the post page, rendered *and* requested only for the author
+  (`useResource(path, isAuthor)`), because asking on anyone else's behalf would be a request whose
+  answer is already known to be a 403. Verified: `go build ./...`, `go vet ./...`, `go test ./...`
+  (including the new `cmd/post_insights_test.go` — zeroes for a fresh post, the audience flipping
+  everyone → followers → selected → followers as the privacy and the profile change, a changed vote
+  replacing rather than adding, two backdated rows grouping into two days, the comment count, the
+  403 and the 404 — and the tour-coverage test, which the new route satisfies through a new `# route:`
+  line in `scripts/api-tour.sh`), `npx tsc --noEmit`, `npm run lint` (0 errors), `npm run build`,
+  and the browser suite, whose new step is `PASS: a post's insights belong to its author alone`.
 
 ### Performance and quality
 
