@@ -34,6 +34,7 @@ func routes() http.Handler {
 	mux.Handle("POST /api/v1/posts", pkgmiddleware.AuthMiddleware(http.HandlerFunc(handlers.HandlerCtx.CreatePost)))
 	mux.Handle("PUT /api/v1/posts/{postId}", pkgmiddleware.AuthMiddleware(http.HandlerFunc(handlers.HandlerCtx.UpdatePost)))
 	mux.Handle("DELETE /api/v1/posts", pkgmiddleware.AuthMiddleware(http.HandlerFunc(handlers.HandlerCtx.DeletePost)))
+	mux.Handle("GET /api/v1/posts/{postId}/insights", pkgmiddleware.AuthMiddleware(http.HandlerFunc(handlers.HandlerCtx.PostInsights)))
 	mux.Handle("GET /api/v1/posts/comments", pkgmiddleware.AuthMiddleware(http.HandlerFunc(handlers.HandlerCtx.GetComments)))
 	mux.Handle("POST /api/v1/posts/comments", pkgmiddleware.AuthMiddleware(http.HandlerFunc(handlers.HandlerCtx.CreateComments)))
 	mux.Handle("DELETE /api/v1/posts/comments", pkgmiddleware.AuthMiddleware(http.HandlerFunc(handlers.HandlerCtx.DeleteComment)))
