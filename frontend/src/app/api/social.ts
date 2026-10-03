@@ -34,6 +34,21 @@ export interface Post {
   isSaved: boolean;
 }
 
+/** One day's reactions, as a post's author insights group them. `day` is `YYYY-MM-DD`, UTC. */
+export interface ReactionDay { day: string; total: number; up: number; down: number }
+
+/**
+ * The author's own numbers for a post. `reach.audience` names the rule that admitted the
+ * audience — not the post's privacy column — because a `public` post by a private profile
+ * reaches followers only, the same distinction `audienceSummary` draws for the composer.
+ */
+export interface PostInsights {
+  postId: number;
+  reach: { audience: 'everyone' | 'followers' | 'selected'; count: number };
+  reactions: number; up: number; down: number; comments: number;
+  days: ReactionDay[];
+}
+
 /** The three privacy levels, worded the way the feed chip and the composer show them. */
 export const PRIVACY_LABEL: Record<Post['privacy'], string> = {
   public: 'Public',
