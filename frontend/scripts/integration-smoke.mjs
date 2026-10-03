@@ -545,6 +545,31 @@ try {
   assert(freshComment.dateTime && freshComment.title, `the exact instant stays on the element: ${JSON.stringify(freshComment)}`);
   console.log('PASS: a comment carries an uploaded photo, renders it and stores its URL');
 
+  // A post from somebody else, arriving over the socket, is offered rather than imposed:
+  // the feed raises a sticky "New posts" pill and only the press folds the page in, so a
+  // reader halfway down the list is not thrown back to the top. Both accounts are put on
+  // the feed first, and the publish is retried because the frame is live-only — it must
+  // not be sent before `dummy`'s socket has finished its handshake, and there is no DOM
+  // signal for that handshake to wait on. The author is skipped by the server, and that
+  // half is asserted too so the frame's contract cannot drift in silence.
+  await navigate(dummy, '/');
+  await navigate(alex, '/');
+  await until(alex, `document.body.innerText.includes('Your feed')`, 'the second account is on the feed');
+  const socketPosts = [];
+  for (let attempt = 0; attempt < 5; attempt++) {
+    const posted = await api(alex, '/posts', 'POST', { title: `Socket ${stamp}`, content: `Socket post ${stamp}`, imageUrls: [], privacy: 'public', selectedFollowerIds: [] });
+    socketPosts.push(posted.postId);
+    await pause(1000);
+    if (await evaluate(dummy, `!!document.querySelector('button[aria-label="Show new posts"]')`)) break;
+  }
+  assert(!(await evaluate(alex, `!!document.querySelector('button[aria-label="Show new posts"]')`)), 'the author must not be offered a reload of the post they just wrote');
+  await until(dummy, `!!document.querySelector('button[aria-label="Show new posts"]')`, 'the feed offers the post that arrived over the socket');
+  await evaluate(dummy, `document.querySelector('button[aria-label="Show new posts"]').click()`);
+  await until(dummy, `document.body.innerText.includes(${JSON.stringify(`Socket post ${stamp}`)})`, 'the pill folds the new page in');
+  assert(!(await evaluate(dummy, `!!document.querySelector('button[aria-label="Show new posts"]')`)), 'the pill goes once it has been pressed');
+  for (const id of socketPosts) await api(alex, `/posts?id=${id}`, 'DELETE');
+  console.log('PASS: a post created elsewhere raises a "New posts" pill instead of replacing the feed');
+
   // On a phone the same comment area is a bottom drawer rather than the inline list: shut
   // until the reader asks for it, opened by the comment button, dismissed with Escape.
   await command('Emulation.setDeviceMetricsOverride', { width: 390, height: 844, deviceScaleFactor: 1, mobile: true }, alex);
