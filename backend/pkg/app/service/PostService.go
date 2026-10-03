@@ -26,6 +26,10 @@ type PostService interface {
 	SearchPosts(search string, pageNumber int, pageSize int, userID string) (posts.PostResponse, error)
 	// HashtagPosts is one tag's results page, in the same shape as the feed.
 	HashtagPosts(tag string, pageNumber int, pageSize int, userID string) (posts.PostResponse, error)
+	// PostInsights is the author's own view of one post: how far it reaches, and what it
+	// has drawn. Read access is checked before ownership, so a post the viewer may not
+	// open answers the 404 a read gives rather than confirming that it exists.
+	PostInsights(postID int, viewerID string) (posts.PostInsightsDTO, error)
 }
 
 type PostServiceImpl struct {
@@ -222,6 +226,44 @@ func (p PostServiceImpl) UpdatePost(postID int, userID string, title string, con
 		return posts.PostDTO{}, err
 	}
 	return p.GetPostByID(postID, userID)
+}
+
+// PostInsights gathers the author's own view of one post: the size of the audience its
+// privacy level actually admits, the reactions it has drawn and how they fall across the
+// days they arrived, and its comment count.
+//
+// It is the one post read that is not viewer-relative, which is exactly why it is
+// restricted. A post the viewer may not open answers the same 404 a read gives — so the
+// path cannot be used to confirm that a post exists — and a post they may open but did
+// not write answers 403, the answer UpdatePost gives for the same "not yours".
+func (p PostServiceImpl) PostInsights(postID int, viewerID string) (posts.PostInsightsDTO, error) {
+	allowed, err := p.db.CanViewPost(postID, viewerID)
+	if err != nil {
+		return posts.PostInsightsDTO{}, err
+	}
+	if !allowed {
+		return posts.PostInsightsDTO{}, realtimeforum.ErrNotFound
+	}
+	insights, err := p.db.PostInsights(postID)
+	if err != nil {
+		return posts.PostInsightsDTO{}, err
+	}
+	if insights.AuthorId != viewerID {
+		return posts.PostInsightsDTO{}, realtimeforum.ErrForbidden
+	}
+	days := make([]posts.ReactionDayDTO, 0, len(insights.Days))
+	for _, day := range insights.Days {
+		days = append(days, posts.ReactionDayDTO{Day: day.Day, Total: day.Total, Up: day.Up, Down: day.Down})
+	}
+	return posts.PostInsightsDTO{
+		PostId:    postID,
+		Reach:     posts.PostAudienceDTO{Audience: insights.Audience, Count: insights.Reach},
+		Reactions: insights.Reactions,
+		Up:        insights.Up,
+		Down:      insights.Down,
+		Comments:  insights.Comments,
+		Days:      days,
+	}, nil
 }
 
 func (p PostServiceImpl) preparePost(userID, title, content, privacy string, selectedUsers, imageURLs []string) (models.Post, error) {
