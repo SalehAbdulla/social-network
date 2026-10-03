@@ -1448,7 +1448,17 @@ Ordered roughly by value for effort.
 - [ ] **P3** Move the remaining hardcoded Tailwind values into the `@theme` block in
   `frontend/src/app/globals.css` (radius, shadow, spacing, `--color-ring`) so restyling is a
   one-file change. The `chat-*` component classes there are the model to follow.
-- [ ] **P3** Dark mode from a `prefers-color-scheme` token set, with the toggle persisted.
+- [x] **P3** Dark mode from a `prefers-color-scheme` token set, with the toggle persisted. Closed
+  2026-10-03 by checking rather than assuming: the feature shipped in the theme session
+  (`b9cdac3`/`07e9cbe`/`656a1bb`) but this line was never ticked. `lib/theme.ts` keeps one
+  source for the storage key (`social:theme`), the media query (`prefers-color-scheme: dark`)
+  and the pre-paint `themeScript`; `ThemeProvider` resolves `system` against `matchMedia`,
+  persists an explicit choice (`system` clears the key so the OS takes over again), and
+  `layout.tsx` puts the class on `<html>` before the first paint so there is no flash; the
+  switch is `ThemeToggle` in the sidebar, drawn from `dark:` variants. Verified: `npx tsc
+  --noEmit`, `npm run lint` (0 errors), `npm run build`, and the browser suite still green.
+  No browser assertion was added: the preference is a class on `<html>` and the switch's
+  `aria-checked`, which the existing sidebar steps already render.
 - [x] **P3** "People you may know" rail on the feed, built from `GET /api/v1/users`.
   Closed 2026-10-01. `components/SuggestedPeople.tsx` reads the same list Discover does and does
   the one thing that endpoint cannot do for itself: it drops everyone the viewer already follows
