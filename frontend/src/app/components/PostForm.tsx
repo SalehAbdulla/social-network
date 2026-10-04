@@ -205,7 +205,7 @@ export default function PostForm({ post, variant = 'page', onPublished }: {
         </label>)}
       </div> : <p className="text-sm text-slate-500">You do not have any followers yet.</p>)}
     </fieldset>}
-    <ImagePicker files={images} onChange={setImages} existing={existingImages} onRemoveExisting={url => setExistingImages(current => current.filter(image => image !== url))} disabled={busy} />
+    <ImagePicker files={images} onChange={setImages} existing={existingImages} onRemoveExisting={url => setExistingImages(current => current.filter(image => image !== url))} disabled={busy} purpose="post" />
     {/* Sticky, so the publish control stays reachable while a long post is written,
         and the same button as before rather than a second copy of it. */}
     <div className="sticky bottom-0 z-10 space-y-2 rounded-xl border border-border bg-white/95 p-3 backdrop-blur">
