@@ -16,24 +16,16 @@ import { useBackend } from './BackendProvider';
  * elements claiming to be the same unread total. The safe-area padding keeps the bar clear of
  * a home indicator.
  */
-const TABS = [
-  { href: '/', label: 'Feed', icon: House },
-  { href: '/search', label: 'Search', icon: SearchIcon },
-  { href: '/create-post', label: 'Create', icon: CirclePlus },
-  { href: '/notifications', label: 'Notifications', icon: Bell },
-  { href: '/profile', label: 'Profile', icon: UserRound },
-];
-
 export default function BottomNav() {
   const pathname = usePathname();
-  const { badges } = useBackend();
+  const { badges, openComposer } = useBackend();
+  const current = (href: string) => pathname === href || (href !== '/' && pathname.startsWith(href + '/'));
+  const tab = (active: boolean) => `flex flex-1 flex-col items-center gap-0.5 py-2 text-[10px] font-medium transition ${active ? 'text-brand-1' : 'text-muted'}`;
   return <nav aria-label="Primary" className="fixed inset-x-0 bottom-0 z-30 flex items-stretch justify-around border-t border-border bg-card/90 backdrop-blur-xl lg:hidden" style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}>
-    {TABS.map(({ href, label, icon: Icon }) => {
-      const current = pathname === href || (href !== '/' && pathname.startsWith(href + '/'));
-      return <Link key={href} href={href} aria-current={current ? 'page' : undefined} className={`flex flex-1 flex-col items-center gap-0.5 py-2 text-[10px] font-medium transition ${current ? 'text-brand-1' : 'text-muted'}`}>
-        <span className="relative"><Icon size={22} />{href === '/notifications' && !!badges?.notifications && <span aria-hidden="true" className="absolute -right-1 -top-0.5 size-2 rounded-full bg-red-600" />}</span>
-        <span>{label}</span>
-      </Link>;
-    })}
+    <Link href="/" aria-current={current('/') ? 'page' : undefined} className={tab(current('/'))}><House size={22} /><span>Feed</span></Link>
+    <Link href="/search" aria-current={current('/search') ? 'page' : undefined} className={tab(current('/search'))}><SearchIcon size={22} /><span>Search</span></Link>
+    <button type="button" onClick={openComposer} className={tab(false)}><CirclePlus size={22} /><span>Create</span></button>
+    <Link href="/notifications" aria-current={current('/notifications') ? 'page' : undefined} className={tab(current('/notifications'))}><span className="relative"><Bell size={22} />{!!badges?.notifications && <span aria-hidden="true" className="absolute -right-1 -top-0.5 size-2 rounded-full bg-red-600" />}</span><span>Notifications</span></Link>
+    <Link href="/profile" aria-current={current('/profile') ? 'page' : undefined} className={tab(current('/profile'))}><UserRound size={22} /><span>Profile</span></Link>
   </nav>;
 }
