@@ -1687,8 +1687,28 @@ Ordered roughly by value for effort.
   read on and page one then carries the new comment. Verified: `npx tsc --noEmit`,
   `npm run lint` (0 errors), `npm run build`, `node scripts/dead-modules.mjs` (0 of 73).
 - [ ] **P3** Virtualise long comment and chat lists, which currently render every loaded item.
-- [ ] **P3** Deduplicate requests: `/users/me` and `/users/me/follows` are fetched separately
-  by several components on the same page (`PostForm.tsx:23`, `SideBar.tsx:47`).
+- [x] **P3** Deduplicate requests. Closed 2026-10-04: the item's own targets were stale —
+  `/users/me` is fetched once per session by `BackendProvider` and handed to every consumer
+  through `useBackend`, and `/users/me/follows` is a single call in `PostForm`. The real
+  remaining duplicate was the sidebar, which asked the same endpoint twice for the two halves
+  of one answer (`/notifications/unread-count?exclude=message` and `?types=message`), each
+  with its own 15-second poll *and* its own socket listeners — two requests on the hottest
+  path, since the badges refresh on every socket event and every poll. A new
+  `GET /api/v1/notifications/unread-counts` answers both in one pass (a
+  `COALESCE(SUM(CASE WHEN entityType = 'message' …))` split, so both subtotals come from one
+  query), and `SideBar` now sends one `useResource` + one `useLiveRefresh`. The old filtered
+  endpoint is kept and still toured, so nothing else regresses. The pair is asserted against
+  each filtered half at three points in `cmd/notification_types_test.go` — which is what caught
+  the two `SUM` columns being scanned in the opposite order. Verified: `gofmt -l pkg cmd`
+  (clean), `go build ./...`, `go vet ./...`, `go test ./...`, `npx tsc --noEmit`, `npm run lint`
+  (0 errors), `npm run build`, `node scripts/dead-modules.mjs` (0 of 73), the browser suite
+  (green end to end, including `an unread chat moves the messages badge and not the bell`), and
+  `scripts/api-tour.sh` (101 requests, each with the status it should have). **Found while
+  verifying, and fixed:** the tour had been posting the register nickname as `nickname=`, while
+  `RegisterRequestDTO` reads `nickName=` — the casing the frontend's own `<input name="nickName">`
+  uses — so registration generated a handle instead and the tour's `/handles/tourb…` step 404'd
+  before it ever reached this endpoint; a one-word fix (three form lines in `scripts/api-tour.sh`)
+  unblocked the whole tour on `main`.
 - [ ] **P3** Add a Lighthouse / Core Web Vitals budget and enforce it in CI.
 - [x] **P3** Add bundle-size reporting to the frontend build. Closed 2026-10-03:
   `frontend/scripts/bundle-size.mjs`, run at the end of `npm run build` and again by
