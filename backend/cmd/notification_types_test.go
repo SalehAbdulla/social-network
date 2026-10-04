@@ -31,6 +31,10 @@ func TestNotificationTypeFilters(t *testing.T) {
 		t.Helper()
 		return decoded[notification.UnreadCountResponse](t, dummy.call("GET", "/api/v1/notifications/unread-count"+query, nil, 200)).Count
 	}
+	counts := func() notification.UnreadCountsResponse {
+		t.Helper()
+		return decoded[notification.UnreadCountsResponse](t, dummy.call("GET", "/api/v1/notifications/unread-counts", nil, 200))
+	}
 	list := func(query string) notification.NotificationResponse {
 		t.Helper()
 		return decoded[notification.NotificationResponse](t, dummy.call("GET", "/api/v1/notifications?limit=20"+query, nil, 200))
@@ -51,6 +55,11 @@ func TestNotificationTypeFilters(t *testing.T) {
 	}
 	if got := count("?types=message"); got != 1 {
 		t.Fatalf("message count = %d, want 1", got)
+	}
+	// The one request the sidebar now sends answers both of those at once, so it has
+	// to agree with the two halves it replaced.
+	if got := counts(); got.Notifications != 1 || got.Messages != 1 {
+		t.Fatalf("combined unread counts = %+v, want bell 1 and message 1", got)
 	}
 	if got := count("?types=comment,follow"); got != 1 {
 		t.Fatalf("comment+follow count = %d, want 1", got)
@@ -97,6 +106,9 @@ func TestNotificationTypeFilters(t *testing.T) {
 	if got := count("?exclude=message"); got != 1 {
 		t.Fatalf("bell count after reading the chat = %d, want 1", got)
 	}
+	if got := counts(); got.Notifications != 1 || got.Messages != 0 {
+		t.Fatalf("combined counts after reading the chat = %+v, want bell 1 and message 0", got)
+	}
 
 	// ...and clearing the comment notification from the bell leaves the message
 	// badge at zero, which is the other half of "they are not the same thing".
@@ -110,5 +122,8 @@ func TestNotificationTypeFilters(t *testing.T) {
 	}
 	if got := count(""); got != 0 {
 		t.Fatalf("unfiltered count after reading everything = %d, want 0", got)
+	}
+	if got := counts(); got.Notifications != 0 || got.Messages != 0 {
+		t.Fatalf("combined counts after reading everything = %+v, want zero", got)
 	}
 }
