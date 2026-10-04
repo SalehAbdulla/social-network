@@ -26,7 +26,14 @@ const DRAFT_SAVE_DELAY = 400;
 /** What stops a publish, in the reader's words, and the field they should look at. */
 type Blocker = { message: string; field: 'title' | 'content' | 'followers' };
 
-export default function PostForm({ post }: { post?: Post }) {
+export default function PostForm({ post, variant = 'page', onPublished }: {
+  post?: Post;
+  /** `modal` drops the page chrome (the wide centred column) for the composer dialog. */
+  variant?: 'page' | 'modal';
+  /** Called after a successful publish, so a dialog can close itself. */
+  onPublished?: () => void;
+}) {
+  const modal = variant === 'modal';
   const { user } = useBackend();
   const router = useRouter();
   const isNewPost = !post;
@@ -148,7 +155,9 @@ export default function PostForm({ post }: { post?: Post }) {
       // and storage must not be written again by the effect on the way out.
       if (isNewPost) { clearPostDraft(); setPublished(true); }
       toast.success(post ? 'Post updated' : 'Post published');
+      // The same navigation the page has always done, then the dialog (if there is one) closes.
       router.push(post ? `/post/${post.postId}` : '/');
+      onPublished?.();
     } catch (error) { toast.error(errorMessage(error)); } finally { setBusy(false); }
   }
 
@@ -166,15 +175,15 @@ export default function PostForm({ post }: { post?: Post }) {
     event.preventDefault();
     void publish();
   }
-  return <div className="mx-auto max-w-6xl p-6 sm:p-8 space-y-6">
+  return <div className={modal ? 'space-y-4' : 'mx-auto max-w-6xl p-6 sm:p-8 space-y-6'}>
     <div className="flex flex-wrap items-center justify-between gap-3">
-      <h1 className="text-3xl font-bold">{post ? 'Edit Post' : 'Create Post'}</h1>
-      <button type="button" onClick={() => setShowPreview(current => !current)} aria-expanded={showPreview} aria-controls="post-preview" className="chat-secondary inline-flex items-center gap-2 lg:hidden"><Eye size={16} aria-hidden="true" />{showPreview ? 'Hide preview' : 'Preview'}</button>
+      {!modal && <h1 className="text-3xl font-bold">{post ? 'Edit Post' : 'Create Post'}</h1>}
+      <button type="button" onClick={() => setShowPreview(current => !current)} aria-expanded={showPreview} aria-controls="post-preview" className={`chat-secondary inline-flex items-center gap-2 ${modal ? '' : 'lg:hidden'}`}><Eye size={16} aria-hidden="true" />{showPreview ? 'Hide preview' : 'Preview'}</button>
     </div>
     {/* `noValidate` hands the checks to `publish()`, which explains itself; the
         fields keep `required`/`minLength` as a description for assistive technology
         rather than as the thing that decides. */}
-    <div className="lg:grid lg:grid-cols-2 lg:gap-6 lg:items-start"><form onSubmit={event => { event.preventDefault(); void publish(); }} onKeyDown={shortcut} noValidate className="rounded-xl bg-white p-6 shadow-sm space-y-5"><div className="flex items-center gap-3"><Avatar name={displayName(user)} avatarUrl={user.avatar} /><div><p className="font-medium">{displayName(user)}</p><p className="text-sm text-slate-500">@{user.nickname}</p></div></div>
+    <div className={modal ? 'space-y-5' : 'lg:grid lg:grid-cols-2 lg:gap-6 lg:items-start'}><form onSubmit={event => { event.preventDefault(); void publish(); }} onKeyDown={shortcut} noValidate className="rounded-xl bg-white p-6 shadow-sm space-y-5"><div className="flex items-center gap-3"><Avatar name={displayName(user)} avatarUrl={user.avatar} /><div><p className="font-medium">{displayName(user)}</p><p className="text-sm text-slate-500">@{user.nickname}</p></div></div>
     {restoredDraft && <p role="status" id="draft-restored" className="flex flex-wrap items-center gap-3 rounded-lg border border-border bg-surface-2 px-3 py-2 text-sm text-muted">Draft restored. The text and the audience came back; photos did not.<button type="button" onClick={discardDraft} className="font-medium text-brand-1 underline">Discard draft</button></p>}
     <label className="block text-sm font-medium">Title (optional)<input ref={titleField} minLength={MIN_TITLE} maxLength={30} value={title} onChange={event => setTitle(event.target.value)} className="mt-2 w-full rounded-lg border border-slate-200 p-3" placeholder="Give your post a title" /></label>
     <label className="block text-sm font-medium">Your post<textarea ref={contentField} required={!hasMedia} minLength={hasMedia ? 0 : MIN_CONTENT} maxLength={500} rows={6} value={content} onChange={event => setContent(event.target.value)} aria-describedby={blocker ? 'publish-blocked' : undefined} className="mt-2 w-full rounded-lg border border-slate-200 p-3" placeholder="What's happening?" /></label>
@@ -207,5 +216,5 @@ export default function PostForm({ post }: { post?: Post }) {
       </div>
       {blocker && <p id="publish-blocked" className="text-xs text-muted">{blocker.message}</p>}
     </div>
-  </form><section id="post-preview" aria-label="Post preview" className={showPreview ? 'block' : 'hidden lg:block'}><p className="mb-3 text-sm font-medium text-muted">Preview</p><PostPreview user={user} title={title} content={content} privacy={privacy} imageUrls={[...existingImages, ...filePreviews]} createdAt={post?.createdAt} selectedNames={audienceNames} /></section></div></div>;
+  </form><section id="post-preview" aria-label="Post preview" className={showPreview ? 'block' : (modal ? 'hidden' : 'hidden lg:block')}><p className="mb-3 text-sm font-medium text-muted">Preview</p><PostPreview user={user} title={title} content={content} privacy={privacy} imageUrls={[...existingImages, ...filePreviews]} createdAt={post?.createdAt} selectedNames={audienceNames} /></section></div></div>;
 }
