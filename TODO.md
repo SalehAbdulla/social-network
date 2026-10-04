@@ -1824,8 +1824,21 @@ item still open in this file is post-submission work; see "Status at submission"
   plan each one is responsible for, drops the index to show what the query costs without it,
   and restores it; the exact plans and numbers are quoted in the migration and in the session
   note below.
-- [ ] **P3** Add a component gallery (Storybook or a `/dev/components` route) so the
-  Instagram-style redesign can be reviewed without clicking through whole flows.
+- [x] **P3** Add a component gallery (Storybook or a `/dev/components` route) so the
+  Instagram-style redesign can be reviewed without clicking through whole flows. Closed
+  2026-10-04: `frontend/src/app/dev/components/page.tsx` is the route — the post card
+  (`PostPreview`, with its audience banner), the avatars at the sizes the app uses, the two unread
+  badges, `Loading`, the three skeletons, the four empty states and the theme switch, each in a
+  titled section. **Decisions:** the route rather than Storybook, because the frontend has no
+  dependency for a gallery and the item allowed either; every piece shown is presentational and
+  takes props, so the page fetches nothing and is honest about what each looks like without a
+  session behind it — the one interactive control is the theme switch, wired to the same provider
+  the app uses; and it is a **development** tool rather than a feature, so a production build calls
+  `notFound()`, which a build-time `NODE_ENV` decides once and the deployed bundle carries as a
+  404. Verified: `npx tsc --noEmit`, `npm run lint` (0 errors), `npm run build`,
+  `node scripts/dead-modules.mjs`, and the browser suite, whose new step navigates the signed-in
+  browser to `/dev/components` and asserts the gallery and the preview's audience banner render:
+  `PASS: the dev-only component gallery renders the redesigned pieces in isolation`.
 
 ### Developer experience
 
