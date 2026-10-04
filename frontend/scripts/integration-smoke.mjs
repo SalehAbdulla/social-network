@@ -1188,10 +1188,17 @@ try {
   await fill(optional, 'textarea[name="aboutMe"]', `About me ${stamp}`);
   await fill(optional, 'select[name="isPublic"]', 'false');
   await until(optional, `document.body.innerText.includes('Nickname is available.')`, 'nickname availability');
-  const avatarFixture = path.join(taskDir, 'avatar.png');
-  await writeFile(avatarFixture, Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aD1sAAAAASUVORK5CYII=', 'base64'));
+  // Per-purpose rules: an avatar under 200×200 is refused before the upload is spent, with the
+  // floor named, and the refused file is not added to the picker. The valid photo below is 256×256.
+  const tooSmall = path.join(taskDir, 'too-small-avatar.png');
+  await writeFile(tooSmall, Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aD1sAAAAASUVORK5CYII=', 'base64'));
   const registerDocument = await command('DOM.getDocument', {}, optional);
   const avatarInput = await command('DOM.querySelector', { nodeId: registerDocument.root.nodeId, selector: 'input[aria-label="Add photos"]' }, optional);
+  await command('DOM.setFileInputFiles', { nodeId: avatarInput.nodeId, files: [tooSmall] }, optional);
+  await until(optional, `document.body.innerText.includes('at least 200×200')`, 'the small avatar is refused with the floor named');
+  assert(await evaluate(optional, `!document.querySelector('img[alt="Preview of too-small-avatar.png"]')`), 'the refused avatar must not be added');
+  const avatarFixture = path.join(taskDir, 'avatar.png');
+  await writeFile(avatarFixture, largePng(256, 256));
   await command('DOM.setFileInputFiles', { nodeId: avatarInput.nodeId, files: [avatarFixture] }, optional);
   await until(optional, `!!document.querySelector('img[alt="Preview of avatar.png"]')`, 'avatar preview before signup');
   await button(optional, 'Create account');
