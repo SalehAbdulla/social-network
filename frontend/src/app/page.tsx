@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { PenSquare, RefreshCw } from 'lucide-react';
 import { type Page, type Post } from './api/social';
 import { usePagedList } from './lib/usePagedList';
+import { useBackend } from './components/BackendProvider';
 import StoriesBar from './components/StoriesBar';
 import SuggestedPeople from './components/SuggestedPeople';
 import PostCard from './components/PostCard';
@@ -18,6 +19,7 @@ const FEED_PAGE_SIZE = 10;
 const FEED_KEY = `/posts?size=${FEED_PAGE_SIZE}&sortBy=createdat&sortOrder=desc`;
 
 export default function Feed() {
+  const { openComposer } = useBackend();
   const feed = usePagedList<Post, Page<Post>>({
     key: FEED_KEY,
     pageQuery: page => `&page=${page}`,
@@ -32,7 +34,7 @@ export default function Feed() {
         <h1 className="text-2xl font-bold tracking-tight text-slate-900">Your feed</h1>
         <p className="text-sm text-slate-500">The latest posts from the people you follow, newest first.</p>
       </div>
-      <Link href="/create-post" className="chat-primary inline-flex items-center gap-2"><PenSquare size={16} />New post</Link>
+      <button type="button" onClick={openComposer} className="chat-primary inline-flex items-center gap-2"><PenSquare size={16} />New post</button>
     </header>
     <StoriesBar />
     <SuggestedPeople />
