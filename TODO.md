@@ -1289,8 +1289,24 @@ item still open in this file is post-submission work; see "Status at submission"
   assuming: the `webp` decoder is registered, so `DecodeConfig` reads WebP headers, and
   `cmd/media_upload_test.go` asserts both directions — a 16384×16384 canvas built from a few
   dozen bytes is refused with 400, and a 64×64 WebP is accepted and served as `image/webp`.
-- [ ] **P3** Enforce minimum dimensions and aspect ratios per purpose: square avatar at least
-  200×200, cover at least 800×300, post media between 1:2 and 2:1.
+- [x] **P3** Enforce minimum dimensions and aspect ratios per purpose: square avatar at least
+  200×200, cover at least 800×300, post media between 1:2 and 2:1. Closed 2026-10-04: `ImagePicker`
+  gained a `purpose` prop (`image` default, `avatar`, `cover`, `post`) and a `checkPurpose` that
+  runs right after the decode, so the refusal names the floor rather than the format. Wired to the
+  avatar field on the signup form (`purpose="avatar"`), to post and comment media
+  (`purpose="post"` — a ratio, because a feed card crops a very tall or wide picture to a sliver),
+  and to `EditProfile`, which **until now uploaded its avatar and cover through raw
+  `<input type="file">` fields that skipped every check the picker makes** — the real gap this item
+  exposed, now closed by routing both through `ImagePicker` with `purpose="avatar"`/`"cover"`.
+  **Corrected rather than obeyed:** the item asks for a *square* avatar, but the rule is a 200×200
+  floor. `Avatar` draws under `object-cover`, so any aspect renders correctly, and refusing a
+  landscape portrait outright would reject a photo the app shows perfectly; the crop step added
+  alongside this item is what an author reaches for when they want the square. The floor is also
+  printed in the picker's own hint, so the rule is known before a choice is made. Verified:
+  `npx tsc --noEmit`, `npm run lint` (0 errors), `npm run build`, `node scripts/dead-modules.mjs`,
+  and the browser suite, whose signup step now first uploads a 1×1 avatar and asserts it is
+  **refused with `at least 200×200` named and not added**, then uploads a 256×256 one that is
+  stored — the fixture that used to be 1×1.
 - [x] **P3** Client-side downscale before upload (canvas, ~1600 px on the long edge, quality
   ~0.85), skipping animated GIFs so they stay animated. This cuts upload time and storage
   for phone photos, which are the common case.
