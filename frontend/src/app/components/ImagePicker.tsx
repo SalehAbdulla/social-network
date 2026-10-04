@@ -1,10 +1,11 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { ImagePlus, X } from 'lucide-react';
+import { Crop, ImagePlus, X } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { errorMessage } from '../api/social';
 import { IMAGE_ACCEPT, MAX_IMAGE_BYTES, MAX_IMAGE_PIXELS, MAX_VIDEO_BYTES, MEDIA_ACCEPT, formatBytes, isImageType, isVideoType, oversizeMessage } from '../lib/mediaLimits';
+import ImageCropper from './ImageCropper';
 
 /** The dimensions the picker has measured for one selected file. */
 type Dimensions = { width: number; height: number };
@@ -69,6 +70,8 @@ export default function ImagePicker({ files, onChange, existing = [], onRemoveEx
   files: File[]; onChange: (files: File[]) => void; existing?: string[]; onRemoveExisting?: (url: string) => void; max?: number; disabled?: boolean; allowVideo?: boolean;
 }) {
   const [checking, setChecking] = useState(false);
+  // The index of the selected file whose crop step is open, if any.
+  const [cropping, setCropping] = useState<number | null>(null);
   // Measured per selected file, keyed by `fileKey`. An entry for a file the parent
   // has removed is harmless: nothing renders it, and the next selection overwrites it.
   const [details, setDetails] = useState<Record<string, Dimensions>>({});
@@ -99,7 +102,15 @@ export default function ImagePicker({ files, onChange, existing = [], onRemoveEx
     </label>
     {!!(files.length + existing.length) && <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
       {existing.map((url, index) => <div key={url} className="relative overflow-hidden rounded-xl border border-slate-200"><img src={url} alt={`Photo ${index + 1}`} className="aspect-square w-full bg-slate-100 object-contain" /><button type="button" disabled={disabled} aria-label={`Remove photo ${index + 1}`} onClick={() => onRemoveExisting?.(url)} className="absolute right-1 top-1 rounded-full bg-white/95 p-1 text-slate-700"><X size={16} /></button></div>)}
-      {files.map((file, index) => <div key={`${file.name}-${index}`} className="relative overflow-hidden rounded-xl border border-slate-200"><Preview file={file} onDimensions={dimensions => setDetails(current => ({ ...current, [fileKey(file)]: dimensions }))} /><FileDetails dimensions={details[fileKey(file)]} size={file.size} /><button type="button" disabled={disabled} aria-label={`Remove ${file.name}`} onClick={() => onChange(files.filter((_, i) => i !== index))} className="absolute right-1 top-1 rounded-full bg-white/95 p-1 text-slate-700"><X size={16} /></button></div>)}
+      {files.map((file, index) => <div key={`${file.name}-${index}`} className="relative overflow-hidden rounded-xl border border-slate-200"><Preview file={file} onDimensions={dimensions => setDetails(current => ({ ...current, [fileKey(file)]: dimensions }))} /><FileDetails dimensions={details[fileKey(file)]} size={file.size} />{isImageType(file.type) && file.type !== 'image/gif' && <button type="button" disabled={disabled} aria-label={`Crop ${file.name}`} onClick={() => setCropping(index)} className="absolute left-1 top-1 rounded-full bg-white/95 p-1 text-slate-700"><Crop size={16} /></button>}<button type="button" disabled={disabled} aria-label={`Remove ${file.name}`} onClick={() => onChange(files.filter((_, i) => i !== index))} className="absolute right-1 top-1 rounded-full bg-white/95 p-1 text-slate-700"><X size={16} /></button></div>)}
     </div>}
+    {cropping !== null && files[cropping] && <ImageCropper file={files[cropping]} onClose={() => setCropping(null)} onApply={cropped => {
+      const index = cropping;
+      // The caption for the new file must be measured again: its key (name, size, time) changed,
+      // so the number the previous file reported does not name this one.
+      void validateImage(cropped).then(dimensions => setDetails(current => ({ ...current, [fileKey(cropped)]: dimensions }))).catch(() => {});
+      onChange(files.map((item, position) => position === index ? cropped : item));
+      setCropping(null);
+    }} />}
   </div>;
 }
