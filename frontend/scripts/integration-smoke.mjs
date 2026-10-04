@@ -351,6 +351,28 @@ try {
   await until(dummy, `!document.querySelector('[role="dialog"][aria-label="Create a post"]')`, 'Escape closes the composer');
   console.log('PASS: the feed opens the composer as a dialog and closes it on Escape');
 
+  // Client-side cropping: a portrait photo cropped to a square must travel as a square. The
+  // picker's tile caption is driven by the file it now holds, so it is the proof the crop
+  // really happened rather than a CSS frame — the fixture starts 600×900 and ends 600×600.
+  await navigate(dummy, '/create-post');
+  const cropFixture = path.join(taskDir, 'crop-fixture.png');
+  await writeFile(cropFixture, largePng(600, 900));
+  const cropDocument = await command('DOM.getDocument', {}, dummy);
+  const cropInput = await command('DOM.querySelector', { nodeId: cropDocument.root.nodeId, selector: 'input[type="file"]' }, dummy);
+  await command('DOM.setFileInputFiles', { nodeId: cropInput.nodeId, files: [cropFixture] }, dummy);
+  await until(dummy, `!!document.querySelector('img[alt="Preview of crop-fixture.png"]')`, 'crop fixture preview');
+  const beforeCrop = await evaluate(dummy, `(() => { const tile = document.querySelector('img[alt="Preview of crop-fixture.png"]').closest('div'); return tile.querySelector('span').textContent.trim(); })()`);
+  assert(/^600 × 900 /.test(beforeCrop), `the crop fixture must start portrait, got ${JSON.stringify(beforeCrop)}`);
+  await clickAt(dummy, 'button[aria-label="Crop crop-fixture.png"]');
+  await until(dummy, `!!document.querySelector('[role="dialog"][aria-label="Crop photo"]')`, 'the crop dialog opens');
+  await button(dummy, 'Apply crop');
+  await until(dummy, `(() => { const tile = document.querySelector('img[alt="Preview of crop-fixture.png"]')?.closest('div'); const caption = tile && tile.querySelector('span'); return caption && /^600 × 600 /.test(caption.textContent.trim()); })()`, 'the crop changed the file to a square');
+  console.log('PASS: a photo is cropped to a square in the browser before it is uploaded');
+
+  // This step and the composer-dialog one above navigated away from the post the next steps
+  // assume they are looking at (they read it off the detail page), so come back to it.
+  await navigate(dummy, `/post/${postId}`);
+
   // The item's own claim, measured in the browser: the feed must stop downloading
   // full-resolution originals, so every request for this post's picture carries a `?size=`.
   // The upload here is a 1x1 PNG, which is narrower than both caps and therefore has no
