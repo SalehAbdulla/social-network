@@ -8,6 +8,7 @@ import { useLiveRefresh } from '../lib/useLiveRefresh';
 import Loading from './Loading';
 import Sidebar from './SideBar';
 import TopBar from './TopBar';
+import BottomNav from './BottomNav';
 
 interface Session {
   user: SocialUser;
@@ -42,7 +43,6 @@ function AuthenticatedBackend({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<SocialUser | null>(null);
   const [error, setError] = useState('');
   const [socket, setSocket] = useState<WebSocket | null>(null);
-  const [isSideBarOpen, setSideBarOpen] = useState(false);
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [reconnecting, setReconnecting] = useState(false);
   const [badges, setBadges] = useState<{ notifications: number; messages: number } | null>(null);
@@ -168,13 +168,14 @@ function AuthenticatedBackend({ children }: { children: React.ReactNode }) {
   </div>;
   if (!user) return <Loading />;
   return <Context.Provider value={{ user, refreshUser, connected: socket?.readyState === WebSocket.OPEN, sendEvent, badges }}><div key={user.userId} className="flex min-h-screen w-full min-w-0">
-    <Sidebar isSideBarOpen={isSideBarOpen} setSideBarOpen={setSideBarOpen} isCollapsed={isCollapsed} setIsCollapsed={setIsCollapsed} />
+    <Sidebar isCollapsed={isCollapsed} setIsCollapsed={setIsCollapsed} />
     <div className="flex min-w-0 flex-1 flex-col">
-      <TopBar isSideBarOpen={isSideBarOpen} onOpenNavigation={() => { setIsCollapsed(false); setSideBarOpen(true); }} />
-      <main className="relative min-w-0 flex-1">
+      <TopBar />
+      <main className="relative min-w-0 flex-1 pb-16 lg:pb-0">
         {reconnecting && <p role="status" aria-live="polite" className="sticky top-0 z-20 bg-amber-100 px-4 py-2 text-center text-xs font-medium text-amber-900">Reconnecting… new messages and notifications may be delayed.</p>}
         {children}
       </main>
+      <BottomNav />
     </div>
   </div></Context.Provider>;
 }
