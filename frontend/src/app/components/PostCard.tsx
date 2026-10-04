@@ -11,6 +11,7 @@ import { useBackend } from './BackendProvider';
 import { useMediaQuery } from '../lib/useMediaQuery';
 import { useDialogFocus } from '../lib/useDialogFocus';
 import { usePagedList } from '../lib/usePagedList';
+import { useInView } from '../lib/useInView';
 import { mediaImageProps } from '../lib/mediaVariants';
 import Avatar from './Avatar';
 import ImagePicker from './ImagePicker';
@@ -25,12 +26,21 @@ const DOUBLE_TAP_MS = 300;
 
 function Comments({ post, onCountChange }: { post: Post; onCountChange: (delta: number) => void }) {
   const { user } = useBackend();
+  // A wide screen shows these open, but the feed holds ten posts, so reading every
+  // thread on mount would fire ten requests before the reader had looked at one. The
+  // first page is asked for only once the section is about to be seen; `forced` covers
+  // the one path the observer cannot — a submit that arrives while the section is still
+  // off screen (a programmatic fill, a keyboard jump), which must not lose the comment.
+  const [sectionRef, sectionSeen] = useInView<HTMLDivElement>();
+  const [forced, setForced] = useState(false);
+  const ready = sectionSeen || forced;
   const comments = usePagedList<Comment, { comments: Comment[]; lastPage: boolean }>({
     key: `/posts/comments?postId=${post.postId}&size=${COMMENTS_PER_PAGE}&sortBy=createdat&sortOrder=desc`,
     pageQuery: page => `&page=${page}`,
     pageSize: COMMENTS_PER_PAGE,
     normalize: raw => ({ items: raw.comments, hasMore: !raw.lastPage }),
     keyOf: comment => comment.commentId,
+    enabled: ready,
   });
 
   const [text, setText] = useState('');
@@ -48,13 +58,20 @@ function Comments({ post, onCountChange }: { post: Post; onCountChange: (delta: 
         await request(`/posts/comments/${id}`, 'PUT', { content: text });
         comments.update(items => items.map(item => item.commentId === id ? { ...item, commentText: text } : item));
       } else {
-        // The composer holds files; only the uploaded URLs travel with the comment.
-        const imageUrls: string[] = [];
-        for (const file of images) imageUrls.push((await upload(file)).url);
-        await request('/posts/comments', 'POST', { postId: post.postId, content: text, imageUrls });
-        // Newest-first ordering, so a new comment belongs on the first page.
-        comments.reload();
+        // The composer holds files; only the uploaded URLs travel with the comment. The
+        // uploads run together and in the picker's order — `Promise.all` keeps that order
+        // however the responses interleave — instead of one after another, so a
+        // four-photo comment no longer waits on four round trips before it is sent.
+        const imageUrls = (await Promise.all(images.map(file => upload(file)))).map(result => result.url);
+        const created = await request<Comment>('/posts/comments', 'POST', { postId: post.postId, content: text, imageUrls });
         onCountChange(1);
+        // Newest-first ordering, so the row the server returned belongs at the top.
+        // Splicing it in is what keeps the reader's place; re-reading page one would be a
+        // second round trip and would throw away the pages already scrolled through. If
+        // the thread has not been read yet, switching it on fetches it instead, and page
+        // one carries this very comment.
+        if (ready) comments.update(items => [created, ...items]);
+        else setForced(true);
       }
       setText(''); setEditing(null); setImages([]);
     } catch (error) { toast.error(errorMessage(error)); } finally { setBusy(false); }
@@ -84,7 +101,7 @@ function Comments({ post, onCountChange }: { post: Post; onCountChange: (delta: 
       toast.error(errorMessage(error));
     } finally { setBusy(false); }
   }
-  return <div className="space-y-4 border-t border-slate-100 pt-4">
+  return <div ref={sectionRef} className="space-y-4 border-t border-slate-100 pt-4">
     <form onSubmit={submit} className="space-y-2"><label className="block text-sm font-medium" htmlFor={`comment-${post.postId}`}>{editing ? 'Edit comment' : 'Add a comment'}</label><textarea id={`comment-${post.postId}`} required minLength={3} maxLength={300} value={text} onChange={event => setText(event.target.value)} className="w-full rounded-lg border border-slate-200 p-3 text-sm" />
       {!editing && <ImagePicker files={images} onChange={setImages} max={4} disabled={busy} />}
       <div className="flex gap-3"><button disabled={busy} className="rounded-lg bg-blue-600 px-4 py-2 text-sm text-white disabled:opacity-50">{editing ? 'Save comment' : 'Comment'}</button>{editing && <button type="button" onClick={() => { setEditing(null); setText(''); }}>Cancel</button>}</div></form>
