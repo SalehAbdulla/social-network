@@ -1246,9 +1246,22 @@ item still open in this file is post-submission work; see "Status at submission"
   browser suite, whose composer step asserts "Visible to everyone" then "Visible to your
   followers" as the select moves, whose audience-edit step asserts the `selected` banner
   names Alex, and whose private-profile section asserts the narrowing note.
-- [ ] **P3** Instagram-style modal composer launched from the sidebar and the feed, keeping
+- [x] **P3** Instagram-style modal composer launched from the sidebar and the feed, keeping
   `/create-post` as a deep link (currently the only entry point is
-  `Sidebar.tsx:79` → `create-post/page.tsx`).
+  `Sidebar.tsx:79` → `create-post/page.tsx`). Closed 2026-10-04: `components/ComposerDialog.tsx`
+  is a bottom sheet on a phone and a centred card from `sm` up — the shape Instagram uses —
+  holding the **same** `PostForm` the deep link renders, so there is one form to keep in step,
+  not two. `BackendProvider` owns its state and hands `openComposer()` to the feed's "New post",
+  the sidebar's "Create Post" and the bottom bar's Create tab, all of which now open the dialog
+  instead of navigating; `/create-post` still renders the form as a page. `PostForm` gained
+  `variant="modal"` (it drops the wide two-column chrome and keeps the preview behind its own
+  toggle, since a viewport-keyed `lg:` grid cannot know it is inside a narrow dialog) and an
+  `onPublished` callback that closes the dialog after the same navigation the page always did.
+  The dialog reuses `useDialogFocus` for the keyboard contract and keeps its backdrop a sibling
+  of the panel, the same reasoning as the comment sheet. Verified: `npx tsc --noEmit`,
+  `npm run lint` (0 errors), `npm run build`, `node scripts/dead-modules.mjs`, and the browser
+  suite, whose new step is `PASS: the feed opens the composer as a dialog and closes it on Escape`
+  while the existing `/create-post` publish steps are unchanged.
 - [x] **P3** Draft autosave to `localStorage` so a refresh does not lose a long post.
   Closed 2026-09-30: `lib/postDraft.ts` owns the key (`social:post-draft`), the composer
   restores it after mount and clears it on publish or Discard. Only the text and the audience
