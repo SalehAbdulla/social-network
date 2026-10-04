@@ -9,6 +9,7 @@ import Loading from './Loading';
 import Sidebar from './SideBar';
 import TopBar from './TopBar';
 import BottomNav from './BottomNav';
+import ComposerDialog from './ComposerDialog';
 
 interface Session {
   user: SocialUser;
@@ -17,6 +18,8 @@ interface Session {
   sendEvent: (event: SocketEvent) => void;
   /** The bell and Messages badges, fetched once here so both bars read one answer. */
   badges: { notifications: number; messages: number } | null;
+  /** Opens the Instagram composer dialog over the current page. */
+  openComposer: () => void;
 }
 const Context = createContext<Session | null>(null);
 
@@ -44,6 +47,7 @@ function AuthenticatedBackend({ children }: { children: React.ReactNode }) {
   const [error, setError] = useState('');
   const [socket, setSocket] = useState<WebSocket | null>(null);
   const [isCollapsed, setIsCollapsed] = useState(false);
+  const [composing, setComposing] = useState(false);
   const [reconnecting, setReconnecting] = useState(false);
   const [badges, setBadges] = useState<{ notifications: number; messages: number } | null>(null);
   const sessionRevision = useRef(0);
@@ -124,6 +128,13 @@ function AuthenticatedBackend({ children }: { children: React.ReactNode }) {
     if (socket?.readyState === WebSocket.OPEN) socket.send(JSON.stringify(event));
   }, [socket]);
 
+  // The composer is opened from several places — the feed's "New post", the sidebar's
+  // "Create Post" and the bottom bar's Create tab — so its state lives here and each of
+  // them calls `openComposer()` instead of navigating to `/create-post` (which stays a
+  // deep link for its own page).
+  const openComposer = useCallback(() => setComposing(true), []);
+  const closeComposer = useCallback(() => setComposing(false), []);
+
   // Both badges are read here rather than in `SideBar`, because two surfaces now show
   // them — the sidebar and the top bar — and a fetch each would be exactly the duplicate
   // the sidebar used to pay. `useLiveRefresh` puts the socket event and the poll in one
@@ -167,7 +178,7 @@ function AuthenticatedBackend({ children }: { children: React.ReactNode }) {
     <button className="rounded-lg bg-blue-600 px-5 py-2 text-white" onClick={() => void initialize()}>Reconnect</button>
   </div>;
   if (!user) return <Loading />;
-  return <Context.Provider value={{ user, refreshUser, connected: socket?.readyState === WebSocket.OPEN, sendEvent, badges }}><div key={user.userId} className="flex min-h-screen w-full min-w-0">
+  return <Context.Provider value={{ user, refreshUser, connected: socket?.readyState === WebSocket.OPEN, sendEvent, badges, openComposer }}><div key={user.userId} className="flex min-h-screen w-full min-w-0">
     <Sidebar isCollapsed={isCollapsed} setIsCollapsed={setIsCollapsed} />
     <div className="flex min-w-0 flex-1 flex-col">
       <TopBar />
@@ -176,6 +187,7 @@ function AuthenticatedBackend({ children }: { children: React.ReactNode }) {
         {children}
       </main>
       <BottomNav />
+      {composing && <ComposerDialog onClose={closeComposer} />}
     </div>
   </div></Context.Provider>;
 }
