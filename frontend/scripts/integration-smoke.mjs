@@ -1251,6 +1251,13 @@ try {
   await until(afterReset, `location.pathname === '/'`, 'signing in with the password the link set', 15000);
   console.log('PASS: the reset link from the mail log sets a new password and signs in');
 
+  // The dev-only component gallery: a route that shows the redesigned pieces on their own. It
+  // is signed-in because it lives under the app shell, and it draws the audience banner the
+  // preview carries, which is the piece the composer shares with the feed.
+  await navigate(dummy, '/dev/components');
+  await until(dummy, `document.body.innerText.includes('Component gallery') && !!document.querySelector('[aria-label="Audience"]')`, 'the component gallery renders the redesigned pieces');
+  console.log('PASS: the dev-only component gallery renders the redesigned pieces in isolation');
+
 
 
   await navigate(dummy, '/');
