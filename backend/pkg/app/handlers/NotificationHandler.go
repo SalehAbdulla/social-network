@@ -145,6 +145,31 @@ func (re *HandlerContext) GetUnreadCount(w http.ResponseWriter, r *http.Request)
 	})
 }
 
+// GetUnreadCounts answers both sidebar badges in one request: the bell counts the
+// unread rows that are not private messages, the Messages entry counts only those.
+// It is the pair `?exclude=message` and `?types=message` used to describe, fetched
+// together so the sidebar does not spend two round trips on one pair of numbers.
+func (re *HandlerContext) GetUnreadCounts(w http.ResponseWriter, r *http.Request) {
+	userID, ok := middleware.UserIDFromContext(r.Context())
+	if !ok || userID == "" {
+		re.HandleError(w, r, realtimeforum.ErrUnauthorized)
+		return
+	}
+
+	counts, err := re.NotificationService.GetUnreadCounts(userID)
+	if err != nil {
+		re.HandleError(w, r, err)
+		return
+	}
+
+	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode(payload.SuccessResponse[notification.UnreadCountsResponse]{
+		Success: true,
+		Data:    counts,
+		Message: "Unread counts retrieved successfully",
+	})
+}
+
 func (re *HandlerContext) MarkAsRead(w http.ResponseWriter, r *http.Request) {
 	userID, ok := middleware.UserIDFromContext(r.Context())
 	if !ok || userID == "" {
