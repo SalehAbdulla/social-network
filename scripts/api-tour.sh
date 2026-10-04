@@ -125,19 +125,19 @@ call "$JAR_A" GET /api/v1/ready 200
 
 # route: POST /api/v1/auth/register
 call "$JAR_A" POST /api/v1/auth/register 201 \
-	"firstName=Tour&lastName=One&email=$EMAIL_A&nickname=toura$STAMP&password=$PASSWORD&confirmPassword=$PASSWORD&birthDate=2000-01-01&gender=male&isPublic=true" \
+	"firstName=Tour&lastName=One&email=$EMAIL_A&nickName=toura$STAMP&password=$PASSWORD&confirmPassword=$PASSWORD&birthDate=2000-01-01&gender=male&isPublic=true" \
 	application/x-www-form-urlencoded
 USER_A="$(field "$BODY" data.userId)"
 # route: POST /api/v1/auth/register
 call "$JAR_B" POST /api/v1/auth/register 201 \
-	"firstName=Tour&lastName=Two&email=$EMAIL_B&nickname=tourb$STAMP&password=$PASSWORD&confirmPassword=$PASSWORD&birthDate=2000-01-01&gender=female&isPublic=true" \
+	"firstName=Tour&lastName=Two&email=$EMAIL_B&nickName=tourb$STAMP&password=$PASSWORD&confirmPassword=$PASSWORD&birthDate=2000-01-01&gender=female&isPublic=true" \
 	application/x-www-form-urlencoded
 USER_B="$(field "$BODY" data.userId)"
 # The same address and nickname again: refused, and the tour asserts the refusal rather than
 # reusing the account, because the ids captured above must not move.
 # route: POST /api/v1/auth/register
 call "$JAR_A" POST /api/v1/auth/register 400 \
-	"firstName=Tour&lastName=One&email=$EMAIL_A&nickname=toura$STAMP&password=$PASSWORD&confirmPassword=$PASSWORD&birthDate=2000-01-01&gender=male" \
+	"firstName=Tour&lastName=One&email=$EMAIL_A&nickName=toura$STAMP&password=$PASSWORD&confirmPassword=$PASSWORD&birthDate=2000-01-01&gender=male" \
 	application/x-www-form-urlencoded
 
 # route: POST /api/v1/auth/login
@@ -313,6 +313,8 @@ call "$JAR_A" GET "/api/v1/notifications?page=1&size=10" 200
 NOTIFICATION_A="$(field "$BODY" data.notifications.0.notificationId)"
 # route: GET /api/v1/notifications/unread-count
 call "$JAR_A" GET /api/v1/notifications/unread-count 200
+# route: GET /api/v1/notifications/unread-counts
+call "$JAR_A" GET /api/v1/notifications/unread-counts 200
 # route: PATCH /api/v1/notifications/{notificationId}/read
 call "$JAR_A" PATCH "/api/v1/notifications/$NOTIFICATION_A/read" 200
 # route: PATCH /api/v1/notifications/read-all
