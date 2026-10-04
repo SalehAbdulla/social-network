@@ -1337,7 +1337,23 @@ item still open in this file is post-submission work; see "Status at submission"
   recorded at the gate and in `DEPLOYMENT.md`. Verified by injection: reverting that one case
   to equality fails the new test with `500` where `413` is expected, and
   `cmd/media_upload_test.go` asserts both halves of the sentence through the real endpoint.
-- [ ] **P3** Client-side cropping for avatars, covers and post images (square, 4:5, 16:9).
+- [x] **P3** Client-side cropping for avatars, covers and post images (square, 4:5, 16:9).
+  Closed 2026-10-04: `lib/crop.ts` draws the crop on a canvas and returns a new `File`, and
+  `components/ImageCropper.tsx` is the step — a dialog with the 1:1, 4:5, 16:9 and Original
+  presets, previewing exactly the rectangle the canvas keeps by drawing the browser's own
+  `object-fit: cover` in a box of the chosen aspect, so there is no second geometry to keep in
+  step. Every selected image tile in `ImagePicker` gains a Crop button (not a GIF, whose still
+  frame is a different picture, and not a video), and applying re-measures the caption because
+  the file's key changed. **Decisions:** a centre crop rather than a draggable window — the
+  largest rectangle of that shape that fits, which is what a viewer already sees under
+  `object-cover`; nothing is ever enlarged; and the same failure contract as `downscale` (an
+  undecodable file, a canvas with no blob, a GIF or the Original preset all return the original),
+  because a crop that cannot be done must not cost the upload. It also caps the long edge at the
+  server's `large` width for the reason `downscale` does. Verified: `npx tsc --noEmit`,
+  `npm run lint` (0 errors), `npm run build`, `node scripts/dead-modules.mjs`, and the browser
+  suite, whose new step is `PASS: a photo is cropped to a square in the browser before it is
+  uploaded` — a hand-written 600×900 PNG cropped through the dialog and asserted at `600 × 600`
+  in the tile caption.
 - [x] **P3** Generate derivatives on upload (`_thumb`, `_large`) and serve them with `srcset`
   so the feed stops downloading full-resolution originals. Closed 2026-09-30: `pkg/media` resizes
   each resizable image into a 480 px `_thumb` and a 1600 px `_large` file beside the original, and
