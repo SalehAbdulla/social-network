@@ -1361,9 +1361,9 @@ item still open in this file is post-submission work; see "Status at submission"
 
 ### Instagram-like UI
 
-- [ ] **P3** Adopt an Instagram-style shell: slim top app bar with search and the notification
+- [x] **P3** Adopt an Instagram-style shell: slim top app bar with search and the notification
   bell, plus a bottom tab bar on mobile, replacing the off-canvas drawer in `SideBar.tsx`.
-  Keep the current sidebar as the `lg:` variant so nothing is lost.
+  Keep the current sidebar as the `lg:` variant so nothing is lost. Closed 2026-10-04.
   Progress 2026-10-04: **the top app bar is done.** `components/TopBar.tsx` is a slim sticky
   bar — wordmark, a search field that hands its term to `/search?q=…`, the notification bell and
   the Messages entry (each with an unread dot), the theme switch and the avatar — rendered by
@@ -1375,8 +1375,8 @@ item still open in this file is post-submission work; see "Status at submission"
   them. Verified: `npx tsc --noEmit`, `npm run lint` (0 errors), `npm run build`,
   `node scripts/dead-modules.mjs` (0 of 74), and the browser suite end to end, which still finds
   the sidebar, the drawer open/close/Escape/backdrop steps, both badge assertions and the
-  320/375/768/1440 px responsive check. **Still open in this item:** nothing — the shell is
-  complete (top bar + bottom tab bar below `lg:`, sidebar as the `lg:` variant).
+  320/375/768/1440 px responsive check. The shell is now complete: the top bar from `sm` up,
+  the bottom tab bar below `lg:`, and the sidebar as the `lg:` variant.
   Progress 2026-10-04 (bottom tab bar): the off-canvas mobile drawer is gone.
   `components/BottomNav.tsx` is a fixed bottom bar (`lg:hidden`) of five links — Feed, Search,
   Create, Notifications and Profile — with `aria-current` on the active one and a dot (not a
