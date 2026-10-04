@@ -45,6 +45,33 @@ export async function validateImage(file: File): Promise<Dimensions> {
  * The caption over a tile. An overlay rather than a line under the preview, so the
  * square frame keeps its size and the grid cannot grow a row it did not have.
  */
+/** What a chosen photo is for, which decides the shape and size it has to be. */
+export type MediaPurpose = 'image' | 'avatar' | 'cover' | 'post';
+
+/**
+ * The per-purpose floor, checked once the file is decoded so the message can name the rule the
+ * photo missed. These are the picker's rules rather than the server's: the server takes any
+ * 10 MB image and is never told what it will be used for, so a floor that depends on the purpose
+ * is something only the browser knows.
+ *
+ * `post` is a ratio rather than a floor because a feed card draws media in a fixed frame, where a
+ * very tall or very wide picture is cropped to a sliver. **The avatar rule is a floor and not the
+ * square the item named:** `Avatar` draws under `object-cover`, so any aspect renders correctly,
+ * and refusing a landscape portrait outright would reject a photo the app shows perfectly — the
+ * crop step is there for whoever wants the square.
+ */
+export function checkPurpose(dimensions: Dimensions, purpose: MediaPurpose) {
+  if (purpose === 'avatar' && (dimensions.width < 200 || dimensions.height < 200)) {
+    throw new Error('Profile photos must be at least 200×200. Choose a larger photo.');
+  }
+  if (purpose === 'cover' && (dimensions.width < 800 || dimensions.height < 300)) {
+    throw new Error('Cover photos must be at least 800×300. Choose a larger photo.');
+  }
+  if (purpose === 'post' && (dimensions.width / dimensions.height < 0.5 || dimensions.width / dimensions.height > 2)) {
+    throw new Error('Photos must be between 1:2 and 2:1. Crop it closer to square.');
+  }
+}
+
 function FileDetails({ dimensions, size }: { dimensions?: Dimensions; size: number }) {
   return <span className="pointer-events-none absolute inset-x-0 bottom-0 truncate bg-slate-950/60 px-2 py-1 text-center text-[11px] font-medium text-white">
     {dimensions ? `${dimensions.width} × ${dimensions.height} · ` : ''}{formatBytes(size)}
@@ -66,19 +93,21 @@ function Preview({ file, onDimensions }: { file: File; onDimensions?: (dimension
     : <img src={src} alt={`Preview of ${file.name}`} className="aspect-square w-full bg-slate-100 object-contain" />;
 }
 
-export default function ImagePicker({ files, onChange, existing = [], onRemoveExisting, max = 4, disabled = false, allowVideo = false }: {
-  files: File[]; onChange: (files: File[]) => void; existing?: string[]; onRemoveExisting?: (url: string) => void; max?: number; disabled?: boolean; allowVideo?: boolean;
+export default function ImagePicker({ files, onChange, existing = [], onRemoveExisting, max = 4, disabled = false, allowVideo = false, purpose = 'image' }: {
+  files: File[]; onChange: (files: File[]) => void; existing?: string[]; onRemoveExisting?: (url: string) => void; max?: number; disabled?: boolean; allowVideo?: boolean; purpose?: MediaPurpose;
 }) {
   const [checking, setChecking] = useState(false);
   // The index of the selected file whose crop step is open, if any.
   const [cropping, setCropping] = useState<number | null>(null);
+  // The per-purpose floor, in the picker's own words, so the rule is known before a choice.
+  const purposeHint = purpose === 'avatar' ? 'at least 200×200' : purpose === 'cover' ? 'at least 800×300' : purpose === 'post' ? 'between 1:2 and 2:1' : '';
   // Measured per selected file, keyed by `fileKey`. An entry for a file the parent
   // has removed is harmless: nothing renders it, and the next selection overwrites it.
   const [details, setDetails] = useState<Record<string, Dimensions>>({});
   return <div className="space-y-3">
     <label className="flex cursor-pointer items-center gap-3 rounded-xl border border-dashed border-slate-300 bg-slate-50 p-4 text-sm">
       <ImagePlus size={22} className="shrink-0 text-teal-700" />
-      <span className="min-w-0"><span className="block font-medium">{checking ? 'Checking files…' : allowVideo ? 'Add a photo or video' : 'Add photos'}</span><span className="text-xs text-slate-500">JPEG, PNG, GIF or WebP · {formatBytes(MAX_IMAGE_BYTES)} each · up to {max}{allowVideo && ` · MP4 / WebM up to ${formatBytes(MAX_VIDEO_BYTES)}`}</span></span>
+      <span className="min-w-0"><span className="block font-medium">{checking ? 'Checking files…' : allowVideo ? 'Add a photo or video' : 'Add photos'}</span><span className="text-xs text-slate-500">JPEG, PNG, GIF or WebP · {formatBytes(MAX_IMAGE_BYTES)} each{purposeHint && ` · ${purposeHint}`} · up to {max}{allowVideo && ` · MP4 / WebM up to ${formatBytes(MAX_VIDEO_BYTES)}`}</span></span>
       <input aria-label={allowVideo ? 'Add photo or video' : 'Add photos'} className="sr-only" type="file" accept={allowVideo ? MEDIA_ACCEPT : IMAGE_ACCEPT} multiple={max > 1} disabled={disabled || checking} onChange={async event => {
         const selected = Array.from(event.target.files || []); event.target.value = '';
         if (selected.length + files.length + existing.length > max) { toast.error(`Choose up to ${max} photo${max === 1 ? '' : 's'} in total.`); return; }
@@ -93,7 +122,9 @@ export default function ImagePicker({ files, onChange, existing = [], onRemoveEx
               if (file.size > MAX_VIDEO_BYTES) throw new Error(oversizeMessage(file));
               return;
             }
-            measured[fileKey(file)] = await validateImage(file);
+            const dimensions = await validateImage(file);
+            checkPurpose(dimensions, purpose);
+            measured[fileKey(file)] = dimensions;
           }));
           setDetails(current => ({ ...current, ...measured }));
           onChange([...files, ...selected]);
