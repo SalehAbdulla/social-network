@@ -1672,6 +1672,20 @@ Ordered roughly by value for effort.
   anything private (which forfeits the point) or signed per-viewer media URLs. Do it for
   genuinely public images first, or not at all; the 26 `no-img-element` warnings are the
   standing reminder.
+- [x] **P3** Stop the feed preloading every post's comments, and make posting one fast.
+  Closed 2026-10-04: on a wide screen `PostCard` renders a post's comments open, so every
+  card in a ten-post page fired its own `GET /posts/comments` on mount — ten requests
+  before the reader had looked at one. The read is now gated by `lib/useInView.ts`, a new
+  `IntersectionObserver` hook: the section stays mounted, so its form and its place in the
+  layout do not move, but its first page is asked for only as it comes near the viewport
+  (`300px` ahead of it). That keeps the "open by default" behaviour and the browser suite's
+  `Post comments open by default` assertion intact. Submitting is cheaper too: the row the
+  server returns is spliced in at the top instead of re-reading page one — a second round
+  trip that also discarded the pages already scrolled through — and a comment's photos
+  upload together in the picker's order rather than one after another. A submit that lands
+  before the section has been seen (a programmatic fill) still works, because it switches the
+  read on and page one then carries the new comment. Verified: `npx tsc --noEmit`,
+  `npm run lint` (0 errors), `npm run build`, `node scripts/dead-modules.mjs` (0 of 73).
 - [ ] **P3** Virtualise long comment and chat lists, which currently render every loaded item.
 - [ ] **P3** Deduplicate requests: `/users/me` and `/users/me/follows` are fetched separately
   by several components on the same page (`PostForm.tsx:23`, `SideBar.tsx:47`).
