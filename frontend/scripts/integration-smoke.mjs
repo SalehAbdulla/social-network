@@ -341,6 +341,16 @@ try {
   await until(dummy, `(async () => (await (await fetch('/api/v1/post?id=${postId}')).json()).data.score === 1)()`, 'post reaction');
   console.log('PASS: post creation, image upload, detail page and reaction persist');
 
+  // The Instagram composer is a dialog and not only a route: the feed's "New post" opens it
+  // over the page, and Escape closes it without leaving. `/create-post` — the step above — is
+  // still the deep link, so both entries stay covered.
+  await navigate(dummy, '/');
+  await button(dummy, 'New post');
+  await until(dummy, `!!document.querySelector('[role="dialog"][aria-label="Create a post"] textarea')`, 'the feed opens the composer dialog');
+  await command('Input.dispatchKeyEvent', { type: 'keyDown', key: 'Escape', code: 'Escape', windowsVirtualKeyCode: 27 }, dummy);
+  await until(dummy, `!document.querySelector('[role="dialog"][aria-label="Create a post"]')`, 'Escape closes the composer');
+  console.log('PASS: the feed opens the composer as a dialog and closes it on Escape');
+
   // The item's own claim, measured in the browser: the feed must stop downloading
   // full-resolution originals, so every request for this post's picture carries a `?size=`.
   // The upload here is a 1x1 PNG, which is narrower than both caps and therefore has no
