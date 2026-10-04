@@ -1375,8 +1375,21 @@ item still open in this file is post-submission work; see "Status at submission"
   them. Verified: `npx tsc --noEmit`, `npm run lint` (0 errors), `npm run build`,
   `node scripts/dead-modules.mjs` (0 of 74), and the browser suite end to end, which still finds
   the sidebar, the drawer open/close/Escape/backdrop steps, both badge assertions and the
-  320/375/768/1440 px responsive check. **Still open in this item:** the bottom tab bar on mobile
-  replacing the drawer, and restricting the sidebar to `lg:`.
+  320/375/768/1440 px responsive check. **Still open in this item:** nothing — the shell is
+  complete (top bar + bottom tab bar below `lg:`, sidebar as the `lg:` variant).
+  Progress 2026-10-04 (bottom tab bar): the off-canvas mobile drawer is gone.
+  `components/BottomNav.tsx` is a fixed bottom bar (`lg:hidden`) of five links — Feed, Search,
+  Create, Notifications and Profile — with `aria-current` on the active one and a dot (not a
+  number) on Notifications, so a phone never shows two elements claiming the same unread total.
+  The sidebar is now `hidden lg:block`: it keeps its `aria-label`, badges and collapse control
+  but no longer becomes a drawer, so the `isSideBarOpen` state, its backdrop, its Escape/scroll
+  lock and the close button are gone. The top bar drops the drawer opener, shows the favicon
+  below `sm` and keeps the search field from `sm` up (search travels with the tab bar on a
+  phone). `main` gains `pb-16 lg:pb-0` so nothing hides behind the fixed bar. The browser suite's
+  mobile step was rewritten from the drawer's open/close/Escape/backdrop assertions to the tab
+  bar's: it now proves the bar is on screen, the sidebar is `display:none` at 390 px, and a tab
+  navigates. Verified: `npx tsc --noEmit`, `npm run lint` (0 errors), `npm run build`,
+  `node scripts/dead-modules.mjs` (0 of 75) and the full browser suite.
 - [x] **P3** Media-first feed cards: full-bleed media that is square by default, with a row of
   icons (heart, comment, share, save) instead of the up/down vote arrows and text buttons in
   `PostCard.tsx:65`. Keep `POST /api/v1/reactions` underneath so no backend change is needed.
