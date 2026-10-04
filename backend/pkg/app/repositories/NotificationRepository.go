@@ -13,6 +13,10 @@ type NotificationRepository interface {
 	// only. A nil list means every known type; an empty list matches nothing.
 	GetNotifications(userID string, offset, limit int, unreadOnly bool, types []string) ([]models.Notification, int, error)
 	GetUnreadCount(userID string, types []string) (int, error)
+	// GetUnreadCounts answers both badges at once: the bell (every type but
+	// `message`) and the Messages badge (`message` only). It is the same predicate
+	// as GetUnreadCount, split into two subtotals by one pass.
+	GetUnreadCounts(userID string) (int, int, error)
 	CreateNotification(userID, actorID, entityType string, entityID int) (models.Notification, error)
 	MarkAsRead(notificationID int, userID string) error
 	MarkAllAsRead(userID string) error
@@ -109,6 +113,26 @@ func (db *DB) GetUnreadCount(userID string, types []string) (int, error) {
 		return 0, realtimeforum.ErrInternal
 	}
 	return count, nil
+}
+
+// GetUnreadCounts answers both badges in one query. The bell counts every unread
+// row except private messages; the Messages entry counts only those. Both subtotals
+// come from the same predicate GetUnreadCount applies, which is the point: the
+// sidebar asked the server twice for one answer, on every socket event and every
+// poll. COALESCE is required because SUM over no rows is NULL, not zero.
+func (db *DB) GetUnreadCounts(userID string) (int, int, error) {
+	var notifications, messages int
+	err := db.Conn.QueryRow(
+		`SELECT COALESCE(SUM(CASE WHEN entityType <> 'message' THEN 1 ELSE 0 END), 0),
+		        COALESCE(SUM(CASE WHEN entityType = 'message' THEN 1 ELSE 0 END), 0)
+		 FROM notification
+		 WHERE userId = ? AND isRead = 0`,
+		userID,
+	).Scan(&notifications, &messages)
+	if err != nil {
+		return 0, 0, realtimeforum.ErrInternal
+	}
+	return notifications, messages, nil
 }
 
 func (db *DB) CreateNotification(userID, actorID, entityType string, entityID int) (models.Notification, error) {
