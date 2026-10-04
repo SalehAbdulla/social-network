@@ -2,17 +2,20 @@
 
 import { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
-import { Menu } from 'lucide-react';
 import { errorMessage, isUnauthorized, request, type SocialUser, type SocketEvent } from '../api/social';
 import { notifyError } from '../lib/notify';
+import { useLiveRefresh } from '../lib/useLiveRefresh';
 import Loading from './Loading';
 import Sidebar from './SideBar';
+import TopBar from './TopBar';
 
 interface Session {
   user: SocialUser;
   refreshUser: () => Promise<void>;
   connected: boolean;
   sendEvent: (event: SocketEvent) => void;
+  /** The bell and Messages badges, fetched once here so both bars read one answer. */
+  badges: { notifications: number; messages: number } | null;
 }
 const Context = createContext<Session | null>(null);
 
@@ -42,6 +45,7 @@ function AuthenticatedBackend({ children }: { children: React.ReactNode }) {
   const [isSideBarOpen, setSideBarOpen] = useState(false);
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [reconnecting, setReconnecting] = useState(false);
+  const [badges, setBadges] = useState<{ notifications: number; messages: number } | null>(null);
   const sessionRevision = useRef(0);
 
   const redirectToLogin = useCallback(() => {
@@ -120,6 +124,29 @@ function AuthenticatedBackend({ children }: { children: React.ReactNode }) {
     if (socket?.readyState === WebSocket.OPEN) socket.send(JSON.stringify(event));
   }, [socket]);
 
+  // Both badges are read here rather than in `SideBar`, because two surfaces now show
+  // them — the sidebar and the top bar — and a fetch each would be exactly the duplicate
+  // the sidebar used to pay. `useLiveRefresh` puts the socket event and the poll in one
+  // place, so the two bars flip together.
+  const [badgeRevision, setBadgeRevision] = useState(0);
+  const reloadBadges = useCallback(() => setBadgeRevision(value => value + 1), []);
+  useEffect(() => {
+    if (!userId) return;
+    const abort = new AbortController();
+    request<{ notifications: number; messages: number }>('/notifications/unread-counts', 'GET', undefined, abort.signal)
+      .then(counts => { if (!abort.signal.aborted) setBadges(counts); })
+      // A failed badge read is not worth a toast; the 401 path above already handled it.
+      .catch(() => { /* keep the last counts */ });
+    return () => abort.abort();
+  }, [userId, badgeRevision]);
+  useLiveRefresh(reloadBadges);
+  useEffect(() => {
+    // The notifications page dispatches this after a row is read, so both indicators
+    // settle together instead of waiting for the next poll.
+    window.addEventListener('social:notifications', reloadBadges);
+    return () => window.removeEventListener('social:notifications', reloadBadges);
+  }, [reloadBadges]);
+
   useEffect(() => {
     const listener = (event: Event) => {
       if (['social_changed', 'connected'].includes((event as CustomEvent<SocketEvent>).detail.type)) {
@@ -140,12 +167,14 @@ function AuthenticatedBackend({ children }: { children: React.ReactNode }) {
     <button className="rounded-lg bg-blue-600 px-5 py-2 text-white" onClick={() => void initialize()}>Reconnect</button>
   </div>;
   if (!user) return <Loading />;
-  return <Context.Provider value={{ user, refreshUser, connected: socket?.readyState === WebSocket.OPEN, sendEvent }}><div key={user.userId} className="flex min-h-screen w-full min-w-0">
+  return <Context.Provider value={{ user, refreshUser, connected: socket?.readyState === WebSocket.OPEN, sendEvent, badges }}><div key={user.userId} className="flex min-h-screen w-full min-w-0">
     <Sidebar isSideBarOpen={isSideBarOpen} setSideBarOpen={setSideBarOpen} isCollapsed={isCollapsed} setIsCollapsed={setIsCollapsed} />
-    <main className="relative min-w-0 flex-1">
-      <button aria-label="Open navigation" aria-expanded={isSideBarOpen} aria-controls="main-navigation" onClick={() => { setIsCollapsed(false); setSideBarOpen(true); }} className="glass-track fixed left-4 top-4 z-30 rounded-lg p-2 sm:hidden"><Menu size={20} /></button>
-      {reconnecting && <p role="status" aria-live="polite" className="sticky top-0 z-20 bg-amber-100 px-4 py-2 text-center text-xs font-medium text-amber-900">Reconnecting… new messages and notifications may be delayed.</p>}
-      {children}
-    </main>
+    <div className="flex min-w-0 flex-1 flex-col">
+      <TopBar isSideBarOpen={isSideBarOpen} onOpenNavigation={() => { setIsCollapsed(false); setSideBarOpen(true); }} />
+      <main className="relative min-w-0 flex-1">
+        {reconnecting && <p role="status" aria-live="polite" className="sticky top-0 z-20 bg-amber-100 px-4 py-2 text-center text-xs font-medium text-amber-900">Reconnecting… new messages and notifications may be delayed.</p>}
+        {children}
+      </main>
+    </div>
   </div></Context.Provider>;
 }
