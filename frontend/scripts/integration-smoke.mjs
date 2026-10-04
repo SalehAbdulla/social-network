@@ -825,21 +825,17 @@ try {
   await command('Emulation.setDeviceMetricsOverride', { width: 390, height: 844, deviceScaleFactor: 1, mobile: true }, dummy);
   await pause(500);
   assert(await evaluate(dummy, 'document.documentElement.scrollWidth <= window.innerWidth'), 'Mobile chat has no horizontal overflow');
-  await clickAt(dummy, '[aria-label="Open navigation"]');
-  await until(dummy, `document.querySelector('[aria-label="Open navigation"]').getAttribute('aria-expanded') === 'true'`, 'mobile sidebar opens');
-  await until(dummy, `(() => { const button = document.querySelector('[aria-label="Close navigation"]'); const r = button.getBoundingClientRect(); return button.contains(document.elementFromPoint(r.x + r.width / 2, r.y + r.height / 2)); })()`, 'Mobile close button is visible and clickable', 3000);
-  await clickAt(dummy, '[aria-label="Close navigation"]');
-  await until(dummy, `document.querySelector('[aria-label="Open navigation"]').getAttribute('aria-expanded') === 'false'`, 'mobile close button dismisses sidebar');
-  await clickAt(dummy, '[aria-label="Open navigation"]');
-  await command('Input.dispatchMouseEvent', { type: 'mousePressed', x: 370, y: 400, button: 'left', clickCount: 1 }, dummy);
-  await command('Input.dispatchMouseEvent', { type: 'mouseReleased', x: 370, y: 400, button: 'left', clickCount: 1 }, dummy);
-  await until(dummy, `document.querySelector('[aria-label="Open navigation"]').getAttribute('aria-expanded') === 'false'`, 'backdrop dismisses sidebar');
-  await clickAt(dummy, '[aria-label="Open navigation"]');
-  await command('Input.dispatchKeyEvent', { type: 'keyDown', key: 'Escape', code: 'Escape', windowsVirtualKeyCode: 27 }, dummy);
-  await until(dummy, `document.querySelector('[aria-label="Open navigation"]').getAttribute('aria-expanded') === 'false'`, 'Escape dismisses sidebar');
-  await until(dummy, `getComputedStyle(document.querySelector('aside[aria-label="Main navigation"]')).visibility === 'hidden' && document.querySelector('aside[aria-label="Main navigation"]').getBoundingClientRect().right <= 0`, 'sidebar is fully offscreen after closing');
+  // The Instagram shell on a phone: the off-canvas drawer is gone and a bottom tab bar has
+  // taken over. The bar has to be on screen (its bottom inside the viewport) while the
+  // sidebar has to be `display:none` — which is the one thing a present-but-hidden element
+  // can actually be asserted on.
+  await until(dummy, `(() => { const bar = document.querySelector('nav[aria-label="Primary"]'); if (!bar) return false; const r = bar.getBoundingClientRect(); return r.height > 0 && r.bottom <= window.innerHeight + 1; })()`, 'mobile bottom tab bar is on screen');
+  assert(await evaluate(dummy, `getComputedStyle(document.querySelector('aside[aria-label="Main navigation"]')).display === 'none'`), 'the sidebar is not shown on a phone');
   const mobileShot = await command('Page.captureScreenshot', { format: 'png' }, dummy);
   await writeFile(path.join(taskDir, 'mobile-chat.png'), Buffer.from(mobileShot.data, 'base64'));
+  // A tab is a real link that navigates, which is the whole point of the bar replacing the drawer.
+  await clickAt(dummy, 'nav[aria-label="Primary"] a[href="/search"]');
+  await until(dummy, `location.pathname === '/search'`, 'the Search tab opens search');
   await command('Emulation.setDeviceMetricsOverride', { width: 1440, height: 960, deviceScaleFactor: 1, mobile: false }, dummy);
   console.log('PASS: groups inside conversations, join approval, group chat, events, RSVP, posts, editing and mobile layout');
 
