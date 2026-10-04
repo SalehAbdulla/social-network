@@ -46,21 +46,19 @@ export default function Sidebar({ isSideBarOpen, setSideBarOpen, isCollapsed, se
     };
   }, [isSideBarOpen, setSideBarOpen]);
   // The bell and the Messages entry report different things: the spec wants new
-  // notifications and new private messages displayed differently, so the bell
-  // counts everything except messages and the Messages entry counts only those.
-  const count = useResource<{ count: number }>('/notifications/unread-count?exclude=message');
-  const messages = useResource<{ count: number }>('/notifications/unread-count?types=message');
-  const reloadCount = count.reload;
-  const reloadMessages = messages.reload;
-  useLiveRefresh(reloadCount);
-  useLiveRefresh(reloadMessages);
+  // notifications and new private messages displayed differently, so the bell is
+  // everything except messages and the Messages entry is only those. Both come from
+  // one request — they used to be two calls to the same endpoint, each with its own
+  // poll and socket listeners, which doubled this sidebar's traffic on the hottest
+  // path: the badges refresh on every socket event and every fifteen seconds.
+  const badges = useResource<{ notifications: number; messages: number }>('/notifications/unread-counts');
+  useLiveRefresh(badges.reload);
   useEffect(() => {
     // The notifications page dispatches this after a row is read, so both
     // indicators settle together instead of waiting for the next poll.
-    const reload = () => { reloadCount(); reloadMessages(); };
-    window.addEventListener('social:notifications', reload);
-    return () => { window.removeEventListener('social:notifications', reload); };
-  }, [reloadCount, reloadMessages]);
+    window.addEventListener('social:notifications', badges.reload);
+    return () => { window.removeEventListener('social:notifications', badges.reload); };
+  }, [badges.reload]);
   const links = [
     { href: '/', label: 'Feed', icon: House }, { href: '/messages', label: 'Messages', icon: MessageSquare },
     { href: '/discover', label: 'Discover', icon: Compass }, { href: '/saved', label: 'Saved', icon: Bookmark },
@@ -95,8 +93,8 @@ export default function Sidebar({ isSideBarOpen, setSideBarOpen, isCollapsed, se
           aria-label, which is what names it inside the link. Red-600 and teal-700
           clear 4.5:1 against white here; red-500 and teal-600 are only ~3.7:1,
           which fails at this text size. */}
-      {href === '/notifications' && <span role="status" aria-live="polite">{!!count.data?.count && <span aria-label={`${count.data.count} unread notifications`} className="rounded-full bg-red-600 px-1.5 text-xs text-white">{count.data.count}</span>}</span>}
-      {href === '/messages' && <span role="status" aria-live="polite">{!!messages.data?.count && <span aria-label={`${messages.data.count} unread messages`} className="flex items-center gap-1 rounded-full bg-teal-700 px-1.5 text-xs text-white"><MessageSquare size={11} aria-hidden="true" />{messages.data.count}</span>}</span>}
+      {href === '/notifications' && <span role="status" aria-live="polite">{!!badges.data?.notifications && <span aria-label={`${badges.data.notifications} unread notifications`} className="rounded-full bg-red-600 px-1.5 text-xs text-white">{badges.data.notifications}</span>}</span>}
+      {href === '/messages' && <span role="status" aria-live="polite">{!!badges.data?.messages && <span aria-label={`${badges.data.messages} unread messages`} className="flex items-center gap-1 rounded-full bg-teal-700 px-1.5 text-xs text-white"><MessageSquare size={11} aria-hidden="true" />{badges.data.messages}</span>}</span>}
     </Link>)}</nav>
     <Link href="/create-post" title="Create post" onClick={() => setSideBarOpen(false)} className="mt-6 flex items-center justify-center gap-2 rounded-lg bg-linear-to-r from-blue-600 to-teal-700 p-3 text-white"><CirclePlus size={20} />{!isCollapsed && 'Create Post'}</Link>
     <div className="mt-auto shrink-0 border-t border-border pt-4 space-y-3">
