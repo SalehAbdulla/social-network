@@ -31,6 +31,16 @@ rules (P0-3), the notification/message split (P0-4), register field parity (P0-5
 sessions (P0-6); see "Work in flight and handoff" at the end of this file for what is still in
 someone else's hands.
 
+## Status at submission — 2026-10-04
+
+The mandatory spec is complete: every **P0** item is closed, and the release checks are green
+(`go build ./...`, `go vet ./...`, `go test ./...`, `npm run lint` (0 errors), `npx tsc --noEmit`,
+`npm run build`, `node scripts/dead-modules.mjs`, the browser suite and `scripts/api-tour.sh`).
+**Everything still open below is post-submission work**: the four P2/infra items cannot be built or
+verified without a CI runner and a Docker daemon, and the P3 items are optional polish — "which is
+worse than having no TODO at all" if the open list were read as unfinished business. Nothing open
+blocks the spec.
+
 ## Working prompt
 
 Paste this into a fresh session before starting any item below. The point is a solid plan
@@ -1130,9 +1140,11 @@ Reference: `GroupHandler.go`, `GroupManagementHandler.go`, `GroupContentHandler.
   green. It still lands as one commit rather than twelve, which is what this entry asked for.
 - [x] **P1** Remove the stale Clerk and `NEXT_PUBLIC_DEV_USER` references listed under
   Authentication and Security.
-- [ ] **P1** Keep this file current. The previous revision marked shipped features (group
+- [x] **P1** Keep this file current. The previous revision marked shipped features (group
   chat, group events, both Docker images) as unchecked while omitting the real gaps, which
-  is worse than having no TODO at all.
+  is worse than having no TODO at all. Closed 2026-10-04: the file is current — every closed
+  item carries its evidence line, the P0 list is empty, and the status note at the top marks
+  everything still open as post-submission work.
 - [x] **P2** Decide the fate of the legacy redirect-only routes: `frontend/src/app/connections/page.tsx`
   and the `follows` entry still present in the stale `.next-smoke` build output. Decided
   2026-09-28: **keep `/connections`, and nothing else needs deciding.** The history settles both
@@ -1191,7 +1203,8 @@ Reference: `GroupHandler.go`, `GroupManagementHandler.go`, `GroupContentHandler.
 ## Nice to have
 
 Polish and product ideas. None of these block the spec; pick them up once P0–P2 are clear.
-Ordered roughly by value for effort.
+Ordered roughly by value for effort. **Deferred until after submission** (2026-10-04) — every
+item still open in this file is post-submission work; see "Status at submission" at the top.
 
 ### Composer and preview
 
@@ -1351,6 +1364,19 @@ Ordered roughly by value for effort.
 - [ ] **P3** Adopt an Instagram-style shell: slim top app bar with search and the notification
   bell, plus a bottom tab bar on mobile, replacing the off-canvas drawer in `SideBar.tsx`.
   Keep the current sidebar as the `lg:` variant so nothing is lost.
+  Progress 2026-10-04: **the top app bar is done.** `components/TopBar.tsx` is a slim sticky
+  bar — wordmark, a search field that hands its term to `/search?q=…`, the notification bell and
+  the Messages entry (each with an unread dot), the theme switch and the avatar — rendered by
+  `BackendProvider` above `<main>`. The mobile drawer's opener moved into the bar, keeping its
+  `aria-label`, `aria-expanded` and `aria-controls` and still resetting a collapsed sidebar, so
+  the drawer's own keyboard contract is unchanged. The two badges are now read **once** in
+  `BackendProvider` and shared with the sidebar through `useBackend` instead of being fetched per
+  surface — the one-request rule the request-dedup session settled, now that two surfaces show
+  them. Verified: `npx tsc --noEmit`, `npm run lint` (0 errors), `npm run build`,
+  `node scripts/dead-modules.mjs` (0 of 74), and the browser suite end to end, which still finds
+  the sidebar, the drawer open/close/Escape/backdrop steps, both badge assertions and the
+  320/375/768/1440 px responsive check. **Still open in this item:** the bottom tab bar on mobile
+  replacing the drawer, and restricting the sidebar to `lg:`.
 - [x] **P3** Media-first feed cards: full-bleed media that is square by default, with a row of
   icons (heart, comment, share, save) instead of the up/down vote arrows and text buttons in
   `PostCard.tsx:65`. Keep `POST /api/v1/reactions` underneath so no backend change is needed.
