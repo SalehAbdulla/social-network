@@ -2,7 +2,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { Archive, ChevronLeft, ChevronRight, Eye, MessageCircle, MoreVertical, Plus, Send, Trash2, X } from 'lucide-react';
 import toast from 'react-hot-toast';
-import { type Story, type StoryReply as StoryReplyEntry, type StoryViewer as StoryViewerEntry, errorMessage, request, upload } from '../api/social';
+import { type Story, type StoryReply as StoryReplyEntry, type StoryViewer as StoryViewerEntry, displayName, errorMessage, request, upload } from '../api/social';
 import { useDialogFocus } from '../lib/useDialogFocus';
 import { usePagedList } from '../lib/usePagedList';
 import { useResource } from '../lib/useResource';
@@ -91,10 +91,19 @@ export default function StoriesBar() {
     const timer = setInterval(() => { if (!strip.current || strip.current.scrollLeft === 0) reload(); }, 60000);
     return () => clearInterval(timer);
   }, [reload]);
-  return <section className="space-y-3"><div className="flex items-center justify-between gap-3"><h2 className="text-sm font-semibold text-slate-900">Stories</h2><button type="button" onClick={() => setArchiveOpen(true)} className="inline-flex items-center gap-1.5 text-xs font-medium text-slate-600 transition hover:text-slate-900"><Archive size={14} aria-hidden="true" />Your archive</button></div><div ref={strip} className="no-scrollbar flex gap-4 overflow-x-auto pb-2">
-    <button onClick={() => setCreating(true)} className="flex aspect-[3/4] h-40 min-w-30 shrink-0 flex-col items-center justify-center rounded-lg border-2 border-dashed border-blue-200 bg-linear-to-b from-blue-50 to-white text-sm text-slate-700 shadow-sm transition hover:shadow-md"><span className="mb-3 flex size-10 items-center justify-center rounded-full bg-blue-600 text-white"><Plus size={20} /></span><span className="font-medium">Create story</span></button>
-    {stories.items.map(story => <StoryCard key={story.storyId} story={story} currentUserId={user.userId} onView={viewStory} onDelete={async () => { await request(`/stories/${story.storyId}`, 'DELETE'); reload(); if (viewing?.storyId === story.storyId) setViewing(null); }} />)}
-    <LoadMore compact className="h-40 w-24" label="Load more stories" endLabel={null} loading={stories.loadingMore} hasMore={stories.hasMore} onLoadMore={stories.loadMore} />
+  return <section className="space-y-2"><div className="flex items-center justify-end"><button type="button" onClick={() => setArchiveOpen(true)} className="inline-flex items-center gap-1.5 text-xs font-medium text-muted transition hover:text-text"><Archive size={14} aria-hidden="true" />Your archive</button></div><div ref={strip} className="no-scrollbar flex gap-4 overflow-x-auto pb-2">
+    {/* Instagram leads the tray with the viewer's own entry: their face inside a dashed circle
+        with a plus on the rim and "Your story" under it, so the first thing in the strip is the
+        thing the reader can do rather than somebody else's story. */}
+    <button type="button" onClick={() => setCreating(true)} className="flex w-[72px] shrink-0 flex-col items-center gap-1.5">
+      <span className="relative flex size-[66px] items-center justify-center rounded-full border-2 border-dashed border-border bg-surface-2">
+        {user.avatar ? <img src={user.avatar} alt="" className="size-[58px] rounded-full object-cover" /> : <span className="flex size-[58px] items-center justify-center rounded-full bg-card text-lg font-semibold text-muted">{displayName(user).slice(0, 1).toUpperCase()}</span>}
+        <span className="absolute -bottom-0.5 -right-0.5 flex size-5 items-center justify-center rounded-full border-2 border-bg bg-blue-600 text-white"><Plus size={12} /></span>
+      </span>
+      <span className="w-full truncate text-center text-xs text-text">Your story</span>
+    </button>
+    {stories.items.map(story => <StoryTrayItem key={story.storyId} story={story} currentUserId={user.userId} onView={viewStory} onDelete={async () => { await request(`/stories/${story.storyId}`, 'DELETE'); reload(); if (viewing?.storyId === story.storyId) setViewing(null); }} />)}
+    <LoadMore compact className="h-[66px] w-16" label="Load more stories" endLabel={null} loading={stories.loadingMore} hasMore={stories.hasMore} onLoadMore={stories.loadMore} />
   </div>
     {creating && <CreateStory close={() => setCreating(false)} saved={reload} />}
     {archiveOpen && <StoryArchive close={() => setArchiveOpen(false)} />}
@@ -102,6 +111,36 @@ export default function StoriesBar() {
   </section>;
 }
 
+// One entry in the stories tray: the author's face inside a ring, their handle under it, the way
+// Instagram draws the strip. A story the viewer has not opened wears the brand gradient and one
+// they have drops to the border colour, so "new" reads at a glance without a second palette to
+// maintain. `data-story-ring` carries that state — a gradient has no text to assert on — and
+// `data-story-id` names the item, which is what the browser suite clicks; the whole item is the
+// target so a tap anywhere on the circle or the label opens the story.
+function StoryTrayItem({ story, currentUserId, onView, onDelete }: { story: Story; currentUserId: string; onView: (story: Story) => void; onDelete: () => Promise<void> }) {
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  async function remove() {
+    setDeleting(true);
+    try { await onDelete(); toast.success('Story deleted'); } catch (error) { toast.error(errorMessage(error)); } finally { setDeleting(false); setMenuOpen(false); }
+  }
+  return <div data-story-id={story.storyId} onClick={() => onView(story)} className="group flex w-[72px] shrink-0 cursor-pointer flex-col items-center gap-1.5">
+    <span data-story-ring={story.viewed ? 'seen' : 'unseen'} className={`flex size-[66px] items-center justify-center rounded-full p-[2px] transition active:scale-95 ${story.viewed ? 'story-ring-seen' : 'story-ring'}`}>
+      {/* A collar in the page colour keeps the ring off the face, so both stay readable over any
+          story's background. */}
+      <span className="flex size-full items-center justify-center rounded-full bg-bg p-[2px]">
+        {story.avatar ? <img src={story.avatar} alt="" className="size-[58px] rounded-full object-cover" /> : <span className="flex size-[58px] items-center justify-center rounded-full bg-surface-2 text-lg font-semibold text-muted">{story.nickname.slice(0, 1).toUpperCase()}</span>}
+      </span>
+    </span>
+    <span className="w-full truncate text-center text-xs text-text">@{story.nickname}</span>
+    {story.userId === currentUserId && <div className="relative -mt-1" onClick={event => event.stopPropagation()}><button aria-label="Story options" onClick={() => setMenuOpen(value => !value)} className="text-muted transition hover:text-text"><MoreVertical size={16} /></button>{menuOpen && <button disabled={deleting} onClick={() => void remove()} className="absolute right-0 top-full z-20 mt-1 flex items-center gap-1 rounded bg-card px-3 py-2 text-xs text-red-600 shadow"><Trash2 size={14} />Delete</button>}</div>}
+  </div>;
+}
+
+// One story in the author's archive, where Instagram shows a grid of thumbnails rather than a
+// tray of rings: the whole story on a tile with the author's own delete control on it. It is a
+// separate component from `StoryTrayItem` because the two want different things from the same
+// row — the tray wants a face and a name, the archive wants the story itself.
 function StoryCard({ story, currentUserId, onView, onDelete }: { story: Story; currentUserId: string; onView: (story: Story) => void; onDelete: () => Promise<void> }) {
   const [menuOpen, setMenuOpen] = useState(false);
   const [deleting, setDeleting] = useState(false);
