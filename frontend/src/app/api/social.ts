@@ -112,6 +112,8 @@ export interface Story {
   // story, which is what the ring in the strip is drawn from.
   viewed: boolean;
 }
+/** One account in a story's "seen by" list, which only the story's author is offered. */
+export interface StoryViewer { userId: string; nickname: string; avatar: string; viewedAt: string }
 export interface ChatUser { userId: string; nickname: string; firstName: string; lastName: string; avatar: string; isOnline: number; lastMessageTime: string }
 export interface ChatMessage {
   messageId: number; senderId: string; recipientId: string; textMessage: string; timeStamp: string;
