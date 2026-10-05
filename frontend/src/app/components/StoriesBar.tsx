@@ -1,8 +1,8 @@
 'use client';
 import { useEffect, useRef, useState } from 'react';
-import { ChevronLeft, ChevronRight, Eye, MoreVertical, Plus, Trash2, X } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Eye, MessageCircle, MoreVertical, Plus, Send, Trash2, X } from 'lucide-react';
 import toast from 'react-hot-toast';
-import { type Story, type StoryViewer as StoryViewerEntry, errorMessage, request, upload } from '../api/social';
+import { type Story, type StoryReply as StoryReplyEntry, type StoryViewer as StoryViewerEntry, errorMessage, request, upload } from '../api/social';
 import { useDialogFocus } from '../lib/useDialogFocus';
 import { usePagedList } from '../lib/usePagedList';
 import { useResource } from '../lib/useResource';
@@ -133,6 +133,22 @@ function StoryViewer({ story, canDelete, close, onPrevious, onNext, hasPrevious,
   const isAuthor = story.userId === user.userId;
   const [showViewers, setShowViewers] = useState(false);
   const viewers = useResource<StoryViewerEntry[]>(`/stories/${story.storyId}/viewers`, isAuthor);
+  // Replies belong to the author alone too, the same shape as "seen by": the list is fetched
+  // only for them, and the endpoint enforces the same rule. A reader is offered the reply box
+  // instead — the other half of the same surface.
+  const [showReplies, setShowReplies] = useState(false);
+  const replies = useResource<StoryReplyEntry[]>(`/stories/${story.storyId}/replies`, isAuthor);
+  const [reply, setReply] = useState('');
+  const [sending, setSending] = useState(false);
+  async function sendReply(event: React.FormEvent) {
+    event.preventDefault();
+    const content = reply.trim();
+    if (!content || sending) return;
+    setSending(true);
+    try { await request(`/stories/${story.storyId}/reply`, 'POST', { content }); setReply(''); toast.success('Reply sent'); }
+    catch (error) { toast.error(errorMessage(error)); }
+    finally { setSending(false); }
+  }
   useEffect(() => {
     if (story.mediaType === 'video') return;
     const interval = window.setInterval(() => setProgress(value => Math.min(value + 1, 100)), 100);
@@ -140,11 +156,22 @@ function StoryViewer({ story, canDelete, close, onPrevious, onNext, hasPrevious,
     return () => { window.clearInterval(interval); window.clearTimeout(timeout); };
   }, [story, onNext]);
   return <div ref={dialog} tabIndex={-1} className="fixed inset-0 z-50 flex items-center justify-center bg-black/90 p-4" role="dialog" aria-modal="true" aria-label="Story"><div className="absolute left-0 top-0 h-1 bg-white transition-all" style={{ width: `${progress}%` }} /><div className="absolute left-4 top-4 z-10 flex items-center gap-3 rounded bg-black/50 p-3 text-white"><span className="font-medium">@{story.nickname}</span></div><button onClick={close} aria-label="Close story" className="absolute right-4 top-4 z-10 text-white"><X size={30} /></button><button onClick={onPrevious} disabled={!hasPrevious} aria-label="Previous story" className="absolute left-4 z-10 rounded-full bg-black/50 p-3 text-white transition hover:bg-black/70 disabled:cursor-not-allowed disabled:opacity-30"><ChevronLeft size={28} /></button><button onClick={onNext} disabled={!hasNext} aria-label="Next story" className="absolute right-4 z-10 rounded-full bg-black/50 p-3 text-white transition hover:bg-black/70 disabled:cursor-not-allowed disabled:opacity-30"><ChevronRight size={28} /></button><div className="flex h-[75vh] w-full max-w-2xl items-center justify-center overflow-hidden rounded-xl" style={{ backgroundColor: story.backgroundColor }}>{story.mediaType === 'image' ? <img src={story.mediaUrl} alt="Story" className="max-h-full max-w-full object-contain" /> : story.mediaType === 'video' ? <video src={story.mediaUrl} controls autoPlay playsInline onEnded={onNext} className="max-h-full max-w-full" /> : <p className="whitespace-pre-wrap break-words p-8 text-center text-2xl text-white">{story.content}</p>}</div>{isAuthor && <div className="absolute bottom-8 right-8 z-10 flex flex-col items-end gap-2">
+      {showReplies && <div className="max-h-64 w-72 overflow-y-auto rounded-lg bg-white p-2 text-slate-800 shadow-lg">
+        {replies.loading && <p className="p-2 text-sm text-slate-500">Loading…</p>}
+        {!replies.loading && !replies.data?.length && <p className="p-2 text-sm text-slate-500">No replies yet.</p>}
+        {(replies.data || []).map(entry => <div key={entry.replyId} className="flex items-start gap-2 rounded p-2 hover:bg-slate-50"><Avatar name={entry.nickname} avatarUrl={entry.avatar} size={28} /><div className="min-w-0"><p className="truncate text-xs text-slate-500">@{entry.nickname}</p><p className="break-words text-sm">{entry.content}</p></div></div>)}
+      </div>}
       {showViewers && <div className="max-h-64 w-64 overflow-y-auto rounded-lg bg-white p-2 text-slate-800 shadow-lg">
         {viewers.loading && <p className="p-2 text-sm text-slate-500">Loading…</p>}
         {!viewers.loading && !viewers.data?.length && <p className="p-2 text-sm text-slate-500">No views yet.</p>}
         {(viewers.data || []).map(viewer => <div key={viewer.userId} className="flex items-center gap-2 rounded p-2 hover:bg-slate-50"><Avatar name={viewer.nickname} avatarUrl={viewer.avatar} size={28} /><span className="min-w-0 truncate text-sm">@{viewer.nickname}</span></div>)}
       </div>}
-      <button type="button" aria-expanded={showViewers} onClick={() => setShowViewers(value => !value)} className="flex items-center gap-2 rounded bg-black/50 px-4 py-2 text-sm text-white transition hover:bg-black/70"><Eye size={16} aria-hidden="true" />Seen by {viewers.data?.length ?? 0}</button>
-    </div>}{canDelete && <button disabled={deleting} onClick={() => void onDelete()} className="absolute bottom-8 flex items-center gap-2 rounded bg-white px-4 py-2 text-sm text-red-600"><Trash2 size={16} />{deleting ? 'Deleting...' : 'Delete story'}</button>}</div>;
+      <div className="flex gap-2">
+        <button type="button" aria-expanded={showReplies} onClick={() => setShowReplies(value => !value)} className="flex items-center gap-2 rounded bg-black/50 px-4 py-2 text-sm text-white transition hover:bg-black/70"><MessageCircle size={16} aria-hidden="true" />Replies {replies.data?.length ?? 0}</button>
+        <button type="button" aria-expanded={showViewers} onClick={() => setShowViewers(value => !value)} className="flex items-center gap-2 rounded bg-black/50 px-4 py-2 text-sm text-white transition hover:bg-black/70"><Eye size={16} aria-hidden="true" />Seen by {viewers.data?.length ?? 0}</button>
+      </div>
+    </div>}{!isAuthor && <form onSubmit={sendReply} className="absolute bottom-8 left-1/2 z-10 flex w-[min(90%,28rem)] -translate-x-1/2 items-center gap-2 rounded-full bg-black/50 p-1 pl-4">
+      <input value={reply} onChange={event => setReply(event.target.value)} maxLength={1000} placeholder="Reply to this story…" aria-label="Reply to story" className="min-w-0 flex-1 bg-transparent py-2 text-sm text-white placeholder:text-white/70 outline-none" />
+      <button type="submit" disabled={sending || !reply.trim()} aria-label="Send reply" className="rounded-full bg-white p-2 text-slate-900 disabled:opacity-40"><Send size={16} /></button>
+    </form>}{canDelete && <button disabled={deleting} onClick={() => void onDelete()} className="absolute bottom-8 flex items-center gap-2 rounded bg-white px-4 py-2 text-sm text-red-600"><Trash2 size={16} />{deleting ? 'Deleting...' : 'Delete story'}</button>}</div>;
 }
