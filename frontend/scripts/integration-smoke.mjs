@@ -942,6 +942,27 @@ try {
   await evaluate(dummy, `document.querySelector('button[aria-label="Close story"]').click()`);
   await until(dummy, `document.querySelector('[role="dialog"]') === null`, 'the story closes');
   assert.equal((await api(dummy, '/stories')).find(story => story.storyId === storyId).viewed, true, 'the view is recorded for this reader');
+  // A reader replies through the story view, and its author — and only its author — reads it back
+  // in the story's own replies panel, the sibling of the seen-by one.
+  await navigate(alex, '/');
+  await until(alex, `document.body.innerText.includes(${JSON.stringify(`Browser story ${stamp}`)})`, 'Alex sees the story strip');
+  await evaluate(alex, `[...document.querySelectorAll('[data-story-ring]')].find(ring => ring.closest('div').innerText.includes(${JSON.stringify(`Browser story ${stamp}`)})).closest('div').click()`);
+  await until(alex, `!!document.querySelector('input[aria-label="Reply to story"]')`, 'a reader is offered the reply box');
+  await fill(alex, 'input[aria-label="Reply to story"]', `Browser reply ${stamp}`);
+  await evaluate(alex, `document.querySelector('button[aria-label="Send reply"]').click()`);
+  await until(alex, `document.querySelector('input[aria-label="Reply to story"]').value === ''`, 'the reply is sent');
+  await evaluate(alex, `document.querySelector('button[aria-label="Close story"]').click()`);
+  await until(alex, `document.querySelector('[role="dialog"]') === null`, 'the reader closes the story');
+
+  await navigate(dummy, '/');
+  await until(dummy, `document.body.innerText.includes(${JSON.stringify(`Browser story ${stamp}`)})`, 'the author is back at the strip');
+  await evaluate(dummy, `[...document.querySelectorAll('[data-story-ring]')].find(ring => ring.closest('div').innerText.includes(${JSON.stringify(`Browser story ${stamp}`)})).closest('div').click()`);
+  await until(dummy, `[...document.querySelectorAll('button')].some(button => button.textContent.trim() === 'Replies 1')`, 'the author is offered the reply count');
+  await button(dummy, 'Replies 1');
+  await until(dummy, `document.querySelector('[role="dialog"][aria-label="Story"]').innerText.includes(${JSON.stringify(`Browser reply ${stamp}`)})`, 'the author reads the reply');
+  console.log('PASS: a story reply reaches its author alone');
+  await evaluate(dummy, `document.querySelector('button[aria-label="Close story"]').click()`);
+  await until(dummy, `document.querySelector('[role="dialog"]') === null`, 'the author closes the story');
   await navigate(dummy, '/profile');
   await until(dummy, `document.body.innerText.includes('Edit profile')`, 'profile loaded');
   await button(dummy, 'Edit profile');
