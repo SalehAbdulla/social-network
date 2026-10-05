@@ -57,3 +57,16 @@ type StoryViewer struct {
 	Avatar   string `json:"avatar"`
 	ViewedAt string `json:"viewedAt"`
 }
+
+// StoryReply is one reply left on a story, read back to the story's author alone. It carries
+// the reply's author the way a comment does, because that is the only face the reader sees on
+// it, and the story it answers, so a reader holding several stories can tell them apart.
+type StoryReply struct {
+	ReplyID   int    `json:"replyId"`
+	StoryID   int    `json:"storyId"`
+	UserID    string `json:"userId"`
+	Nickname  string `json:"nickname"`
+	Avatar    string `json:"avatar"`
+	Content   string `json:"content"`
+	CreatedAt string `json:"createdAt"`
+}
