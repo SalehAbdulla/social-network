@@ -8,25 +8,26 @@ import (
 
 // Media rows are created by POST /api/v1/media and referenced by URL from the
 // eight surfaces that can carry an upload: a post's or a comment's `imageUrls`
-// array, a live story, a private message, group content, an avatar, a cover
-// photo and a group image. Nothing deletes them when the row that pointed at
-// them goes away, so this query is what keeps the table (and the upload
-// directory that mirrors it) from growing forever.
+// array, a story, a private message, group content, an avatar, a cover photo and
+// a group image. Nothing deletes them when the row that pointed at them goes
+// away, so this query is what keeps the table (and the upload directory that
+// mirrors it) from growing forever.
 //
 // Two deliberate details:
 //
 //   - `createdAt <= datetime('now', ?)` is a grace window. An upload happens
 //     *before* the request that attaches it, so a file nobody has referenced yet
 //     is normal for a moment; the window keeps the collector away from it.
-//   - a story only counts while it is live. Once `expiresAt` has passed the
-//     story is no longer served (see CanViewMedia), so its media is an orphan
-//     even though the row is still there.
+//   - a story counts for as long as its row exists, expired or not. An expired
+//     story is archived rather than gone — its author still opens it (see
+//     CanViewMedia) — so its upload is not an orphan; deleting the story is what
+//     releases it, the way deleting a post releases a post's photo.
 const unreferencedMediaQuery = `
 SELECT m.mediaId FROM media m
 WHERE m.createdAt <= datetime('now', ?)
   AND NOT EXISTS (SELECT 1 FROM post p, json_each(p.imageUrls) image WHERE image.value = '/api/v1/media/' || m.mediaId)
   AND NOT EXISTS (SELECT 1 FROM comment c, json_each(c.imageUrls) image WHERE image.value = '/api/v1/media/' || m.mediaId)
-  AND NOT EXISTS (SELECT 1 FROM story s WHERE s.mediaUrl = '/api/v1/media/' || m.mediaId AND s.expiresAt > datetime('now'))
+  AND NOT EXISTS (SELECT 1 FROM story s WHERE s.mediaUrl = '/api/v1/media/' || m.mediaId)
   AND NOT EXISTS (SELECT 1 FROM message msg WHERE msg.mediaUrl = '/api/v1/media/' || m.mediaId)
   AND NOT EXISTS (SELECT 1 FROM groupContent gc WHERE gc.mediaUrl = '/api/v1/media/' || m.mediaId)
   AND NOT EXISTS (SELECT 1 FROM user u WHERE u.avatar = '/api/v1/media/' || m.mediaId OR u.coverPhoto = '/api/v1/media/' || m.mediaId)
