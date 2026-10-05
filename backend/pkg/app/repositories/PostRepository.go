@@ -60,7 +60,7 @@ const postVisibility = `(p.userId = ? OR (p.privacy = 'public' AND (EXISTS (SELE
 // against a paraphrase would keep passing while the real query changed shape. The
 // ORDER BY and LIMIT stay at the call site because both come from the request.
 const postFeedSelect = `
-		SELECT p.postId, p.userId, p.privacy, u.nickName, p.title, p.content,
+		SELECT p.postId, p.userId, p.privacy, u.nickName, u.firstName, u.lastName, p.title, p.content,
 			   p.score, p.commentsCounter,
 			   p.createdAt, p.updatedAt, p.imageUrls
 		FROM post p
@@ -133,6 +133,8 @@ func (db *DB) scanPostPage(rows *sql.Rows, viewerID string) ([]models.Post, erro
 			&post.UserId,
 			&post.Privacy,
 			&post.Nickname,
+			&post.FirstName,
+			&post.LastName,
 			&post.Title,
 			&post.Content,
 			&post.Score,
@@ -272,7 +274,7 @@ func (db *DB) DoesPostExists(postId int) error {
 func (db *DB) GetPostByID(postId int, viewerID string) (models.Post, error) {
 	var post models.Post
 	err := db.Conn.QueryRow(
-		`SELECT p.postId, p.userId, p.privacy, u.nickName, p.title, p.content,
+		`SELECT p.postId, p.userId, p.privacy, u.nickName, u.firstName, u.lastName, p.title, p.content,
 				p.score, p.commentsCounter,
 				p.createdAt, p.updatedAt, p.imageUrls
 		FROM post p
@@ -283,6 +285,8 @@ func (db *DB) GetPostByID(postId int, viewerID string) (models.Post, error) {
 		&post.UserId,
 		&post.Privacy,
 		&post.Nickname,
+		&post.FirstName,
+		&post.LastName,
 		&post.Title,
 		&post.Content,
 		&post.Score,
