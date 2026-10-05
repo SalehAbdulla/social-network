@@ -341,15 +341,16 @@ try {
   await until(dummy, `(async () => (await (await fetch('/api/v1/post?id=${postId}')).json()).data.score === 1)()`, 'post reaction');
   console.log('PASS: post creation, image upload, detail page and reaction persist');
 
-  // The Instagram composer is a dialog and not only a route: the feed's "New post" opens it
-  // over the page, and Escape closes it without leaving. `/create-post` — the step above — is
-  // still the deep link, so both entries stay covered.
+  // The Instagram composer is a dialog and not only a route. It is opened from the sidebar's
+  // "Create Post" — the single place a desktop starts a post, the way Instagram's left rail carries
+  // it, after the feed's own duplicate button was removed — and Escape closes it without leaving.
+  // `/create-post`, the step above, stays the deep link, so both entries are still covered.
   await navigate(dummy, '/');
-  await button(dummy, 'New post');
-  await until(dummy, `!!document.querySelector('[role="dialog"][aria-label="Create a post"] textarea')`, 'the feed opens the composer dialog');
+  await button(dummy, 'Create Post');
+  await until(dummy, `!!document.querySelector('[role="dialog"][aria-label="Create a post"] textarea')`, 'the sidebar opens the composer dialog');
   await command('Input.dispatchKeyEvent', { type: 'keyDown', key: 'Escape', code: 'Escape', windowsVirtualKeyCode: 27 }, dummy);
   await until(dummy, `!document.querySelector('[role="dialog"][aria-label="Create a post"]')`, 'Escape closes the composer');
-  console.log('PASS: the feed opens the composer as a dialog and closes it on Escape');
+  console.log('PASS: the sidebar opens the composer as a dialog and Escape closes it');
 
   // Client-side cropping: a portrait photo cropped to a square must travel as a square. The
   // picker's tile caption is driven by the file it now holds, so it is the proof the crop
@@ -630,6 +631,50 @@ try {
   await until(alex, `!document.querySelector('[role="dialog"][aria-label="Comments"]')`, 'Escape closes the drawer');
   await command('Emulation.setDeviceMetricsOverride', { width: 1440, height: 960, deviceScaleFactor: 1, mobile: false }, alex);
   console.log('PASS: on a phone the comments open as a bottom drawer and close on Escape');
+
+  // The feed's Instagram overlay: clicking a post opens a pop-up — media on the left; header,
+  // caption, the post's actions and the comments on the right, with the composer pinned at the
+  // bottom. This is the desktop *feed* path the steps above never exercised: they read and write
+  // comments off the `/post/{postId}` page, which stays the deep link and still opens `#comment-{id}`
+  // inline, and the step they end on proves the phone's drawer. Escape closes the overlay and focus
+  // returns to the picture that opened it; the phone step below proves the drawer, not this, is what
+  // a narrow screen gets.
+  await navigate(dummy, '/');
+  const feedMedia = `article:has(a[href="/post/${postId}"]) button[aria-label^="Open image"]`;
+  await until(dummy, `!!document.querySelector(${JSON.stringify(feedMedia)})`, 'the post is on the feed with its media');
+  await clickAt(dummy, feedMedia);
+  await until(dummy, `!!document.querySelector('[role="dialog"][aria-label="Post"]')`, 'the feed opens the post overlay');
+  assert(await evaluate(dummy, `(() => { const dialog = document.querySelector('[role="dialog"][aria-label="Post"]'); return !!dialog.querySelector('img[alt="Post attachment"]') && !!dialog.querySelector('#comment-${postId}') && !!dialog.querySelector('button[aria-label="Like post"], button[aria-label="Unlike post"]'); })()`), 'the overlay holds the media, the composer and the post actions');
+  const overlayDocument = await command('DOM.getDocument', {}, dummy);
+  const overlayPicker = await command('DOM.querySelector', { nodeId: overlayDocument.root.nodeId, selector: '[role="dialog"][aria-label="Post"] input[aria-label="Add photos"]' }, dummy);
+  await command('DOM.setFileInputFiles', { nodeId: overlayPicker.nodeId, files: [commentPhotoFixture] }, dummy);
+  await until(dummy, `!!document.querySelector('[role="dialog"][aria-label="Post"] img[alt="Preview of comment-photo.png"]')`, 'the overlay previews a comment photo');
+  await fill(dummy, `[role="dialog"][aria-label="Post"] #comment-${postId}`, `Overlay comment ${stamp}`);
+  await evaluate(dummy, `[...document.querySelectorAll('[role="dialog"][aria-label="Post"] button')].find(button => button.textContent.trim() === 'Post').click()`);
+  // Wait for this comment's own text, not just any `Comment attachment`: the post already carries a
+  // comment photo from the post-page step above, so the generic selector would pass before this
+  // write lands and the API read below would run too early.
+  await until(dummy, `document.querySelector('[role="dialog"][aria-label="Post"]').innerText.includes(${JSON.stringify(`Overlay comment ${stamp}`)})`, 'the overlay shows the comment it wrote');
+  await until(dummy, `!!document.querySelector('[role="dialog"][aria-label="Post"] img[alt="Comment attachment"]')`, 'the overlay renders the comment photo');
+  const overlayComment = (await api(dummy, `/posts/comments?postId=${postId}`)).comments.find(item => item.commentText === `Overlay comment ${stamp}`);
+  assert(overlayComment && overlayComment.imageUrls.length === 1, `the overlay comment is stored with its photo: ${JSON.stringify(overlayComment)}`);
+  await command('Input.dispatchKeyEvent', { type: 'keyDown', key: 'Escape', code: 'Escape', windowsVirtualKeyCode: 27 }, dummy);
+  await until(dummy, `!document.querySelector('[role="dialog"][aria-label="Post"]')`, 'Escape closes the overlay');
+  assert(await evaluate(dummy, `document.activeElement?.getAttribute('aria-label')?.startsWith('Open image')`), 'focus returns to the picture that opened the overlay');
+  console.log('PASS: the feed opens a post overlay that reads and writes a comment photo, and Escape returns focus');
+
+  // On a phone the feed keeps the bottom drawer and is never offered the overlay.
+  await command('Emulation.setDeviceMetricsOverride', { width: 390, height: 844, deviceScaleFactor: 1, mobile: true }, dummy);
+  await navigate(dummy, '/');
+  const feedComments = `article:has(a[href="/post/${postId}"]) button[aria-label="Show comments"]`;
+  await until(dummy, `!!document.querySelector(${JSON.stringify(feedComments)})`, 'the feed card offers the comment button on a phone');
+  assert(!(await evaluate(dummy, `!!document.querySelector('[role="dialog"][aria-label="Post"]')`)), 'no overlay is offered on a phone');
+  await evaluate(dummy, `document.querySelector(${JSON.stringify(feedComments)}).click()`);
+  await until(dummy, `!!document.querySelector('[role="dialog"][aria-label="Comments"] #comment-${postId}')`, 'the phone feed opens the comment drawer');
+  await command('Input.dispatchKeyEvent', { type: 'keyDown', key: 'Escape', code: 'Escape', windowsVirtualKeyCode: 27 }, dummy);
+  await until(dummy, `!document.querySelector('[role="dialog"][aria-label="Comments"]')`, 'Escape closes the drawer');
+  await command('Emulation.setDeviceMetricsOverride', { width: 1440, height: 960, deviceScaleFactor: 1, mobile: false }, dummy);
+  console.log('PASS: on a phone the feed opens the comment drawer, not the overlay');
 
   // The profile media tab lists comment photos next to post photos. The tile asks for one of
   // the server's derivatives rather than the original, so what identifies the photo here is its
