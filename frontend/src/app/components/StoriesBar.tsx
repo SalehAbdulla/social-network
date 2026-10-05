@@ -1,6 +1,6 @@
 'use client';
 import { useEffect, useRef, useState } from 'react';
-import { ChevronLeft, ChevronRight, Eye, MessageCircle, MoreVertical, Plus, Send, Trash2, X } from 'lucide-react';
+import { Archive, ChevronLeft, ChevronRight, Eye, MessageCircle, MoreVertical, Plus, Send, Trash2, X } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { type Story, type StoryReply as StoryReplyEntry, type StoryViewer as StoryViewerEntry, errorMessage, request, upload } from '../api/social';
 import { useDialogFocus } from '../lib/useDialogFocus';
@@ -40,6 +40,8 @@ export function CreateStory({ close, saved }: { close: () => void; saved: () => 
 const STORIES_PER_PAGE = 30;
 // `/stories` caps a page at 30 rows and pages with a raw offset.
 const STORIES_KEY = '/stories';
+// The author's own expired stories: the same page size and offset shape, a different list.
+const ARCHIVE_KEY = '/stories/archive';
 
 export default function StoriesBar() {
   const { user } = useBackend();
@@ -52,6 +54,7 @@ export default function StoriesBar() {
   });
   const strip = useRef<HTMLDivElement>(null);
   const [creating, setCreating] = useState(false);
+  const [archiveOpen, setArchiveOpen] = useState(false);
   const [viewing, setViewing] = useState<Story | null>(null);
   const [deleting, setDeleting] = useState(false);
   const reload = stories.reload;
@@ -88,12 +91,13 @@ export default function StoriesBar() {
     const timer = setInterval(() => { if (!strip.current || strip.current.scrollLeft === 0) reload(); }, 60000);
     return () => clearInterval(timer);
   }, [reload]);
-  return <section className="space-y-3"><div ref={strip} className="no-scrollbar flex gap-4 overflow-x-auto pb-2">
+  return <section className="space-y-3"><div className="flex items-center justify-between gap-3"><h2 className="text-sm font-semibold text-slate-900">Stories</h2><button type="button" onClick={() => setArchiveOpen(true)} className="inline-flex items-center gap-1.5 text-xs font-medium text-slate-600 transition hover:text-slate-900"><Archive size={14} aria-hidden="true" />Your archive</button></div><div ref={strip} className="no-scrollbar flex gap-4 overflow-x-auto pb-2">
     <button onClick={() => setCreating(true)} className="flex aspect-[3/4] h-40 min-w-30 shrink-0 flex-col items-center justify-center rounded-lg border-2 border-dashed border-blue-200 bg-linear-to-b from-blue-50 to-white text-sm text-slate-700 shadow-sm transition hover:shadow-md"><span className="mb-3 flex size-10 items-center justify-center rounded-full bg-blue-600 text-white"><Plus size={20} /></span><span className="font-medium">Create story</span></button>
     {stories.items.map(story => <StoryCard key={story.storyId} story={story} currentUserId={user.userId} onView={viewStory} onDelete={async () => { await request(`/stories/${story.storyId}`, 'DELETE'); reload(); if (viewing?.storyId === story.storyId) setViewing(null); }} />)}
     <LoadMore compact className="h-40 w-24" label="Load more stories" endLabel={null} loading={stories.loadingMore} hasMore={stories.hasMore} onLoadMore={stories.loadMore} />
   </div>
     {creating && <CreateStory close={() => setCreating(false)} saved={reload} />}
+    {archiveOpen && <StoryArchive close={() => setArchiveOpen(false)} />}
     {viewing && <StoryViewer key={viewing.storyId} story={viewing} canDelete={viewing.userId === user.userId} close={() => setViewing(null)} onPrevious={showPreviousStory} onNext={showNextStory} hasPrevious={stories.items.findIndex(story => story.storyId === viewing.storyId) > 0} hasNext={stories.items.findIndex(story => story.storyId === viewing.storyId) < stories.items.length - 1 || stories.hasMore} deleting={deleting} onDelete={async () => { setDeleting(true); try { await request(`/stories/${viewing.storyId}`, 'DELETE'); setViewing(null); reload(); } catch (error) { toast.error(errorMessage(error)); } finally { setDeleting(false); } }} />}
   </section>;
 }
@@ -174,4 +178,56 @@ function StoryViewer({ story, canDelete, close, onPrevious, onNext, hasPrevious,
       <input value={reply} onChange={event => setReply(event.target.value)} maxLength={1000} placeholder="Reply to this story…" aria-label="Reply to story" className="min-w-0 flex-1 bg-transparent py-2 text-sm text-white placeholder:text-white/70 outline-none" />
       <button type="submit" disabled={sending || !reply.trim()} aria-label="Send reply" className="rounded-full bg-white p-2 text-slate-900 disabled:opacity-40"><Send size={16} /></button>
     </form>}{canDelete && <button disabled={deleting} onClick={() => void onDelete()} className="absolute bottom-8 flex items-center gap-2 rounded bg-white px-4 py-2 text-sm text-red-600"><Trash2 size={16} />{deleting ? 'Deleting...' : 'Delete story'}</button>}</div>;
+}
+
+// The author's own expired stories — the ones that have left the strip and would otherwise
+// disappear. It is the caller's own list by construction (the endpoint answers only the signed-in
+// account's stories), so there is nothing to filter or guard here.
+function StoryArchive({ close }: { close: () => void }) {
+  const { user } = useBackend();
+  const archived = usePagedList<Story, Story[]>({
+    key: ARCHIVE_KEY,
+    pageQuery: page => `?offset=${(page - 1) * STORIES_PER_PAGE}`,
+    pageSize: STORIES_PER_PAGE,
+    normalize: raw => ({ items: raw }),
+    keyOf: story => story.storyId,
+  });
+  const [viewing, setViewing] = useState<Story | null>(null);
+  const [deleting, setDeleting] = useState(false);
+  // One overlay at a time: while a story is open the viewer owns the keyboard, so this dialog's
+  // trap is off and Escape closes the story rather than the archive behind it.
+  const dialog = useDialogFocus<HTMLDivElement>(close, { enabled: !viewing });
+  const items = archived.items;
+  const index = viewing ? items.findIndex(story => story.storyId === viewing.storyId) : -1;
+  async function remove(story: Story) {
+    setDeleting(true);
+    try {
+      await request(`/stories/${story.storyId}`, 'DELETE');
+      if (viewing?.storyId === story.storyId) setViewing(null);
+      archived.update(list => list.filter(item => item.storyId !== story.storyId));
+    } finally { setDeleting(false); }
+  }
+  if (viewing) return <StoryViewer key={viewing.storyId} story={viewing} canDelete close={() => setViewing(null)}
+    onPrevious={() => { if (index > 0) setViewing(items[index - 1]); }}
+    onNext={() => { if (index >= 0 && index < items.length - 1) setViewing(items[index + 1]); else void archived.loadMore(); }}
+    hasPrevious={index > 0} hasNext={index >= 0 && (index < items.length - 1 || archived.hasMore)}
+    deleting={deleting}
+    onDelete={async () => { try { await remove(viewing); } catch (error) { toast.error(errorMessage(error)); } }} />;
+  return <div ref={dialog} tabIndex={-1} role="dialog" aria-modal="true" aria-label="Story archive" className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/70 p-4">
+    <div className="my-8 w-full max-w-3xl space-y-4 rounded-xl bg-white p-5">
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <h2 className="text-xl font-bold">Your story archive</h2>
+          <p className="text-sm text-slate-500">Stories you have shared, after they leave the strip.</p>
+        </div>
+        <button type="button" onClick={close} className="chat-secondary shrink-0">Close</button>
+      </div>
+      {archived.loading
+        ? <p role="status" className="py-8 text-center text-sm text-slate-500">Loading your archive…</p>
+        : archived.items.length === 0
+          ? <p className="py-8 text-center text-sm text-slate-500">No archived stories yet. A story arrives here once its 24 hours are up.</p>
+          : <div className="flex flex-wrap gap-4">{archived.items.map(story => <StoryCard key={story.storyId} story={story} currentUserId={user.userId} onView={setViewing} onDelete={() => remove(story)} />)}</div>}
+      {archived.items.length > 0 && <LoadMore loading={archived.loadingMore} hasMore={archived.hasMore} onLoadMore={archived.loadMore} label="Load more archived stories" />}
+    </div>
+  </div>;
 }
