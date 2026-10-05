@@ -370,8 +370,11 @@ try {
   console.log('PASS: a photo is cropped to a square in the browser before it is uploaded');
 
   // This step and the composer-dialog one above navigated away from the post the next steps
-  // assume they are looking at (they read it off the detail page), so come back to it.
+  // assume they are looking at (they read it off the detail page), so come back to it — and
+  // wait for the card, which is fetched after the route change and is what the next steps read
+  // the edit link and the like button off, so a fast hand-off cannot outrun it.
   await navigate(dummy, `/post/${postId}`);
+  await until(dummy, `!!document.querySelector('a[aria-label="Edit post"]')`, 'the post page is loaded again');
 
   // The item's own claim, measured in the browser: the feed must stop downloading
   // full-resolution originals, so every request for this post's picture carries a `?size=`.
@@ -922,12 +925,20 @@ try {
   await button(dummy, 'Share story');
   await until(dummy, `!document.querySelector('[role="dialog"]') && document.body.innerText.includes(${JSON.stringify(`Browser story ${stamp}`)})`, 'create story');
   storyId = (await api(dummy, '/stories')).find(story => story.content === `Browser story ${stamp}`).storyId;
+  // Another account opens it, so the author's "seen by" list has someone to name.
+  await api(alex, `/stories/${storyId}/view`, 'POST');
   // A story nobody has opened wears the unseen (gradient) ring...
   assert.equal(await evaluate(dummy, `document.querySelector('[data-story-ring]')?.dataset.storyRing`), 'unseen', 'a fresh story wears the unseen ring');
   // ...and opening it is what turns the ring and records the view for this reader alone.
   await evaluate(dummy, `document.querySelector('[data-story-ring]').closest('div').click()`);
   await until(dummy, `document.querySelector('[role="dialog"][aria-label="Story"]') !== null`, 'the story opens');
   assert.equal(await evaluate(dummy, `document.querySelector('[data-story-ring]')?.dataset.storyRing`), 'seen', 'opening a story turns its ring');
+  // A story's author — and only the author — can see who opened it. Alex's API view above is
+  // what the count reports; a reader's own viewer would not be offered the list at all.
+  await until(dummy, `[...document.querySelectorAll('button')].some(button => button.textContent.trim() === 'Seen by 1')`, 'the author is offered the viewer count');
+  await button(dummy, 'Seen by 1');
+  await until(dummy, `document.querySelector('[role="dialog"][aria-label="Story"]').innerText.includes('@alexdemo')`, 'the seen-by list names the viewer');
+  console.log('PASS: a story shows its author who has seen it');
   await evaluate(dummy, `document.querySelector('button[aria-label="Close story"]').click()`);
   await until(dummy, `document.querySelector('[role="dialog"]') === null`, 'the story closes');
   assert.equal((await api(dummy, '/stories')).find(story => story.storyId === storyId).viewed, true, 'the view is recorded for this reader');
