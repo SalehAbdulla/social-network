@@ -400,6 +400,45 @@ func (re *HandlerContext) StoryViewers(w http.ResponseWriter, r *http.Request) {
 	respond(w, http.StatusOK, viewers)
 }
 
+// ReplyToStory records the caller's reply to a story. It is 404 for a story that is unknown or
+// expired, 400 for the author answering their own story, and 403 when the chat rule keeps the
+// caller from addressing the author — the same rule that gates private messages, because a reply
+// is private text addressed to one account.
+func (re *HandlerContext) ReplyToStory(w http.ResponseWriter, r *http.Request) {
+	id, ok := re.resourceID(w, r)
+	if !ok {
+		return
+	}
+	var req struct {
+		Content string `json:"content"`
+	}
+	if !re.decode(w, r, &req) {
+		return
+	}
+	replyID, err := re.SocialService.ReplyToStory(id, currentUser(r), req.Content)
+	if err != nil {
+		re.HandleError(w, r, err)
+		return
+	}
+	respond(w, http.StatusCreated, map[string]int{"storyId": id, "replyId": replyID})
+}
+
+// StoryReplies answers the author's own list of replies to a story. It is 404 for a story that is
+// unknown or someone else's rather than 403 — the same choice StoryViewers makes — so the route
+// is not a way to learn that a story exists or that it has been replied to.
+func (re *HandlerContext) StoryReplies(w http.ResponseWriter, r *http.Request) {
+	id, ok := re.resourceID(w, r)
+	if !ok {
+		return
+	}
+	replies, err := re.SocialService.StoryReplies(id, currentUser(r))
+	if err != nil {
+		re.HandleError(w, r, err)
+		return
+	}
+	respond(w, http.StatusOK, replies)
+}
+
 func (re *HandlerContext) EditComment(w http.ResponseWriter, r *http.Request) {
 	id, ok := re.resourceID(w, r)
 	if !ok {
