@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Bell, Bookmark, CirclePlus, Compass, House, MessageSquare, Search, UserRound, ChevronLeft, ChevronRight, LogOut } from 'lucide-react';
+import { Bell, Bookmark, SquarePlus, Compass, House, MessageSquare, Search, UserRound, ChevronLeft, ChevronRight, LogOut } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { displayName, errorMessage, request } from '../api/social';
 import { useBackend } from './BackendProvider';
@@ -55,7 +55,10 @@ export default function Sidebar({ isCollapsed, setIsCollapsed }: {
       {href === '/notifications' && <span role="status" aria-live="polite">{!!badges?.notifications && <span aria-label={`${badges?.notifications} unread notifications`} className="rounded-full bg-red-600 px-1.5 text-xs text-white">{badges?.notifications}</span>}</span>}
       {href === '/messages' && <span role="status" aria-live="polite">{!!badges?.messages && <span aria-label={`${badges?.messages} unread messages`} className="flex items-center gap-1 rounded-full bg-teal-700 px-1.5 text-xs text-white"><MessageSquare size={11} aria-hidden="true" />{badges?.messages}</span>}</span>}
     </Link>)}</nav>
-    <button type="button" onClick={openComposer} title="Create post" className="mt-6 flex items-center justify-center gap-2 rounded-lg bg-linear-to-r from-blue-600 to-teal-700 p-3 text-white"><CirclePlus size={20} />{!isCollapsed && 'Create Post'}</button>
+    {/* Create sits with the rail rather than as a lone banner, the way Instagram's left rail carries
+        it: one entry among the destinations, drawn like them, and the only place a desktop starts a
+        post — the phone's is the bottom bar's Create tab. */}
+    <button type="button" onClick={openComposer} title="Create post" className="mt-2 flex w-full items-center gap-3 rounded-xl px-3 py-3 text-slate-600 hover:bg-slate-50"><SquarePlus size={21} className="shrink-0" />{!isCollapsed && <span>Create Post</span>}</button>
     <div className="mt-auto shrink-0 border-t border-border pt-4 space-y-3">
       <ThemeToggle compact={isCollapsed} label={!isCollapsed} className={isCollapsed ? 'mx-auto' : ''} />
       <Link href="/profile" className="flex items-center gap-2"><Avatar name={displayName(user)} avatarUrl={user.avatar} />{!isCollapsed && <div className="min-w-0"><p className="truncate font-medium">{displayName(user)}</p><p className="truncate text-xs text-muted">@{user.nickname}</p></div>}</Link>
