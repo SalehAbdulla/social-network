@@ -172,9 +172,9 @@ func TestUnreferencedMediaSpansEverySurface(t *testing.T) {
 	}{
 		{"post", "post", func() { db.Conn.Exec("DELETE FROM post WHERE postId = ?", postID) }},
 		{"comment", "comment", func() { db.Conn.Exec("DELETE FROM comment WHERE postId <> ?", postID) }},
-		// An expired story stops counting while the row itself stays, which is
-		// the design decision this asserts.
-		{"story", "story", func() { db.Conn.Exec("UPDATE story SET expiresAt = datetime('now', '-1 minute')") }},
+		// Deleting the story is what releases its upload: an expired story is
+		// still the author's archive, so expiry alone releases nothing.
+		{"story", "story", func() { db.Conn.Exec("DELETE FROM story") }},
 		{"message", "message", func() { db.Conn.Exec("DELETE FROM message") }},
 		{"group post", "groupPost", func() { db.Conn.Exec("DELETE FROM groupContent WHERE groupId = ?", groupID) }},
 		{"group image", "groupImage", func() { db.Conn.Exec("UPDATE socialGroup SET imageUrl = '' WHERE groupId = ?", groupID) }},
