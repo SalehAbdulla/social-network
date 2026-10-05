@@ -299,6 +299,10 @@ call "$JAR_A" POST /api/v1/stories 201 "{\"content\":\"A story from the API tour
 STORY_A="$(field "$BODY" data.storyId)"
 # route: GET /api/v1/stories
 call "$JAR_A" GET /api/v1/stories 200
+# route: GET /api/v1/stories/archive
+# A's own archive: the stories A wrote whose 24 hours are up. It is empty here — nothing can
+# expire inside a tour run — and that the route answers A's own list either way is the point.
+call "$JAR_A" GET /api/v1/stories/archive 200
 # route: POST /api/v1/stories/{id}/view
 # B opens A's story, which is what turns B's ring for it from unseen to seen.
 call "$JAR_B" POST "/api/v1/stories/$STORY_A/view" 200
