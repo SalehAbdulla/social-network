@@ -52,6 +52,8 @@ func mapPostToDTO(post models.Post, userScore int) posts.PostDTO {
 		PostId:          post.PostId,
 		UserId:          post.UserId,
 		Nickname:        post.Nickname,
+		FirstName:       post.FirstName,
+		LastName:        post.LastName,
 		Title:           post.Title,
 		Content:         post.Content,
 		Score:           post.Score,
