@@ -1681,8 +1681,31 @@ item still open in this file is post-submission work; see "Status at submission"
   back as the author, refuses it for the reader, and refuses an unknown story's), the API tour
   (route coverage enforced by `cmd/api_tour_test.go`), `npx tsc --noEmit`, `npm run lint`
   (0 errors), `npm run build`, and the browser suite, whose new step is `PASS: a story shows its
-  author who has seen it`. **Still open in this item:** story replies, and archiving expired
-  stories instead of letting the row disappear.
+  author who has seen it`. **Still open in this item:** story replies — done in the paragraph
+  below — and archiving expired stories instead of letting the row disappear.
+
+  Progress 2026-10-05: **story replies are done.** `POST /api/v1/stories/{id}/reply` records a
+  reply to a live story from an account other than its author, and
+  `GET /api/v1/stories/{id}/replies` reads them back to the author alone, built the same way the
+  seen-by list is: an unknown story and someone else's are one **404**, so neither route can
+  confirm that a story exists, and the read is author-only by construction. The write obeys two
+  rules, both named in the service: the story has to be live (an unknown or expired story is the
+  same 404 a view gives), and the chat rule has to let the replier address the author
+  (`ReplyToStory` reuses `CanMessage`), so a reply is not a way around the follow rule that gates
+  private messages — and the author's own story is a **400**, because a reply is read by the
+  author, so an author answering themselves has no reader on the other side. Replies live in
+  their own `storyReply` table (`000017`) rather than in `message`: a reply is read in the story
+  view by the author alone, like the seen-by list, so it is not a conversation and must not open
+  a private thread, and `ON DELETE CASCADE` follows both the story and the account, so deleting
+  either takes the replies with it. The story viewer offers a reply box to a reader and a
+  "Replies N" panel to the author, beside "Seen by N". Verified: `go build ./...`, `go vet ./...`,
+  `go test ./...` (including the new `cmd/story_reply_test.go` — the write, the author-only read,
+  the own-story 400, the empty and over-long 400s, the chat rule's 403, the expired-story 404
+  beside the kept reply, and the cascade), the migration round trip at `000017`, the API tour
+  (route coverage enforced by `cmd/api_tour_test.go`), `npx tsc --noEmit`, `npm run lint`
+  (0 errors), `npm run build`, and the browser suite, whose new step is `PASS: a story reply
+  reaches its author alone`. **Still open in this item:** archiving expired stories instead of
+  letting the row disappear.
 - [ ] **P3** Chat extras: message reactions, an image lightbox, voice notes, and a shared
   media tab per conversation.
   Progress 2026-10-01: **message reactions are done.** The `reaction` table is already
