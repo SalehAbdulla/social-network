@@ -3,7 +3,7 @@
 import { Eye } from 'lucide-react';
 import { linkify } from '../lib/linkify';
 import { mediaImageProps } from '../lib/mediaVariants';
-import { type Post, type SocialUser, PRIVACY_LABEL, audienceSummary, dateLabel, isoTimestamp, relativeLabel } from '../api/social';
+import { type Post, type SocialUser, PRIVACY_LABEL, audienceSummary, dateLabel, displayName, isoTimestamp, relativeLabel } from '../api/social';
 import Avatar from './Avatar';
 
 interface PostPreviewProps {
@@ -44,10 +44,11 @@ export default function PostPreview({ user, title, content, privacy, imageUrls, 
     </div>
     <article className="space-y-4 rounded-2xl border border-border bg-card p-5 shadow-sm">
       <div className="flex items-center gap-3">
-        <Avatar name={user.nickname} avatarUrl={user.avatar} />
+        <Avatar name={displayName(user)} avatarUrl={user.avatar} />
         <div>
-          <p className="font-semibold">@{user.nickname}</p>
+          <p className="font-semibold">{displayName(user)}</p>
           <p className="text-xs text-muted">
+            @{user.nickname}<span aria-hidden="true"> · </span>
             {createdAt
               ? <time dateTime={isoTimestamp(createdAt)} title={dateLabel(createdAt)}>{relativeLabel(createdAt)}</time>
               : <time>Just now</time>}
