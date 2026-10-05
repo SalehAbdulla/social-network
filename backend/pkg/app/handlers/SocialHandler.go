@@ -334,6 +334,24 @@ func (re *HandlerContext) Stories(w http.ResponseWriter, r *http.Request) {
 	respond(w, http.StatusOK, items)
 }
 
+// ArchivedStories answers the caller's own expired stories — the archive the strip cannot show,
+// because the strip lists only what is still live. It is a route of its own rather than a flag on
+// `/stories`, the way saved posts are their own list: the two answer different permissions (any
+// live story versus the caller's own), and a query parameter that flips a permission is not a
+// shape this API uses.
+func (re *HandlerContext) ArchivedStories(w http.ResponseWriter, r *http.Request) {
+	offset, ok := re.offset(w, r)
+	if !ok {
+		return
+	}
+	items, err := re.SocialService.ArchivedStories(offset, currentUser(r))
+	if err != nil {
+		re.HandleError(w, r, err)
+		return
+	}
+	respond(w, http.StatusOK, items)
+}
+
 // MarkStoryViewed records that the caller opened a story, so the stories strip can draw a
 // "seen" ring. It answers 200 for a story already viewed (the write is a state, not a
 // change) and 404 for one that is unknown or expired, the same answer a read gives.
