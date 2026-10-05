@@ -401,6 +401,41 @@ func (db *DB) MarkStoryViewed(storyID int, viewerID string) error {
 	return err
 }
 
+// StoryViewers answers a story's "seen by" list, newest view first. It is author-only by
+// construction: the query runs only for a story whose owner is the caller, and anything else —
+// an unknown story, or someone else's — is the same `ErrNotFound`, so the endpoint cannot be
+// used to confirm that a story exists. The owner is left out, because an author who opened
+// their own story is not a reader of it.
+func (db *DB) StoryViewers(storyID int, ownerID string) ([]models.StoryViewer, error) {
+	var owned bool
+	if err := db.Conn.QueryRow("SELECT EXISTS(SELECT 1 FROM story WHERE storyId=? AND userId=?)", storyID, ownerID).Scan(&owned); err != nil {
+		return nil, err
+	}
+	if !owned {
+		return nil, backend.ErrNotFound
+	}
+	rows, err := db.Conn.Query(
+		`SELECT v.userId, COALESCE(u.nickName,''), COALESCE(u.avatar,''), v.viewedAt
+		 FROM storyView v JOIN user u ON u.userId=v.userId
+		 WHERE v.storyId=? AND v.userId<>?
+		 ORDER BY v.viewedAt DESC, v.userId`,
+		storyID, ownerID,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	viewers := []models.StoryViewer{}
+	for rows.Next() {
+		var v models.StoryViewer
+		if err := rows.Scan(&v.UserID, &v.Nickname, &v.Avatar, &v.ViewedAt); err != nil {
+			return nil, err
+		}
+		viewers = append(viewers, v)
+	}
+	return viewers, rows.Err()
+}
+
 func affected(result sql.Result, err error) error {
 	if err != nil {
 		return err
