@@ -114,6 +114,8 @@ export interface Story {
 }
 /** One account in a story's "seen by" list, which only the story's author is offered. */
 export interface StoryViewer { userId: string; nickname: string; avatar: string; viewedAt: string }
+/** One reply left on a story, read back to the story's author alone. */
+export interface StoryReply { replyId: number; storyId: number; userId: string; nickname: string; avatar: string; content: string; createdAt: string }
 export interface ChatUser { userId: string; nickname: string; firstName: string; lastName: string; avatar: string; isOnline: number; lastMessageTime: string }
 export interface ChatMessage {
   messageId: number; senderId: string; recipientId: string; textMessage: string; timeStamp: string;
