@@ -154,3 +154,37 @@ func (s *SocialService) StoryViewers(storyID int, requesterID string) ([]models.
 	}
 	return s.Repo.StoryViewers(storyID, requesterID)
 }
+
+// ReplyToStory records a reply to a live story from someone other than its author. A reply is
+// private text addressed to the author alone, so the rule this owns is twofold: the story has to
+// be live — an unknown or expired story is the same 404 a read gives — and the chat rule has to
+// let the replier address the author (see CanMessage), so a reply cannot become a way around the
+// follow rule that gates private messages. The author's own story is a 400: a reply is read by
+// the author, and an author answering themselves is not a reader of it.
+func (s *SocialService) ReplyToStory(storyID int, replierID, content string) (int, error) {
+	content = strings.TrimSpace(content)
+	if storyID < 1 || replierID == "" || content == "" || utf8.RuneCountInString(content) > 1000 {
+		return 0, backend.ErrBadRequest
+	}
+	owner, err := s.Repo.LiveStoryOwner(storyID)
+	if err != nil {
+		return 0, err
+	}
+	if owner == replierID {
+		return 0, backend.ErrBadRequest
+	}
+	if err := s.CanMessage(replierID, owner); err != nil {
+		return 0, err
+	}
+	return s.Repo.AddStoryReply(storyID, replierID, content)
+}
+
+// StoryReplies answers a story's replies. The rule this owns is the repository's — it answers
+// only for the story's own author, and an unknown story and someone else's are the same 404 — so
+// the service only guards the shape of the arguments.
+func (s *SocialService) StoryReplies(storyID int, requesterID string) ([]models.StoryReply, error) {
+	if storyID < 1 || requesterID == "" {
+		return nil, backend.ErrBadRequest
+	}
+	return s.Repo.StoryReplies(storyID, requesterID)
+}
