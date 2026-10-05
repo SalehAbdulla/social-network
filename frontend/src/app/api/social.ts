@@ -27,7 +27,7 @@ export interface SocialUser {
 }
 export interface FollowRequest { userId: string; nickname: string; createdAt: string }
 export interface Post {
-  postId: number; userId: string; nickname: string; title: string; content: string;
+  postId: number; userId: string; nickname: string; firstName: string; lastName: string; title: string; content: string;
   imageUrls: string[]; privacy: 'public' | 'followers' | 'selected'; selectedFollowerIds?: string[];
   score: number; userScore: number; commentsCounter: number; createdAt: string; updatedAt: string;
   // Viewer-relative: true when the signed-in member has this post bookmarked.
@@ -282,6 +282,19 @@ export function dateLabel(value: string) {
 }
 
 /**
+ * The day something happened, without the clock time — the label for anything older than the
+ * relative window.
+ *
+ * A feed entry from a few weeks back is described by its date ("September 17, 2026"), not by
+ * the second it was written, which is what Instagram shows and what a reader can actually use.
+ * The exact instant stays available through `dateLabel`, which callers put on the `title` of the
+ * `<time>` element, so the precision is a hover away instead of in the reader's face.
+ */
+export function dayLabel(value: string) {
+  return parseTimestamp(value)?.toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' }) ?? '';
+}
+
+/**
  * How long ago something happened, worded by the visitor's own locale.
  *
  * `Intl.RelativeTimeFormat` is used instead of a plural table because it knows the
@@ -299,10 +312,10 @@ export function relativeLabel(value: string, now: number = Date.now()) {
   if (!date) return '';
   let remaining = (date.getTime() - now) / 1000;
   const formatter = new Intl.RelativeTimeFormat(undefined, { numeric: 'auto' });
-  const units: Array<[Intl.RelativeTimeFormatUnit, number]> = [['second', 60], ['minute', 60], ['hour', 24], ['day', 7]];
+  const units: Array<[Intl.RelativeTimeFormatUnit, number]> = [['second', 60], ['minute', 60], ['hour', 24], ['day', 7], ['week', 4], ['month', 12]];
   for (const [unit, span] of units) {
     if (Math.abs(remaining) < span) return formatter.format(Math.round(remaining), unit);
     remaining /= span;
   }
-  return dateLabel(value);
+  return dayLabel(value);
 }
