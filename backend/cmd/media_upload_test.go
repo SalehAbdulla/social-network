@@ -260,11 +260,11 @@ func TestUploadHardening(t *testing.T) {
 	})
 }
 
-// TestExpiredStoryMediaIsCollected pins the other half of the story rule: while a
-// story is live its upload is referenced, and once it has expired the story can
-// never be served again (see CanViewMedia), so the collector is free to take the
-// upload even though the story row is still there.
-func TestExpiredStoryMediaIsCollected(t *testing.T) {
+// TestArchivedStoryMediaSurvives pins the story half of the media rule: a story's upload belongs
+// to the row, so an expired story — which the author keeps in their archive rather than losing —
+// holds on to it, and only deleting the story releases it to the collector. It is the same rule a
+// post's photo lives under: the row's life, not a clock, decides.
+func TestArchivedStoryMediaSurvives(t *testing.T) {
 	server, repo := integrationServer(t, true, false)
 	owner := newIntegrationClient(t, server)
 	owner.login("dummy@example.com")
@@ -283,11 +283,19 @@ func TestExpiredStoryMediaIsCollected(t *testing.T) {
 	if result := pruneMedia(t, 0); result.Rows != 0 || result.Files != 0 {
 		t.Fatalf("a live story's media was collected: %+v", result)
 	}
+	// Expiry moves the story to the archive rather than ending it, so the upload stays.
 	if _, err := repo.Conn.Exec("UPDATE story SET expiresAt = datetime('now', '-1 minute') WHERE storyId = ?", storyID); err != nil {
 		t.Fatal(err)
 	}
+	if result := pruneMedia(t, 0); result.Rows != 0 || result.Files != 0 {
+		t.Fatalf("an archived story's media was collected: %+v", result)
+	}
+	// Deleting the story is what releases the upload, the way deleting a post releases its photo.
+	if _, err := repo.Conn.Exec("DELETE FROM story WHERE storyId = ?", storyID); err != nil {
+		t.Fatal(err)
+	}
 	if result := pruneMedia(t, 0); result.Rows != 1 || result.Files != 1 {
-		t.Fatalf("an expired story held on to its upload: %+v", result)
+		t.Fatalf("deleting an archived story left its upload behind: %+v", result)
 	}
 }
 
