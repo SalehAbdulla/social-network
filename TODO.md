@@ -1406,6 +1406,31 @@ item still open in this file is post-submission work; see "Status at submission"
 
 ### Instagram-like UI
 
+- [x] **P3** Open a feed post in an Instagram-style overlay — the media on the left, and on the
+  right the header, the caption, the post's actions and the comments with the composer pinned at
+  the bottom — while `/post/[postId]` stays the deep link (hard load, refresh, the Share button's
+  copied URL) and a phone keeps the bottom drawer. Closed 2026-10-06. `components/PostOverlay.tsx`
+  is a new dialog (`role="dialog"` / `aria-modal` / Escape closes / focus returns to the trigger /
+  scroll frozen, all through `useDialogFocus`, the same contract as `Lightbox` and `ComposerDialog`)
+  rendering `PostCard` in a new `overlay` layout, so a like, a save, a delete and a comment are one
+  implementation across the card and the pop-up. The feed (`app/page.tsx`) opens it on a click on a
+  wide screen through a new `onOpen` prop; a card without `onOpen` — the post page, `/saved`,
+  `/search`, `/hashtag`, a phone — keeps exactly the behaviour it had, which is why the four
+  existing comment assertions (`integration-smoke.mjs:556`, `:557-578`, `:625`, `:628`) still hold
+  and a new desktop-feed step and a new phone-feed step were *added* rather than weakened.
+  **Decisions:** the overlay is *pure state* and never touches the URL — a `history.pushState`
+  would be repainted by the App Router by URL (`app-router.js` `applyUrlFromHistoryPushReplace`),
+  and route interception is viewport-blind and would swallow the phone's plain `/post/{id}`
+  navigation, so Back behaves as it does for every other dialog here; **`lg` (1024 px)** is the
+  breakpoint, the `min-width` the card already reads and the line the sidebar and top bar use; the
+  **post actions stay on the card** (the overlay reuses the very same `PostCard`). The nested photo
+  viewer disables the overlay's trap while it is open (the `StoryArchive` rule), so Escape closes
+  the innermost dialog. The feed's duplicate "New post" button is gone and **Create** is now a rail
+  item in `SideBar.tsx`, Instagram's one desktop place to start a post (the phone keeps
+  `BottomNav`'s Create tab). Verified: `cd backend && go build ./... && go vet ./... && go test
+  ./... -count=1`; `cd frontend && npx tsc --noEmit`, `npm run lint` (0 errors), `npm run build`,
+  `node scripts/dead-modules.mjs` (0 of 80); and `npm run test:integration` — 52 PASS, no runtime
+  exceptions, no console errors.
 - [x] **P3** Adopt an Instagram-style shell: slim top app bar with search and the notification
   bell, plus a bottom tab bar on mobile, replacing the off-canvas drawer in `SideBar.tsx`.
   Keep the current sidebar as the `lg:` variant so nothing is lost. Closed 2026-10-04.
