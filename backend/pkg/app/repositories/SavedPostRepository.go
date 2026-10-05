@@ -72,7 +72,8 @@ func (db *DB) SavedPostIDs(userID string, postIDs []int) (map[int]bool, error) {
 // unreadable (the author turns private, the viewer unfollows) drops out of the
 // list instead of becoming a back door to it. The projection repeats the feed's
 // column list rather than reusing postFeedSelect, because that constant ends at
-// `WHERE` and this query needs a third join before it.
+// `WHERE` and this query needs a third join before it — which also means the two
+// lists have to be kept in step by hand, since they share one `scanPostPage`.
 //
 // The argument order follows the text: the join's `sp.userId = ?` binds first,
 // then the fragment's four viewer positions, then LIMIT and OFFSET.
@@ -87,7 +88,7 @@ func (db *DB) SavedPosts(userID string, pageNumber int, pageSize int) ([]models.
 
 	offset := (pageNumber - 1) * pageSize
 	rows, err := db.Conn.Query(`
-		SELECT p.postId, p.userId, p.privacy, u.nickName, p.title, p.content,
+		SELECT p.postId, p.userId, p.privacy, u.nickName, u.firstName, u.lastName, p.title, p.content,
 			   p.score, p.commentsCounter,
 			   p.createdAt, p.updatedAt, p.imageUrls
 		FROM post p
