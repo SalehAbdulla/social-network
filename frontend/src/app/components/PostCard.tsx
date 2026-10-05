@@ -2,7 +2,7 @@
 
 import { linkify } from '../lib/linkify';
 
-import { useRef, useState, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import Link from 'next/link';
 import { ArrowDown, ArrowUp, Bookmark, Heart, MessageCircle, Share2, Trash2, Pencil, X } from 'lucide-react';
 import toast from 'react-hot-toast';
@@ -24,7 +24,14 @@ const COMMENTS_PER_PAGE = 10;
 // than a second attempt to open the lightbox.
 const DOUBLE_TAP_MS = 300;
 
-function Comments({ post, onCountChange }: { post: Post; onCountChange: (delta: number) => void }) {
+function Comments({ post, onCountChange, variant = 'inline', onViewerChange }: {
+  post: Post;
+  onCountChange: (delta: number) => void;
+  /** `panel` is the overlay's right column: the thread scrolls and the composer is pinned under it. */
+  variant?: 'inline' | 'panel';
+  /** Told when the comment-photo viewer opens or closes, so the overlay can hand it Escape. */
+  onViewerChange?: (open: boolean) => void;
+}) {
   const { user } = useBackend();
   // A wide screen shows these open, but the feed holds ten posts, so reading every
   // thread on mount would fire ten requests before the reader had looked at one. The
@@ -50,6 +57,7 @@ function Comments({ post, onCountChange }: { post: Post; onCountChange: (delta: 
   // Which comment photo is open in the viewer, if any. The set travels with the
   // index because each comment owns its own photos.
   const [viewer, setViewer] = useState<{ images: string[]; index: number } | null>(null);
+  useEffect(() => { onViewerChange?.(viewer !== null); }, [viewer, onViewerChange]);
   async function submit(event: React.FormEvent) {
     event.preventDefault(); setBusy(true);
     try {
@@ -101,17 +109,21 @@ function Comments({ post, onCountChange }: { post: Post; onCountChange: (delta: 
       toast.error(errorMessage(error));
     } finally { setBusy(false); }
   }
-  return <div ref={sectionRef} className="space-y-4 border-t border-slate-100 pt-4">
-    <form onSubmit={submit} className="space-y-2"><label className="block text-sm font-medium" htmlFor={`comment-${post.postId}`}>{editing ? 'Edit comment' : 'Add a comment'}</label><textarea id={`comment-${post.postId}`} required minLength={3} maxLength={300} value={text} onChange={event => setText(event.target.value)} className="w-full rounded-lg border border-slate-200 p-3 text-sm" />
+  // The overlay's right column is the one layout difference from the inline list: the thread
+  // scrolls while the composer stays pinned below it. The field, the picker and the write path are
+  // the same `#comment-{postId}` form either way, so the two variants cannot drift apart.
+  return <div ref={sectionRef} className={variant === 'panel' ? 'flex min-h-0 flex-1 flex-col' : 'space-y-4 border-t border-slate-100 pt-4'}>
+    <div className={variant === 'panel' ? 'order-2 shrink-0 border-t border-border p-4' : ''}>
+    <form onSubmit={submit} className="space-y-2"><label className="block text-sm font-medium" htmlFor={`comment-${post.postId}`}>{editing ? 'Edit comment' : 'Add a comment'}</label><textarea id={`comment-${post.postId}`} required minLength={3} maxLength={300} value={text} placeholder={variant === 'panel' ? 'Add a comment…' : undefined} onChange={event => setText(event.target.value)} className="w-full rounded-lg border border-slate-200 p-3 text-sm" />
       {!editing && <ImagePicker files={images} onChange={setImages} max={4} disabled={busy} purpose="post" />}
-      <div className="flex gap-3"><button disabled={busy} className="rounded-lg bg-blue-600 px-4 py-2 text-sm text-white disabled:opacity-50">{editing ? 'Save comment' : 'Comment'}</button>{editing && <button type="button" onClick={() => { setEditing(null); setText(''); }}>Cancel</button>}</div></form>
-    {comments.loading && <Loading height={56} label="Loading comments" />}
+      <div className="flex gap-3"><button disabled={busy} className="rounded-lg bg-blue-600 px-4 py-2 text-sm text-white disabled:opacity-50">{editing ? 'Save comment' : variant === 'panel' ? 'Post' : 'Comment'}</button>{editing && <button type="button" onClick={() => { setEditing(null); setText(''); }}>Cancel</button>}</div></form></div>
+    <div className={variant === 'panel' ? 'order-1 min-h-0 flex-1 space-y-3 overflow-y-auto p-4' : 'space-y-4'}>{comments.loading && <Loading height={56} label="Loading comments" />}
     {comments.items.map(comment => <div key={comment.commentId} className="rounded-xl bg-slate-50 p-3 space-y-2"><div className="flex justify-between gap-2"><Link href={`/profile/${comment.userId}`} className="text-sm font-semibold">@{comment.nickname || user.nickname}</Link><time className="text-xs text-slate-400" dateTime={isoTimestamp(comment.createdAt)} title={dateLabel(comment.createdAt)}>{relativeLabel(comment.createdAt)}</time></div><p className="whitespace-pre-wrap break-words text-sm">{linkify(comment.commentText)}</p>{!!comment.imageUrls?.length && <div className={`grid gap-2 ${comment.imageUrls.length > 1 ? 'grid-cols-2' : ''}`}>{comment.imageUrls.map((url, position) => <button key={url} type="button" aria-label={`Open comment image ${position + 1} of ${comment.imageUrls.length}`} onClick={() => setViewer({ images: comment.imageUrls, index: position })} className="block w-full cursor-zoom-in"><img {...mediaImageProps(url, comment.imageUrls.length > 1 ? '(max-width: 640px) 50vw, 320px' : '(max-width: 768px) 100vw, 480px')} alt="Comment attachment" className="aspect-square max-h-72 w-full rounded-lg bg-white object-contain" /></button>)}</div>}<div className="flex items-center gap-3 text-xs text-slate-500">
       <button type="button" disabled={busy} aria-label="Upvote comment" aria-pressed={comment.userScore === 1} className={comment.userScore === 1 ? 'text-blue-600' : ''} onClick={() => void react(comment, 1)}><ArrowUp size={15} /></button><span>{comment.score}</span><button type="button" disabled={busy} aria-label="Downvote comment" aria-pressed={comment.userScore === -1} className={comment.userScore === -1 ? 'text-blue-600' : ''} onClick={() => void react(comment, -1)}><ArrowDown size={15} /></button>
       {comment.userId === user.userId && <><button aria-label="Edit comment" onClick={() => { setEditing(comment.commentId); setText(comment.commentText); }}><Pencil size={14} /></button><button disabled={busy} aria-label="Delete comment" onClick={() => void mutate(() => request(`/posts/comments?id=${comment.commentId}`, 'DELETE'), () => { comments.update(items => items.filter(item => item.commentId !== comment.commentId)); onCountChange(-1); })}><Trash2 size={14} /></button></>}
     </div></div>)}
     {comments.settled && comments.items.length === 0 && <p className="text-sm text-slate-500">Be the first to comment.</p>}
-    <LoadMore loading={comments.loadingMore} hasMore={comments.hasMore} onLoadMore={comments.loadMore} label="Load more comments" endLabel={null} className="py-2" />
+    <LoadMore loading={comments.loadingMore} hasMore={comments.hasMore} onLoadMore={comments.loadMore} label="Load more comments" endLabel={null} className="py-2" /></div>
     {viewer && <Lightbox images={viewer.images} startIndex={viewer.index} label="Comment photos" onClose={() => setViewer(null)} />}
   </div>;
 }
@@ -141,7 +153,7 @@ function CommentSheet({ onClose, children }: { onClose: () => void; children: Re
     </div>
   </>;
 }
-export default function PostCard({ post, fetchPosts, onPostRemoved, onUnsaved }: {
+export default function PostCard({ post, fetchPosts, onPostRemoved, onUnsaved, onOpen, onClose, variant = 'card', onNestedViewerChange }: {
   post: Post;
   /** Refetch fallback for surfaces that are not list-backed, such as the single post page. */
   fetchPosts?: () => void;
@@ -149,15 +161,35 @@ export default function PostCard({ post, fetchPosts, onPostRemoved, onUnsaved }:
   onPostRemoved?: (postId: number) => void;
   /** Called when this card un-saves a post, so the saved list can drop the row. */
   onUnsaved?: (postId: number) => void;
+  /**
+   * Present only in the feed. On a wide screen the card stops being a route link: the media, the
+   * title and the comment button open the overlay instead. Absent everywhere else, so the post
+   * page, the phone and every other list keep the behaviour they already had.
+   */
+  onOpen?: () => void;
+  /** Present only inside the overlay: draws the dialog's close control. */
+  onClose?: () => void;
+  /** `overlay` is the feed's pop-up — media on the left, header/caption/actions/comments on the right. */
+  variant?: 'card' | 'overlay';
+  /** Reports whether a nested photo viewer is open, so the overlay can hand Escape to it. */
+  onNestedViewerChange?: (open: boolean) => void;
 }) {
   const { user } = useBackend();
+  // Two facts decide every branch below: whether this card is the feed's (so it opens the overlay)
+  // and whether it is drawn inside the overlay itself.
+  const inFeed = !!onOpen;
+  const asOverlay = variant === 'overlay';
+  const hasMedia = !!post.imageUrls?.length;
   // A wide screen keeps the comment list inline and open, as it always was; a phone gets
   // it as a bottom drawer that stays shut until the reader asks for it. `null` is "follow
   // the viewport", decided here at render rather than by an effect that would overrule a
   // reader who has already opened or closed the list — once they have, their choice wins.
   const wide = useMediaQuery('(min-width: 1024px)');
   const [commentsOpen, setCommentsOpen] = useState<boolean | null>(null);
-  const showComments = commentsOpen ?? wide;
+  // The overlay already shows the thread, so its action row reports "expanded". The feed's card
+  // never shows the thread inline — the overlay holds it — while the post page and the phone keep
+  // the `null`-means-follow-the-viewport rule this line has always had.
+  const commentsVisible = asOverlay || (commentsOpen ?? (wide && !inFeed));
   const [reaction, setReaction] = useState<{ score: number; userScore: number } | null>(null);
   // Comments mutate their own list, so the counter tracks the server value plus
   // the deltas this card saw instead of forcing a feed-wide refetch.
@@ -168,6 +200,11 @@ export default function PostCard({ post, fetchPosts, onPostRemoved, onUnsaved }:
   const [saved, setSaved] = useState(post.isSaved);
   // Which post photo is open in the viewer, if any.
   const [viewer, setViewer] = useState<number | null>(null);
+  // Whether the comment-photo viewer inside the thread is open. The overlay's trap stands down
+  // while either viewer is up (the `StoryArchive` rule), so a single Escape closes the innermost
+  // dialog rather than both at once.
+  const [commentViewerOpen, setCommentViewerOpen] = useState(false);
+  useEffect(() => { onNestedViewerChange?.(viewer !== null || commentViewerOpen); }, [viewer, commentViewerOpen, onNestedViewerChange]);
   // A double-tap like: the burst id plus the photo it should appear over, so the
   // heart lands on the picture the reader tapped rather than the middle of the grid.
   const [burst, setBurst] = useState<{ id: number; position: number } | null>(null);
@@ -207,7 +244,9 @@ export default function PostCard({ post, fetchPosts, onPostRemoved, onUnsaved }:
       return;
     }
     if (previous.timer) clearTimeout(previous.timer);
-    lastTap.current = { position, at: timeStamp, timer: setTimeout(() => setViewer(position), DOUBLE_TAP_MS) };
+    // A single tap: in the feed on a wide screen it opens the post; everywhere else it opens the
+    // lightbox, exactly as before. The double-tap branch above is untouched.
+    lastTap.current = { position, at: timeStamp, timer: setTimeout(() => { if (inFeed && wide) onOpen?.(); else setViewer(position); }, DOUBLE_TAP_MS) };
   }
   // Named rather than inline so the two branches of the comment render share one pair of
   // callbacks: the counter moves the same way and closing is the same act whether the
@@ -242,12 +281,30 @@ export default function PostCard({ post, fetchPosts, onPostRemoved, onUnsaved }:
       if (onPostRemoved) onPostRemoved(post.postId); else fetchPosts?.();
     } catch (error) { toast.error(errorMessage(error)); } finally { setBusy(false); }
   }
+  const authorLink = <Link href={`/profile/${post.userId}`} className="flex items-center gap-3"><Avatar name={displayName(post)} /><div><p className="font-semibold">{displayName(post)}</p><p className="text-xs text-slate-400">@{post.nickname}<span aria-hidden="true"> · </span><time dateTime={isoTimestamp(post.createdAt)} title={dateLabel(post.createdAt)}>{relativeLabel(post.createdAt)}</time></p></div></Link>;
+  const ownerControls = post.userId === user.userId && <div className="flex items-center gap-1"><Link href={`/post/${post.postId}/edit`} aria-label="Edit post" title="Edit post" className="flex size-9 items-center justify-center rounded-full text-slate-400 transition hover:bg-slate-100 hover:text-blue-600"><Pencil size={18} /></Link><button disabled={busy} aria-label="Delete post" title="Delete post" className="flex size-9 items-center justify-center rounded-full text-slate-400 transition hover:bg-red-50 hover:text-red-600" onClick={() => void remove()}><Trash2 size={18} /></button></div>;
+  const caption = <>{post.title && <Link href={`/post/${post.postId}`} onClick={event => { if (inFeed && wide) { event.preventDefault(); onOpen?.(); } }} className="block text-lg font-semibold hover:text-blue-700">{post.title}</Link>}<p className="whitespace-pre-wrap break-words text-slate-700">{linkify(post.content)}</p><span className="inline-block rounded-full bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-600">{PRIVACY_LABEL[post.privacy]}</span></>;
+  const mediaGrid = (overlay: boolean) => hasMedia && <div className={overlay ? `grid w-full gap-1 ${post.imageUrls.length > 1 ? 'grid-cols-2' : 'grid-cols-1'}` : `-mx-5 grid gap-2 ${post.imageUrls.length > 1 ? 'grid-cols-2' : ''}`}>{post.imageUrls.map((url, position) => <button key={url} type="button" aria-label={`Open image ${position + 1} of ${post.imageUrls.length}`} onClick={(event) => handleMediaTap(position, event.timeStamp)} className="relative block w-full cursor-zoom-in touch-manipulation"><img {...mediaImageProps(url, post.imageUrls.length > 1 ? '(max-width: 640px) 50vw, 320px' : '(max-width: 768px) 100vw, 640px')} alt="Post attachment" className={overlay ? 'max-h-[92vh] w-full object-contain' : 'aspect-square w-full bg-card-2 object-cover'} />{burst?.position === position && <span key={burst.id} aria-hidden="true" onAnimationEnd={() => setBurst(null)} className="heart-burst text-red-500"><Heart size={80} fill="currentColor" strokeWidth={0} /></span>}</button>)}</div>;
+  const actionRow = <div className="flex items-center gap-1 border-t border-border pt-3 text-muted"><button disabled={busy} aria-label={vote.userScore === 1 ? 'Unlike post' : 'Like post'} aria-pressed={vote.userScore === 1} onClick={() => void react(1)} className={`flex items-center gap-1.5 rounded-full p-2 transition hover:bg-surface-2 ${vote.userScore === 1 ? 'text-danger' : ''}`}><Heart size={22} fill={vote.userScore === 1 ? 'currentColor' : 'none'} /><span className="text-sm font-medium">{vote.score}</span></button><button aria-expanded={commentsVisible} aria-label={commentsVisible ? 'Hide comments' : 'Show comments'} onClick={() => { if (inFeed && wide) onOpen?.(); else setCommentsOpen(!commentsVisible); }} className="flex items-center gap-1.5 rounded-full p-2 transition hover:bg-surface-2"><MessageCircle size={22} /><span className="text-sm font-medium">{commentCount}</span></button><button aria-label="Share post" className="rounded-full p-2 transition hover:bg-surface-2" onClick={async () => { try { await navigator.clipboard.writeText(`${location.origin}/post/${post.postId}`); toast.success('Post link copied'); } catch { toast.error('Could not copy the link'); } }}><Share2 size={22} /></button><button disabled={busy} aria-label={saved ? 'Remove from saved' : 'Save post'} aria-pressed={saved} title={saved ? 'Remove from saved' : 'Save post'} onClick={() => void toggleSave()} className={`ml-auto rounded-full p-2 transition hover:bg-surface-2 ${saved ? 'text-brand-1' : ''}`}><Bookmark size={22} fill={saved ? 'currentColor' : 'none'} /></button></div>;
+
+  // The feed's pop-up: the media on the left, and on the right the header, the caption, the post's
+  // own action row (the same controls the card draws, so a like or a save has one implementation)
+  // and the comments with the composer pinned under them. A text-only post has no left column.
+  if (asOverlay) return <div className="flex max-h-[92vh]">
+    {hasMedia && <div className="flex min-h-0 flex-[1.4] items-center justify-center overflow-hidden bg-slate-950">{mediaGrid(true)}</div>}
+    <div className="flex min-h-0 flex-1 flex-col">
+      <div className="flex items-center gap-3 border-b border-border p-4">{authorLink}<div className="ml-auto flex items-center gap-1">{ownerControls}<button type="button" aria-label="Close post" onClick={onClose} className="flex size-9 items-center justify-center rounded-full text-muted transition hover:bg-surface-2"><X size={20} /></button></div></div>
+      <div className="space-y-3 border-b border-border p-4">{caption}{actionRow}</div>
+      <Comments post={post} onCountChange={bumpComments} variant="panel" onViewerChange={setCommentViewerOpen} />
+    </div>
+  </div>;
+
   return <article className="space-y-4 overflow-hidden rounded-2xl border border-border bg-card p-5 shadow-sm transition hover:shadow-md">
-    <div className="flex items-center justify-between"><Link href={`/profile/${post.userId}`} className="flex items-center gap-3"><Avatar name={displayName(post)} /><div><p className="font-semibold">{displayName(post)}</p><p className="text-xs text-slate-400">@{post.nickname}<span aria-hidden="true"> · </span><time dateTime={isoTimestamp(post.createdAt)} title={dateLabel(post.createdAt)}>{relativeLabel(post.createdAt)}</time></p></div></Link>{post.userId === user.userId && <div className="flex items-center gap-1"><Link href={`/post/${post.postId}/edit`} aria-label="Edit post" title="Edit post" className="flex size-9 items-center justify-center rounded-full text-slate-400 transition hover:bg-slate-100 hover:text-blue-600"><Pencil size={18} /></Link><button disabled={busy} aria-label="Delete post" title="Delete post" className="flex size-9 items-center justify-center rounded-full text-slate-400 transition hover:bg-red-50 hover:text-red-600" onClick={() => void remove()}><Trash2 size={18} /></button></div>}</div>
-    {post.title && <Link href={`/post/${post.postId}`} className="block text-lg font-semibold hover:text-blue-700">{post.title}</Link>}<p className="whitespace-pre-wrap break-words text-slate-700">{linkify(post.content)}</p><span className="inline-block rounded-full bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-600">{PRIVACY_LABEL[post.privacy]}</span>
-    {!!post.imageUrls?.length && <div className={`-mx-5 grid gap-2 ${post.imageUrls.length > 1 ? 'grid-cols-2' : ''}`}>{post.imageUrls.map((url, position) => <button key={url} type="button" aria-label={`Open image ${position + 1} of ${post.imageUrls.length}`} onClick={(event) => handleMediaTap(position, event.timeStamp)} className="relative block w-full cursor-zoom-in touch-manipulation"><img {...mediaImageProps(url, post.imageUrls.length > 1 ? '(max-width: 640px) 50vw, 320px' : '(max-width: 768px) 100vw, 640px')} alt="Post attachment" className="aspect-square w-full bg-card-2 object-cover" />{burst?.position === position && <span key={burst.id} aria-hidden="true" onAnimationEnd={() => setBurst(null)} className="heart-burst text-red-500"><Heart size={80} fill="currentColor" strokeWidth={0} /></span>}</button>)}</div>}
-    <div className="flex items-center gap-1 border-t border-border pt-3 text-muted"><button disabled={busy} aria-label={vote.userScore === 1 ? 'Unlike post' : 'Like post'} aria-pressed={vote.userScore === 1} onClick={() => void react(1)} className={`flex items-center gap-1.5 rounded-full p-2 transition hover:bg-surface-2 ${vote.userScore === 1 ? 'text-danger' : ''}`}><Heart size={22} fill={vote.userScore === 1 ? 'currentColor' : 'none'} /><span className="text-sm font-medium">{vote.score}</span></button><button aria-expanded={showComments} aria-label={showComments ? 'Hide comments' : 'Show comments'} onClick={() => setCommentsOpen(!showComments)} className="flex items-center gap-1.5 rounded-full p-2 transition hover:bg-surface-2"><MessageCircle size={22} /><span className="text-sm font-medium">{commentCount}</span></button><button aria-label="Share post" className="rounded-full p-2 transition hover:bg-surface-2" onClick={async () => { try { await navigator.clipboard.writeText(`${location.origin}/post/${post.postId}`); toast.success('Post link copied'); } catch { toast.error('Could not copy the link'); } }}><Share2 size={22} /></button><button disabled={busy} aria-label={saved ? 'Remove from saved' : 'Save post'} aria-pressed={saved} title={saved ? 'Remove from saved' : 'Save post'} onClick={() => void toggleSave()} className={`ml-auto rounded-full p-2 transition hover:bg-surface-2 ${saved ? 'text-brand-1' : ''}`}><Bookmark size={22} fill={saved ? 'currentColor' : 'none'} /></button></div>
-    {showComments && (wide
+    <div className="flex items-center justify-between">{authorLink}{ownerControls}</div>
+    {caption}
+    {mediaGrid(false)}
+    {actionRow}
+    {commentsVisible && (wide
       ? <Comments post={post} onCountChange={bumpComments} />
       : <CommentSheet onClose={closeComments}><Comments post={post} onCountChange={bumpComments} /></CommentSheet>)}
     {viewer !== null && <Lightbox images={post.imageUrls} startIndex={viewer} label="Post photos" onClose={() => setViewer(null)} />}
