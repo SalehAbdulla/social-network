@@ -1669,6 +1669,20 @@ item still open in this file is post-submission work; see "Status at submission"
 - [ ] **P3** Mute and block a user, enforced in the feed, profile, chat and notifications.
 - [ ] **P3** Story replies and a "seen by" list; archive expired stories instead of letting
   the row disappear.
+  Progress 2026-10-04: **the "seen by" list is done.** `GET /api/v1/stories/{id}/viewers` answers
+  the author's own list, built from the `storyView` table the seen-ring already writes, newest
+  view first. It is **author-only by construction**: the query runs only for a story whose owner
+  is the caller, an unknown story and someone else's are the same **404** (the choice the comment
+  and message reactions make, so the route cannot confirm a story exists), and the owner is left
+  out because an author who opened their own story is not a reader of it. The story viewer offers
+  a "Seen by N" control to the author alone — fetched only for them, since not asking is the
+  cheaper half of the same rule — with a panel naming each viewer. Verified: `go build ./...`,
+  `go vet ./...`, `go test ./...` (including `cmd/story_view_test.go`, which now reads the list
+  back as the author, refuses it for the reader, and refuses an unknown story's), the API tour
+  (route coverage enforced by `cmd/api_tour_test.go`), `npx tsc --noEmit`, `npm run lint`
+  (0 errors), `npm run build`, and the browser suite, whose new step is `PASS: a story shows its
+  author who has seen it`. **Still open in this item:** story replies, and archiving expired
+  stories instead of letting the row disappear.
 - [ ] **P3** Chat extras: message reactions, an image lightbox, voice notes, and a shared
   media tab per conversation.
   Progress 2026-10-01: **message reactions are done.** The `reaction` table is already
