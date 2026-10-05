@@ -305,6 +305,13 @@ call "$JAR_B" POST "/api/v1/stories/$STORY_A/view" 200
 # route: GET /api/v1/stories/{id}/viewers
 # A, the author, is the one who can read the list B just joined; anyone else gets a 404.
 call "$JAR_A" GET "/api/v1/stories/$STORY_A/viewers" 200
+# route: POST /api/v1/stories/{id}/reply
+# B replies to A's story, which the chat rule allows (the tour's accounts are public) and which
+# only A reads back.
+call "$JAR_B" POST "/api/v1/stories/$STORY_A/reply" 201 "{\"content\":\"A reply from the API tour.\"}"
+# route: GET /api/v1/stories/{id}/replies
+# A is the one who can read the replies to their own story; the reader gets a 404.
+call "$JAR_A" GET "/api/v1/stories/$STORY_A/replies" 200
 # route: DELETE /api/v1/stories/{id}
 call "$JAR_A" DELETE "/api/v1/stories/$STORY_A" 200
 
