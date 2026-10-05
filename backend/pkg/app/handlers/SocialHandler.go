@@ -384,6 +384,22 @@ func (re *HandlerContext) DeleteStory(w http.ResponseWriter, r *http.Request) {
 	respond(w, http.StatusOK, nil)
 }
 
+// StoryViewers answers the author's own list of who opened a story. It is 404 for a story that
+// is unknown or someone else's rather than 403 — the same choice the comment and message
+// reactions make — so the route is not a way to learn that a story exists.
+func (re *HandlerContext) StoryViewers(w http.ResponseWriter, r *http.Request) {
+	id, ok := re.resourceID(w, r)
+	if !ok {
+		return
+	}
+	viewers, err := re.SocialService.StoryViewers(id, currentUser(r))
+	if err != nil {
+		re.HandleError(w, r, err)
+		return
+	}
+	respond(w, http.StatusOK, viewers)
+}
+
 func (re *HandlerContext) EditComment(w http.ResponseWriter, r *http.Request) {
 	id, ok := re.resourceID(w, r)
 	if !ok {
