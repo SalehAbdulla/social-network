@@ -302,6 +302,9 @@ call "$JAR_A" GET /api/v1/stories 200
 # route: POST /api/v1/stories/{id}/view
 # B opens A's story, which is what turns B's ring for it from unseen to seen.
 call "$JAR_B" POST "/api/v1/stories/$STORY_A/view" 200
+# route: GET /api/v1/stories/{id}/viewers
+# A, the author, is the one who can read the list B just joined; anyone else gets a 404.
+call "$JAR_A" GET "/api/v1/stories/$STORY_A/viewers" 200
 # route: DELETE /api/v1/stories/{id}
 call "$JAR_A" DELETE "/api/v1/stories/$STORY_A" 200
 
