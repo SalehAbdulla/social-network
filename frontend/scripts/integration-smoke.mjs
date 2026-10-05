@@ -963,6 +963,15 @@ try {
   console.log('PASS: a story reply reaches its author alone');
   await evaluate(dummy, `document.querySelector('button[aria-label="Close story"]').click()`);
   await until(dummy, `document.querySelector('[role="dialog"]') === null`, 'the author closes the story');
+
+  // A story that has expired is not gone: it is in the author's own archive, the list the strip
+  // cannot show. The demo seed leaves one expired story behind, because nothing can pass a story's
+  // real 24-hour life inside a run.
+  await button(dummy, 'Your archive');
+  await until(dummy, `document.querySelector('[role="dialog"][aria-label="Story archive"]')?.innerText.includes('From yesterday, kept in the archive')`, 'the author reads an archived story');
+  console.log("PASS: an expired story stays in its author's archive");
+  await evaluate(dummy, `[...document.querySelectorAll('[role="dialog"][aria-label="Story archive"] button')].find(candidate => candidate.textContent.trim() === 'Close')?.click()`);
+  await until(dummy, `document.querySelector('[role="dialog"][aria-label="Story archive"]') === null`, 'the archive closes');
   await navigate(dummy, '/profile');
   await until(dummy, `document.body.innerText.includes('Edit profile')`, 'profile loaded');
   await button(dummy, 'Edit profile');
