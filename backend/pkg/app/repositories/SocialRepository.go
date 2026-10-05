@@ -332,9 +332,10 @@ func (db *DB) CanViewMedia(id, viewerID string) (bool, error) {
 				-- Stories carry no audience: a live one is readable by any signed-in
 				-- member. That is a decision, not an omission — the spec's story
 				-- requirement names no privacy, and the listing query agrees with this
-				-- branch by keying on expiry alone. Expiry is therefore the only thing
-				-- that ends access, which is also why an expired story releases its
-				-- upload to the collector.
+				-- branch by keying on expiry alone. Expiry is therefore what ends access
+				-- for everyone but the author, whose own-media branch above still opens
+				-- an expired story they kept in their archive — which is why the
+				-- collector holds that upload instead of releasing it.
 				SELECT 1 FROM story s WHERE s.mediaUrl='/api/v1/media/' || m.mediaId AND s.expiresAt>datetime('now')
 			) OR EXISTS (
 				SELECT 1 FROM socialGroup g WHERE g.imageUrl='/api/v1/media/' || m.mediaId
@@ -370,6 +371,28 @@ func (db *DB) CreateStory(s models.Story) (int, error) {
 // costs one lookup per story and nothing when there are no views.
 func (db *DB) Stories(offset int, viewerID string) ([]models.Story, error) {
 	rows, err := db.Conn.Query(`SELECT s.storyId,s.userId,u.nickName,COALESCE(u.avatar,''),s.content,s.mediaUrl,s.mediaType,s.backgroundColor,s.createdAt,s.expiresAt,(v.userId IS NOT NULL) FROM story s JOIN user u ON u.userId=s.userId LEFT JOIN storyView v ON v.storyId=s.storyId AND v.userId=? WHERE s.expiresAt > datetime('now') ORDER BY s.createdAt DESC,s.storyId DESC LIMIT 30 OFFSET ?`, viewerID, offset)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	stories := []models.Story{}
+	for rows.Next() {
+		var s models.Story
+		if err := rows.Scan(&s.StoryID, &s.UserID, &s.Nickname, &s.Avatar, &s.Content, &s.MediaURL, &s.MediaType, &s.BackgroundColor, &s.CreatedAt, &s.ExpiresAt, &s.Viewed); err != nil {
+			return nil, err
+		}
+		stories = append(stories, s)
+	}
+	return stories, rows.Err()
+}
+
+// ArchivedStories lists one account's own expired stories, newest first — the ones that have
+// left every strip and would otherwise disappear entirely. It is the author's own list and
+// nobody else's: the predicate is the caller's id, so there is no one else's archive to ask for.
+// The viewer-relative `viewed` flag is folded in exactly as `Stories` folds it, so a row means
+// the same thing in both lists.
+func (db *DB) ArchivedStories(offset int, userID string) ([]models.Story, error) {
+	rows, err := db.Conn.Query(`SELECT s.storyId,s.userId,u.nickName,COALESCE(u.avatar,''),s.content,s.mediaUrl,s.mediaType,s.backgroundColor,s.createdAt,s.expiresAt,(v.userId IS NOT NULL) FROM story s JOIN user u ON u.userId=s.userId LEFT JOIN storyView v ON v.storyId=s.storyId AND v.userId=? WHERE s.userId=? AND s.expiresAt <= datetime('now') ORDER BY s.createdAt DESC,s.storyId DESC LIMIT 30 OFFSET ?`, userID, userID, offset)
 	if err != nil {
 		return nil, err
 	}
