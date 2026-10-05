@@ -300,16 +300,16 @@ try {
   // The feed's "People you may know" rail: it offers members the viewer does not follow,
   // and following one from it takes them out of the rail. The follow is undone at the end,
   // because the request flows later in this suite start from nobody following anybody.
-  await until(dummy, `!!document.querySelector('section[aria-label="People you may know"]')`, 'the feed offers people to follow', 15000);
+  await until(dummy, `!!document.querySelector('section[aria-label="Suggested for you"]')`, 'the feed offers people to follow', 15000);
   const suggestion = (await api(dummy, '/users?q=alexdemo')).find(person => person.nickname === 'alexdemo');
   assert(suggestion, 'Alex must be someone the rail can offer');
-  await until(dummy, `document.querySelector('section[aria-label="People you may know"]').innerText.includes('@alexdemo')`, 'the rail offers Alex');
-  await evaluate(dummy, `[...document.querySelectorAll('section[aria-label="People you may know"] button')].find(candidate => candidate.textContent === 'Follow').click()`);
-  await until(dummy, `!(document.querySelector('section[aria-label="People you may know"]')?.innerText || '').includes('@alexdemo')`, 'the followed member leaves the rail');
+  await until(dummy, `document.querySelector('section[aria-label="Suggested for you"]').innerText.includes('@alexdemo')`, 'the rail offers Alex');
+  await evaluate(dummy, `[...document.querySelectorAll('section[aria-label="Suggested for you"] button')].find(candidate => candidate.textContent === 'Follow').click()`);
+  await until(dummy, `!(document.querySelector('section[aria-label="Suggested for you"]')?.innerText || '').includes('@alexdemo')`, 'the followed member leaves the rail');
   assert(await evaluate(dummy, `(async () => (await (await fetch('/api/v1/users/me')).json()).data.following.includes(${JSON.stringify(suggestion.userId)}))()`), 'following from the rail must reach the account');
   await api(dummy, `/users/${suggestion.userId}/follow`, 'DELETE');
   await navigate(dummy, '/');
-  await until(dummy, `(document.querySelector('section[aria-label="People you may know"]')?.innerText || '').includes('@alexdemo')`, 'unfollowing offers the member again');
+  await until(dummy, `(document.querySelector('section[aria-label="Suggested for you"]')?.innerText || '').includes('@alexdemo')`, 'unfollowing offers the member again');
   console.log('PASS: the feed offers people you may know, and following one takes them out of it');
 
   await navigate(dummy, '/create-post');
@@ -920,11 +920,14 @@ try {
   console.log('PASS: one search page looks through posts, people and groups and remembers the terms');
 
   await navigate(dummy, '/');
-  await evaluate(dummy, `[...document.querySelectorAll('button')].find(button => button.textContent.includes('Create story')).click()`);
+  await evaluate(dummy, `[...document.querySelectorAll('button')].find(button => button.textContent.includes('Your story')).click()`);
   await fill(dummy, '[role="dialog"] textarea', `Browser story ${stamp}`);
   await button(dummy, 'Share story');
-  await until(dummy, `!document.querySelector('[role="dialog"]') && document.body.innerText.includes(${JSON.stringify(`Browser story ${stamp}`)})`, 'create story');
+  await until(dummy, `!document.querySelector('[role="dialog"]')`, 'the story composer closes');
   storyId = (await api(dummy, '/stories')).find(story => story.content === `Browser story ${stamp}`).storyId;
+  // The strip is a tray of rings, not cards with the caption on them, so the proof the story
+  // landed is its own item in the tray rather than its text appearing on the page.
+  await until(dummy, `!!document.querySelector('[data-story-id="${storyId}"]')`, 'the story joins the tray');
   // Another account opens it, so the author's "seen by" list has someone to name.
   await api(alex, `/stories/${storyId}/view`, 'POST');
   // A story nobody has opened wears the unseen (gradient) ring...
@@ -945,8 +948,8 @@ try {
   // A reader replies through the story view, and its author — and only its author — reads it back
   // in the story's own replies panel, the sibling of the seen-by one.
   await navigate(alex, '/');
-  await until(alex, `document.body.innerText.includes(${JSON.stringify(`Browser story ${stamp}`)})`, 'Alex sees the story strip');
-  await evaluate(alex, `[...document.querySelectorAll('[data-story-ring]')].find(ring => ring.closest('div').innerText.includes(${JSON.stringify(`Browser story ${stamp}`)})).closest('div').click()`);
+  await until(alex, `!!document.querySelector('[data-story-id="${storyId}"]')`, 'Alex sees the story in the tray');
+  await evaluate(alex, `document.querySelector('[data-story-id="${storyId}"]').click()`);
   await until(alex, `!!document.querySelector('input[aria-label="Reply to story"]')`, 'a reader is offered the reply box');
   await fill(alex, 'input[aria-label="Reply to story"]', `Browser reply ${stamp}`);
   await evaluate(alex, `document.querySelector('button[aria-label="Send reply"]').click()`);
@@ -955,8 +958,8 @@ try {
   await until(alex, `document.querySelector('[role="dialog"]') === null`, 'the reader closes the story');
 
   await navigate(dummy, '/');
-  await until(dummy, `document.body.innerText.includes(${JSON.stringify(`Browser story ${stamp}`)})`, 'the author is back at the strip');
-  await evaluate(dummy, `[...document.querySelectorAll('[data-story-ring]')].find(ring => ring.closest('div').innerText.includes(${JSON.stringify(`Browser story ${stamp}`)})).closest('div').click()`);
+  await until(dummy, `!!document.querySelector('[data-story-id="${storyId}"]')`, 'the author is back at the tray');
+  await evaluate(dummy, `document.querySelector('[data-story-id="${storyId}"]').click()`);
   await until(dummy, `[...document.querySelectorAll('button')].some(button => button.textContent.trim() === 'Replies 1')`, 'the author is offered the reply count');
   await button(dummy, 'Replies 1');
   await until(dummy, `document.querySelector('[role="dialog"][aria-label="Story"]').innerText.includes(${JSON.stringify(`Browser reply ${stamp}`)})`, 'the author reads the reply');
