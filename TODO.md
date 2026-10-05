@@ -1667,8 +1667,9 @@ item still open in this file is post-submission work; see "Status at submission"
   (0 of 62), and the browser suite, which added `/search` to the anonymous sweep and asserts the
   page by name.
 - [ ] **P3** Mute and block a user, enforced in the feed, profile, chat and notifications.
-- [ ] **P3** Story replies and a "seen by" list; archive expired stories instead of letting
-  the row disappear.
+- [x] **P3** Story replies and a "seen by" list; archive expired stories instead of letting
+  the row disappear. **Closed 2026-10-05:** all three parts are the three Progress paragraphs
+  below.
   Progress 2026-10-04: **the "seen by" list is done.** `GET /api/v1/stories/{id}/viewers` answers
   the author's own list, built from the `storyView` table the seen-ring already writes, newest
   view first. It is **author-only by construction**: the query runs only for a story whose owner
@@ -1704,8 +1705,31 @@ item still open in this file is post-submission work; see "Status at submission"
   beside the kept reply, and the cascade), the migration round trip at `000017`, the API tour
   (route coverage enforced by `cmd/api_tour_test.go`), `npx tsc --noEmit`, `npm run lint`
   (0 errors), `npm run build`, and the browser suite, whose new step is `PASS: a story reply
-  reaches its author alone`. **Still open in this item:** archiving expired stories instead of
-  letting the row disappear.
+  reaches its author alone`. **Still open in this item:** archiving expired stories — done in the
+  paragraph below.
+
+  Progress 2026-10-05 (story archive): **the archive is done, and the item with it.**
+  `GET /api/v1/stories/archive` answers the caller's own expired stories, newest first, so a story
+  that has left every strip no longer disappears from view — its author keeps it. It is the
+  caller's own list by construction, the repository's predicate being the caller's id, so there is
+  no one else's archive to ask for; the page size and raw-offset shape match `/stories`, and
+  `000018` adds `story(userId, createdAt DESC)` so the list does not sort a temporary b-tree on
+  every page load — the index `savedPost` got for the same reason. **The change that made it real
+  is a reversal:** an expired story's upload used to be treated as an orphan and collected (the
+  old `TestExpiredStoryMediaIsCollected`), which would have left the archive's photos dead. An
+  expired story is now archived rather than gone — the author still opens it, through the
+  own-media branch of `CanViewMedia` — so the collector holds the upload for as long as the story
+  row exists, and deleting the story is what releases it, exactly as deleting a post releases a
+  post's photo. The visible surface is a "Your archive" control on the stories strip that opens a
+  dialog of the author's own expired stories, each opening in the same viewer (seen-by and replies
+  included) with the same delete. Verified: `go build ./...`, `go vet ./...`, `go test ./...`
+  (including the new `cmd/story_archive_test.go` — a live story is not archived, an expired one is,
+  a second account's archive is its own and empty, and deleting empties it — and the rewritten
+  `TestArchivedStoryMediaSurvives`), the migration round trip at `000018`, the API tour (route
+  coverage enforced by `cmd/api_tour_test.go`), `npx tsc --noEmit`, `npm run lint` (0 errors),
+  `npm run build`, and the browser suite, whose new step is `PASS: an expired story stays in its
+  author's archive` (the demo seed leaves one expired story, since nothing can pass a story's real
+  24-hour life inside a run).
 - [ ] **P3** Chat extras: message reactions, an image lightbox, voice notes, and a shared
   media tab per conversation.
   Progress 2026-10-01: **message reactions are done.** The `reaction` table is already
