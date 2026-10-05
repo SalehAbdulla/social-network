@@ -28,7 +28,7 @@ export default function Feed() {
     keyOf: post => post.postId,
   });
 
-  return <div className="mx-auto max-w-3xl space-y-6 p-4 py-8 sm:p-8">
+  return <div className="mx-auto max-w-5xl space-y-6 p-4 py-8 sm:p-8">
     <header className="flex flex-wrap items-end justify-between gap-3">
       <div>
         <h1 className="text-2xl font-bold tracking-tight text-slate-900">Your feed</h1>
@@ -36,8 +36,13 @@ export default function Feed() {
       </div>
       <button type="button" onClick={openComposer} className="chat-primary inline-flex items-center gap-2"><PenSquare size={16} />New post</button>
     </header>
+    {/* Instagram's desktop feed is a centred column with the suggestions rail beside it, and the
+        rail simply dropped below `xl` rather than moved — which is why the column centres itself
+        until the two-column grid can hold both. The rail is `sticky` so it stays put while the
+        feed scrolls past it. */}
+    <div className="grid gap-8 xl:grid-cols-[minmax(0,1fr)_20rem]">
+    <div className="mx-auto w-full min-w-0 max-w-3xl space-y-6 xl:mx-0 xl:max-w-none">
     <StoriesBar />
-    <SuggestedPeople />
     {/* Offered, not imposed: a post that arrives over the socket raises this pill, and
         the reader chooses when to fold the newest page in. */}
     <NewPostsNotice onReload={feed.refresh} />
@@ -50,6 +55,9 @@ export default function Feed() {
         {feed.settled && !feed.error && feed.items.length === 0 && <Link href="/create-post" className="block text-center text-blue-600">Create a post</Link>}
         {feed.items.length > 0 && <LoadMore loading={feed.loadingMore} hasMore={feed.hasMore} onLoadMore={feed.loadMore} label={`Load${feed.items.length > FEED_PAGE_SIZE ? ' more' : ' older'} posts`} />}
       </>}
+    </div>
+    <aside className="hidden xl:block"><div className="sticky top-6"><SuggestedPeople /></div></aside>
+    </div>
   </div>;
 }
 
