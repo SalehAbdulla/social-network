@@ -47,3 +47,13 @@ type Story struct {
 	// is true, so the flag is filled by the listing query rather than stored here.
 	Viewed bool `json:"viewed"`
 }
+
+// StoryViewer is one account in a story's "seen by" list, which only the story's author is
+// offered. It is deliberately small: the author needs the person and the moment they looked,
+// and nothing about the story, which the caller already holds.
+type StoryViewer struct {
+	UserID   string `json:"userId"`
+	Nickname string `json:"nickname"`
+	Avatar   string `json:"avatar"`
+	ViewedAt string `json:"viewedAt"`
+}
