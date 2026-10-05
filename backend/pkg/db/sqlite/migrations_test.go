@@ -76,8 +76,8 @@ func TestMigrationsRoundTrip(t *testing.T) {
 	version, dirty, err := migrations.Version()
 	// Pinned rather than derived from the directory: a new migration is meant to be noticed
 	// here and its round trip confirmed, so adding one is a deliberate edit to this line.
-	if err != nil || dirty || version != 17 {
-		t.Fatalf("expected clean version 17, got %d (dirty=%v, err=%v)", version, dirty, err)
+	if err != nil || dirty || version != 18 {
+		t.Fatalf("expected clean version 18, got %d (dirty=%v, err=%v)", version, dirty, err)
 	}
 }
 
