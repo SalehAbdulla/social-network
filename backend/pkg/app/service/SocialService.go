@@ -188,3 +188,13 @@ func (s *SocialService) StoryReplies(storyID int, requesterID string) ([]models.
 	}
 	return s.Repo.StoryReplies(storyID, requesterID)
 }
+
+// ArchivedStories lists the caller's own expired stories. The rule this owns is the repository's
+// — the list is the caller's own by construction, so there is no one else's to leak — so the
+// service only guards the shape of the arguments, the way the stories listing does.
+func (s *SocialService) ArchivedStories(offset int, userID string) ([]models.Story, error) {
+	if offset < 0 || userID == "" {
+		return nil, backend.ErrBadRequest
+	}
+	return s.Repo.ArchivedStories(offset, userID)
+}
