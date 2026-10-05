@@ -26,8 +26,11 @@ yet and a button to change that.
 
 **Posts, comments and reactions** — three privacy levels (`public`, `followers` for
 "almost private", `selected` for "only the followers you pick"), up to four images or
-GIFs per post, comments with their own image — an inline list on a wide screen and a
-bottom drawer on a phone — and reaction scores. Stories expire
+GIFs per post, comments with their own image, and reaction scores. On a wide screen the
+feed opens a post in an Instagram-style overlay — the media on the left, and on the right
+the header, caption, the post's actions and the comments with the composer pinned at the
+bottom — while the post's own page keeps its inline list and a phone keeps the bottom
+drawer. Stories expire
 after 24 hours, and the strip draws a gradient ring around an author's avatar until
 you open their story — the "seen" state is kept per account on the server, so it
 follows you to another device. An unsent post is kept in the browser, so a refresh does not lose the
