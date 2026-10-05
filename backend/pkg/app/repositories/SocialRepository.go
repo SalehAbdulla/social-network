@@ -436,6 +436,64 @@ func (db *DB) StoryViewers(storyID int, ownerID string) ([]models.StoryViewer, e
 	return viewers, rows.Err()
 }
 
+// LiveStoryOwner answers the account that owns a story that can still be read. It is the lookup
+// a reply runs before it is written: a story that is unknown or expired is the same ErrNotFound
+// a read gives, so a reply cannot be a way to learn that a dead story exists.
+func (db *DB) LiveStoryOwner(storyID int) (string, error) {
+	var owner string
+	err := db.Conn.QueryRow("SELECT userId FROM story WHERE storyId=? AND expiresAt > datetime('now')", storyID).Scan(&owner)
+	if errors.Is(err, sql.ErrNoRows) {
+		return "", backend.ErrNotFound
+	}
+	return owner, err
+}
+
+// AddStoryReply records a reply to a story. The caller has already resolved the story and its
+// owner (see LiveStoryOwner and SocialService.ReplyToStory); this only writes the row.
+func (db *DB) AddStoryReply(storyID int, userID, content string) (int, error) {
+	result, err := db.Conn.Exec("INSERT INTO storyReply (storyId,userId,content) VALUES (?,?,?)", storyID, userID, content)
+	if err != nil {
+		return 0, err
+	}
+	id, err := result.LastInsertId()
+	return int(id), err
+}
+
+// StoryReplies answers a story's replies, newest first. It is author-only by construction, the
+// same shape as StoryViewers: the query runs only for a story whose owner is the caller, and an
+// unknown story and someone else's are the same ErrNotFound, so the route cannot be used to
+// confirm that a story exists. The story need not still be live — an author keeps the replies
+// left before it expired, which is what makes the reply a record rather than a transient.
+func (db *DB) StoryReplies(storyID int, ownerID string) ([]models.StoryReply, error) {
+	var owned bool
+	if err := db.Conn.QueryRow("SELECT EXISTS(SELECT 1 FROM story WHERE storyId=? AND userId=?)", storyID, ownerID).Scan(&owned); err != nil {
+		return nil, err
+	}
+	if !owned {
+		return nil, backend.ErrNotFound
+	}
+	rows, err := db.Conn.Query(
+		`SELECT r.replyId, r.storyId, r.userId, COALESCE(u.nickName,''), COALESCE(u.avatar,''), r.content, r.createdAt
+		 FROM storyReply r JOIN user u ON u.userId=r.userId
+		 WHERE r.storyId=?
+		 ORDER BY r.createdAt DESC, r.replyId DESC`,
+		storyID,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	replies := []models.StoryReply{}
+	for rows.Next() {
+		var r models.StoryReply
+		if err := rows.Scan(&r.ReplyID, &r.StoryID, &r.UserID, &r.Nickname, &r.Avatar, &r.Content, &r.CreatedAt); err != nil {
+			return nil, err
+		}
+		replies = append(replies, r)
+	}
+	return replies, rows.Err()
+}
+
 func affected(result sql.Result, err error) error {
 	if err != nil {
 		return err
