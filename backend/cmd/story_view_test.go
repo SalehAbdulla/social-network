@@ -60,6 +60,18 @@ func TestStoryViewIntegration(t *testing.T) {
 		t.Fatalf("one reader's view turned the writer's ring: %+v", story)
 	}
 
+	// The author, and only the author, is offered the list of who opened it: the flag above
+	// records a view, and this reads the views back to the one account entitled to them.
+	viewersPath := "/api/v1/stories/" + strconv.Itoa(created["storyId"]) + "/viewers"
+	viewers := decoded[[]models.StoryViewer](t, writer.call("GET", viewersPath, nil, 200))
+	if len(viewers) != 1 || viewers[0].UserID != "alex-id" || viewers[0].Nickname == "" {
+		t.Fatalf("the author's seen-by list = %+v, want the one reader", viewers)
+	}
+	// A reader gets the same 404 as a story that does not exist, so the route is not a way to
+	// learn that someone else's story exists.
+	reader.call("GET", viewersPath, nil, 404)
+	reader.call("GET", "/api/v1/stories/999999/viewers", nil, 404)
+
 	// Opening it twice is a state, not a change: still a 200, still one row.
 	reader.call("POST", viewPath, nil, 200)
 	var rows int
