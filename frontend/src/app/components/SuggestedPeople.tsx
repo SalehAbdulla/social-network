@@ -12,7 +12,12 @@ import Avatar from './Avatar';
 const SUGGESTIONS = 3;
 
 /**
- * A few members the viewer does not follow yet, offered on the feed.
+ * A few members the viewer does not follow yet, offered in the feed's right-hand rail.
+ *
+ * It is the rail Instagram puts beside the feed: a heading, a "See all" link into Discover, and
+ * a row per person — face, name over `@handle`, and a Follow link on the right. `page.tsx` owns
+ * where it sits (the `aside` beside the feed from `xl` up), so this component only draws the
+ * list.
  *
  * It reads `GET /api/v1/users` — the same list Discover shows — and does the thing that
  * endpoint cannot do for itself: drop everyone the viewer already follows or has already
@@ -57,17 +62,17 @@ export default function SuggestedPeople() {
   }
 
   if (suggestions.length === 0) return null;
-  return <section aria-label="People you may know" className="rounded-2xl border border-border bg-card p-4">
+  return <section aria-label="Suggested for you" className="space-y-3">
     <div className="flex items-center justify-between gap-3">
-      <h2 className="text-sm font-semibold">People you may know</h2>
-      <Link href="/discover" className="text-xs font-medium text-brand-1 hover:underline">See all</Link>
+      <h2 className="text-sm font-semibold text-muted">Suggested for you</h2>
+      <Link href="/discover" className="text-xs font-semibold text-brand-1 hover:underline">See all</Link>
     </div>
-    <ul className="mt-3 grid gap-2 sm:grid-cols-3">{suggestions.map(person => <li key={person.userId} className="flex items-center gap-2 rounded-xl border border-border bg-surface-2 p-2">
-      <Link href={`/profile/${person.userId}`} className="flex min-w-0 flex-1 items-center gap-2">
-        <Avatar name={displayName(person)} avatarUrl={person.avatar} size={36} />
-        <span className="min-w-0"><span className="block truncate text-sm font-medium">{displayName(person)}</span><span className="block truncate text-xs text-slate-500">@{person.nickname}</span></span>
+    <ul className="space-y-3">{suggestions.map(person => <li key={person.userId} className="flex items-center gap-3">
+      <Link href={`/profile/${person.userId}`} className="flex min-w-0 flex-1 items-center gap-3">
+        <Avatar name={displayName(person)} avatarUrl={person.avatar} size={44} />
+        <span className="min-w-0"><span className="block truncate text-sm font-semibold text-text">{displayName(person)}</span><span className="block truncate text-xs text-muted">@{person.nickname}</span></span>
       </Link>
-      <button type="button" disabled={busy === person.userId} onClick={() => void follow(person)} className="shrink-0 rounded-lg bg-blue-50 px-2.5 py-1.5 text-xs font-medium text-blue-700 disabled:opacity-50">{person.isPublic ? 'Follow' : 'Request'}</button>
+      <button type="button" disabled={busy === person.userId} onClick={() => void follow(person)} className="shrink-0 text-xs font-semibold text-brand-1 hover:underline disabled:opacity-50">{person.isPublic ? 'Follow' : 'Request'}</button>
     </li>)}</ul>
   </section>;
 }
