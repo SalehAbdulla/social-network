@@ -1,13 +1,15 @@
 'use client';
 
 import Link from 'next/link';
-import { PenSquare, RefreshCw } from 'lucide-react';
+import { RefreshCw } from 'lucide-react';
+import { useState } from 'react';
 import { type Page, type Post } from './api/social';
 import { usePagedList } from './lib/usePagedList';
-import { useBackend } from './components/BackendProvider';
+import { useMediaQuery } from './lib/useMediaQuery';
 import StoriesBar from './components/StoriesBar';
 import SuggestedPeople from './components/SuggestedPeople';
 import PostCard from './components/PostCard';
+import PostOverlay from './components/PostOverlay';
 import RequestState from './components/RequestState';
 import LoadMore from './components/LoadMore';
 import NewPostsNotice from './components/NewPostsNotice';
@@ -19,7 +21,6 @@ const FEED_PAGE_SIZE = 10;
 const FEED_KEY = `/posts?size=${FEED_PAGE_SIZE}&sortBy=createdat&sortOrder=desc`;
 
 export default function Feed() {
-  const { openComposer } = useBackend();
   const feed = usePagedList<Post, Page<Post>>({
     key: FEED_KEY,
     pageQuery: page => `&page=${page}`,
@@ -27,14 +28,19 @@ export default function Feed() {
     normalize: raw => ({ items: raw.posts, hasMore: !raw.lastPage }),
     keyOf: post => post.postId,
   });
+  // The overlay belongs to the feed, not the shell: only this list opens it, and only on a wide
+  // screen, where a card stops being a route link and becomes the thing Instagram pops open.
+  // Rendering is gated on `wide` rather than clearing state on a resize, so a desktop dialog can
+  // never be left sitting over a phone layout. Creating a post is not offered here — the sidebar
+  // owns it on a desktop and the bottom bar on a phone (the one-surface-per-breakpoint rule), so
+  // the header is only a heading.
+  const wide = useMediaQuery('(min-width: 1024px)');
+  const [openPost, setOpenPost] = useState<Post | null>(null);
 
   return <div className="mx-auto max-w-5xl space-y-6 p-4 py-8 sm:p-8">
-    <header className="flex flex-wrap items-end justify-between gap-3">
-      <div>
-        <h1 className="text-2xl font-bold tracking-tight text-slate-900">Your feed</h1>
-        <p className="text-sm text-slate-500">The latest posts from the people you follow, newest first.</p>
-      </div>
-      <button type="button" onClick={openComposer} className="chat-primary inline-flex items-center gap-2"><PenSquare size={16} />New post</button>
+    <header>
+      <h1 className="text-2xl font-bold tracking-tight text-slate-900">Your feed</h1>
+      <p className="text-sm text-slate-500">The latest posts from the people you follow, newest first.</p>
     </header>
     {/* Instagram's desktop feed is a centred column with the suggestions rail beside it, and the
         rail simply dropped below `xl` rather than moved — which is why the column centres itself
@@ -50,7 +56,7 @@ export default function Feed() {
     {feed.loading
       ? <PostListSkeleton />
       : <>
-        {feed.items.map(post => <PostCard key={post.postId} post={post} onPostRemoved={postId => feed.update(items => items.filter(item => item.postId !== postId))} />)}
+        {feed.items.map(post => <PostCard key={post.postId} post={post} onOpen={wide ? () => setOpenPost(post) : undefined} onPostRemoved={postId => feed.update(items => items.filter(item => item.postId !== postId))} />)}
         {feed.settled && !feed.error && feed.items.length === 0 && <RequestState variant="feed" empty="No posts yet. Share your first post to get started." />}
         {feed.settled && !feed.error && feed.items.length === 0 && <Link href="/create-post" className="block text-center text-blue-600">Create a post</Link>}
         {feed.items.length > 0 && <LoadMore loading={feed.loadingMore} hasMore={feed.hasMore} onLoadMore={feed.loadMore} label={`Load${feed.items.length > FEED_PAGE_SIZE ? ' more' : ' older'} posts`} />}
@@ -58,6 +64,9 @@ export default function Feed() {
     </div>
     <aside className="hidden xl:block"><div className="sticky top-6"><SuggestedPeople /></div></aside>
     </div>
+    {/* Pure state, outside the grid: `/post/{postId}` stays the deep link (hard load, refresh, the
+        Share button's copied URL) and closing the overlay just drops this state. */}
+    {wide && openPost && <PostOverlay post={openPost} onClose={() => setOpenPost(null)} onPostRemoved={postId => { feed.update(items => items.filter(item => item.postId !== postId)); setOpenPost(null); }} />}
   </div>;
 }
 
