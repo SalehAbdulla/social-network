@@ -52,11 +52,12 @@ func TestMigrationsRoundTrip(t *testing.T) {
 	assertResetColumns(t, database)
 	assertSavedPostColumns(t, database)
 	assertStoryViewColumns(t, database)
+	assertStoryReplyColumns(t, database)
 
 	if err := migrations.Down(); err != nil {
 		t.Fatalf("down: %v", err)
 	}
-	for _, table := range []string{"user", "session", "post", "comment", "message", "notification", "media", "follow", "connection", "story", "storyView", "socialGroup", "groupContent", "passwordReset", "savedPost"} {
+	for _, table := range []string{"user", "session", "post", "comment", "message", "notification", "media", "follow", "connection", "story", "storyView", "storyReply", "socialGroup", "groupContent", "passwordReset", "savedPost"} {
 		if tableExists(t, database, table) {
 			t.Fatalf("table %q survived a full down migration", table)
 		}
@@ -71,11 +72,12 @@ func TestMigrationsRoundTrip(t *testing.T) {
 	assertResetColumns(t, database)
 	assertSavedPostColumns(t, database)
 	assertStoryViewColumns(t, database)
+	assertStoryReplyColumns(t, database)
 	version, dirty, err := migrations.Version()
 	// Pinned rather than derived from the directory: a new migration is meant to be noticed
 	// here and its round trip confirmed, so adding one is a deliberate edit to this line.
-	if err != nil || dirty || version != 16 {
-		t.Fatalf("expected clean version 16, got %d (dirty=%v, err=%v)", version, dirty, err)
+	if err != nil || dirty || version != 17 {
+		t.Fatalf("expected clean version 17, got %d (dirty=%v, err=%v)", version, dirty, err)
 	}
 }
 
@@ -217,6 +219,19 @@ func assertStoryViewColumns(t *testing.T, database *sql.DB) {
 	for _, name := range []string{"storyId", "userId", "viewedAt"} {
 		if !columns[name] {
 			t.Fatalf("storyView is missing %q after the migration", name)
+		}
+	}
+}
+
+// assertStoryReplyColumns guards the table 000017 adds. It has to point at both the story and the
+// account, or deleting either would leave the reply behind for the read to filter out by hand,
+// and it carries its own `content` and `createdAt`, because that is what the author reads back.
+func assertStoryReplyColumns(t *testing.T, database *sql.DB) {
+	t.Helper()
+	columns := tableColumns(t, database, "storyReply")
+	for _, name := range []string{"replyId", "storyId", "userId", "content", "createdAt"} {
+		if !columns[name] {
+			t.Fatalf("storyReply is missing %q after the migration", name)
 		}
 	}
 }
