@@ -144,3 +144,13 @@ func (s *SocialService) ViewStory(storyID int, viewerID string) error {
 	}
 	return s.Repo.MarkStoryViewed(storyID, viewerID)
 }
+
+// StoryViewers answers a story's "seen by" list. The rule this owns is the repository's — it
+// answers only for the story's own author, and an unknown story and someone else's are the same
+// 404 — so the service only guards the shape of the arguments.
+func (s *SocialService) StoryViewers(storyID int, requesterID string) ([]models.StoryViewer, error) {
+	if storyID < 1 || requesterID == "" {
+		return nil, backend.ErrBadRequest
+	}
+	return s.Repo.StoryViewers(storyID, requesterID)
+}
