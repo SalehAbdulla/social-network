@@ -8,16 +8,19 @@ import { type ChatUser, type ChatMessage, type Group, displayName, errorMessage,
 import { usePagedList } from '../lib/usePagedList';
 import { useResource } from '../lib/useResource';
 import { useLiveRefresh } from '../lib/useLiveRefresh';
+import { useDialogFocus } from '../lib/useDialogFocus';
 import Avatar from '../components/Avatar';
 import ConversationList, { type ConversationItem } from '../components/messages/ConversationList';
 import EmptyChat from '../components/messages/EmptyChat';
 import NewMessageModal from '../components/messages/NewMessageModal';
 import { previewTime } from '../components/messages/time';
+import { memberCount } from '../components/messages/group/groupContent';
 import DirectConversation from '../components/DirectConversation';
 import GroupConversation from '../components/GroupConversation';
 import GroupInvitations from '../components/GroupInvitations';
 import ImagePicker from '../components/ImagePicker';
 import { useBackend } from '../components/BackendProvider';
+import { DM_AVATAR_SIZE } from '../lib/sizing';
 
 const GROUPS_PER_PAGE = 30;
 // A conversation's preview is read from its own thread (the list endpoint reports only when
@@ -54,6 +57,9 @@ export default function MessagesInboxPage() {
   const [busy, setBusy] = useState(false);
   const [files, setFiles] = useState<File[]>([]);
   const [previews, setPreviews] = useState<Record<string, Preview>>({});
+  // The create-group prompt is an overlay, so it takes the app's dialog contract: focus moves
+  // inside, Tab cycles, Escape closes, and the page behind is frozen.
+  const createDialog = useDialogFocus<HTMLFormElement>(() => { if (!busy) setCreating(false); }, { enabled: creating });
   const users = useResource<ChatUser[]>('/messages/users');
   const groups = usePagedList<Group, Group[]>({
     // Scope and query are the identity, so a new search starts at offset 0.
@@ -131,7 +137,7 @@ export default function MessagesInboxPage() {
       key: person.userId,
       href: `/messages/${person.userId}`,
       name: displayName(person),
-      avatar: <Avatar name={displayName(person)} avatarUrl={person.avatar} size={56} />,
+      avatar: <Avatar name={displayName(person)} avatarUrl={person.avatar} size={DM_AVATAR_SIZE} />,
       online: !!person.isOnline,
       preview: previewOf(person.userId),
       stamp: person.lastMessageTime ? previewTime(person.lastMessageTime) : '',
@@ -144,8 +150,8 @@ export default function MessagesInboxPage() {
     key: String(group.groupId),
     href: `/messages/groups/${group.groupId}`,
     name: group.title,
-    avatar: <Avatar name={group.title} avatarUrl={group.imageUrl} size={56} />,
-    preview: group.isMember ? `${group.memberCount} members` : group.joinRequested ? 'Request pending' : 'Discover · Request to join',
+    avatar: <Avatar name={group.title} avatarUrl={group.imageUrl} size={DM_AVATAR_SIZE} />,
+    preview: group.isMember ? memberCount(group.memberCount) : group.joinRequested ? 'Request pending' : 'Discover · Request to join',
     stamp: '',
     unread: false,
   })), [groups.items]);
@@ -182,9 +188,11 @@ export default function MessagesInboxPage() {
           ? (search ? 'No groups found.' : 'Your joined groups will appear here. Find a group to join or create your own.')
           : (search ? 'No messages found' : 'Your conversations will appear here after your first message.')}
         activeKey={groupTab ? groupId : partner}
-        extra={groupTab ? <div className="space-y-3 px-6 pb-3">
-          <GroupInvitations changed={groups.reload} />
-          <button type="button" className="dm-secondary w-full" onClick={() => { setBrowsingGroups(!browsingGroups); setSearch(''); setQuery(''); }}>{browsingGroups ? 'Back to your groups' : 'Find groups to join'}</button>
+        extra={groupTab ? <div className="space-y-3 pb-1">
+          <div className="dm-list-block"><GroupInvitations changed={groups.reload} /></div>
+          {/* The action sits in a container carrying the same `--dm-list-head-x` inset the search
+              pill is inset by, so the two line up; the button itself fills that container. */}
+          <div className="dm-list-block"><button type="button" className="dm-secondary dm-list-action" onClick={() => { setBrowsingGroups(!browsingGroups); setSearch(''); setQuery(''); }}>{browsingGroups ? 'Back to your groups' : 'Find groups to join'}</button></div>
         </div> : undefined}
       />
       <div className="dm-chat">
@@ -194,15 +202,20 @@ export default function MessagesInboxPage() {
       </div>
     </div>
     {composing && <NewMessageModal meId={meId} onClose={() => setComposing(false)} />}
-    {creating && <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/40 p-4" role="dialog" aria-modal="true" aria-labelledby="create-group-title" onKeyDown={event => { if (event.key === 'Escape' && !busy) setCreating(false); }}>
-      <form onSubmit={create} className="max-h-[90dvh] w-full max-w-lg space-y-5 overflow-y-auto rounded-2xl bg-white p-6 shadow-xl">
-        <fieldset disabled={busy} className="space-y-5">
-          <div className="flex items-center justify-between"><h2 id="create-group-title" className="text-xl font-semibold">Create a group</h2><button type="button" aria-label="Close create group" onClick={() => setCreating(false)}><X size={20} /></button></div>
-          <label className="chat-label">Group name<input autoFocus name="title" required minLength={3} maxLength={100} className="chat-field" placeholder="Give your group a name" /></label>
-          <label className="chat-label">Description<textarea name="description" maxLength={1000} rows={3} className="chat-field" placeholder="What brings your group together?" /></label>
+    {creating && <div className="dm-modal" onClick={() => { if (!busy) setCreating(false); }}>
+      <form ref={createDialog} onSubmit={create} role="dialog" aria-modal="true" aria-labelledby="create-group-title" tabIndex={-1} className="dm-modal-card" onClick={event => event.stopPropagation()}>
+        <div className="dm-modal-head">
+          <h2 id="create-group-title">Create a group</h2>
+          <button type="button" aria-label="Close create group" className="dm-icon" onClick={() => setCreating(false)}><X aria-hidden="true" /></button>
+        </div>
+        <fieldset disabled={busy} className="grp-sheet-body">
+          <label className="grp-field">Group name<input autoFocus name="title" required minLength={3} maxLength={100} placeholder="Give your group a name" /></label>
+          <label className="grp-field">Description<textarea name="description" maxLength={1000} rows={3} placeholder="What brings your group together?" /></label>
           <ImagePicker files={files} onChange={setFiles} max={1} disabled={busy} />
-          <button className="chat-primary w-full">{busy ? 'Creating…' : 'Create group'}</button>
         </fieldset>
+        <div className="dm-modal-foot">
+          <button className="dm-primary" disabled={busy}>{busy ? 'Creating…' : 'Create group'}</button>
+        </div>
       </form>
     </div>}
   </>;
