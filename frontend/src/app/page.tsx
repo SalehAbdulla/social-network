@@ -33,7 +33,11 @@ export default function Feed() {
   // carries no title of its own, the way Instagram's feed does not.
   const { openFor, overlay } = usePostOverlay(postId => feed.update(items => items.filter(item => item.postId !== postId)));
 
-  return <div className="mx-auto max-w-5xl space-y-6 p-4 py-8 sm:p-8">
+  // The rail beside the post column is what stops the column from being centred on the window: the
+  // grid below gives it 20rem plus a 2rem gap, so the posts sit 176px left of the middle. `xl:pl-16`
+  // makes up the other half — the shell already reserves the rail's own 18rem, and 18rem + 4rem is
+  // the 22rem that the suggestions rail and its gap take off the right.
+  return <div className="xl:pl-16"><div className="mx-auto max-w-5xl space-y-6 p-4 py-8 sm:p-8">
     {/* Instagram's desktop feed is a centred column with the suggestions rail beside it, and the
         rail simply dropped below `xl` rather than moved — which is why the column centres itself
         until the two-column grid can hold both. The rail is `sticky` so it stays put while the
@@ -57,6 +61,6 @@ export default function Feed() {
     <aside className="hidden xl:block"><div className="sticky top-6 space-y-6"><AccountRailCard /><SuggestedPeople /></div></aside>
     </div>
     {overlay}
-  </div>;
+  </div></div>;
 }
 
