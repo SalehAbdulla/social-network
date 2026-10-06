@@ -22,4 +22,10 @@ type GroupContent struct {
 	// rather than on its own clock, so the sections and the order cannot disagree
 	// — and a render stays a pure function of what the server sent.
 	Upcoming bool `json:"upcoming"`
+	// LikeCount and LikedByMe are a post's or a comment's likes, shaped the way the feed's
+	// `score`/`userScore` pair is: a total for the row, and a flag for the reader asking.
+	// The total is the denormalised `groupContent.score` column the reaction write keeps in
+	// step, so a page of posts costs one query rather than one aggregate per item.
+	LikeCount int  `json:"likeCount"`
+	LikedByMe bool `json:"likedByMe"`
 }
