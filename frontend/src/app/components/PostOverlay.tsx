@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { type Post } from '../api/social';
 import { useDialogFocus } from '../lib/useDialogFocus';
-import PostCard from './PostCard';
+import PostCard, { type PostCardProps } from './PostCard';
 
 /**
  * The feed's Instagram-style post: a pop-up over the list with the media on the left and the
@@ -19,11 +19,18 @@ import PostCard from './PostCard';
  * the backdrop and the close control close it, and `useDialogFocus` returns focus to whatever
  * opened it — the same contract as `ComposerDialog` and `Lightbox`.
  */
-export default function PostOverlay({ post, onClose, onPostRemoved }: {
+export default function PostOverlay({ post, onClose, onPostRemoved, cardProps }: {
   post: Post;
   onClose: () => void;
   /** Drop the deleted row and close, so the feed behind the dialog cannot keep a dead card. */
   onPostRemoved?: (postId: number) => void;
+  /**
+   * Extra props for the card inside the dialog, for a post that is not the feed's own — a group
+   * post hands its context, its thread, its menu rows and its shared avatar lookup over here. The
+   * props the dialog itself owns (the post, the overlay variant, the close and the nested-dialog
+   * callbacks) are set below and cannot be overridden.
+   */
+  cardProps?: Omit<PostCardProps, 'post' | 'variant' | 'onClose' | 'onPostRemoved' | 'onNestedDialogChange'>;
 }) {
   // Escape and Tab belong to the innermost dialog: while a photo viewer or this post's own "…" menu
   // is open inside the overlay the trap stands down, which is the rule `StoryArchive` already
@@ -37,7 +44,7 @@ export default function PostOverlay({ post, onClose, onPostRemoved }: {
           sheet and the composer draw it that way: `backdrop-filter` makes an element the containing
           block for `position: fixed` descendants. */}
       <div onClick={event => event.stopPropagation()} className="w-[min(68rem,94vw)] overflow-hidden rounded-2xl border border-border bg-card shadow-2xl">
-        <PostCard key={post.postId} post={post} variant="overlay" onClose={onClose} onPostRemoved={onPostRemoved} onNestedDialogChange={setNestedDialog} />
+        <PostCard key={post.postId} {...cardProps} post={post} variant="overlay" onClose={onClose} onPostRemoved={onPostRemoved} onNestedDialogChange={setNestedDialog} />
       </div>
     </div>
   </>;
