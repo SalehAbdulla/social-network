@@ -53,6 +53,7 @@ func TestMigrationsRoundTrip(t *testing.T) {
 	assertSavedPostColumns(t, database)
 	assertStoryViewColumns(t, database)
 	assertStoryReplyColumns(t, database)
+	assertGroupLikeColumn(t, database)
 
 	if err := migrations.Down(); err != nil {
 		t.Fatalf("down: %v", err)
@@ -73,11 +74,12 @@ func TestMigrationsRoundTrip(t *testing.T) {
 	assertSavedPostColumns(t, database)
 	assertStoryViewColumns(t, database)
 	assertStoryReplyColumns(t, database)
+	assertGroupLikeColumn(t, database)
 	version, dirty, err := migrations.Version()
 	// Pinned rather than derived from the directory: a new migration is meant to be noticed
 	// here and its round trip confirmed, so adding one is a deliberate edit to this line.
-	if err != nil || dirty || version != 18 {
-		t.Fatalf("expected clean version 18, got %d (dirty=%v, err=%v)", version, dirty, err)
+	if err != nil || dirty || version != 19 {
+		t.Fatalf("expected clean version 19, got %d (dirty=%v, err=%v)", version, dirty, err)
 	}
 }
 
@@ -177,6 +179,23 @@ func assertEventColumns(t *testing.T, database *sql.DB) {
 	columns := tableColumns(t, database, "groupContent")
 	if !columns["reminderSentAt"] {
 		t.Fatal("groupContent is missing reminderSentAt after the migration")
+	}
+}
+
+// assertGroupLikeColumn guards 000019: the denormalised total a page of group posts or
+// comments reads its like count from, and the default that keeps every existing row at zero
+// likes rather than NULL.
+func assertGroupLikeColumn(t *testing.T, database *sql.DB) {
+	t.Helper()
+	if !tableColumns(t, database, "groupContent")["score"] {
+		t.Fatal("groupContent is missing score after the migration")
+	}
+	var definition string
+	if err := database.QueryRow("SELECT dflt_value FROM pragma_table_info('groupContent') WHERE name = 'score'").Scan(&definition); err != nil {
+		t.Fatalf("could not read groupContent.score's default: %v", err)
+	}
+	if definition != "0" {
+		t.Fatalf("groupContent.score should default to 0, got %q", definition)
 	}
 }
 
