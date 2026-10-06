@@ -16,7 +16,6 @@ import type { Post } from '../api/social';
 export const POST_DRAFT_STORAGE_KEY = 'social:post-draft';
 
 export type PostDraft = {
-  title: string;
   content: string;
   privacy: Post['privacy'];
   selectedFollowerIds: string[];
@@ -26,8 +25,8 @@ export type PostDraft = {
 const PRIVACY_VALUES: Post['privacy'][] = ['public', 'followers', 'selected'];
 
 /** Whether there is anything worth keeping. An empty composer stores nothing. */
-export function draftHasContent(title: string, content: string): boolean {
-  return Boolean(title.trim() || content.trim());
+export function draftHasContent(content: string): boolean {
+  return Boolean(content.trim());
 }
 
 /**
@@ -46,11 +45,9 @@ export function readPostDraft(): PostDraft | null {
     const parsed: unknown = JSON.parse(stored);
     if (typeof parsed !== 'object' || parsed === null) return null;
     const draft = parsed as Partial<PostDraft>;
-    const title = typeof draft.title === 'string' ? draft.title : '';
     const content = typeof draft.content === 'string' ? draft.content : '';
-    if (!draftHasContent(title, content)) return null;
+    if (!draftHasContent(content)) return null;
     return {
-      title,
       content,
       privacy: PRIVACY_VALUES.includes(draft.privacy as Post['privacy']) ? draft.privacy as Post['privacy'] : 'public',
       selectedFollowerIds: Array.isArray(draft.selectedFollowerIds) ? draft.selectedFollowerIds.filter(id => typeof id === 'string') : [],
