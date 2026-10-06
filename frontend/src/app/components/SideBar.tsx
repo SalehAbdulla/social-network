@@ -41,8 +41,8 @@ export default function Sidebar({ isCollapsed, setIsCollapsed }: {
       setLoggingOut(false);
     }
   }
-  return <aside id="main-navigation" aria-label="Main navigation" className={`sticky top-0 z-20 hidden h-dvh self-start shrink-0 border-r border-border bg-card/70 backdrop-blur-xl transition-all lg:block ${isCollapsed ? 'w-20' : 'w-64'}`}>
-    <div className="flex h-full flex-col overflow-y-auto p-4">
+  return <aside id="main-navigation" aria-label="Main navigation" className={`sticky top-0 z-20 hidden h-dvh self-start shrink-0 border-r border-border bg-card/70 backdrop-blur-xl transition-all lg:block ${isCollapsed ? 'w-20' : 'w-72'}`}>
+    <div className="flex h-full flex-col overflow-y-auto p-3">
     <Link href="/" aria-label="Social Network home" className="mb-6 mt-2 block shrink-0"><img src={isCollapsed ? '/favicon.svg' : '/logo.svg'} alt="Social Network" className={isCollapsed ? 'mx-auto h-10 w-10 object-contain' : 'h-16 w-full object-contain dark:brightness-125'} /></Link>
     <nav className="space-y-2">{links.map(({ href, label, icon: Icon }) => <Link key={href} href={href} title={label} className={`flex items-center gap-3 rounded-xl px-3 py-3 ${pathname === href || (href !== '/' && pathname.startsWith(href + '/')) ? 'bg-blue-50 text-blue-700' : 'text-slate-600 hover:bg-slate-50'}`}>
       <Icon size={21} className="shrink-0" />{!isCollapsed && <span>{label}</span>}
@@ -59,7 +59,7 @@ export default function Sidebar({ isCollapsed, setIsCollapsed }: {
         it: one entry among the destinations, drawn like them, and the only place a desktop starts a
         post — the phone's is the bottom bar's Create tab. */}
     <button type="button" onClick={openComposer} title="Create post" className="mt-2 flex w-full items-center gap-3 rounded-xl px-3 py-3 text-slate-600 hover:bg-slate-50"><SquarePlus size={21} className="shrink-0" />{!isCollapsed && <span>Create Post</span>}</button>
-    <div className="mt-auto shrink-0 border-t border-border pt-4 space-y-3">
+    <div className="mt-auto shrink-0 border-t border-border pt-3 space-y-3">
       <ThemeToggle compact={isCollapsed} label={!isCollapsed} className={isCollapsed ? 'mx-auto' : ''} />
       <Link href="/profile" className="flex items-center gap-2"><Avatar name={displayName(user)} avatarUrl={user.avatar} />{!isCollapsed && <div className="min-w-0"><p className="truncate font-medium">{displayName(user)}</p><p className="truncate text-xs text-muted">@{user.nickname}</p></div>}</Link>
 
