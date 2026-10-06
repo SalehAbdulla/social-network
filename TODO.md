@@ -1406,6 +1406,19 @@ item still open in this file is post-submission work; see "Status at submission"
 
 ### Instagram-like UI
 
+- [x] **P3** Instagram pass on the shell: drop the page-title labels the navigation already carries,
+  move the story archive onto the profile, and lead the feed's rail with the account. Closed
+  2026-10-06. `app/page.tsx`, `app/discover/page.tsx` and `app/saved/page.tsx` no longer draw a page
+  title and subtitle (the feed, Discover and Saved now read as Instagram's pages do), and
+  `app/saved/page.tsx` keeps only its "Back to feed" link; the stories strip
+  (`components/StoriesBar.tsx`) loses its "Your archive" affordance, and `StoryArchive` is exported
+  and rendered from the profile's own header (`app/profile/page.tsx`) instead, where a member's own
+  content belongs; and a new `components/AccountRailCard.tsx` puts the signed-in member at the top
+  of the feed's `xl` rail, above `SuggestedPeople`. Verified: `npx tsc --noEmit`, `npm run lint`
+  (0 errors), `npm run build`, `node scripts/dead-modules.mjs` (0 of 81) and
+  `npm run test:integration` — 52 PASS, no runtime exceptions, no console errors (`:605` now asserts
+  the account rail, `:734` the discover search field, and the archive step navigates to `/profile`
+  first).
 - [x] **P3** Open a feed post in an Instagram-style overlay — the media on the left, and on the
   right the header, the caption, the post's actions and the comments with the composer pinned at
   the bottom — while `/post/[postId]` stays the deep link (hard load, refresh, the Share button's
