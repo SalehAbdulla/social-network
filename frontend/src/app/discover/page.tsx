@@ -61,7 +61,7 @@ export default function Discover() {
       toast.error(errorMessage(error));
     } finally { setBusy(''); }
   }
-  return <div className="mx-auto max-w-6xl p-6 sm:p-8 space-y-6"><div><h1 className="text-3xl font-bold">Discover People</h1><p className="mt-2 text-slate-500">Find people to follow and message.</p></div>
+  return <div className="mx-auto max-w-6xl p-6 sm:p-8 space-y-6">
     <form className="flex gap-3" onSubmit={event => { event.preventDefault(); setSearch(input); }}><input aria-label="Search people" value={input} onChange={event => setInput(event.target.value)} className="min-w-0 flex-1 rounded-lg border border-slate-200 bg-white p-3" placeholder="Search by name, username, bio or location" /><button className="rounded-lg bg-blue-600 px-5 text-white">Search</button></form>
     {people.loading && <CardGridSkeleton />}
     <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">{people.items.map(person => {
