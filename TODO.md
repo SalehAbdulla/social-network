@@ -3008,6 +3008,19 @@ Changed in the previous session, for review: `backend/pkg/db/migrations/sqlite/0
 `frontend/.env.local`, `frontend/README.md`, `.gitignore`, `.env.example`, `DEPLOYMENT.md`,
 `backend/README.md`.
 
+Changed in the black-theme session (2026-10-06), for review: `frontend/src/app/globals.css`,
+`frontend/src/app/lib/theme.ts`. The palette is Instagram's now: dark is a true black page
+(`#000000`) with `#262626` hairlines and raised surfaces, white text, `#a8a8a8` secondary text and
+one blue (`#4a5df9`, with `#708dff` as its lighter shade); light is white with `#f5f5f5` surfaces,
+`#ccd0d5` borders, `#8e8e8e` secondary text and the same blue. The blue and teal shades the older
+screens spell out (`bg-blue-600`, `text-teal-700`, …) are mapped onto those tokens in `@theme`, so
+they follow the theme instead of freezing a second palette onto the page, and `.chat-primary` plus
+the focus outline moved onto the brand tokens. Black is the default too: `readStoredTheme` and the
+pre-paint script resolve an unset preference to `dark`, and the switch still offers light. Checked
+by reading computed styles back from a running build: `body` is `rgb(0, 0, 0)` with white text and
+a post card at `#000000` on a `rgb(38, 38, 38)` border in dark, white on `rgb(204, 208, 213)` in
+light.
+
 ## Definition of done
 
 A task is complete when: the code builds (`go build ./...`, `npm run build`), tests pass
