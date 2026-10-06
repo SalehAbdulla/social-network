@@ -28,7 +28,7 @@ export default function ThemeToggle({ compact = false, label = false, className 
     </button>
   ) : (
     <button type="button" role="switch" aria-checked={dark} aria-label="Dark mode" title="Toggle dark mode" onClick={toggleTheme}
-      className="glass-track relative flex h-9 w-16 shrink-0 items-center rounded-full px-1 transition">
+      className="glass-track relative flex h-9 w-16 shrink-0 items-center rounded-lg px-1 transition">
       <span data-testid="theme-knob" className="relative flex size-7 items-center justify-center rounded-full border border-white/80 bg-linear-to-b from-white/95 to-white/65 shadow-[0_2px_6px_-1px_rgba(15,48,87,0.35)] transition-transform duration-300 ease-out translate-x-0 dark:translate-x-7 dark:border-white/20 dark:from-white/25 dark:to-white/5 dark:shadow-[0_2px_8px_-1px_rgba(0,0,0,0.7)]">
         <IconStack size={16} />
       </span>
