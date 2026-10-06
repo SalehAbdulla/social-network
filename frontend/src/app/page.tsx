@@ -33,12 +33,15 @@ export default function Feed() {
   // carries no title of its own, the way Instagram's feed does not.
   const { openFor, overlay } = usePostOverlay(postId => feed.update(items => items.filter(item => item.postId !== postId)));
 
-  // Instagram's desktop feed: a 470px column with a 319px suggestions rail 64px to its right,
-  // the pair centred as a group (all three come from the geometry tokens in globals.css). The
-  // rail drops below 1000px rather than moving, so the column simply centres on its own there.
-  return <div className="px-4 pt-[var(--feed-top)] pb-4">
-    <div className="mx-auto flex w-full max-w-[var(--feed-group)] justify-center gap-[var(--feed-gap)]">
-    <div className="w-full min-w-0 max-w-[var(--feed-width)] space-y-[var(--post-spacing)]">
+  // Instagram's desktop feed: a 470px column centred in the content area, with a 319px suggestions
+  // rail 64px to its right. The column is centred by the grid's two equal outer tracks rather than by
+  // a margin on a group, so the feed sits in the middle of the page to the right of the rail, and its
+  // own track starts and ends exactly where the posts do — the rail's track begins one `--feed-gap`
+  // past the feed's right edge. Every one of these numbers is a geometry token in globals.css, and the
+  // tracks stay put when the rail is hidden, so nothing here depends on the rail being shown. Below
+  // `md` the wrapper is a block and the column centres on its own margins instead.
+  return <div className="px-4 pt-[var(--feed-top)] pb-4 md:grid md:grid-cols-[var(--feed-columns)]">
+    <div className="col-start-2 mx-auto w-full min-w-0 max-w-[var(--feed-width)] space-y-[var(--post-spacing)]">
     <StoriesBar />
     {/* Offered, not imposed: a post that arrives over the socket raises this pill, and
         the reader chooses when to fold the newest page in. */}
@@ -53,8 +56,7 @@ export default function Feed() {
         {feed.items.length > 0 && <LoadMore loading={feed.loadingMore} hasMore={feed.hasMore} onLoadMore={feed.loadMore} label={`Load${feed.items.length > FEED_PAGE_SIZE ? ' more' : ' older'} posts`} />}
       </>}
     </div>
-    <aside className="hidden w-[var(--feed-rail)] shrink-0 min-[1000px]:block"><div className="sticky top-[var(--feed-top)] space-y-6"><AccountRailCard /><SuggestedPeople /></div></aside>
-    </div>
+    <aside className="col-start-3 ml-[var(--feed-gap)] hidden w-[var(--feed-rail)] justify-self-start min-[1340px]:block"><div className="sticky top-[var(--feed-top)] space-y-6"><AccountRailCard /><SuggestedPeople /></div></aside>
     {overlay}
   </div>;
 }

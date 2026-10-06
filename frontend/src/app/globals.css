@@ -136,7 +136,15 @@
   --feed-width: 470px;
   --feed-gap: 64px;
   --feed-rail: 319px;
-  --feed-group: calc(var(--feed-width) + var(--feed-gap) + var(--feed-rail));
+  /* The feed's column and the suggestions rail beside it, as three tracks rather than one centred
+     group: the outer two are equal, so the 470px track in the middle lands in the middle of the
+     content area however the rail is doing, and the rail's track begins exactly at the feed's right
+     edge. The tracks are explicit instead of content-sized, so the feed keeps its 470px and hides or
+     shows the rail without moving, and below `md` the wrapper is a plain block again with the column
+     centring itself on its own margins (the rail only returns once there is room for it: the third
+     track has to hold `--feed-gap` + `--feed-rail`, 383px, so it is shown from 1340px up, which is
+     `--rail-collapsed` + the page's 32px + `--feed-width` + 383px twice). */
+  --feed-columns: 1fr var(--feed-width) 1fr;
 
   /* Glass surfaces: a translucent tint, the blur applied to whatever sits
      behind it, a specular 1px edge and an inset highlight on the rim. */
