@@ -180,7 +180,12 @@ function AuthenticatedBackend({ children }: { children: React.ReactNode }) {
   if (!user) return <Loading />;
   return <Context.Provider value={{ user, refreshUser, connected: socket?.readyState === WebSocket.OPEN, sendEvent, badges, openComposer }}><div key={user.userId} className="flex min-h-screen w-full min-w-0">
     <Sidebar isCollapsed={isCollapsed} setIsCollapsed={setIsCollapsed} />
-    <div className="flex min-w-0 flex-1 flex-col">
+    {/* The rail is `fixed`, so opening or collapsing it never reflows this column: the posts stay
+        exactly where they are in either state. That makes this gutter a constant rather than the
+        rail's live width — it is the rail's own 18rem, so nothing is ever hidden underneath it, and
+        it neither grows nor shrinks with the toggle. Pages whose content has something beside it
+        (the feed's suggestions rail) add their own inset on top of it. */} 
+    <div className="flex min-w-0 flex-1 flex-col lg:pl-72">
       <TopBar />
       <main className="relative min-w-0 flex-1 pb-16 lg:pb-0">
         {reconnecting && <p role="status" aria-live="polite" className="sticky top-0 z-20 bg-amber-100 px-4 py-2 text-center text-xs font-medium text-amber-900">Reconnecting… new messages and notifications may be delayed.</p>}
