@@ -10,8 +10,9 @@ import { displayName, errorMessage, request } from '../api/social';
 import { useBackend } from './BackendProvider';
 import Avatar from './Avatar';
 import SidePanels, { type PanelKind } from './SidePanels';
-import { MenuPanel, MenuItem, MoreMenuContent, RowBody, rowClass } from './SideBarMenus';
-import { RAIL_AVATAR_SIZE } from '../lib/railMetrics';
+import { MenuPanel, MenuItem } from './PopoverMenu';
+import { MoreMenuContent, RowBody, rowClass } from './SideBarMenus';
+import { RAIL_AVATAR_SIZE } from '../lib/sizing';
 
 type NavItem = { key: string; label: string; icon: LucideIcon; href?: string; panel?: PanelKind; create?: boolean };
 

@@ -7,6 +7,7 @@ import { type SocialUser, displayName, errorMessage, request } from '../api/soci
 import { useResource } from '../lib/useResource';
 import { useBackend } from './BackendProvider';
 import Avatar from './Avatar';
+import { ACCOUNT_AVATAR_SIZE } from '../lib/sizing';
 
 /** How many people the rail offers; past this it stops being a rail. */
 const SUGGESTIONS = 3;
@@ -69,7 +70,7 @@ export default function SuggestedPeople() {
     </div>
     <ul className="space-y-3">{suggestions.map(person => <li key={person.userId} className="flex items-center gap-3">
       <Link href={`/profile/${person.userId}`} className="flex min-w-0 flex-1 items-center gap-3">
-        <Avatar name={displayName(person)} avatarUrl={person.avatar} size={44} />
+        <Avatar name={displayName(person)} avatarUrl={person.avatar} size={ACCOUNT_AVATAR_SIZE} />
         <span className="min-w-0"><span className="block truncate text-sm font-semibold text-text">{displayName(person)}</span><span className="block truncate text-xs text-muted">@{person.nickname}</span></span>
       </Link>
       <button type="button" disabled={busy === person.userId} onClick={() => void follow(person)} className="shrink-0 text-xs font-semibold text-brand-1 hover:underline disabled:opacity-50">{person.isPublic ? 'Follow' : 'Request'}</button>

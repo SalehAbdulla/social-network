@@ -56,24 +56,52 @@
   --rail-collapsed: 72px;
   --rail-expanded: 244px;
 
-  /* Inside the rail: one icon size and one stroke for every row, a 44px row on a 4px gap (a
-     48px pitch), and the label the hover reveal fades in. The wordmark is 15% shorter than the
-     29px it was, and the mark is the square that stands in for it while collapsed. The profile
-     avatar is the one rail measurement JavaScript has to hand over (`RAIL_AVATAR_SIZE` in
-     `lib/railMetrics.ts`), because `Avatar` sizes itself with an inline style that nothing in
-     this stylesheet could outrank. */
-  --rail-icon: 22px;
+  /* Inside the rail: one icon size and one stroke for every row, a 40px row on a 4px gap (a
+     44px pitch), and the label the hover reveal fades in. The wordmark is 20% shorter than it
+     was, and the mark is the square that stands in for it while collapsed. The profile avatar is
+     the one rail measurement JavaScript has to hand over (`RAIL_AVATAR_SIZE` in `lib/sizing.ts`),
+     because `Avatar` sizes itself with an inline style that nothing in this stylesheet could
+     outrank. */
+  --rail-icon: 20px;
   --rail-stroke: 1.75;
-  --rail-stroke-active: 2.25;
-  --rail-row-height: 44px;
+  --rail-stroke-active: 2;
+  --rail-row-height: 40px;
   --rail-row-gap: 4px;
   --rail-row-radius: 8px;
-  --rail-label-size: 15px;
-  --rail-mark: 24px;
-  --rail-wordmark: 24.65px;
+  --rail-label-size: 14px;
+  --rail-mark: 22px;
+  --rail-wordmark: 19.7px;
 
-  /* The audience icon in a post's header line, level with the 12px secondary text it sits in. */
+  /* The feed's scale, one group per surface: the post card, the story tray and the right column.
+     These are drawn sizes, not spacing guesses — each was read back off the rendered page. The two
+     avatars the `Avatar` component draws (the post header's and the account block's) are not here,
+     because it sets its own size inline; they are `POST_AVATAR_SIZE` and `ACCOUNT_AVATAR_SIZE` in
+     `lib/sizing.ts`, next to the rail's. */
+  --post-name-size: 14px;
+  --post-meta-size: 12px;
   --post-audience-icon: 12px;
+  --post-header-icon: 16px;
+  --post-description-size: 14px;
+  --post-description-leading: 18px;
+  --post-media-radius: 4px;
+  --post-action-icon: 22px;
+  --post-action-gap: 14px;
+  --post-action-padding: 8px;
+  --post-count-size: 14px;
+  --post-gap: 8px;
+  --post-spacing: 16px;
+  --post-menu-width: 180px;
+
+  --story-ring: 56px;
+  --story-avatar: 48px;
+  --story-item: 64px;
+  --story-badge: 16px;
+  --story-badge-icon: 10px;
+  --story-caption-size: 12px;
+  --story-caption-gap: 6px;
+
+  --aside-name-size: 14px;
+  --aside-handle-size: 14px;
 
   --feed-width: 470px;
   --feed-gap: 64px;
@@ -414,15 +442,17 @@ body {
   border-right: 1px solid var(--ui-rail-border);
 }
 
-/* One icon size and one stroke for the whole rail. Lucide writes `width`, `height` and
+/* One icon size per group, read from the tokens. Lucide writes `width`, `height` and
    `stroke-width` onto its <svg> as presentation attributes, and a stylesheet rule outranks an
-   attribute, so these lines are what every rail icon is actually drawn at: a component cannot
-   widen one and a wrapper cannot scale one. `stroke-width` is inherited by the paths, which is
-   how Lucide's own default reaches them. The row you are on is read from the two ARIA
-   attributes the rows already carry, so the state is not kept a second time. */
+   attribute, so these lines are what the icons are actually drawn at: a component cannot widen
+   one and a wrapper cannot scale one. `stroke-width` is inherited by the paths, which is how
+   Lucide's own default reaches them. The rail's active row is read from the two ARIA attributes
+   the rows already carry, so the state is not kept a second time; the action row keeps Lucide's
+   own stroke, since only its size is ours. */
 .app-rail svg { width: var(--rail-icon); height: var(--rail-icon); stroke-width: var(--rail-stroke); }
 .app-rail [aria-current='page'] svg,
 .app-rail [aria-expanded='true'] svg { stroke-width: var(--rail-stroke-active); }
+.post-actions svg { width: var(--post-action-icon); height: var(--post-action-icon); }
 
 /* Collapsed chrome: the labels are in the DOM (so they can fade) but invisible and clipped,
    and the icon mark stands in for the wordmark. Both images are sized from the tokens, so the

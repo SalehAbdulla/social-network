@@ -4,7 +4,7 @@ import { linkify } from '../lib/linkify';
 
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import Link from 'next/link';
-import { ArrowDown, ArrowUp, Bookmark, Heart, MessageCircle, Share2, Trash2, Pencil, X } from 'lucide-react';
+import { ArrowDown, ArrowUp, Bookmark, Heart, MessageCircle, MoreHorizontal, Share2, Trash2, Pencil, X } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { type Post, type Comment, dateLabel, displayName, errorMessage, isoTimestamp, relativeLabel, request, savePost, unsavePost, upload } from '../api/social';
 import { useBackend } from './BackendProvider';
@@ -15,6 +15,8 @@ import { useInView } from '../lib/useInView';
 import { mediaImageProps } from '../lib/mediaVariants';
 import AudienceIcon from './AudienceIcon';
 import Avatar from './Avatar';
+import { MenuItem, MenuPanel, menuRowClass } from './PopoverMenu';
+import { POST_AVATAR_SIZE } from '../lib/sizing';
 import ImagePicker from './ImagePicker';
 import Lightbox from './Lightbox';
 import LoadMore from './LoadMore';
@@ -154,7 +156,7 @@ function CommentSheet({ onClose, children }: { onClose: () => void; children: Re
     </div>
   </>;
 }
-export default function PostCard({ post, fetchPosts, onPostRemoved, onUnsaved, onOpen, onClose, variant = 'card', onNestedViewerChange }: {
+export default function PostCard({ post, fetchPosts, onPostRemoved, onUnsaved, onOpen, onClose, variant = 'card', onNestedDialogChange }: {
   post: Post;
   /** Refetch fallback for surfaces that are not list-backed, such as the single post page. */
   fetchPosts?: () => void;
@@ -172,8 +174,11 @@ export default function PostCard({ post, fetchPosts, onPostRemoved, onUnsaved, o
   onClose?: () => void;
   /** `overlay` is the feed's pop-up — media on the left, header/caption/actions/comments on the right. */
   variant?: 'card' | 'overlay';
-  /** Reports whether a nested photo viewer is open, so the overlay can hand Escape to it. */
-  onNestedViewerChange?: (open: boolean) => void;
+  /**
+   * Reports whether a nested dialog is open — a photo viewer or this card's own "…" menu — so the
+   * overlay above it stands down its Escape handling and the innermost thing closes first.
+   */
+  onNestedDialogChange?: (open: boolean) => void;
 }) {
   const { user } = useBackend();
   // Two facts decide every branch below: whether this card is the feed's (so it opens the overlay)
@@ -205,7 +210,26 @@ export default function PostCard({ post, fetchPosts, onPostRemoved, onUnsaved, o
   // while either viewer is up (the `StoryArchive` rule), so a single Escape closes the innermost
   // dialog rather than both at once.
   const [commentViewerOpen, setCommentViewerOpen] = useState(false);
-  useEffect(() => { onNestedViewerChange?.(viewer !== null || commentViewerOpen); }, [viewer, commentViewerOpen, onNestedViewerChange]);
+  // The post's own "…" menu: its trigger's rect while open, and null when shut. It is a nested
+  // dialog like the photo viewer, so the overlay stands down for it too and Escape closes the menu
+  // rather than the post behind it.
+  const [optionsRect, setOptionsRect] = useState<DOMRect | null>(null);
+  const optionsRef = useRef<HTMLDivElement>(null);
+  const optionsTriggerRef = useRef<HTMLButtonElement>(null);
+  // Escape and a press anywhere outside it close the menu, the same pair the rail's popovers use.
+  useEffect(() => {
+    if (!optionsRect) return;
+    const onDown = (event: MouseEvent) => {
+      const target = event.target as Node;
+      if (optionsRef.current?.contains(target) || optionsTriggerRef.current?.contains(target)) return;
+      setOptionsRect(null);
+    };
+    const onKey = (event: KeyboardEvent) => { if (event.key === 'Escape') setOptionsRect(null); };
+    document.addEventListener('mousedown', onDown);
+    document.addEventListener('keydown', onKey);
+    return () => { document.removeEventListener('mousedown', onDown); document.removeEventListener('keydown', onKey); };
+  }, [optionsRect]);
+  useEffect(() => { onNestedDialogChange?.(viewer !== null || commentViewerOpen || optionsRect !== null); }, [viewer, commentViewerOpen, optionsRect, onNestedDialogChange]);
   // A double-tap like: the burst id plus the photo it should appear over, so the
   // heart lands on the picture the reader tapped rather than the middle of the grid.
   const [burst, setBurst] = useState<{ id: number; position: number } | null>(null);
@@ -282,13 +306,28 @@ export default function PostCard({ post, fetchPosts, onPostRemoved, onUnsaved, o
       if (onPostRemoved) onPostRemoved(post.postId); else fetchPosts?.();
     } catch (error) { toast.error(errorMessage(error)); } finally { setBusy(false); }
   }
-  const authorLink = <Link href={`/profile/${post.userId}`} className="flex items-center gap-2.5"><Avatar name={displayName(post)} size={32} /><div className="leading-4"><p className="text-sm font-semibold">{displayName(post)}</p><p className="text-xs text-muted">@{post.nickname}<span aria-hidden="true"> · </span><time dateTime={isoTimestamp(post.createdAt)} title={dateLabel(post.createdAt)}>{relativeLabel(post.createdAt)}</time><span aria-hidden="true"> · </span><AudienceIcon privacy={post.privacy} /></p></div></Link>;
-  const ownerControls = post.userId === user.userId && <div className="flex items-center gap-1"><Link href={`/post/${post.postId}/edit`} aria-label="Edit post" title="Edit post" className="flex size-9 items-center justify-center rounded-full text-slate-400 transition hover:bg-slate-100 hover:text-blue-600"><Pencil size={18} /></Link><button disabled={busy} aria-label="Delete post" title="Delete post" className="flex size-9 items-center justify-center rounded-full text-slate-400 transition hover:bg-red-50 hover:text-red-600" onClick={() => void remove()}><Trash2 size={18} /></button></div>;
+  const authorLink = <Link href={`/profile/${post.userId}`} className="flex items-center gap-2.5"><Avatar name={displayName(post)} size={POST_AVATAR_SIZE} /><div className="leading-4"><p className="text-[length:var(--post-name-size)] font-semibold">{displayName(post)}</p><p className="text-[length:var(--post-meta-size)] text-muted">@{post.nickname}<span aria-hidden="true"> · </span><time dateTime={isoTimestamp(post.createdAt)} title={dateLabel(post.createdAt)}>{relativeLabel(post.createdAt)}</time><span aria-hidden="true"> · </span><AudienceIcon privacy={post.privacy} /></p></div></Link>;
+  // Instagram's control here is one "…" that opens Edit and Delete, rather than two icons sitting in
+  // the header: a single target, and the destructive one behind a second deliberate click. It is the
+  // app's shared menu (`PopoverMenu`), hung under the button's own right edge, and `size-8` gives it
+  // the 32px hit area the icons it replaced had.
+  const ownerControls = post.userId === user.userId && <>
+    <button ref={optionsTriggerRef} type="button" aria-label="Post options" aria-haspopup="menu" aria-expanded={!!optionsRect} onClick={event => { const rect = event.currentTarget.getBoundingClientRect(); setOptionsRect(open => open ? null : rect); }} className={`flex size-8 items-center justify-center rounded-full text-muted transition hover:bg-surface-2 ${optionsRect ? 'bg-surface-2' : ''}`}>
+      <MoreHorizontal className="size-[var(--post-header-icon)]" aria-hidden="true" />
+    </button>
+    {optionsRect && <MenuPanel menuRef={optionsRef} rect={optionsRect} width="var(--post-menu-width)" placement="below" label="Post options">
+      <Link href={`/post/${post.postId}/edit`} role="menuitem" onClick={() => setOptionsRect(null)} className={menuRowClass}><Pencil size={20} aria-hidden="true" />Edit</Link>
+      <MenuItem danger onClick={() => { setOptionsRect(null); void remove(); }} disabled={busy}><Trash2 size={20} aria-hidden="true" />Delete</MenuItem>
+    </MenuPanel>}
+  </>;
   // The description alone, now that the audience is an icon in the header's second line: the grey
   // chip under this text said the same thing twice, and the header states it once.
-  const caption = <p className="whitespace-pre-wrap break-words text-sm leading-[18px] text-text">{linkify(post.content)}</p>;
-  const mediaGrid = (overlay: boolean) => hasMedia && <div className={overlay ? `grid w-full gap-1 ${post.imageUrls.length > 1 ? 'grid-cols-2' : 'grid-cols-1'}` : `grid gap-1 overflow-hidden rounded-[4px] ${post.imageUrls.length > 1 ? 'grid-cols-2' : ''}`}>{post.imageUrls.map((url, position) => <button key={url} type="button" aria-label={`Open image ${position + 1} of ${post.imageUrls.length}`} onClick={(event) => handleMediaTap(position, event.timeStamp)} className="relative block w-full cursor-zoom-in touch-manipulation"><img {...mediaImageProps(url, post.imageUrls.length > 1 ? '(max-width: 640px) 50vw, 320px' : '(max-width: 768px) 100vw, 640px')} alt="Post attachment" className={overlay ? 'max-h-[92vh] w-full object-contain' : 'aspect-square w-full bg-card-2 object-cover'} />{burst?.position === position && <span key={burst.id} aria-hidden="true" onAnimationEnd={() => setBurst(null)} className="heart-burst text-red-500"><Heart size={80} fill="currentColor" strokeWidth={0} /></span>}</button>)}</div>;
-  const actionRow = <div className="flex items-center gap-4 py-2 text-text"><button disabled={busy} aria-label={vote.userScore === 1 ? 'Unlike post' : 'Like post'} aria-pressed={vote.userScore === 1} onClick={() => void react(1)} className={`flex items-center gap-1.5 rounded-full p-1 transition hover:opacity-60 ${vote.userScore === 1 ? 'text-danger' : ''}`}><Heart size={24} fill={vote.userScore === 1 ? 'currentColor' : 'none'} /><span className="text-sm font-semibold">{vote.score}</span></button><button aria-expanded={commentsVisible} aria-label={commentsVisible ? 'Hide comments' : 'Show comments'} onClick={() => { if (inFeed && wide) onOpen?.(); else setCommentsOpen(!commentsVisible); }} className="flex items-center gap-1.5 rounded-full p-1 transition hover:opacity-60"><MessageCircle size={24} /><span className="text-sm font-semibold">{commentCount}</span></button><button aria-label="Share post" className="rounded-full p-1 transition hover:opacity-60" onClick={async () => { try { await navigator.clipboard.writeText(`${location.origin}/post/${post.postId}`); toast.success('Post link copied'); } catch { toast.error('Could not copy the link'); } }}><Share2 size={24} /></button><button disabled={busy} aria-label={saved ? 'Remove from saved' : 'Save post'} aria-pressed={saved} title={saved ? 'Remove from saved' : 'Save post'} onClick={() => void toggleSave()} className={`ml-auto rounded-full p-1 transition hover:opacity-60 ${saved ? 'text-brand-1' : ''}`}><Bookmark size={24} fill={saved ? 'currentColor' : 'none'} /></button></div>;
+  const caption = <p className="whitespace-pre-wrap break-words text-[length:var(--post-description-size)] leading-[var(--post-description-leading)] text-text">{linkify(post.content)}</p>;
+  const mediaGrid = (overlay: boolean) => hasMedia && <div className={overlay ? `grid w-full gap-1 ${post.imageUrls.length > 1 ? 'grid-cols-2' : 'grid-cols-1'}` : `grid gap-1 overflow-hidden rounded-[var(--post-media-radius)] ${post.imageUrls.length > 1 ? 'grid-cols-2' : ''}`}>{post.imageUrls.map((url, position) => <button key={url} type="button" aria-label={`Open image ${position + 1} of ${post.imageUrls.length}`} onClick={(event) => handleMediaTap(position, event.timeStamp)} className="relative block w-full cursor-zoom-in touch-manipulation"><img {...mediaImageProps(url, post.imageUrls.length > 1 ? '(max-width: 640px) 50vw, 320px' : '(max-width: 768px) 100vw, 640px')} alt="Post attachment" className={overlay ? 'max-h-[92vh] w-full object-contain' : 'aspect-square w-full bg-card-2 object-cover'} />{burst?.position === position && <span key={burst.id} aria-hidden="true" onAnimationEnd={() => setBurst(null)} className="heart-burst text-red-500"><Heart size={80} fill="currentColor" strokeWidth={0} /></span>}</button>)}</div>;
+  // The row's icons are sized by the `.post-actions svg` rule from `--post-action-icon`, so not one
+  // of them carries a `size` prop: 22px is the token, and it holds for the card and the overlay
+  // alike. Only the counts sit at `--post-count-size`.
+  const actionRow = <div className="post-actions flex items-center gap-[var(--post-action-gap)] py-[var(--post-action-padding)] text-text"><button disabled={busy} aria-label={vote.userScore === 1 ? 'Unlike post' : 'Like post'} aria-pressed={vote.userScore === 1} onClick={() => void react(1)} className={`flex items-center gap-1.5 rounded-full p-1 transition hover:opacity-60 ${vote.userScore === 1 ? 'text-danger' : ''}`}><Heart fill={vote.userScore === 1 ? 'currentColor' : 'none'} /><span className="text-[length:var(--post-count-size)] font-semibold">{vote.score}</span></button><button aria-expanded={commentsVisible} aria-label={commentsVisible ? 'Hide comments' : 'Show comments'} onClick={() => { if (inFeed && wide) onOpen?.(); else setCommentsOpen(!commentsVisible); }} className="flex items-center gap-1.5 rounded-full p-1 transition hover:opacity-60"><MessageCircle /><span className="text-[length:var(--post-count-size)] font-semibold">{commentCount}</span></button><button aria-label="Share post" className="rounded-full p-1 transition hover:opacity-60" onClick={async () => { try { await navigator.clipboard.writeText(`${location.origin}/post/${post.postId}`); toast.success('Post link copied'); } catch { toast.error('Could not copy the link'); } }}><Share2 /></button><button disabled={busy} aria-label={saved ? 'Remove from saved' : 'Save post'} aria-pressed={saved} title={saved ? 'Remove from saved' : 'Save post'} onClick={() => void toggleSave()} className={`ml-auto rounded-full p-1 transition hover:opacity-60 ${saved ? 'text-brand-1' : ''}`}><Bookmark fill={saved ? 'currentColor' : 'none'} /></button></div>;
 
   // The feed's pop-up: the media on the left, and on the right the header, the caption, the post's
   // own action row (the same controls the card draws, so a like or a save has one implementation)
@@ -302,7 +341,7 @@ export default function PostCard({ post, fetchPosts, onPostRemoved, onUnsaved, o
     </div>
   </div>;
 
-  return <article data-post-id={post.postId} className="space-y-2 border-b border-border pb-4">
+  return <article data-post-id={post.postId} className="space-y-[var(--post-gap)] border-b border-border pb-[var(--post-spacing)]">
     <div className="flex items-center justify-between py-1">{authorLink}{ownerControls}</div>
     {/* The description sits directly under the header — 8px below it, from the `space-y-2` above —
         and above the media, so the post reads as a caption for what follows. The audience is not

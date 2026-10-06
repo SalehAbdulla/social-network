@@ -1,10 +1,11 @@
 'use client';
 
-import { useEffect, useState, type CSSProperties, type ReactNode, type RefObject } from 'react';
+import { useState, type ReactNode } from 'react';
 import Link from 'next/link';
 import { Bookmark, ChevronLeft, LogOut, Moon, RefreshCw, Settings, TriangleAlert } from 'lucide-react';
 import toast from 'react-hot-toast';
 import ThemeToggle from './ThemeToggle';
+import { MenuItem, menuRowClass } from './PopoverMenu';
 
 /** The shared row class: a full-width 44px row on an 8px radius, both read from the `--rail-row-*`
  *  tokens in globals.css so the rail's geometry is tuned in that block rather than here. The icon
@@ -27,47 +28,6 @@ export function RowBody({ label, active, badge = 0, children }: {
     </span>
     <span className={`app-rail-label ${active ? 'font-bold' : 'font-normal'}`}>{label}</span>
   </>;
-}
-
-/** One row inside a menu popover: ~50px tall, 16px text, hover background. Shared with the
- *  Link rows so a route and an action are drawn identically. */
-export const menuRowClass = 'flex min-h-[50px] w-full items-center gap-3 rounded-[12px] px-3 text-left text-base text-text hover:bg-rail-hover focus:bg-rail-hover focus:outline-none disabled:opacity-50';
-
-export function MenuItem({ onClick, children, disabled = false }: {
-  onClick: () => void; children: ReactNode; disabled?: boolean;
-}) {
-  return <button type="button" role="menuitem" disabled={disabled} onClick={onClick} className={menuRowClass}>{children}</button>;
-}
-
-/**
- * The floating menu surface. It is `fixed` and positioned from the trigger's rect, so it floats
- * out of the rail without being clipped by it. Focus moves to the first item on open, and the
- * arrow keys and Tab cycle the items; Escape and outside-click are handled by the sidebar, which
- * owns the open state.
- */
-export function MenuPanel({ rect, width, placement, label, menuRef, children }: {
-  rect: DOMRect; width: number; placement: 'right' | 'above'; label: string;
-  menuRef: RefObject<HTMLDivElement | null>; children: ReactNode;
-}) {
-  useEffect(() => {
-    const items = () => [...(menuRef.current?.querySelectorAll<HTMLElement>('[role="menuitem"]') ?? [])].filter(element => element.getClientRects().length > 0);
-    items()[0]?.focus();
-    const onKey = (event: KeyboardEvent) => {
-      if (!['ArrowDown', 'ArrowUp', 'Tab'].includes(event.key)) return;
-      const list = items();
-      if (!list.length) return;
-      event.preventDefault();
-      const index = list.indexOf(document.activeElement as HTMLElement);
-      const step = event.key === 'ArrowUp' || (event.key === 'Tab' && event.shiftKey) ? -1 : 1;
-      list[(index + step + list.length) % list.length]?.focus();
-    };
-    document.addEventListener('keydown', onKey);
-    return () => document.removeEventListener('keydown', onKey);
-  }, [menuRef]);
-  const style: CSSProperties = placement === 'above'
-    ? { position: 'fixed', left: rect.left, bottom: window.innerHeight - rect.top + 8, width, maxHeight: '70vh' }
-    : { position: 'fixed', left: rect.left + rect.width + 8, bottom: Math.max(16, window.innerHeight - rect.bottom), width, maxHeight: '70vh' };
-  return <div ref={menuRef} role="menu" aria-label={label} style={style} className="z-50 overflow-y-auto rounded-[16px] border border-popover-border bg-popover p-2 font-sans leading-5 shadow-[0_12px_40px_rgba(0,0,0,0.28)]">{children}</div>;
 }
 
 /** The More menu, with its "Switch appearance" sub-view that hosts the theme toggle. */

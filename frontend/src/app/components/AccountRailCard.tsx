@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { displayName } from '../api/social';
 import { useBackend } from './BackendProvider';
 import Avatar from './Avatar';
+import { ACCOUNT_AVATAR_SIZE } from '../lib/sizing';
 
 /**
  * The signed-in member, at the top of the feed's right-hand rail — Instagram's account row above
@@ -19,10 +20,10 @@ export default function AccountRailCard() {
   const { user } = useBackend();
   return <section aria-label="Your account">
     <Link href="/profile" className="flex items-center gap-3 rounded-xl p-2 transition hover:bg-surface-2">
-      <Avatar name={displayName(user)} avatarUrl={user.avatar} size={44} />
+      <Avatar name={displayName(user)} avatarUrl={user.avatar} size={ACCOUNT_AVATAR_SIZE} />
       <span className="min-w-0">
-        <span className="block truncate text-sm font-semibold text-text">{displayName(user)}</span>
-        <span className="block truncate text-xs text-muted">@{user.nickname}</span>
+        <span className="block truncate text-[length:var(--aside-name-size)] font-semibold text-text">{displayName(user)}</span>
+        <span className="block truncate text-[length:var(--aside-handle-size)] text-muted">@{user.nickname}</span>
       </span>
     </Link>
   </section>;

@@ -25,11 +25,11 @@ export default function PostOverlay({ post, onClose, onPostRemoved }: {
   /** Drop the deleted row and close, so the feed behind the dialog cannot keep a dead card. */
   onPostRemoved?: (postId: number) => void;
 }) {
-  // Escape and Tab belong to the innermost dialog: while the lightbox is open inside the overlay
-  // the trap stands down, which is the rule `StoryArchive` already follows for the story viewer.
-  // Without it a single Escape would close both.
-  const [nestedViewer, setNestedViewer] = useState(false);
-  const dialog = useDialogFocus<HTMLDivElement>(onClose, { enabled: !nestedViewer });
+  // Escape and Tab belong to the innermost dialog: while a photo viewer or this post's own "…" menu
+  // is open inside the overlay the trap stands down, which is the rule `StoryArchive` already
+  // follows for the story viewer. Without it a single Escape would close both.
+  const [nestedDialog, setNestedDialog] = useState(false);
+  const dialog = useDialogFocus<HTMLDivElement>(onClose, { enabled: !nestedDialog });
   return <>
     <div aria-hidden="true" onClick={onClose} className="fixed inset-0 z-40 bg-slate-950/70 backdrop-blur-sm" />
     <div ref={dialog} tabIndex={-1} role="dialog" aria-modal="true" aria-label="Post" onClick={onClose} className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto p-4 outline-none">
@@ -37,7 +37,7 @@ export default function PostOverlay({ post, onClose, onPostRemoved }: {
           sheet and the composer draw it that way: `backdrop-filter` makes an element the containing
           block for `position: fixed` descendants. */}
       <div onClick={event => event.stopPropagation()} className="w-[min(68rem,94vw)] overflow-hidden rounded-2xl border border-border bg-card shadow-2xl">
-        <PostCard key={post.postId} post={post} variant="overlay" onClose={onClose} onPostRemoved={onPostRemoved} onNestedViewerChange={setNestedViewer} />
+        <PostCard key={post.postId} post={post} variant="overlay" onClose={onClose} onPostRemoved={onPostRemoved} onNestedDialogChange={setNestedDialog} />
       </div>
     </div>
   </>;
