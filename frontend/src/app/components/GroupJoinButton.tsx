@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import toast from 'react-hot-toast';
 import { type Group, errorMessage, request } from '../api/social';
+import Button from './ui/Button';
 
 export default function GroupJoinButton({ group, onRequested }: { group: Group; onRequested: () => void }) {
   const [busy, setBusy] = useState(false);
@@ -16,8 +17,8 @@ export default function GroupJoinButton({ group, onRequested }: { group: Group; 
       toast.success('Join request sent');
     } catch (error) { toast.error(errorMessage(error)); } finally { setBusy(false); }
   }
-  if (group.isMember) return <span className="font-medium text-teal-700">Member</span>;
-  return <button type="button" disabled={busy || group.joinRequested} onClick={() => void join()} className="rounded-lg bg-blue-50 px-3 py-2 text-sm text-blue-700 disabled:opacity-50">
-    {group.joinRequested ? 'Request pending' : busy ? 'Sending...' : 'Request to join'}
-  </button>;
+  if (group.isMember) return <span className="grp-badge">Member</span>;
+  return <Button loading={busy} disabled={group.joinRequested} onClick={() => void join()} className="grp-gate-action">
+    {group.joinRequested ? 'Request pending' : 'Request to join'}
+  </Button>;
 }
