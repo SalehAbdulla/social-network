@@ -13,10 +13,9 @@ import PostPreview from './PostPreview';
 import { useResource } from '../lib/useResource';
 import { clearPostDraft, draftHasContent, readPostDraft, writePostDraft } from '../lib/postDraft';
 
-// The server is the authority on both lengths (ErrTitleLength, ErrContentLength);
-// they are repeated here so the composer can refuse before the request and name the
-// field that is short instead of leaving a dead button.
-const MIN_TITLE = 3;
+// The server is the authority on the length (ErrContentLength); it is repeated here so
+// the composer can refuse before the request and name the field instead of leaving a
+// dead button.
 const MIN_CONTENT = 10;
 // How long a keystroke waits before the draft reaches storage. Writing on every
 // character would hit the store thousands of times for one paragraph; this is short
@@ -24,7 +23,7 @@ const MIN_CONTENT = 10;
 const DRAFT_SAVE_DELAY = 400;
 
 /** What stops a publish, in the reader's words, and the field they should look at. */
-type Blocker = { message: string; field: 'title' | 'content' | 'followers' };
+type Blocker = { message: string; field: 'content' | 'followers' };
 
 export default function PostForm({ post, variant = 'page', onPublished }: {
   post?: Post;
@@ -37,7 +36,6 @@ export default function PostForm({ post, variant = 'page', onPublished }: {
   const { user } = useBackend();
   const router = useRouter();
   const isNewPost = !post;
-  const [title, setTitle] = useState(post?.title || '');
   const [content, setContent] = useState(post?.content || '');
   const [images, setImages] = useState<File[]>([]);
   const [existingImages, setExistingImages] = useState<string[]>(post?.imageUrls || []);
@@ -55,7 +53,6 @@ export default function PostForm({ post, variant = 'page', onPublished }: {
   const [showPreview, setShowPreview] = useState(false);
   // Object URLs for the files just picked, so the preview can draw them before upload.
   const [filePreviews, setFilePreviews] = useState<string[]>([]);
-  const titleField = useRef<HTMLInputElement>(null);
   const contentField = useRef<HTMLTextAreaElement>(null);
   const followersField = useRef<HTMLFieldSetElement>(null);
   const followers = useResource<FollowLists>('/users/me/follows', privacy === 'selected');
@@ -70,11 +67,10 @@ export default function PostForm({ post, variant = 'page', onPublished }: {
     const timer = window.setTimeout(() => {
       const draft = readPostDraft();
       if (draft) {
-        setTitle(draft.title);
         setContent(draft.content);
         setPrivacy(draft.privacy);
         setSelectedFollowers(draft.selectedFollowerIds);
-        setRestoredDraft(draftHasContent(draft.title, draft.content));
+        setRestoredDraft(draftHasContent(draft.content));
       }
       setHydrated(true);
     }, 0);
@@ -83,10 +79,10 @@ export default function PostForm({ post, variant = 'page', onPublished }: {
 
   useEffect(() => {
     if (!isNewPost || !hydrated || published) return;
-    if (!draftHasContent(title, content)) { clearPostDraft(); return; }
-    const timer = window.setTimeout(() => writePostDraft({ title, content, privacy, selectedFollowerIds: selectedFollowers, savedAt: Date.now() }), DRAFT_SAVE_DELAY);
+    if (!draftHasContent(content)) { clearPostDraft(); return; }
+    const timer = window.setTimeout(() => writePostDraft({ content, privacy, selectedFollowerIds: selectedFollowers, savedAt: Date.now() }), DRAFT_SAVE_DELAY);
     return () => window.clearTimeout(timer);
-  }, [isNewPost, hydrated, published, title, content, privacy, selectedFollowers]);
+  }, [isNewPost, hydrated, published, content, privacy, selectedFollowers]);
 
   // Object URLs follow the same create/revoke lifecycle as `ImagePicker.Preview`, so a
   // removed file does not leave a blob behind and the preview never draws a stale one.
@@ -108,15 +104,11 @@ export default function PostForm({ post, variant = 'page', onPublished }: {
   /**
    * What stops this draft from being publishable, or null when nothing does.
    *
-   * The order is the order the reader meets the fields in: the title and the text
-   * first, then the audience, which lives further down the form.
+   * The order is the order the reader meets the fields in: the text first, then the
+   * audience, which lives further down the form.
    */
   function blockedReason(): Blocker | null {
-    const trimmedTitle = title.trim();
     const trimmedContent = content.trim();
-    if (trimmedTitle && trimmedTitle.length < MIN_TITLE) {
-      return { message: `Titles need at least ${MIN_TITLE} characters.`, field: 'title' };
-    }
     if (!trimmedContent && !hasMedia) {
       return { message: 'Write something, or add a photo.', field: 'content' };
     }
@@ -141,8 +133,7 @@ export default function PostForm({ post, variant = 'page', onPublished }: {
       // A disabled button says nothing; this says what is missing and puts the
       // caret where the answer goes.
       toast.error(blocker.message);
-      if (blocker.field === 'title') titleField.current?.focus();
-      else if (blocker.field === 'content') contentField.current?.focus();
+      if (blocker.field === 'content') contentField.current?.focus();
       else followersField.current?.focus();
       return;
     }
@@ -150,7 +141,9 @@ export default function PostForm({ post, variant = 'page', onPublished }: {
     try {
       const imageUrls = [...existingImages];
       for (const file of images) imageUrls.push((await upload(file)).url);
-      await request(post ? `/posts/${post.postId}` : '/posts', post ? 'PUT' : 'POST', { title, content, imageUrls, privacy, selectedFollowerIds: privacy === 'selected' ? audience : [] });
+      // A post is a description now, not a titled thing: the composer collects the text and
+      // the media, and the title the API still accepts is sent empty rather than collected.
+      await request(post ? `/posts/${post.postId}` : '/posts', post ? 'PUT' : 'POST', { title: '', content, imageUrls, privacy, selectedFollowerIds: privacy === 'selected' ? audience : [] });
       // The draft has become a post, so it must not come back on the next visit —
       // and storage must not be written again by the effect on the way out.
       if (isNewPost) { clearPostDraft(); setPublished(true); }
@@ -163,7 +156,7 @@ export default function PostForm({ post, variant = 'page', onPublished }: {
 
   function discardDraft() {
     clearPostDraft();
-    setTitle(''); setContent(''); setPrivacy('public'); setSelectedFollowers([]);
+    setContent(''); setPrivacy('public'); setSelectedFollowers([]);
     setRestoredDraft(false);
     contentField.current?.focus();
   }
@@ -185,8 +178,7 @@ export default function PostForm({ post, variant = 'page', onPublished }: {
         rather than as the thing that decides. */}
     <div className={modal ? 'space-y-5' : 'lg:grid lg:grid-cols-2 lg:gap-6 lg:items-start'}><form onSubmit={event => { event.preventDefault(); void publish(); }} onKeyDown={shortcut} noValidate className="rounded-xl bg-white p-6 shadow-sm space-y-5"><div className="flex items-center gap-3"><Avatar name={displayName(user)} avatarUrl={user.avatar} /><div><p className="font-medium">{displayName(user)}</p><p className="text-sm text-slate-500">@{user.nickname}</p></div></div>
     {restoredDraft && <p role="status" id="draft-restored" className="flex flex-wrap items-center gap-3 rounded-lg border border-border bg-surface-2 px-3 py-2 text-sm text-muted">Draft restored. The text and the audience came back; photos did not.<button type="button" onClick={discardDraft} className="font-medium text-brand-1 underline">Discard draft</button></p>}
-    <label className="block text-sm font-medium">Title (optional)<input ref={titleField} minLength={MIN_TITLE} maxLength={30} value={title} onChange={event => setTitle(event.target.value)} className="mt-2 w-full rounded-lg border border-slate-200 p-3" placeholder="Give your post a title" /></label>
-    <label className="block text-sm font-medium">Your post<textarea ref={contentField} required={!hasMedia} minLength={hasMedia ? 0 : MIN_CONTENT} maxLength={500} rows={6} value={content} onChange={event => setContent(event.target.value)} aria-describedby={blocker ? 'publish-blocked' : undefined} className="mt-2 w-full rounded-lg border border-slate-200 p-3" placeholder="What's happening?" /></label>
+    <label className="block text-sm font-medium">Description<textarea ref={contentField} required={!hasMedia} minLength={hasMedia ? 0 : MIN_CONTENT} maxLength={500} rows={6} value={content} onChange={event => setContent(event.target.value)} aria-describedby={blocker ? 'publish-blocked' : undefined} className="mt-2 w-full rounded-lg border border-slate-200 p-3" placeholder="Write a description…" /></label>
     <label className="block text-sm font-medium">Post privacy<select value={privacy} onChange={event => setPrivacy(event.target.value as typeof privacy)} className="mt-2 block w-full rounded-lg border border-slate-200 p-3">{Object.entries(PRIVACY_LABEL).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label>
     {privacy === 'selected' && <fieldset ref={followersField} tabIndex={-1} className="rounded-lg border border-slate-200 p-3">
       <legend className="px-1 text-sm font-medium">Choose followers</legend>
@@ -216,5 +208,5 @@ export default function PostForm({ post, variant = 'page', onPublished }: {
       </div>
       {blocker && <p id="publish-blocked" className="text-xs text-muted">{blocker.message}</p>}
     </div>
-  </form><section id="post-preview" aria-label="Post preview" className={showPreview ? 'block' : (modal ? 'hidden' : 'hidden lg:block')}><p className="mb-3 text-sm font-medium text-muted">Preview</p><PostPreview user={user} title={title} content={content} privacy={privacy} imageUrls={[...existingImages, ...filePreviews]} createdAt={post?.createdAt} selectedNames={audienceNames} /></section></div></div>;
+  </form><section id="post-preview" aria-label="Post preview" className={showPreview ? 'block' : (modal ? 'hidden' : 'hidden lg:block')}><p className="mb-3 text-sm font-medium text-muted">Preview</p><PostPreview user={user} content={content} privacy={privacy} imageUrls={[...existingImages, ...filePreviews]} createdAt={post?.createdAt} selectedNames={audienceNames} /></section></div></div>;
 }
