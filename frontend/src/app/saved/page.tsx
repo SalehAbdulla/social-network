@@ -1,7 +1,6 @@
 'use client';
 
 import Link from 'next/link';
-import { Bookmark } from 'lucide-react';
 import { type Page, type Post } from '../api/social';
 import { usePagedList } from '../lib/usePagedList';
 import PostCard from '../components/PostCard';
@@ -31,13 +30,9 @@ export default function Saved() {
   });
 
   return <div className="mx-auto max-w-3xl space-y-6 p-4 py-8 sm:p-8">
-    <header className="flex flex-wrap items-end justify-between gap-3">
-      <div>
-        <h1 className="flex items-center gap-2 text-2xl font-bold tracking-tight text-slate-900"><Bookmark size={22} aria-hidden="true" />Saved posts</h1>
-        <p className="text-sm text-slate-500">Only you can see this list. A post you can no longer read drops out of it.</p>
-      </div>
-      <Link href="/" className="chat-primary inline-flex items-center gap-2">Back to feed</Link>
-    </header>
+    {/* No page title: the rail already names this page, and the note that the list is private is
+        the same rule the backend enforces rather than a label worth repeating. */}
+    <div className="flex justify-end"><Link href="/" className="chat-secondary inline-flex items-center gap-2">Back to feed</Link></div>
     {saved.refreshing && <p role="status" className="flex items-center justify-center gap-2 text-xs font-medium text-slate-400">Refreshing your saved posts…</p>}
     {saved.loading
       ? <PostListSkeleton />
