@@ -1,118 +1,241 @@
 'use client';
-import { useRef, useState } from 'react';
+
+import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
-import { useRouter, useSearchParams } from 'next/navigation';
-import { ArrowLeft, Info } from 'lucide-react';
+import { usePathname, useRouter, useSearchParams } from 'next/navigation';
+import { ChevronLeft, Info, Plus } from 'lucide-react';
 import toast from 'react-hot-toast';
-import { type Group, type GroupMember, type GroupRequest, type SocialUser, displayName, errorMessage, request, upload } from '../api/social';
+import { type Group, type GroupInvitation, errorMessage, request } from '../api/social';
 import { useBackend } from './BackendProvider';
-import { useDialogFocus } from '../lib/useDialogFocus';
-import { usePagedList } from '../lib/usePagedList';
 import { useResource } from '../lib/useResource';
 import { useLiveRefresh } from '../lib/useLiveRefresh';
 import Avatar from './Avatar';
-import ImagePicker from './ImagePicker';
-import GroupActivity from './GroupActivity';
+import Button from './ui/Button';
+import IconButton from './ui/IconButton';
+import Tabs from './ui/Tabs';
 import GroupJoinButton from './GroupJoinButton';
-import Loading from './Loading';
-import LoadMore from './LoadMore';
+import GroupChat from './messages/group/GroupChat';
+import GroupPosts from './messages/group/GroupPosts';
+import GroupEvents from './messages/group/GroupEvents';
+import GroupMedia from './messages/group/GroupMedia';
+import GroupDetails from './messages/group/GroupDetails';
+import GroupContentSheet from './messages/group/GroupContentSheet';
+import { memberCount, type GroupItem } from './messages/group/groupContent';
 
-// Must match groupPageSize in the backend's GroupRepository: one page of rows
-// plus the extra row the server sends as the "there is more" signal.
-const GROUP_LIST_PAGE_SIZE = 30;
+/**
+ * The group's four folders. Each carries the one action that belongs to it: the Chat
+ * folder has none, because there is nothing to create in a conversation.
+ */
+const TABS = [
+  { value: 'timeline', label: 'Chat', action: null },
+  { value: 'posts', label: 'Posts', action: 'New post' },
+  { value: 'events', label: 'Events', action: 'New event' },
+  { value: 'media', label: 'Media', action: 'Add photo' },
+] as const;
+type TabValue = typeof TABS[number]['value'];
+const TAB_VALUES: string[] = TABS.map(entry => entry.value);
 
-function GroupInfo({ group, changed }: { group: Group; changed: () => void }) {
-  const { user } = useBackend();
-  const router = useRouter();
-  const [editing, setEditing] = useState(false);
-  const [files, setFiles] = useState<File[]>([]);
-  const [image, setImage] = useState(group.imageUrl);
-  const [busy, setBusy] = useState(false);
-  const [confirm, setConfirm] = useState<'delete' | 'leave' | null>(null);
-  // The confirmation prompt is a dialog with the drawer's keyboard contract:
-  // Escape and Cancel both cancel it, focus starts on the action and returns to
-  // the button that opened it. It stays part of the page rather than an overlay,
-  // so `lockScroll` is off; `enabled` installs the trap only while it is open.
-  const confirmButton = useRef<HTMLButtonElement>(null);
-  const confirmDialog = useDialogFocus<HTMLDivElement>(() => setConfirm(null), { initialFocus: confirmButton, enabled: confirm !== null, lockScroll: false });
-  const [search, setSearch] = useState('');
-  const [query, setQuery] = useState('');
-  // Both lists are paged like every other list in the app. The backend sends one
-  // row more than a page holds, so `hasMore` falls back to "a short page is the
-  // last one" and the extra row is dropped by the hook's de-duplication. Live
-  // refresh folds the newest page in without discarding pages already opened.
-  const members = usePagedList<GroupMember, GroupMember[]>({
-    key: `/groups/${group.groupId}/members`,
-    pageQuery: page => `?offset=${(page - 1) * GROUP_LIST_PAGE_SIZE}`,
-    pageSize: GROUP_LIST_PAGE_SIZE,
-    normalize: raw => ({ items: raw }),
-    keyOf: member => member.userId,
-  });
-  const requests = usePagedList<GroupRequest, GroupRequest[]>({
-    key: `/groups/${group.groupId}/requests`,
-    pageQuery: page => `?offset=${(page - 1) * GROUP_LIST_PAGE_SIZE}`,
-    pageSize: GROUP_LIST_PAGE_SIZE,
-    normalize: raw => ({ items: raw }),
-    keyOf: item => item.requestId,
-    enabled: group.isOwner,
-  });
-  const people = useResource<SocialUser[]>(`/users?q=${encodeURIComponent(query)}`, !!query);
-  useLiveRefresh(members.refresh, String(group.groupId));
-  useLiveRefresh(requests.refresh, String(group.groupId));
-  async function mutate(action: () => Promise<unknown>, message: string) {
-    if (busy) return; setBusy(true);
-    try { await action(); members.reload(); requests.reload(); changed(); toast.success(message); }
-    catch (error) { toast.error(errorMessage(error)); } finally { setBusy(false); }
-  }
-  return <div className="min-h-0 flex-1 overflow-y-auto bg-slate-50 p-4 sm:p-6"><div className="mx-auto max-w-2xl space-y-5">
-    <section className="rounded-2xl border border-slate-200 bg-white p-5">
-      <div className="flex items-center gap-4"><Avatar name={group.title} avatarUrl={group.imageUrl} size={72} /><div><h3 className="text-xl font-semibold">{group.title}</h3><p className="text-sm text-slate-500">{group.memberCount} members · Created by {group.ownerName}</p></div></div>
-      <p className="mt-4 whitespace-pre-wrap break-words text-sm text-slate-600">{group.description || 'Add a description to tell people about your group.'}</p>
-      {group.isOwner && <button className="chat-secondary mt-4" onClick={() => { setImage(group.imageUrl); setFiles([]); setEditing(!editing); }}>{editing ? 'Cancel editing' : 'Edit group'}</button>}
-      {editing && <form className="mt-4 space-y-4" onSubmit={event => {
-        event.preventDefault(); const data = new FormData(event.currentTarget);
-        void mutate(async () => { const imageUrl = files.length ? (await upload(files[0])).url : image; await request(`/groups/${group.groupId}`, 'PUT', { title: data.get('title'), description: data.get('description'), imageUrl }); setEditing(false); }, 'Group updated');
-      }}><fieldset disabled={busy} className="space-y-4"><label className="chat-label">Group name<input name="title" defaultValue={group.title} required minLength={3} maxLength={100} className="chat-field" /></label><label className="chat-label">Description<textarea name="description" defaultValue={group.description} maxLength={1000} className="chat-field" /></label><ImagePicker files={files} onChange={setFiles} existing={image ? [image] : []} onRemoveExisting={() => setImage('')} max={1} disabled={busy} /><button className="chat-primary">{busy ? 'Saving…' : 'Save group'}</button></fieldset></form>}
-    </section>
-    <section className="rounded-2xl border border-slate-200 bg-white p-5"><h3 className="font-semibold">Members</h3>
-      {members.loading && <Loading height={70} />}
-      <div className="mt-3 divide-y divide-slate-100">{members.items.map(member => <div key={member.userId} className="flex flex-wrap items-center gap-3 py-3"><Avatar name={displayName(member)} avatarUrl={member.avatar} size={36} /><Link href={`/profile/${member.userId}`} className="min-w-0 flex-1 text-sm font-medium">{displayName(member)}{member.userId === user.userId ? ' (you)' : ''}<span className="block text-xs font-normal capitalize text-slate-400">{member.role}</span></Link>{group.isOwner && member.role !== 'owner' && <details className="relative"><summary className="cursor-pointer text-xs text-slate-500">Manage</summary><div className="absolute right-0 z-10 w-44 rounded-xl border border-slate-200 bg-white p-1 shadow-lg"><button disabled={busy} className="chat-menu text-xs" onClick={() => void mutate(() => request(`/groups/${group.groupId}/members/${member.userId}`, 'PUT', { role: 'owner' }), 'Group ownership transferred')}>Make group owner</button><button disabled={busy} className="chat-menu text-xs text-red-600" onClick={() => void mutate(() => request(`/groups/${group.groupId}/members/${member.userId}`, 'DELETE'), 'Member removed')}>Remove member</button></div></details>}</div>)}</div>
-      <LoadMore loading={members.loadingMore} hasMore={members.hasMore} onLoadMore={members.loadMore} label="Load more members" />
-      <form className="mt-4 flex gap-2" onSubmit={event => { event.preventDefault(); setQuery(search.trim()); }}><input aria-label="Find people to invite" placeholder="Find people to invite" value={search} onChange={event => setSearch(event.target.value)} className="chat-field mt-0 min-w-0 flex-1" /><button className="chat-secondary">Find</button></form>
-      {!!query && <div className="mt-3 space-y-2">{people.loading && <Loading height={60} />}{people.data?.filter(person => !members.items.some(member => member.userId === person.userId)).map(person => <div key={person.userId} className="flex items-center justify-between gap-2 text-sm"><span>{displayName(person)}</span><button disabled={busy} className="chat-secondary" onClick={() => void mutate(() => request(`/groups/${group.groupId}/invite/${person.userId}`, 'POST'), 'Invitation sent')}>Invite</button></div>)}{people.data?.length === 0 && <p className="text-sm text-slate-500">No people found.</p>}</div>}
-    </section>
-    {group.isOwner && <section className="rounded-2xl border border-slate-200 bg-white p-5"><h3 className="font-semibold">Join requests</h3>{requests.items.length ? requests.items.map(item => <div key={item.requestId} className="mt-3 flex flex-wrap items-center justify-between gap-2 text-sm"><span>{item.nickname}</span><div className="flex gap-2">{['accepted', 'declined'].map(status => <button key={status} disabled={busy} className="chat-secondary" onClick={() => void mutate(() => request(`/groups/${group.groupId}/requests/${item.requestId}`, 'PUT', { status }), status === 'accepted' ? 'Member added' : 'Request declined')}>{status === 'accepted' ? 'Accept' : 'Decline'}</button>)}</div></div>) : <p className="mt-3 text-sm text-slate-500">No pending requests.</p>}
-      <LoadMore loading={requests.loadingMore} hasMore={requests.hasMore} onLoadMore={requests.loadMore} label="Load more requests" />
-    </section>}
-    <section className="rounded-2xl border border-red-100 bg-white p-5">
-      <button className="text-sm font-medium text-red-600" onClick={() => setConfirm(group.isOwner ? 'delete' : 'leave')}>{group.isOwner ? 'Delete group' : 'Leave group'}</button>
-      {group.isOwner && <p className="mt-2 text-xs text-slate-500">To leave without deleting the group, transfer ownership to a member first.</p>}
-      {confirm && <div ref={confirmDialog} tabIndex={-1} role="dialog" aria-labelledby={`group-${group.groupId}-confirm`} className="mt-3 space-y-3"><p id={`group-${group.groupId}-confirm`} className="text-sm text-slate-600">{confirm === 'delete' ? 'Delete this group and all its messages, posts and events? This cannot be undone.' : 'Leave this group? You will need an invitation or approval to rejoin.'}</p><div className="flex gap-2"><button ref={confirmButton} disabled={busy} className="rounded-lg bg-red-600 px-4 py-2 text-sm text-white" onClick={() => void mutate(async () => { await request(confirm === 'delete' ? `/groups/${group.groupId}` : `/groups/${group.groupId}/members/${user.userId}`, 'DELETE'); router.push('/messages/groups'); }, confirm === 'delete' ? 'Group deleted' : 'You left the group')}>{confirm === 'delete' ? 'Delete permanently' : 'Leave group'}</button><button className="chat-secondary" onClick={() => setConfirm(null)}>Cancel</button></div></div>}
-    </section>
-  </div></div>;
+/** The first paint of the whole shell: header, tab row and body, in the real geometry. */
+function ShellSkeleton() {
+  return <section className="dm-panel" aria-busy="true" aria-label="Loading group">
+    <div className="dm-header">
+      <span className="grp-skeleton size-11 shrink-0" style={{ borderRadius: '9999px' }} />
+      <span className="min-w-0 flex-1 space-y-2">
+        <span className="grp-skeleton grp-skel-line block w-40" />
+        <span className="grp-skeleton grp-skel-line block w-24" />
+      </span>
+    </div>
+    <div className="grp-tabbar"><span className="grp-skeleton grp-skel-line block w-56" /></div>
+    <div className="grp-body">
+      <div className="grp-column">
+        <div className="flex flex-col gap-3 py-3">
+          <span className="grp-skeleton block h-16 w-full" />
+          <span className="grp-skeleton block h-40 w-full" />
+        </div>
+      </div>
+    </div>
+  </section>;
 }
 
+/**
+ * A group conversation.
+ *
+ * It uses the direct-message shell: the chat panel is the thread, the composer and the
+ * details column, the header is the same 68px header, and only the content under the tab
+ * bar scrolls. The tab bar is left-aligned and content-width with one ghost action on the
+ * right; on a phone that action becomes a floating button. `?tab=info`, which a join
+ * request's notification links to, opens the details panel instead of a tab.
+ */
 export default function GroupConversation({ groupId }: { groupId: string }) {
   const searchParams = useSearchParams();
-  // A group notification links to the tab that needs attention (`?tab=events`,
-  // `?tab=info`), so the requested tab is the entry point. Switching tabs stays
-  // local state, and a second request arriving while this view is still mounted
-  // (one group to the next) resets it during the render, which is React's
-  // documented way to adjust state when an input changes.
-  const requestedTab = searchParams.get('tab') ?? 'timeline';
-  const [tab, setTab] = useState(requestedTab);
-  const [lastRequested, setLastRequested] = useState(requestedTab);
-  if (requestedTab !== lastRequested) {
-    setLastRequested(requestedTab);
-    setTab(requestedTab);
+  const pathname = usePathname();
+  const router = useRouter();
+  const { user } = useBackend();
+  const requested = searchParams.get('tab') ?? 'timeline';
+  // A share link names one post: `/messages/groups/{id}?tab=posts&post={id}`. The id is read
+  // once here and handed to the Posts tab, which scrolls to the card and flashes it; the flash
+  // is cleared a moment later, so the card settles back rather than staying lit.
+  const sharedPost = Number.parseInt(searchParams.get('post') ?? '', 10);
+  const sharedPostId = Number.isFinite(sharedPost) && sharedPost > 0 ? sharedPost : null;
+  const [tab, setTab] = useState<TabValue>(() => {
+    if (requested === 'info') return 'timeline';
+    // A link that names a post is a link to the Posts tab, whichever tab the URL happens to
+    // name — that is what makes the deep link work even when it is copied without `tab`.
+    if (sharedPostId) return 'posts';
+    return TAB_VALUES.includes(requested) ? requested as TabValue : 'timeline';
+  });
+  const [details, setDetails] = useState(requested === 'info');
+  const [lastRequested, setLastRequested] = useState(requested);
+  // The flash is a moment, not a state: the id stays live until its own timer has run, and
+  // that timer is what turns it off. Deriving it this way means a second share link arriving
+  // while the view is mounted re-arms the flash without a state write during render.
+  const [flashedId, setFlashedId] = useState<number | null>(null);
+  const flashId = sharedPostId !== null && sharedPostId !== flashedId ? sharedPostId : null;
+  const [creating, setCreating] = useState<'posts' | 'events' | null>(null);
+  const [editing, setEditing] = useState<GroupItem | null>(null);
+  const [deciding, setDeciding] = useState(false);
+  useEffect(() => {
+    if (sharedPostId === null) return;
+    const timer = setTimeout(() => setFlashedId(sharedPostId), 1800);
+    return () => clearTimeout(timer);
+  }, [sharedPostId]);
+  // Each tab remembers where it was scrolled to, so switching away and back does not throw
+  // the reader to the top. The scroll container is the tab's own `.grp-body` (or the chat's
+  // thread), found through the panel the tab renders into.
+  const panels = useRef<Record<string, HTMLDivElement | null>>({});
+  const scrollPositions = useRef<Record<string, number>>({});
+  function scrollerOf(value: string) {
+    const panel = panels.current[value];
+    return panel?.querySelector<HTMLElement>('.grp-body, .dm-thread') ?? null;
+  }
+  function selectTab(next: TabValue) {
+    if (next === tab) return;
+    const current = scrollerOf(tab);
+    if (current) scrollPositions.current[tab] = current.scrollTop;
+    setTab(next);
+    // The tab is in the URL, so a refresh and the browser's back/forward buttons land where
+    // the reader left off rather than resetting to the chat.
+    const params = new URLSearchParams(searchParams.toString());
+    params.set('tab', next);
+    router.push(`${pathname}?${params.toString()}`, { scroll: false });
   }
   const group = useResource<Group>(`/groups/${groupId}`);
+  // An invitee who opens the group straight from a notification never sees the invitation
+  // card in the sidebar, so the gate has to know about it too.
+  const invitations = useResource<GroupInvitation[]>('/groups/invitations');
   useLiveRefresh(group.reload, groupId);
-  if (group.loading) return <Loading />;
-  if (!group.data) return <div className="m-auto space-y-3 p-6 text-center text-slate-500"><p>This group is unavailable.</p><Link href="/messages/groups" className="chat-secondary">Back to groups</Link></div>;
+  useLiveRefresh(invitations.reload);
+  // A notification that points at a tab is the entry point; a second one arriving while
+  // this view is still mounted resets which surface is open, which React documents as the
+  // way to adjust state when an input changes.
+  if (requested !== lastRequested) {
+    setLastRequested(requested);
+    if (requested === 'info') setDetails(true);
+    else if (TAB_VALUES.includes(requested)) setTab(requested as TabValue);
+  }
+  // Restore the tab's place once it has rendered.
+  useEffect(() => {
+    const element = scrollerOf(tab);
+    if (element) element.scrollTop = scrollPositions.current[tab] ?? 0;
+  }, [tab]);
+  if (group.loading) return <ShellSkeleton />;
+  if (!group.data) {
+    if (group.error) return <section className="dm-panel"><div className="grp-gate">
+      <p className="grp-gate-title">This group could not be loaded</p>
+      <p className="grp-gate-desc">{group.error}</p>
+      <Button onClick={group.reload} className="grp-gate-action">Retry</Button>
+    </div></section>;
+    return <section className="dm-panel"><div className="grp-gate">
+      <p className="grp-gate-title">This group is unavailable</p>
+      <p className="grp-gate-desc">It may have been deleted, or you may no longer be a member.</p>
+      <Link href="/messages/groups" className="dm-secondary grp-gate-action">Back to groups</Link>
+    </div></section>;
+  }
   const data = group.data;
-  return <section className="flex h-full min-h-0 flex-1 flex-col" aria-label={`Group conversation: ${data.title}`}>
-    <header className="dm-header" data-connected="true"><Link href="/messages/groups" aria-label="Back to groups" className="dm-icon dm-back"><ArrowLeft /></Link><button type="button" className="flex min-w-0 flex-1 items-center gap-3 text-left" onClick={() => setTab('info')}><Avatar name={data.title} avatarUrl={data.imageUrl} size={44} /><span className="min-w-0"><span className="dm-header-name truncate">{data.title}</span><span className="dm-header-sub truncate">{data.isMember ? `${data.memberCount} members · Group conversation` : data.joinRequested ? 'Request pending' : `${data.memberCount} members · Request to join`}</span></span></button><button type="button" aria-label="Group info" className="dm-icon" onClick={() => setTab('info')}><Info /></button></header>
-    {data.isMember ? <><nav aria-label="Group conversation tabs" className="dm-tabs overflow-x-auto">{[['timeline', 'Chat'], ['posts', 'Posts'], ['events', 'Events'], ['media', 'Media'], ['info', 'Group info']].map(([value, label]) => <button key={value} type="button" aria-pressed={tab === value} onClick={() => setTab(value)} className="dm-tab whitespace-nowrap">{label}</button>)}</nav>{tab === 'info' ? <GroupInfo group={data} changed={group.reload} /> : <GroupActivity key={tab} groupId={groupId} kind={tab} isOwner={data.isOwner} />}</> : <div className="m-auto max-w-lg space-y-4 p-6 text-center"><Avatar name={data.title} avatarUrl={data.imageUrl} size={80} /><h3 className="text-xl font-semibold">Join {data.title}</h3><p className="text-sm text-slate-500">{data.description}</p><p className="text-sm text-slate-500">Join this group to see its conversations, posts, events and media.</p><GroupJoinButton group={data} onRequested={() => { group.update(value => ({ ...value, joinRequested: true })); group.reload(); }} /></div>}
-  </section>;
+  const invitation = invitations.data?.find(entry => String(entry.groupId) === groupId) ?? null;
+  const active = TABS.find(entry => entry.value === tab) ?? TABS[0];
+  const creates = active.value === 'events' ? 'events' : 'posts';
+  async function answerInvitation(status: 'accepted' | 'declined') {
+    if (!invitation || deciding) return;
+    setDeciding(true);
+    try {
+      await request(`/groups/${invitation.groupId}/invitations/${invitation.invitationId}`, 'PUT', { status });
+      invitations.reload();
+      group.reload();
+      window.dispatchEvent(new Event('social:notifications'));
+      toast.success(status === 'accepted' ? `You joined ${invitation.groupTitle}` : 'Invitation declined');
+    } catch (error) { toast.error(errorMessage(error)); } finally { setDeciding(false); }
+  }
+  async function remove(item: GroupItem) {
+    try {
+      await request(`/groups/${groupId}/content/${item.kind}/${item.id}?parentId=${item.parentId}`, 'DELETE');
+      setEditing(null);
+    } catch (error) { toast.error(errorMessage(error)); }
+  }
+
+  return <>
+    <section className="dm-panel" aria-label={`Group conversation: ${data.title}`}>
+      <header className="dm-header" data-connected="true">
+        <Link href="/messages/groups" aria-label="Back to groups" className="dm-icon dm-back"><ChevronLeft aria-hidden="true" /></Link>
+        <button type="button" className="flex min-w-0 flex-1 items-center gap-3 text-left" onClick={() => setDetails(true)}>
+          <Avatar name={data.title} avatarUrl={data.imageUrl} size={44} />
+          <span className="min-w-0">
+            <span className="dm-header-name truncate" dir="auto">{data.title}</span>
+            <span className="dm-header-sub truncate">{data.isMember ? memberCount(data.memberCount) : invitation ? `${memberCount(data.memberCount)} · Invited you to join` : data.joinRequested ? 'Request pending' : `${memberCount(data.memberCount)} · Request to join`}</span>
+          </span>
+        </button>
+        <IconButton label="Group details" aria-expanded={details} aria-controls="group-details" onClick={() => setDetails(value => !value)}><Info aria-hidden="true" /></IconButton>
+      </header>
+      {data.isMember ? <>
+        <div className="grp-tabbar">
+          <Tabs
+            label="Group conversation tabs"
+            value={tab}
+            onChange={value => selectTab(value as TabValue)}
+            tabs={TABS.map(entry => ({ value: entry.value, label: entry.label }))}
+          />
+          {active.action && <div className="grp-tabbar-action">
+            <button type="button" className="grp-action" onClick={() => setCreating(creates)}>
+              <Plus aria-hidden="true" />{active.action}
+            </button>
+          </div>}
+        </div>
+        {/* `display: contents` keeps the shell's one flex column while still giving each tab a
+            panel a screen reader can point at from its `aria-controls`. */}
+        {tab === 'timeline' && <div id="panel-timeline" role="tabpanel" aria-labelledby="tab-timeline" className="contents" ref={element => { panels.current.timeline = element; }}>
+          <GroupChat groupId={groupId} meId={user.userId} isOwner={data.isOwner} onOpenEvents={() => selectTab('events')} onEdit={setEditing} onDelete={item => void remove(item)} />
+        </div>}
+        {tab === 'posts' && <div id="panel-posts" role="tabpanel" aria-labelledby="tab-posts" className="contents" ref={element => { panels.current.posts = element; }}>
+          <GroupPosts groupId={groupId} meId={user.userId} isOwner={data.isOwner} highlightId={flashId} onCreate={() => setCreating('posts')} onEdit={setEditing} />
+        </div>}
+        {tab === 'events' && <div id="panel-events" role="tabpanel" aria-labelledby="tab-events" className="contents" ref={element => { panels.current.events = element; }}>
+          <GroupEvents groupId={groupId} meId={user.userId} isOwner={data.isOwner} onCreate={() => setCreating('events')} onEdit={setEditing} />
+        </div>}
+        {tab === 'media' && <div id="panel-media" role="tabpanel" aria-labelledby="tab-media" className="contents" ref={element => { panels.current.media = element; }}>
+          <GroupMedia groupId={groupId} meId={user.userId} isOwner={data.isOwner} onCreate={() => setCreating('posts')} />
+        </div>}
+        {active.action && <button type="button" aria-label={active.action} className="grp-fab" onClick={() => setCreating(creates)}><Plus aria-hidden="true" /></button>}
+      </> : <div className="grp-gate">
+        <Avatar name={data.title} avatarUrl={data.imageUrl} size={96} />
+        <h3 className="grp-gate-title" dir="auto">Join {data.title}</h3>
+        <p className="grp-gate-meta">{memberCount(data.memberCount)}</p>
+        {!!data.description && <p className="grp-gate-desc" dir="auto">{data.description}</p>}
+        {invitation ? <div className="grp-gate-actions">
+          <Button loading={deciding} className="grp-gate-action" onClick={() => void answerInvitation('accepted')}>Accept invitation</Button>
+          <Button variant="secondary" disabled={deciding} className="grp-gate-action" onClick={() => void answerInvitation('declined')}>Decline</Button>
+        </div> : <GroupJoinButton group={data} onRequested={() => { group.update(value => ({ ...value, joinRequested: true })); group.reload(); }} />}
+        <p className="grp-gate-note">{invitation
+          ? 'You were invited to this group. Accept and its conversations, posts, events and media open up.'
+          : 'Conversations, posts, events and media stay private until an admin accepts your request.'}</p>
+      </div>}
+    </section>
+    {details && <GroupDetails group={data} meId={user.userId} changed={group.reload} onClose={() => setDetails(false)} />}
+    {(creating || editing) && <GroupContentSheet
+      groupId={groupId}
+      kind={editing ? (editing.kind === 'events' ? 'events' : 'posts') : creating ?? 'posts'}
+      item={editing ?? undefined}
+      onClose={() => { setCreating(null); setEditing(null); }}
+      onSaved={() => { setCreating(null); setEditing(null); group.reload(); }}
+    />}
+  </>;
 }
