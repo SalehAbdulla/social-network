@@ -215,8 +215,23 @@ button:not(:disabled) { cursor: pointer; }
 }
 
 @theme {
-  --radius-DEFAULT: 16px;
-  --radius-sm: 11px;
+  /* Corners are square. Every sized radius utility — `rounded`, `rounded-lg`, `rounded-xl`,
+     `rounded-2xl`, the `-t`/`-br`/`-bl` sides and the responsive variants — resolves through one
+     of these keys, so zeroing the scale squares all two hundred-odd call sites at once and keeps
+     the decision in one place instead of in every class name. `--radius` and `--radius-DEFAULT`
+     are both spelled out because v3 read the former and v4 the latter. `rounded-full` is
+     deliberately left alone: it is a literal maximum radius rather than a scale member, and it is
+     what makes avatars, story rings, switch knobs and spinners read as circles. */
+  --radius: 0px;
+  --radius-DEFAULT: 0px;
+  --radius-xs: 0px;
+  --radius-sm: 0px;
+  --radius-md: 0px;
+  --radius-lg: 0px;
+  --radius-xl: 0px;
+  --radius-2xl: 0px;
+  --radius-3xl: 0px;
+  --radius-4xl: 0px;
 
   --shadow-sm: 0 1px 3px rgba(15, 48, 87, 0.06), 0 1px 2px rgba(15, 48, 87, 0.05);
   --shadow-md: 0 10px 30px -8px rgba(15, 48, 87, 0.18), 0 4px 10px -6px rgba(15, 48, 87, 0.12);
