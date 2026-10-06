@@ -7,6 +7,7 @@ import toast from 'react-hot-toast';
 
 import {
   type MediaItem,
+  type Page,
   type Post,
   type SocialUser,
   type SocketEvent,
@@ -19,6 +20,7 @@ import {
 import { useBackend } from '../components/BackendProvider';
 import { usePagedList } from '../lib/usePagedList';
 import { useResource } from '../lib/useResource';
+import { usePostOverlay } from '../lib/usePostOverlay';
 import { mediaImageProps } from '../lib/mediaVariants';
 
 import Avatar from '../components/Avatar';
@@ -37,7 +39,7 @@ import { PostListSkeleton } from '../components/Skeletons';
 
 const POSTS_PER_PAGE = 20;
 
-type ProfileTab = 'posts' | 'media' | 'likes';
+type ProfileTab = 'posts' | 'media' | 'likes' | 'saved';
 
 const PROFILE_TABS: ProfileTab[] = ['posts', 'media', 'likes'];
 
@@ -76,6 +78,18 @@ export default function Profile() {
     enabled: !!profile.data && canViewProfile,
   });
 
+  // The bookmark list is the member's own and lives here now, the way Instagram's Saved is a tab
+  // on your profile rather than a page of its own. It reads the same `/saved-posts` projection the
+  // standalone page does, and is only fetched while the tab is open.
+  const saved = usePagedList<Post, Page<Post>>({
+    key: `/saved-posts?size=${POSTS_PER_PAGE}`,
+    pageQuery: page => `&page=${page}`,
+    pageSize: POSTS_PER_PAGE,
+    normalize: raw => ({ items: raw.posts, hasMore: !raw.lastPage }),
+    keyOf: post => post.postId,
+    enabled: isOwnProfile && canViewProfile && activeTab === 'saved',
+  });
+
   // The media tab lists post and comment photos together, so it reads its own
   // endpoint instead of deriving the grid from the posts above.
   const media = usePagedList<MediaItem, MediaItem[]>({
@@ -112,6 +126,7 @@ export default function Profile() {
         profile.reload();
         posts.reload();
         media.reload();
+        saved.reload();
       }
     };
 
@@ -120,7 +135,7 @@ export default function Profile() {
     return () => {
       window.removeEventListener('social:socket', handleSocketEvent);
     };
-  }, [profile.reload, posts.reload, media.reload, user.userId]);
+  }, [profile.reload, posts.reload, media.reload, saved.reload, user.userId]);
 
   async function handleToggleFollow() {
     if (isFollowingBusy) return;
@@ -160,6 +175,11 @@ export default function Profile() {
     setActiveTab(tab);
   }
 
+  // Posts, likes and saved are three projections of a list of posts; media is a grid of its own.
+  // `list` is whichever of the three the active tab shows, so the loading, empty and load-more
+  // branches below are written once rather than three times.
+  const list = activeTab === 'saved' ? saved : posts;
+
   return (
     <div className="mx-auto max-w-3xl space-y-6 p-6">
       {/* Profile loading state */}
@@ -190,19 +210,20 @@ export default function Profile() {
           ) : (
             <>
               <ProfileTabs
+                tabs={isOwnProfile ? [...PROFILE_TABS, 'saved'] : PROFILE_TABS}
                 activeTab={activeTab}
                 onChange={handleTabChange}
               />
 
-              {/* Posts and media */}
-              {(activeTab === 'media' ? media.loading : posts.loading) && <PostListSkeleton />}
+              {/* Posts, likes, saved and media */}
+              {(activeTab === 'media' ? media.loading : list.loading) && <PostListSkeleton />}
 
               {activeTab === 'media' ? (
                 <MediaGrid items={media.items} />
               ) : (
                 <PostList
-                  posts={posts.items}
-                  onRemoved={postId => posts.update(items => items.filter(item => item.postId !== postId))}
+                  posts={list.items}
+                  onRemoved={postId => list.update(items => items.filter(item => item.postId !== postId))}
                 />
               )}
 
@@ -211,9 +232,9 @@ export default function Profile() {
                 ? media.settled && !media.error && media.items.length === 0 && (
                     <RequestState empty="No photos yet." />
                   )
-                : posts.settled && !posts.error && posts.items.length === 0 && (
+                : list.settled && !list.error && list.items.length === 0 && (
                     <RequestState
-                      empty={activeTab === 'likes' ? 'No liked posts yet.' : 'No posts yet.'}
+                      empty={activeTab === 'saved' ? 'Nothing saved yet.' : activeTab === 'likes' ? 'No liked posts yet.' : 'No posts yet.'}
                     />
                   )}
 
@@ -226,12 +247,12 @@ export default function Profile() {
                       label="Load more photos"
                     />
                   )
-                : posts.items.length > 0 && (
+                : list.items.length > 0 && (
                     <LoadMore
-                      loading={posts.loadingMore}
-                      hasMore={posts.hasMore}
-                      onLoadMore={posts.loadMore}
-                      label="Load more posts"
+                      loading={list.loadingMore}
+                      hasMore={list.hasMore}
+                      onLoadMore={list.loadMore}
+                      label={activeTab === 'saved' ? 'Load more saved posts' : 'Load more posts'}
                     />
                   )}
             </>
@@ -471,17 +492,20 @@ function ProfileActions({
 
 
 type ProfileTabsProps = {
+  /** Which tabs to draw: the viewer's own profile adds Saved to the three everyone has. */
+  tabs: ProfileTab[];
   activeTab: ProfileTab;
   onChange: (tab: ProfileTab) => void;
 };
 
 function ProfileTabs({
+  tabs,
   activeTab,
   onChange,
 }: ProfileTabsProps) {
   return (
-    <div className="flex justify-center items-center gap-2">
-      {PROFILE_TABS.map((tab) => {
+    <div className="flex flex-wrap justify-center items-center gap-2">
+      {tabs.map((tab) => {
         const isActive = activeTab === tab;
 
         return (
@@ -514,15 +538,20 @@ function PostList({
   posts,
   onRemoved,
 }: PostListProps) {
+  // The feed's overlay, so a card on a profile opens the same dialog a card on the feed does
+  // instead of keeping the older inline-comments shape this page used to show on a wide screen.
+  const { openFor, overlay } = usePostOverlay(onRemoved);
   return (
     <div className="space-y-4">
       {posts.map((post) => (
         <PostCard
           key={post.postId}
           post={post}
+          onOpen={openFor(post)}
           onPostRemoved={onRemoved}
         />
       ))}
+      {overlay}
     </div>
   );
 }
