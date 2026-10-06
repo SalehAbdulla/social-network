@@ -4,6 +4,7 @@ import Link from 'next/link';
 import type { ReactNode } from 'react';
 import { ChevronDown, Search, SquarePen } from 'lucide-react';
 import ConversationRow, { type ConversationItem } from './ConversationRow';
+import { GroupRowsSkeleton } from '../Skeletons';
 
 /** The row shape the page resolves each conversation into; re-exported for its callers. */
 export type { ConversationItem } from './ConversationRow';
@@ -59,7 +60,7 @@ export default function ConversationList({ tab, currentUserName, search, onSearc
     </label>
     {extra && <div className="dm-collapse">{extra}</div>}
     <div className="dm-scroll">
-      {loading && <p className="dm-empty-note" role="status">Loading…</p>}
+      {loading && <GroupRowsSkeleton count={6} />}
       {!!error && <div className="p-4 text-center"><button type="button" className="dm-secondary" onClick={onRetry}>Retry</button></div>}
       {!loading && !error && items.length === 0 && <p className="dm-empty-note">{empty}</p>}
       {items.map(item => <ConversationRow key={item.key} item={item} active={item.key === activeKey} />)}
