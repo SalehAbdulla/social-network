@@ -3,6 +3,7 @@
 import { useParams } from 'next/navigation';
 import { type Page, type Post } from '../../api/social';
 import { usePagedList } from '../../lib/usePagedList';
+import { usePostOverlay } from '../../lib/usePostOverlay';
 import PostCard from '../../components/PostCard';
 import RequestState from '../../components/RequestState';
 import LoadMore from '../../components/LoadMore';
@@ -26,6 +27,7 @@ export default function Hashtag() {
     keyOf: post => post.postId,
     enabled: !!tag,
   });
+  const { openFor, overlay } = usePostOverlay(postId => posts.update(items => items.filter(item => item.postId !== postId)));
 
   return <div className="mx-auto max-w-3xl space-y-6 p-4 py-8 sm:p-8">
     <header>
@@ -35,10 +37,11 @@ export default function Hashtag() {
     {posts.loading
       ? <PostListSkeleton />
       : <>
-        {posts.items.map(post => <PostCard key={post.postId} post={post} onPostRemoved={postId => posts.update(items => items.filter(item => item.postId !== postId))} />)}
+        {posts.items.map(post => <PostCard key={post.postId} post={post} onOpen={openFor(post)} onPostRemoved={postId => posts.update(items => items.filter(item => item.postId !== postId))} />)}
         {posts.settled && posts.error && <RequestState empty={`#${tag} is not a tag this app can look up.`} />}
         {posts.settled && !posts.error && posts.items.length === 0 && <RequestState empty={`Nothing carries #${tag} yet.`} />}
         {posts.items.length > 0 && <LoadMore loading={posts.loadingMore} hasMore={posts.hasMore} onLoadMore={posts.loadMore} label="Load more posts" />}
       </>}
+    {overlay}
   </div>;
 }
