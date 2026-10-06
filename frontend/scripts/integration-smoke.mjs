@@ -197,6 +197,15 @@ async function button(page, text) {
   await until(page, `[...document.querySelectorAll('button')].some(element => element.textContent.trim() === ${JSON.stringify(text)} && !element.disabled)`, `button ${text}`);
   await evaluate(page, `(() => { const button = [...document.querySelectorAll('button')].find(element => element.textContent.trim() === ${JSON.stringify(text)}); if (!button) throw new Error('Button not found: ' + ${JSON.stringify(text)}); button.click(); })()`);
 }
+// The author's own Edit and Delete live in the card's "…" menu rather than as icons of their own, so
+// reaching one is deliberately two steps: open the menu, then press the row. `until` between them,
+// because the rows do not exist until React has re-rendered with the menu open.
+async function postMenu(page, label) {
+  await evaluate(page, `document.querySelector('[aria-label="Post options"]').click()`);
+  await until(page, `!!document.querySelector('[role="menuitem"]')`, 'the post options menu opens');
+  await evaluate(page, `(() => { const item = [...document.querySelectorAll('[role="menuitem"]')].find(node => node.textContent.trim() === ${JSON.stringify(label)}); if (!item) throw new Error('Menu item not found: ' + ${JSON.stringify(label)}); item.click(); })()`);
+}
+
 // A click on a page that was just created can land before React has attached its
 // handler. The button is in the server-rendered HTML, so the click is accepted and
 // nothing happens — a 60-second stall rather than a failure with a cause. That was
@@ -342,12 +351,15 @@ try {
   await until(dummy, `(async () => (await (await fetch('/api/v1/post?id=${postId}')).json()).data.score === 1)()`, 'post reaction');
   console.log('PASS: post creation, image upload, detail page and reaction persist');
 
-  // The Instagram composer is a dialog and not only a route. It is opened from the sidebar's
-  // "Create Post" — the single place a desktop starts a post, the way Instagram's left rail carries
-  // it, after the feed's own duplicate button was removed — and Escape closes it without leaving.
-  // `/create-post`, the step above, stays the deep link, so both entries are still covered.
+  // The Instagram composer is a dialog and not only a route. The left rail carries one "Create"
+  // entry — the single place a desktop starts a post, after the feed's own duplicate button was
+  // removed — and it opens a one-item menu whose "Post" opens the dialog, which Escape then closes
+  // without leaving. `/create-post`, the step above, stays the deep link, so both entries are
+  // still covered.
   await navigate(dummy, '/');
-  await button(dummy, 'Create Post');
+  await evaluate(dummy, `document.querySelector('button[aria-label="Create"]').click()`);
+  await until(dummy, `!!document.querySelector('[role="menu"][aria-label="Create"] [role="menuitem"]')`, 'the rail opens its create menu');
+  await evaluate(dummy, `document.querySelector('[role="menu"][aria-label="Create"] [role="menuitem"]').click()`);
   await until(dummy, `!!document.querySelector('[role="dialog"][aria-label="Create a post"] textarea')`, 'the sidebar opens the composer dialog');
   await command('Input.dispatchKeyEvent', { type: 'keyDown', key: 'Escape', code: 'Escape', windowsVirtualKeyCode: 27 }, dummy);
   await until(dummy, `!document.querySelector('[role="dialog"][aria-label="Create a post"]')`, 'Escape closes the composer');
@@ -374,9 +386,9 @@ try {
   // This step and the composer-dialog one above navigated away from the post the next steps
   // assume they are looking at (they read it off the detail page), so come back to it — and
   // wait for the card, which is fetched after the route change and is what the next steps read
-  // the edit link and the like button off, so a fast hand-off cannot outrun it.
+  // the options menu and the like button off, so a fast hand-off cannot outrun it.
   await navigate(dummy, `/post/${postId}`);
-  await until(dummy, `!!document.querySelector('a[aria-label="Edit post"]')`, 'the post page is loaded again');
+  await until(dummy, `!!document.querySelector('[aria-label="Post options"]')`, 'the post page is loaded again');
 
   // The item's own claim, measured in the browser: the feed must stop downloading
   // full-resolution originals, so every request for this post's picture carries a `?size=`.
@@ -392,14 +404,14 @@ try {
   assert(mediaRequests.every(url => url.includes('?size=')), `every request for the picture must name a size, got ${JSON.stringify(mediaRequests)}`);
   console.log('PASS: the picture is fetched through a sized variant, never as the bare original');
 
-  await evaluate(dummy, `document.querySelector('a[aria-label="Edit post"]').click()`);
+  await postMenu(dummy, 'Edit');
   await until(dummy, `document.querySelector('h1')?.textContent === 'Edit Post' && !!document.querySelector('img[alt="Photo 1"]')`, 'prefilled post editor');
   assert.equal(await evaluate(dummy, `document.querySelector('textarea').value`), created.content, 'the editor is prefilled with the post text');
   await fill(dummy, 'textarea', 'Cancelled edit');
   await evaluate(dummy, `[...document.querySelectorAll('main a')].find(link => link.textContent === 'Cancel').click()`);
-  await until(dummy, `location.pathname === '/post/${postId}' && !!document.querySelector('a[aria-label="Edit post"]')`, 'cancel edit');
+  await until(dummy, `location.pathname === '/post/${postId}' && !!document.querySelector('[aria-label="Post options"]')`, 'cancel edit');
   assert.equal((await api(dummy, `/post?id=${postId}`)).content, created.content);
-  await evaluate(dummy, `document.querySelector('a[aria-label="Edit post"]').click()`);
+  await postMenu(dummy, 'Edit');
   await until(dummy, `document.querySelector('h1')?.textContent === 'Edit Post'`, 'reopen editor');
   await fill(dummy, 'textarea', `Updated browser post content ${stamp}`);
   await button(dummy, 'Save changes');
@@ -535,7 +547,7 @@ try {
   assert(await evaluate(alex, `!!document.querySelector('button[aria-label="New message"]')`));
   await navigate(alex, `/post/${postId}`);
   await until(alex, `!!document.querySelector('button[aria-label="Like post"]')`, 'other author post');
-  assert(!(await evaluate(alex, `!!document.querySelector('a[aria-label="Edit post"]')`)));
+  assert(!(await evaluate(alex, `!!document.querySelector('[aria-label="Post options"]')`)));
   await navigate(alex, `/post/${postId}/edit`);
   await until(alex, `document.body.innerText.includes('You can only edit your own posts.')`, 'non-owner editor denied');
   assert(!(await evaluate(alex, `!!document.querySelector('textarea')`)), 'the editor is not offered to a non-owner');
@@ -858,7 +870,7 @@ try {
   await until(alex, `document.querySelector('section > header').innerText.includes('Request pending')`, 'pending request updates group header immediately', 3000);
   const groupNotificationCount = (await api(dummy, '/notifications/unread-count?exclude=message')).count;
   await until(dummy, `!!document.querySelector('[aria-label="${groupNotificationCount} unread notifications"]')`, 'group notification badge updates live', 10000);
-  await button(dummy, 'Group info');
+  await evaluate(dummy, `document.querySelector('button[aria-label="Group details"]').click()`);
   await until(dummy, `document.body.innerText.includes('alexdemo')`, 'owner receives request');
   await button(dummy, 'Accept');
   await until(dummy, `document.body.innerText.includes('2 members')`, 'owner accepts request');
@@ -875,28 +887,31 @@ try {
   await clickAt(dummy, '[aria-label="Send message"]');
   await until(dummy, `document.querySelector('textarea[aria-label="Message"]').value === ''`, 'second group message sent');
   assert(await evaluate(dummy, `document.activeElement === document.querySelector('textarea[aria-label="Message"]')`), 'Mouse send restores composer focus');
-  await checkMessageMenus(dummy, 'Group item actions');
-  await button(dummy, 'Event');
+  await checkMessageMenus(dummy, 'Message actions');
+  await button(dummy, 'Events');
+  await button(dummy, 'New event');
   await fill(dummy, 'input[name="title"]', `Meetup ${stamp}`);
   await fill(dummy, 'input[name="startsAt"]', '2030-12-01T18:00');
   await fill(dummy, 'textarea[name="content"]', 'Meet at the park');
   await button(dummy, 'Create event');
   await until(alex, `document.body.innerText.includes(${JSON.stringify(`Meetup ${stamp}`)})`, 'event appears in chat');
+  await button(alex, 'Events');
   await button(alex, 'Going');
   await until(dummy, `document.body.innerText.includes('1 going')`, 'live RSVP');
   await button(dummy, 'Posts');
-  await button(dummy, 'Post');
+  await button(dummy, 'New post');
   await fill(dummy, 'textarea[name="content"]', `Group post ${stamp}`);
   await button(dummy, 'Publish');
-  await until(dummy, `document.body.innerText.includes(${JSON.stringify(`Group post ${stamp}`)})`, 'group post stays in conversation');
-  assert(await evaluate(dummy, `[...document.querySelectorAll('button')].some(item => item.textContent === 'Hide comments' && item.getAttribute('aria-expanded') === 'true')`), 'Group post comments open by default');
-  await button(dummy, 'Group info');
-  await button(dummy, 'Edit group');
+  await until(dummy, `document.body.innerText.includes(${JSON.stringify(`Group post ${stamp}`)})`, 'group post lands in the Posts folder');
+  assert(await evaluate(dummy, `!!document.querySelector('.grp-comments .grp-comment-field input')`), 'a group post offers its comment input');
+  await evaluate(dummy, `document.querySelector('button[aria-label="Group details"]').click()`);
+  await button(dummy, 'Edit');
   await fill(dummy, 'textarea[name="description"]', 'Updated group description');
   await button(dummy, 'Save group');
   await until(dummy, `!document.querySelector('textarea[name="description"]') && document.body.innerText.includes('Updated group description')`, 'group edit');
   const groupShot = await command('Page.captureScreenshot', { format: 'png' }, dummy);
   await writeFile(path.join(taskDir, 'group-info.png'), Buffer.from(groupShot.data, 'base64'));
+  await evaluate(dummy, `document.querySelector('button[aria-label="Close details"]').click()`);
   await button(dummy, 'Chat');
   await until(dummy, `document.querySelector('section[aria-label^="Group conversation"]').innerText.includes(${JSON.stringify(`Group hello ${stamp}`)})`, 'chat is loaded for screenshot');
   const chatShot = await command('Page.captureScreenshot', { format: 'png' }, dummy);
@@ -918,23 +933,23 @@ try {
   await command('Emulation.setDeviceMetricsOverride', { width: 1440, height: 960, deviceScaleFactor: 1, mobile: false }, dummy);
   console.log('PASS: groups inside conversations, join approval, group chat, events, RSVP, posts, editing and mobile layout');
 
-  // A group notification opens the tab that needs attention instead of the chat:
-  // a join request is answered on Group info, an event lives on Events.
+  // A group notification opens the surface that needs attention instead of the chat:
+  // a join request is answered in the details panel, an event lives on the Events tab.
   await navigate(dummy, '/notifications');
   await until(dummy, `!!document.querySelector('a[href="/messages/groups/${group.groupId}?tab=info"]')`, 'join request notification target');
   await evaluate(dummy, `document.querySelector('a[href="/messages/groups/${group.groupId}?tab=info"]').click()`);
-  await until(dummy, `document.querySelector('[aria-label="Group conversation tabs"] button[aria-pressed="true"]')?.textContent === 'Group info'`, 'request notification opens the group info tab');
+  await until(dummy, `!!document.querySelector('aside[aria-label="Group details"]') && !!document.querySelector('a[href="/profile/${originalAlex.userId}"]')`, 'request notification opens the group details panel');
   // The member and request lists are paged now. A short group has to render every
   // member on the first page and report that the list has ended, with no way to
   // ask for a second page: a stray "Load more members" button would mean the page
   // size or the end-of-list rule is wired wrong.
-  await until(dummy, `!!document.querySelector('a[href="/profile/${originalAlex.userId}"]')`, 'member list on the group info tab');
+  await until(dummy, `!!document.querySelector('a[href="/profile/${originalAlex.userId}"]')`, 'member list in the details panel');
   assert(await evaluate(dummy, `[...document.querySelectorAll('button')].every(button => button.textContent.trim() !== 'Load more members')`), 'a short member list must not offer a second page');
   assert(await evaluate(dummy, `document.body.innerText.includes("You're all caught up")`), 'the member list has to report that it ended');
   await navigate(alex, '/notifications');
   await until(alex, `!!document.querySelector('a[href="/messages/groups/${group.groupId}?tab=events"]')`, 'event notification target');
   await evaluate(alex, `document.querySelector('a[href="/messages/groups/${group.groupId}?tab=events"]').click()`);
-  await until(alex, `document.querySelector('[aria-label="Group conversation tabs"] button[aria-pressed="true"]')?.textContent === 'Events' && document.body.innerText.includes(${JSON.stringify(`Meetup ${stamp}`)})`, 'event notification opens the events tab');
+  await until(alex, `document.querySelector('[aria-label="Group conversation tabs"] button[aria-selected="true"]')?.textContent === 'Events' && document.body.innerText.includes(${JSON.stringify(`Meetup ${stamp}`)})`, 'event notification opens the events tab');
   // The events tab is split into what is to come and what has been, and the split
   // is what the server decided when it ordered the tab: the new event has to sit
   // under the Upcoming heading. Compared in the DOM rather than in innerText,
