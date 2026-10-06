@@ -65,6 +65,14 @@ const nextConfig: NextConfig = {
       },
     ],
   },
+  // The development indicator defaults to `bottom-left`, which is exactly where the rail's "More"
+  // row sits, and it covered the hamburger with a circular Next.js mark. Measured at 1440x900 the
+  // badge occupies (20, 844) 78x36 while the More row occupies (12, 844) 47x48, so the rail loses
+  // that corner outright. Turning the indicator off leaves the corner to the rail: the badge stays
+  // in the DOM but is `display: none`. The red "N Issue" pill the error overlay draws while a build
+  // is failing is not part of the indicator and still lands bottom-left, so
+  // `{ position: 'bottom-right' }` is worth reaching for instead if that shows up.
+  devIndicators: false,
   allowedDevOrigins: ["127.0.0.1", "10.1.201.32", "local-origin.dev", "*.local-origin.dev"],
 };
 

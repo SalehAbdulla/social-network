@@ -90,11 +90,11 @@ export default function StoriesBar() {
     const timer = setInterval(() => { if (!strip.current || strip.current.scrollLeft === 0) reload(); }, 60000);
     return () => clearInterval(timer);
   }, [reload]);
-  return <section className="space-y-2"><div ref={strip} className="no-scrollbar flex gap-4 overflow-x-auto pb-2">
+  return <section><div ref={strip} className="no-scrollbar flex gap-3 overflow-x-auto pb-2">
     {/* Instagram leads the tray with the viewer's own entry: their face inside a dashed circle
         with a plus on the rim and "Your story" under it, so the first thing in the strip is the
         thing the reader can do rather than somebody else's story. */}
-    <button type="button" onClick={() => setCreating(true)} className="flex w-[72px] shrink-0 flex-col items-center gap-1.5">
+    <button type="button" onClick={() => setCreating(true)} className="flex w-[66px] shrink-0 flex-col items-center gap-2">
       <span className="relative flex size-[66px] items-center justify-center rounded-full border-2 border-dashed border-border bg-surface-2">
         {user.avatar ? <img src={user.avatar} alt="" className="size-[58px] rounded-full object-cover" /> : <span className="flex size-[58px] items-center justify-center rounded-full bg-card text-lg font-semibold text-muted">{displayName(user).slice(0, 1).toUpperCase()}</span>}
         <span className="absolute -bottom-0.5 -right-0.5 flex size-5 items-center justify-center rounded-full border-2 border-bg bg-blue-600 text-white"><Plus size={12} /></span>
@@ -122,7 +122,7 @@ function StoryTrayItem({ story, currentUserId, onView, onDelete }: { story: Stor
     setDeleting(true);
     try { await onDelete(); toast.success('Story deleted'); } catch (error) { toast.error(errorMessage(error)); } finally { setDeleting(false); setMenuOpen(false); }
   }
-  return <div data-story-id={story.storyId} onClick={() => onView(story)} className="group flex w-[72px] shrink-0 cursor-pointer flex-col items-center gap-1.5">
+  return <div data-story-id={story.storyId} onClick={() => onView(story)} className="group flex w-[66px] shrink-0 cursor-pointer flex-col items-center gap-2">
     <span data-story-ring={story.viewed ? 'seen' : 'unseen'} className={`flex size-[66px] items-center justify-center rounded-full p-[2px] transition active:scale-95 ${story.viewed ? 'story-ring-seen' : 'story-ring'}`}>
       {/* A collar in the page colour keeps the ring off the face, so both stay readable over any
           story's background. */}

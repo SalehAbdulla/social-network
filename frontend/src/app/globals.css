@@ -1,6 +1,4 @@
 
-@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@100..900&display=swap');
-
 @import "tailwindcss";
 
 /* Class-based dark mode. The `dark` class is put on <html> by the inline script
@@ -39,6 +37,48 @@
   --ui-accent: #85a1ff;
   --ui-danger: #ed4956;
   --ui-warn: #d97706;
+
+  /* Left rail (Instagram-style): its own surface, hairline, hover overlays and the
+     floating popover/panel surface. Kept apart from `--ui-card` so the rail can be a
+     near-black blue-tinted tone in the dark theme while cards stay where they were. */
+  --ui-rail: #ffffff;
+  --ui-rail-border: #dbdbdb;
+  --ui-rail-hover: rgba(0, 0, 0, 0.05);
+  --ui-rail-hover-strong: rgba(0, 0, 0, 0.1);
+  --ui-popover: #ffffff;
+  --ui-popover-border: #dbdbdb;
+  --ui-badge: #ff3040;
+
+  /* Instagram's proportions, in one place. Every measurement the rail and the feed are drawn
+     against lives here, so tuning the layout is editing this block rather than hunting class
+     names. The rail values are the collapsed/hover-expanded pair; the feed values reproduce
+     Instagram's 470px column with its 319px suggestions rail 64px to the right. */
+  --rail-collapsed: 72px;
+  --rail-expanded: 244px;
+
+  /* Inside the rail: one icon size and one stroke for every row, a 44px row on a 4px gap (a
+     48px pitch), and the label the hover reveal fades in. The wordmark is 15% shorter than the
+     29px it was, and the mark is the square that stands in for it while collapsed. The profile
+     avatar is the one rail measurement JavaScript has to hand over (`RAIL_AVATAR_SIZE` in
+     `lib/railMetrics.ts`), because `Avatar` sizes itself with an inline style that nothing in
+     this stylesheet could outrank. */
+  --rail-icon: 22px;
+  --rail-stroke: 1.75;
+  --rail-stroke-active: 2.25;
+  --rail-row-height: 44px;
+  --rail-row-gap: 4px;
+  --rail-row-radius: 8px;
+  --rail-label-size: 15px;
+  --rail-mark: 24px;
+  --rail-wordmark: 24.65px;
+
+  /* The audience icon in a post's header line, level with the 12px secondary text it sits in. */
+  --post-audience-icon: 12px;
+
+  --feed-width: 470px;
+  --feed-gap: 64px;
+  --feed-rail: 319px;
+  --feed-group: calc(var(--feed-width) + var(--feed-gap) + var(--feed-rail));
 
   /* Glass surfaces: a translucent tint, the blur applied to whatever sits
      behind it, a specular 1px edge and an inset highlight on the rim. */
@@ -84,6 +124,14 @@
   --ui-danger: #ff5c5c;
   --ui-warn: #fbbf24;
 
+  --ui-rail: #0c1014;
+  --ui-rail-border: rgba(255, 255, 255, 0.15);
+  --ui-rail-hover: rgba(255, 255, 255, 0.1);
+  --ui-rail-hover-strong: rgba(255, 255, 255, 0.16);
+  --ui-popover: #262626;
+  --ui-popover-border: rgba(255, 255, 255, 0.15);
+  --ui-badge: #ff3040;
+
   --ui-glass: rgba(255, 255, 255, 0.06);
   --ui-glass-strong: rgba(255, 255, 255, 0.13);
   --ui-glass-border: rgba(255, 255, 255, 0.16);
@@ -118,6 +166,14 @@
   --color-accent: var(--ui-accent);
   --color-danger: var(--ui-danger);
   --color-warn: var(--ui-warn);
+
+  --color-rail: var(--ui-rail);
+  --color-rail-border: var(--ui-rail-border);
+  --color-rail-hover: var(--ui-rail-hover);
+  --color-rail-hover-strong: var(--ui-rail-hover-strong);
+  --color-popover: var(--ui-popover);
+  --color-popover-border: var(--ui-popover-border);
+  --color-badge: var(--ui-badge);
 
   /* Instagram draws its whole interface in one blue. Screens written before the token set spell
      their accents out with Tailwind's own blue and teal, so the shades they actually use are
@@ -182,8 +238,10 @@
 button, summary, a, input, textarea, select { @apply focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-2; }
 button:not(:disabled) { cursor: pointer; }
 
-*{
-  font-family: "Outfit", sans-serif;
+/* The 14px body Instagram is drawn at; the small/large ends of the scale hang off it. */
+body {
+  font-size: 14px;
+  line-height: 20px;
 }
 
 .no-scrollbar::-webkit-scrollbar{
@@ -215,6 +273,9 @@ button:not(:disabled) { cursor: pointer; }
 }
 
 @theme {
+  /* The whole app is drawn in Instagram's own system stack rather than a webfont. */
+  --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+
   /* Corners are square. Every sized radius utility — `rounded`, `rounded-lg`, `rounded-xl`,
      `rounded-2xl`, the `-t`/`-br`/`-bl` sides and the responsive variants — resolves through one
      of these keys, so zeroing the scale squares all two hundred-odd call sites at once and keeps
@@ -331,5 +392,101 @@ button:not(:disabled) { cursor: pointer; }
   .dark .from-blue-200 { --tw-gradient-from: color-mix(in srgb, var(--ui-brand-1) 30%, transparent); }
   .dark .to-teal-100 { --tw-gradient-to: color-mix(in srgb, var(--ui-brand-2) 26%, transparent); }
   .dark .to-white { --tw-gradient-to: var(--ui-card); }
+}
+
+
+/* ---------------------------------------------------------------------------
+   Left rail layout. The rail is fixed, so every state is pure CSS and nothing
+   is measured in JS: it is icon-only at every desktop width, and on a device
+   that actually hovers it grows to the labelled width while the pointer is over
+   it. The content gutter is reserved once the rail exists and is a constant, so
+   the growth always overlays the feed and can never reflow it.
+--------------------------------------------------------------------------- */
+.app-rail {
+  /* Repeated from the element's own utilities (`fixed`, `z-40`, `bg-rail`, `border-r`) so the
+     overlay contract holds even if one of those classes is ever edited away: it is pinned out
+     of flow, above the content, opaque, and edged with a hairline on the side the feed meets. */
+  position: fixed;
+  z-index: 40;
+  width: var(--rail-collapsed);
+  overflow: hidden;
+  background-color: var(--ui-rail);
+  border-right: 1px solid var(--ui-rail-border);
+}
+
+/* One icon size and one stroke for the whole rail. Lucide writes `width`, `height` and
+   `stroke-width` onto its <svg> as presentation attributes, and a stylesheet rule outranks an
+   attribute, so these lines are what every rail icon is actually drawn at: a component cannot
+   widen one and a wrapper cannot scale one. `stroke-width` is inherited by the paths, which is
+   how Lucide's own default reaches them. The row you are on is read from the two ARIA
+   attributes the rows already carry, so the state is not kept a second time. */
+.app-rail svg { width: var(--rail-icon); height: var(--rail-icon); stroke-width: var(--rail-stroke); }
+.app-rail [aria-current='page'] svg,
+.app-rail [aria-expanded='true'] svg { stroke-width: var(--rail-stroke-active); }
+
+/* Collapsed chrome: the labels are in the DOM (so they can fade) but invisible and clipped,
+   and the icon mark stands in for the wordmark. Both images are sized from the tokens, so the
+   logo row is one measurement like every other part of the rail. */
+.app-rail-label { opacity: 0; overflow: hidden; white-space: nowrap; font-size: var(--rail-label-size); }
+.app-rail-wordmark { display: none; height: var(--rail-wordmark); }
+.app-rail-mark { display: block; width: var(--rail-mark); height: var(--rail-mark); }
+
+/* The gutter the feed leaves for the rail is the collapsed width at every width the rail is
+   shown, and it follows nothing else — so a rail that expands overlays the content. */
+.app-content { padding-left: 0; }
+@media (min-width: 768px) { .app-content { padding-left: var(--rail-collapsed); } }
+
+/* Hover/focus expansion, on hover-capable devices only (a touch screen never matches
+   `hover: hover`, so it stays icon-only). `data-pinned` keeps the rail open while one of its
+   popovers is open, since the pointer has left the rail to reach it. Rows are laid out from the
+   rail's left edge, so the icons hold their position while the width grows around them. */
+@media (hover: hover) and (min-width: 768px) {
+  .app-rail:hover,
+  .app-rail:focus-within,
+  .app-rail[data-pinned='true'] {
+    width: var(--rail-expanded);
+    /* Growing starts at once. The hold that stops the rail snapping shut on mouseleave lives on
+       the collapsed rule below, which is what the element falls back to when the pointer leaves. */
+    transition-delay: 0s;
+  }
+  .app-rail:hover .app-rail-label,
+  .app-rail:focus-within .app-rail-label,
+  .app-rail[data-pinned='true'] .app-rail-label { opacity: 1; }
+  .app-rail:hover .app-rail-wordmark,
+  .app-rail:focus-within .app-rail-wordmark,
+  .app-rail[data-pinned='true'] .app-rail-wordmark { display: block; }
+  .app-rail:hover .app-rail-mark,
+  .app-rail:focus-within .app-rail-mark,
+  .app-rail[data-pinned='true'] .app-rail-mark { display: none; }
+}
+
+/* A slide-out panel forces the narrow rail on every screen: the Search and Notifications panels
+   need the room beside them, so the rail must not grow under the pointer. Declared last, so its
+   (equal) specificity beats the hover rule above. */
+.app-rail[data-panel-open='true'] { width: var(--rail-collapsed); }
+.app-rail[data-panel-open='true'] .app-rail-label { opacity: 0; }
+.app-rail[data-panel-open='true'] .app-rail-wordmark { display: none; }
+.app-rail[data-panel-open='true'] .app-rail-mark { display: block; }
+
+@media (prefers-reduced-motion: no-preference) {
+  /* The collapse holds for 100ms after the pointer leaves, so merely crossing the rail's edge on
+     the way somewhere else does not open and shut it. Growing carries no hold — the hover rule
+     above resets this delay — and the content gutter never moves, so it needs no transition. */
+  .app-rail { transition: width 200ms ease 100ms; }
+  .app-rail-label { transition: opacity 150ms ease; }
+  .app-panel { transition: transform 250ms cubic-bezier(0.32, 0.72, 0, 1), opacity 250ms ease; }
+}
+
+/* The rail, its panels and its menus keep the whole feel quiet when the reader has asked for
+   less motion: the widths, slides and hover scales all collapse to an instant change. Tailwind's
+   own transition utilities (`transition-colors`, `group-hover:scale-*`) are covered here because
+   they are not wrapped in the `no-preference` query above. */
+@media (prefers-reduced-motion: reduce) {
+  /* The 100ms hold is part of the motion, so it goes too: reduced motion means instant. */
+  .app-rail { transition-delay: 0ms !important; }
+  .app-rail, .app-rail *, .app-panel, .app-panel *, [role='menu'], [role='menu'] * {
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+  }
 }
 

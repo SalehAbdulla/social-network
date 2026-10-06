@@ -33,34 +33,29 @@ export default function Feed() {
   // carries no title of its own, the way Instagram's feed does not.
   const { openFor, overlay } = usePostOverlay(postId => feed.update(items => items.filter(item => item.postId !== postId)));
 
-  // The rail beside the post column is what stops the column from being centred on the window: the
-  // grid below gives it 20rem plus a 2rem gap, so the posts sit 176px left of the middle. `xl:pl-16`
-  // makes up the other half — the shell already reserves the rail's own 18rem, and 18rem + 4rem is
-  // the 22rem that the suggestions rail and its gap take off the right.
-  return <div className="xl:pl-16"><div className="mx-auto max-w-5xl space-y-6 p-4 py-8 sm:p-8">
-    {/* Instagram's desktop feed is a centred column with the suggestions rail beside it, and the
-        rail simply dropped below `xl` rather than moved — which is why the column centres itself
-        until the two-column grid can hold both. The rail is `sticky` so it stays put while the
-        feed scrolls past it. */}
-    <div className="grid gap-8 xl:grid-cols-[minmax(0,1fr)_20rem]">
-    <div className="mx-auto w-full min-w-0 max-w-3xl space-y-6 xl:mx-0 xl:max-w-none">
+  // Instagram's desktop feed: a 470px column with a 319px suggestions rail 64px to its right,
+  // the pair centred as a group (all three come from the geometry tokens in globals.css). The
+  // rail drops below 1000px rather than moving, so the column simply centres on its own there.
+  return <div className="px-4 py-4">
+    <div className="mx-auto flex w-full max-w-[var(--feed-group)] justify-center gap-[var(--feed-gap)]">
+    <div className="w-full min-w-0 max-w-[var(--feed-width)] space-y-4">
     <StoriesBar />
     {/* Offered, not imposed: a post that arrives over the socket raises this pill, and
         the reader chooses when to fold the newest page in. */}
     <NewPostsNotice onReload={feed.refresh} />
-    {feed.refreshing && <p role="status" className="flex items-center justify-center gap-2 text-xs font-medium text-slate-400"><RefreshCw size={13} className="animate-spin" aria-hidden="true" />Refreshing your feed…</p>}
+    {feed.refreshing && <p role="status" className="flex items-center justify-center gap-2 text-xs font-medium text-muted"><RefreshCw size={13} className="animate-spin" aria-hidden="true" />Refreshing your feed…</p>}
     {feed.loading
       ? <PostListSkeleton />
       : <>
         {feed.items.map(post => <PostCard key={post.postId} post={post} onOpen={openFor(post)} onPostRemoved={postId => feed.update(items => items.filter(item => item.postId !== postId))} />)}
         {feed.settled && !feed.error && feed.items.length === 0 && <RequestState variant="feed" empty="No posts yet. Share your first post to get started." />}
-        {feed.settled && !feed.error && feed.items.length === 0 && <Link href="/create-post" className="block text-center text-blue-600">Create a post</Link>}
+        {feed.settled && !feed.error && feed.items.length === 0 && <Link href="/create-post" className="block text-center text-brand-1">Create a post</Link>}
         {feed.items.length > 0 && <LoadMore loading={feed.loadingMore} hasMore={feed.hasMore} onLoadMore={feed.loadMore} label={`Load${feed.items.length > FEED_PAGE_SIZE ? ' more' : ' older'} posts`} />}
       </>}
     </div>
-    <aside className="hidden xl:block"><div className="sticky top-6 space-y-6"><AccountRailCard /><SuggestedPeople /></div></aside>
+    <aside className="hidden w-[var(--feed-rail)] shrink-0 min-[1000px]:block"><div className="sticky top-6 space-y-6"><AccountRailCard /><SuggestedPeople /></div></aside>
     </div>
     {overlay}
-  </div></div>;
+  </div>;
 }
 

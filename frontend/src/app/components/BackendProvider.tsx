@@ -20,6 +20,8 @@ interface Session {
   badges: { notifications: number; messages: number } | null;
   /** Opens the Instagram composer dialog over the current page. */
   openComposer: () => void;
+  /** Whether the composer dialog is open, so the rail's Create row can stay active. */
+  composerOpen: boolean;
 }
 const Context = createContext<Session | null>(null);
 
@@ -46,7 +48,6 @@ function AuthenticatedBackend({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<SocialUser | null>(null);
   const [error, setError] = useState('');
   const [socket, setSocket] = useState<WebSocket | null>(null);
-  const [isCollapsed, setIsCollapsed] = useState(false);
   const [composing, setComposing] = useState(false);
   const [reconnecting, setReconnecting] = useState(false);
   const [badges, setBadges] = useState<{ notifications: number; messages: number } | null>(null);
@@ -178,16 +179,17 @@ function AuthenticatedBackend({ children }: { children: React.ReactNode }) {
     <button className="rounded-lg bg-blue-600 px-5 py-2 text-white" onClick={() => void initialize()}>Reconnect</button>
   </div>;
   if (!user) return <Loading />;
-  return <Context.Provider value={{ user, refreshUser, connected: socket?.readyState === WebSocket.OPEN, sendEvent, badges, openComposer }}><div key={user.userId} className="flex min-h-screen w-full min-w-0">
-    <Sidebar isCollapsed={isCollapsed} setIsCollapsed={setIsCollapsed} />
-    {/* The rail is `fixed`, so opening or collapsing it never reflows this column: the posts stay
-        exactly where they are in either state. That makes this gutter a constant rather than the
-        rail's live width — it is the rail's own 18rem, so nothing is ever hidden underneath it, and
-        it neither grows nor shrinks with the toggle. Pages whose content has something beside it
-        (the feed's suggestions rail) add their own inset on top of it. */} 
-    <div className="flex min-w-0 flex-1 flex-col lg:pl-72">
+  return <Context.Provider value={{ user, refreshUser, connected: socket?.readyState === WebSocket.OPEN, sendEvent, badges, openComposer, composerOpen: composing }}><div key={user.userId} className="flex min-h-screen w-full min-w-0">
+    <Sidebar />
+    {/* The rail is `fixed` and overlays this column, so its width never reflows it: the posts stay
+        exactly where they are whether the rail has grown under the pointer, is at rest, or a
+        slide-out panel is forcing it narrow. The gutter is therefore a flat 72px (`.app-content` in
+        globals.css) rather than the rail's live width. Pages whose content has something beside it
+        (the feed's suggestions rail) add their own inset on top of it. The bottom bar owns the
+        space below `md`. */} 
+    <div className="app-content flex min-w-0 flex-1 flex-col">
       <TopBar />
-      <main className="relative min-w-0 flex-1 pb-16 lg:pb-0">
+      <main className="relative min-w-0 flex-1 pb-[calc(56px_+_env(safe-area-inset-bottom))] md:pb-0">
         {reconnecting && <p role="status" aria-live="polite" className="sticky top-0 z-20 bg-amber-100 px-4 py-2 text-center text-xs font-medium text-amber-900">Reconnecting… new messages and notifications may be delayed.</p>}
         {children}
       </main>

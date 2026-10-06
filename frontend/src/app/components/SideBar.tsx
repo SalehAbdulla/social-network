@@ -2,38 +2,97 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { House, MessageSquare, Compass, Search, Bell, UserRound, ChevronLeft, ChevronRight, LogOut, SquarePlus } from 'lucide-react';
+import { useCallback, useEffect, useRef, useState, type MouseEvent as ReactMouseEvent } from 'react';
+import type { LucideIcon } from 'lucide-react';
+import { Bell, Compass, House, Menu, MessageCircle, Search as SearchIcon, SquarePlus, UserRound } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { displayName, errorMessage, request } from '../api/social';
 import { useBackend } from './BackendProvider';
-import { useState } from 'react';
 import Avatar from './Avatar';
-import ThemeToggle from './ThemeToggle';
+import SidePanels, { type PanelKind } from './SidePanels';
+import { MenuPanel, MenuItem, MoreMenuContent, RowBody, rowClass } from './SideBarMenus';
+import { RAIL_AVATAR_SIZE } from '../lib/railMetrics';
 
-export default function Sidebar({ isCollapsed, setIsCollapsed }: {
-  isCollapsed: boolean; setIsCollapsed: (collapsed: boolean) => void;
-}) {
-  const { user, badges, openComposer } = useBackend();
+type NavItem = { key: string; label: string; icon: LucideIcon; href?: string; panel?: PanelKind; create?: boolean };
+
+/**
+ * Instagram's desktop left rail.
+ *
+ * There is no manual toggle and no wide by default: the rail is icon-only (`app-rail` in
+ * globals.css) and grows over the content while the pointer is over it, and only a slide-out panel
+ * forces the narrow state. Routes stay real links; Search and Notifications are buttons
+ * that open a panel, and Create and More open anchored popovers. The composer, the theme and the
+ * account actions are all reused from the rest of the app.
+ *
+ * No icon size or stroke is passed down from here: every icon in this rail is drawn at the
+ * `--rail-icon` and `--rail-stroke*` tokens by the rail's own `.app-rail svg` rule, and the
+ * profile avatar's size is the one number `lib/railMetrics.ts` hands over, since `Avatar` sizes
+ * itself with an inline style. The row geometry comes from the `--rail-row-*` tokens through
+ * `rowClass`. That leaves this component holding behaviour only.
+ */
+export default function Sidebar() {
+  const { user, badges, openComposer, composerOpen } = useBackend();
   const pathname = usePathname();
+  const [panelKind, setPanelKind] = useState<PanelKind | null>(null);
+  const [panelOpen, setPanelOpen] = useState(false);
+  const [createRect, setCreateRect] = useState<DOMRect | null>(null);
+  const [moreRect, setMoreRect] = useState<DOMRect | null>(null);
   const [loggingOut, setLoggingOut] = useState(false);
-  // The bell and the Messages entry report different things: the spec wants new
-  // notifications and new private messages displayed differently, so the bell is
-  // everything except messages and the Messages entry is only those. Both come from the
-  // one `/notifications/unread-counts` fetch `BackendProvider` owns — the top bar reads
-  // the same numbers — so a single request answers both bars and both badges.
-  const links = [
-    { href: '/', label: 'Feed', icon: House }, { href: '/messages', label: 'Messages', icon: MessageSquare },
-    { href: '/discover', label: 'Discover', icon: Compass },
-    { href: '/search', label: 'Search', icon: Search },
-    { href: '/notifications', label: 'Notifications', icon: Bell }, { href: '/profile', label: 'Profile', icon: UserRound },
-  ];
+  const closeTimer = useRef<number | null>(null);
+  const railRef = useRef<HTMLElement>(null);
+  const panelRef = useRef<HTMLDivElement>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
+
+  // The panel stays mounted for its 250ms exit, so its kind is cleared only after the slide out.
+  const closePanel = useCallback(() => {
+    setPanelOpen(false);
+    closeTimer.current = window.setTimeout(() => { setPanelKind(null); closeTimer.current = null; }, 250);
+  }, []);
+  const openPanel = useCallback((kind: PanelKind) => {
+    if (closeTimer.current) { window.clearTimeout(closeTimer.current); closeTimer.current = null; }
+    setPanelKind(kind);
+    setPanelOpen(true);
+  }, []);
+  // Clicking the same trigger closes; a different one swaps the content without re-sliding.
+  const togglePanel = (kind: PanelKind) => { if (panelKind === kind && panelOpen) closePanel(); else openPanel(kind); };
+  const closeOverlays = () => { if (panelKind) closePanel(); setCreateRect(null); setMoreRect(null); };
+
+  // A panel, a menu, or both can be open; a press outside the rail, the panel and the menu dismisses them.
+  useEffect(() => {
+    if (!panelKind && !createRect && !moreRect) return;
+    const onDown = (event: MouseEvent) => {
+      const target = event.target as Node;
+      if (railRef.current?.contains(target) || panelRef.current?.contains(target) || menuRef.current?.contains(target)) return;
+      closePanel(); setCreateRect(null); setMoreRect(null);
+    };
+    document.addEventListener('mousedown', onDown);
+    return () => document.removeEventListener('mousedown', onDown);
+  }, [panelKind, createRect, moreRect, closePanel]);
+
+  // Escape closes the topmost thing, the way every other overlay in the app behaves.
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape') return;
+      if (moreRect) setMoreRect(null);
+      else if (createRect) setCreateRect(null);
+      else if (panelKind) closePanel();
+    };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [moreRect, createRect, panelKind, closePanel]);
+
+  // A popover is anchored to a fixed rail, so a resize would leave it detached: close it instead.
+  useEffect(() => {
+    const onResize = () => { setCreateRect(null); setMoreRect(null); };
+    window.addEventListener('resize', onResize);
+    return () => window.removeEventListener('resize', onResize);
+  }, []);
+
   async function logout() {
     setLoggingOut(true);
     try {
       await request('/auth/logout', 'POST');
-      // A full reload is deliberate: it drops the WebSocket and every other piece
-      // of client state the signed-out session owned, which a router push would
-      // leave behind. The app sets no `basePath`, so the relative path is correct.
+      // A full reload is deliberate: it drops the WebSocket and every other piece of client state.
       // eslint-disable-next-line @next/next/no-location-assign-relative-destination
       window.location.href = '/login';
     } catch (error) {
@@ -41,34 +100,63 @@ export default function Sidebar({ isCollapsed, setIsCollapsed }: {
       setLoggingOut(false);
     }
   }
-  // `fixed`, not `sticky`, and deliberately out of the layout flow: opening or collapsing the rail
-  // must not reflow the page, or the feed would slide sideways under the reader. The shell reserves
-  // a matching gutter (`BackendProvider`) so nothing is ever hidden behind the rail.
-  return <aside id="main-navigation" aria-label="Main navigation" className={`fixed inset-y-0 left-0 z-20 hidden h-dvh border-r border-border bg-card/70 backdrop-blur-xl transition-all lg:block ${isCollapsed ? 'w-20' : 'w-72'}`}>
-    <div className="flex h-full flex-col overflow-y-auto p-3">
-    <Link href="/" aria-label="Social Network home" className="mb-6 mt-2 block shrink-0"><img src={isCollapsed ? '/favicon.svg' : '/logo.svg'} alt="Social Network" className={isCollapsed ? 'mx-auto h-10 w-10 object-contain' : 'h-16 w-full object-contain dark:brightness-125'} /></Link>
-    <nav className="space-y-2">{links.map(({ href, label, icon: Icon }) => <Link key={href} href={href} title={label} className={`flex items-center gap-3 rounded-xl px-3 py-3 ${pathname === href || (href !== '/' && pathname.startsWith(href + '/')) ? 'bg-blue-50 text-blue-700' : 'text-slate-600 hover:bg-slate-50'}`}>
-      <Icon size={21} className="shrink-0" />{!isCollapsed && <span>{label}</span>}
-      {/* A live region has to exist before its text changes, so the region is the
-          always-mounted wrapper and the badge inside it appears later — that way
-          the first count is announced instead of missed. The badge keeps its own
-          aria-label, which is what names it inside the link. Red-600 and teal-700
-          clear 4.5:1 against white here; red-500 and teal-600 are only ~3.7:1,
-          which fails at this text size. */}
-      {href === '/notifications' && <span role="status" aria-live="polite">{!!badges?.notifications && <span aria-label={`${badges?.notifications} unread notifications`} className="rounded-lg bg-red-600 px-1.5 text-xs text-white">{badges?.notifications}</span>}</span>}
-      {href === '/messages' && <span role="status" aria-live="polite">{!!badges?.messages && <span aria-label={`${badges?.messages} unread messages`} className="flex items-center gap-1 rounded-lg bg-teal-700 px-1.5 text-xs text-white"><MessageSquare size={11} aria-hidden="true" />{badges?.messages}</span>}</span>}
-    </Link>)}</nav>
-    {/* Create sits with the rail rather than as a lone banner, the way Instagram's left rail carries
-        it: one entry among the destinations, drawn like them, and the only place a desktop starts a
-        post — the phone's is the bottom bar's Create tab. */}
-    <button type="button" onClick={openComposer} title="Create post" className="mt-2 flex w-full items-center gap-3 rounded-xl px-3 py-3 text-slate-600 hover:bg-slate-50"><SquarePlus size={21} className="shrink-0" />{!isCollapsed && <span>Create Post</span>}</button>
-    <div className="mt-auto shrink-0 border-t border-border pt-3 space-y-3">
-      <ThemeToggle compact={isCollapsed} label={!isCollapsed} className={isCollapsed ? 'mx-auto' : ''} />
-      <Link href="/profile" className="flex items-center gap-2"><Avatar name={displayName(user)} avatarUrl={user.avatar} />{!isCollapsed && <div className="min-w-0"><p className="truncate font-medium">{displayName(user)}</p><p className="truncate text-xs text-muted">@{user.nickname}</p></div>}</Link>
 
-      <button disabled={loggingOut} onClick={() => void logout()} className="flex w-full items-center gap-2 rounded-lg px-2 py-2 text-sm text-muted hover:bg-surface-2 disabled:opacity-50"><LogOut size={18} />{!isCollapsed && (loggingOut ? 'Signing out...' : 'Sign out')}</button>
-    </div>
-    </div>
-    <button aria-label={isCollapsed ? 'Expand sidebar' : 'Collapse sidebar'} onClick={() => setIsCollapsed(!isCollapsed)} className="glass-track absolute -right-3 top-1/2 rounded-full p-1.5 text-muted">{isCollapsed ? <ChevronRight size={16} /> : <ChevronLeft size={16} />}</button>
-  </aside>;
+  const toggleCreate = (event: ReactMouseEvent<HTMLButtonElement>) => {
+    const rect = event.currentTarget.getBoundingClientRect();
+    setMoreRect(null);
+    setCreateRect(open => open ? null : rect);
+  };
+  const toggleMore = (event: ReactMouseEvent<HTMLButtonElement>) => {
+    const rect = event.currentTarget.getBoundingClientRect();
+    setCreateRect(null);
+    setMoreRect(open => open ? null : rect);
+  };
+
+  const items: NavItem[] = [
+    { key: 'feed', label: 'Feed', icon: House, href: '/' },
+    { key: 'messages', label: 'Messages', icon: MessageCircle, href: '/messages' },
+    { key: 'discover', label: 'Discover', icon: Compass, href: '/discover' },
+    { key: 'search', label: 'Search', icon: SearchIcon, panel: 'search' },
+    { key: 'notifications', label: 'Notifications', icon: Bell, panel: 'notifications' },
+    { key: 'profile', label: 'Profile', icon: UserRound, href: '/profile' },
+    { key: 'create', label: 'Create', icon: SquarePlus, create: true },
+  ];
+  const current = (href: string) => pathname === href || (href !== '/' && pathname.startsWith(`${href}/`));
+  const badgeFor = (key: string) => key === 'notifications' ? (badges?.notifications ?? 0) : key === 'messages' ? (badges?.messages ?? 0) : 0;
+
+  const rowFor = (item: NavItem) => {
+    const active = item.panel ? panelKind === item.panel : item.create ? !!(createRect || composerOpen) : item.href ? current(item.href) : false;
+    const body = <RowBody label={item.label} active={active} badge={badgeFor(item.key)}>
+      {item.key === 'profile'
+        ? <Avatar name={displayName(user)} avatarUrl={user.avatar} size={RAIL_AVATAR_SIZE} className={active ? 'ring-2 ring-text' : ''} />
+        : <item.icon aria-hidden="true" />}
+    </RowBody>;
+    if (item.href) return <Link key={item.key} href={item.href} aria-current={active ? 'page' : undefined} aria-label={item.label} className={rowClass} onClick={closeOverlays}>{body}</Link>;
+    if (item.panel) return <button key={item.key} type="button" aria-label={item.label} aria-expanded={panelKind === item.panel} aria-controls="app-panel" className={rowClass} onClick={() => togglePanel(item.panel as PanelKind)}>{body}</button>;
+    return <button key={item.key} type="button" aria-label={item.label} aria-haspopup="menu" aria-expanded={!!createRect} className={rowClass} onClick={toggleCreate}>{body}</button>;
+  };
+
+  return <>
+    <aside ref={railRef} id="main-navigation" aria-label="Main navigation" data-panel-open={panelKind ? 'true' : 'false'} data-pinned={createRect || moreRect ? 'true' : 'false'} className="app-rail fixed inset-y-0 left-0 z-40 hidden border-r border-rail-border bg-rail md:block">
+      <div className="flex h-full flex-col px-3 py-2 font-sans leading-5">
+        <Link href="/" aria-label="Social Network home" className="mb-8 mt-4 flex h-[var(--rail-wordmark)] shrink-0 items-center px-3">
+          <img src="/logo.svg" alt="" className="app-rail-wordmark w-auto object-contain dark:brightness-125" />
+          <img src="/favicon.svg" alt="" className="app-rail-mark mx-auto shrink-0 max-w-none object-contain" />
+        </Link>
+        <nav aria-label="Primary" className="space-y-[var(--rail-row-gap)]">{items.map(rowFor)}</nav>
+        <div className="mt-auto space-y-[var(--rail-row-gap)]">
+          <button type="button" aria-label="More" aria-haspopup="menu" aria-expanded={!!moreRect} onClick={toggleMore} className={rowClass}>
+            <RowBody label="More" active={!!moreRect}><Menu aria-hidden="true" /></RowBody>
+          </button>
+        </div>
+      </div>
+    </aside>
+    {panelKind && <SidePanels kind={panelKind} open={panelOpen} onClose={closePanel} panelRef={panelRef} />}
+    {createRect && <MenuPanel menuRef={menuRef} rect={createRect} width={200} placement="right" label="Create">
+      <MenuItem onClick={() => { setCreateRect(null); openComposer(); }}><SquarePlus size={20} aria-hidden="true" />Post</MenuItem>
+    </MenuPanel>}
+    {moreRect && <MenuPanel menuRef={menuRef} rect={moreRect} width={266} placement="above" label="More">
+      <MoreMenuContent onClose={() => setMoreRect(null)} onLogout={() => void logout()} loggingOut={loggingOut} />
+    </MenuPanel>}
+  </>;
 }

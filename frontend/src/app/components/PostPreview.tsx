@@ -3,7 +3,8 @@
 import { Eye } from 'lucide-react';
 import { linkify } from '../lib/linkify';
 import { mediaImageProps } from '../lib/mediaVariants';
-import { type Post, type SocialUser, PRIVACY_LABEL, audienceSummary, dateLabel, displayName, isoTimestamp, relativeLabel } from '../api/social';
+import { type Post, type SocialUser, audienceSummary, dateLabel, displayName, isoTimestamp, relativeLabel } from '../api/social';
+import AudienceIcon from './AudienceIcon';
 import Avatar from './Avatar';
 
 interface PostPreviewProps {
@@ -49,12 +50,11 @@ export default function PostPreview({ user, content, privacy, imageUrls, created
             @{user.nickname}<span aria-hidden="true"> · </span>
             {createdAt
               ? <time dateTime={isoTimestamp(createdAt)} title={dateLabel(createdAt)}>{relativeLabel(createdAt)}</time>
-              : <time>Just now</time>}
+              : <time>Just now</time>}<span aria-hidden="true"> · </span><AudienceIcon privacy={privacy} />
           </p>
         </div>
       </div>
       {trimmedContent ? <p className="whitespace-pre-wrap break-words text-text">{linkify(trimmedContent)}</p> : <p className="text-muted">Your post will appear here…</p>}
-      <span className="inline-block rounded-lg bg-surface-2 px-2.5 py-1 text-xs font-medium text-muted">{PRIVACY_LABEL[privacy]}</span>
       {imageUrls.length > 0 && (
         <div className={`grid gap-2 ${imageUrls.length > 1 ? 'grid-cols-2' : ''}`}>
           {imageUrls.map((url, position) => (
