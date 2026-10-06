@@ -80,7 +80,7 @@ function SearchScreen() {
         <button className="chat-primary inline-flex items-center gap-2"><SearchIcon size={16} aria-hidden="true" />Search</button>
       </form>
       {!query && (recent.length > 0
-        ? <div className="flex flex-wrap items-center gap-2"><span className="text-sm text-slate-500">Recent</span>{recent.map(term => <button key={term} type="button" onClick={() => run(term)} className="rounded-full border border-border bg-surface-2 px-3 py-1 text-sm text-muted hover:text-brand-1">{term}</button>)}<button type="button" aria-label="Clear recent searches" onClick={() => { clearRecentSearches(); setRecent([]); }} className="ml-1 inline-flex items-center gap-1 text-xs text-muted underline"><X size={12} aria-hidden="true" />Clear</button></div>
+        ? <div className="flex flex-wrap items-center gap-2"><span className="text-sm text-slate-500">Recent</span>{recent.map(term => <button key={term} type="button" onClick={() => run(term)} className="rounded-lg border border-border bg-surface-2 px-3 py-1 text-sm text-muted hover:text-brand-1">{term}</button>)}<button type="button" aria-label="Clear recent searches" onClick={() => { clearRecentSearches(); setRecent([]); }} className="ml-1 inline-flex items-center gap-1 text-xs text-muted underline"><X size={12} aria-hidden="true" />Clear</button></div>
         : <p className="text-sm text-slate-500">Search for a person, a group, or something someone wrote.</p>)}
     </header>
 
