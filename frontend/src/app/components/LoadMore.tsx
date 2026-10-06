@@ -89,7 +89,7 @@ export default function LoadMore({
         onClick={onLoadMore}
         disabled={loading}
         aria-busy={loading}
-        className="inline-flex items-center gap-2 rounded-full border border-border bg-card px-5 py-2.5 text-sm font-medium text-text shadow-sm transition hover:-translate-y-px hover:border-teal-200 hover:text-teal-800 hover:shadow-md disabled:translate-y-0 disabled:cursor-wait disabled:opacity-70"
+        className="inline-flex items-center gap-2 rounded-lg border border-border bg-card px-5 py-2.5 text-sm font-medium text-text shadow-sm transition hover:-translate-y-px hover:border-teal-200 hover:text-teal-800 hover:shadow-md disabled:translate-y-0 disabled:cursor-wait disabled:opacity-70"
       >
         {loading && <Loader2 size={16} className="animate-spin" aria-hidden="true" />}
         {loading ? 'Loading more…' : label}
