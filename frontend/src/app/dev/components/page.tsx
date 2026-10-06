@@ -39,7 +39,7 @@ export default function ComponentGallery() {
     </header>
 
     <Section title="Post card" note="The composer's preview, with the audience banner it draws above the card.">
-      <PostPreview user={SAMPLE_USER} title="A sample post" content="The draft renders exactly as the feed card does, linkified — try #travel or @sample." privacy="public" imageUrls={[]} />
+      <PostPreview user={SAMPLE_USER} content="The draft renders exactly as the feed card does, linkified — try #travel or @sample." privacy="public" imageUrls={[]} />
     </Section>
 
     <Section title="Avatars" note="Initials when there is no photo, the photo when there is, at the sizes the app uses.">
