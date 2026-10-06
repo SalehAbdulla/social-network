@@ -1,6 +1,6 @@
 "use client"
 
-import React from "react";
+import React, { useState } from "react";
 import { mediaImageProps } from "../lib/mediaVariants";
 
 interface AvatarProps {
@@ -38,13 +38,18 @@ function initials(name: string): string {
 }
 
 const Avatar = ({ name, avatarUrl, size = 40, className = "" }: AvatarProps) => {
-  if (avatarUrl) {
+  const [failed, setFailed] = useState(false);
+
+  if (avatarUrl && !failed) {
     return (
       <img
         {...mediaImageProps(avatarUrl, `${size}px`)}
         alt={name}
         width={size}
         height={size}
+        loading="lazy"
+        decoding="async"
+        onError={() => setFailed(true)}
         className={`rounded-full object-cover shrink-0 ${className}`}
         style={{ width: size, height: size }}
       />
@@ -59,6 +64,8 @@ const Avatar = ({ name, avatarUrl, size = 40, className = "" }: AvatarProps) => 
       className={`${bg} rounded-full flex items-center justify-center text-white font-semibold shrink-0 ${fontSize} ${className}`}
       style={{ width: size, height: size }}
       title={name}
+      role="img"
+      aria-label={name}
     >
       {initials(name)}
     </div>
