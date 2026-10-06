@@ -52,8 +52,8 @@ export default function Sidebar({ isCollapsed, setIsCollapsed }: {
           aria-label, which is what names it inside the link. Red-600 and teal-700
           clear 4.5:1 against white here; red-500 and teal-600 are only ~3.7:1,
           which fails at this text size. */}
-      {href === '/notifications' && <span role="status" aria-live="polite">{!!badges?.notifications && <span aria-label={`${badges?.notifications} unread notifications`} className="rounded-full bg-red-600 px-1.5 text-xs text-white">{badges?.notifications}</span>}</span>}
-      {href === '/messages' && <span role="status" aria-live="polite">{!!badges?.messages && <span aria-label={`${badges?.messages} unread messages`} className="flex items-center gap-1 rounded-full bg-teal-700 px-1.5 text-xs text-white"><MessageSquare size={11} aria-hidden="true" />{badges?.messages}</span>}</span>}
+      {href === '/notifications' && <span role="status" aria-live="polite">{!!badges?.notifications && <span aria-label={`${badges?.notifications} unread notifications`} className="rounded-lg bg-red-600 px-1.5 text-xs text-white">{badges?.notifications}</span>}</span>}
+      {href === '/messages' && <span role="status" aria-live="polite">{!!badges?.messages && <span aria-label={`${badges?.messages} unread messages`} className="flex items-center gap-1 rounded-lg bg-teal-700 px-1.5 text-xs text-white"><MessageSquare size={11} aria-hidden="true" />{badges?.messages}</span>}</span>}
     </Link>)}</nav>
     {/* Create sits with the rail rather than as a lone banner, the way Instagram's left rail carries
         it: one entry among the destinations, drawn like them, and the only place a desktop starts a
