@@ -54,7 +54,7 @@ export default function PostPreview({ user, content, privacy, imageUrls, created
         </div>
       </div>
       {trimmedContent ? <p className="whitespace-pre-wrap break-words text-text">{linkify(trimmedContent)}</p> : <p className="text-muted">Your post will appear here…</p>}
-      <span className="inline-block rounded-full bg-surface-2 px-2.5 py-1 text-xs font-medium text-muted">{PRIVACY_LABEL[privacy]}</span>
+      <span className="inline-block rounded-lg bg-surface-2 px-2.5 py-1 text-xs font-medium text-muted">{PRIVACY_LABEL[privacy]}</span>
       {imageUrls.length > 0 && (
         <div className={`grid gap-2 ${imageUrls.length > 1 ? 'grid-cols-2' : ''}`}>
           {imageUrls.map((url, position) => (
