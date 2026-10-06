@@ -31,6 +31,7 @@ import Loading from '../components/Loading';
 import LoadMore from '../components/LoadMore';
 import MessageAction from '../components/MessageAction';
 import PostCard from '../components/PostCard';
+import { StoryArchive } from '../components/StoriesBar';
 import RequestState from '../components/RequestState';
 import { PostListSkeleton } from '../components/Skeletons';
 
@@ -292,8 +293,11 @@ function ProfileHeader({
   onOpenFollowList,
 }: ProfileHeaderProps) {
   const profileOwner = isOwnProfile ? currentUser : profile;
+  // The author's own expired stories live here now, not in the feed's strip: the profile is where a
+  // member's own content belongs, and the strip is for what is still live.
+  const [archiveOpen, setArchiveOpen] = useState(false);
 
-  return (
+  return <>
     <section className="overflow-hidden rounded-xl bg-white shadow-sm">
       {/* Cover */}
       <div className="h-44 bg-linear-to-r from-brand-1/30 to-brand-2/25">
@@ -338,6 +342,13 @@ function ProfileHeader({
                     className="rounded-lg border border-slate-200 px-4 py-2"
                   >
                     Change password
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setArchiveOpen(true)}
+                    className="rounded-lg border border-slate-200 px-4 py-2"
+                  >
+                    Your archive
                   </button>
                 </div>
               ) : (
@@ -409,7 +420,8 @@ function ProfileHeader({
         </div>
       </div>
     </section>
-  );
+    {archiveOpen && <StoryArchive close={() => setArchiveOpen(false)} />}
+  </>;
 }
 
 type ProfileActionsProps = {
