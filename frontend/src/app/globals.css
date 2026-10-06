@@ -30,7 +30,7 @@
   --ui-card-2: #f8f9f9;
   --ui-surface-2: #f5f5f5;
   --ui-text: #000000;
-  --ui-muted: #8e8e8e;
+  --ui-muted: #737373;    /* Instagram's secondary grey, darkened one step so it clears AA */
   --ui-border: #ccd0d5;
   --ui-ring: rgba(74, 93, 249, 0.18);
 
@@ -166,14 +166,20 @@
      two columns are fixed-width list plus a flexible chat panel; the row, the
      bubble and the composer each carry exactly one number for their geometry.
   ------------------------------------------------------------------------- */
-  --dm-list-width: 397px;      /* the conversation column */
+  --dm-list-width: 340px;      /* the conversation column */
   --dm-list-collapsed: 72px;   /* avatar-only list, 768–999px */
-  --dm-row-height: 72px;
+  --dm-row-height: 64px;
   --dm-row-inset: 8px;         /* how far the active/hover fill sits from the column edge */
-  --dm-row-pad-x: 16px;        /* + the inset makes the 24px the row's content starts at */
+  --dm-row-pad-x: 12px;        /* + the inset makes the 20px the row's content starts at */
   --dm-row-gap: 12px;
   --dm-row-radius: 8px;
-  --dm-avatar: 56px;           /* the list avatar */
+  --dm-list-head-top: 20px;    /* the list header's top padding */
+  --dm-list-head-x: 20px;
+  --dm-title-size: 18px;       /* the account name, the one line above body size */
+  --dm-title-icon: 14px;       /* its chevron */
+  --dm-compose-icon: 22px;
+  --dm-tab-height: 40px;
+  --dm-avatar: 48px;           /* the list avatar */
   --dm-avatar-header: 44px;    /* the chat header, the details panel and the new-message modal */
   --dm-avatar-group: 36px;     /* each half of a stacked group avatar */
   --dm-avatar-thread: 28px;    /* the sender avatar beside the last bubble of a received group */
@@ -184,6 +190,11 @@
   --dm-bubble-max: 60%;
   --dm-bubble-pad-y: 8px;
   --dm-bubble-pad-x: 12px;
+  --dm-media-w: 240px;         /* how wide a photo or a clip inside a bubble may grow */
+  --dm-media-min: 120px;       /* a very small upload is still drawn at a readable size */
+  --dm-media-max: 320px;       /* how tall a photo or a clip inside a bubble may grow */
+  --dm-media-radius: 18px;
+  --dm-gap-rich: 4px;          /* between a bubble and a neighbouring card or image */
   --dm-thread-pad-x: 16px;
   --dm-thread-pad-y: 16px;
   --dm-group-gap: 2px;         /* between bubbles of one sender */
@@ -191,8 +202,9 @@
   --dm-composer-height: 44px;
   --dm-composer-radius: 22px;
   --dm-details-width: 340px;
-  --dm-search-height: 40px;
-  --dm-presence: 14px;         /* the online dot on an avatar */
+  --dm-search-height: 36px;
+  --dm-search-radius: 18px;
+  --dm-presence: 12px;         /* the online dot on an avatar */
   --dm-unread: 8px;            /* the unread dot at the end of a row */
   --dm-icon: 24px;             /* the header's and the composer's icons */
   --dm-icon-stroke: 1.75;
@@ -205,6 +217,54 @@
   --dm-chrome-top: 56px;       /* the phone's top strip, drawn by the app shell */
   --dm-chrome-bottom: 56px;    /* the phone's bottom tab bar, drawn by the app shell */
   --dm-motion: 150ms;
+
+  /* -------------------------------------------------------------------------
+     Group conversations. The shell is the DM shell — a pinned header, a tab bar
+     carrying one contextual action, a single scrolling content column and the
+     details panel the Info icon toggles — so the header/composer numbers are
+     reused and only what is new is named here.
+  ------------------------------------------------------------------------- */
+  --grp-tab-height: 44px;
+  --grp-tab-pad-x: 16px;
+  --grp-action-height: 32px;
+  --grp-column: 640px;         /* the posts, events and media column */
+  --grp-pad: 16px;
+  --grp-comment-avatar: 28px;
+  --grp-comment-field: 36px;
+  --grp-member-avatar: 40px;
+  --grp-member-row: 56px;
+  --grp-avatar-lg: 96px;
+  --grp-event-tile: 56px;
+  --grp-event-radius: 12px;
+  --grp-event-gap: 12px;
+  --grp-embed-radius: 18px;
+  --grp-embed-pad: 12px;
+  --grp-embed-min: 220px;
+  --grp-embed-max: 320px;      /* the event card that lands in the chat stream */
+  --grp-media-gap: 4px;
+  --grp-media-ratio: 3 / 4;
+  --grp-media-scrim: rgba(0, 0, 0, 0.4);
+  --grp-media-column: 935px;   /* the grid's own column, wider than the posts' */
+  --grp-tabbar-pad-end: 16px;
+  --grp-comment-gap: 6px;      /* name to text inside one comment */
+  --grp-comment-space: 8px;    /* between two comments, and the action row to the list */
+  --grp-comment-input-space: 12px; /* the last comment to the input, and the input to the divider */
+  --grp-event-avatar: 20px;
+  --grp-event-avatar-overlap: 8px;
+  --grp-fab: 40px;
+
+  /* The primitives the group surfaces share, so a button, an icon button and a "…" agree
+     wherever they are drawn. A 32px button, a 24px icon in a 32px hit area, a 16px trigger. */
+  --btn-height: 32px;
+  --btn-radius: 8px;
+  --icon-btn-size: 32px;
+  --icon-btn-icon: 24px;
+  --menu-icon: 16px;
+  --skeleton: var(--dm-surface);
+  --grp-pill-bg: #ffffff;      /* a chip on a raised surface: the event card, the details panel */
+  --grp-pill-border: var(--dm-border);
+  --grp-tile-bg: #ffffff;      /* the date tile on an event card */
+  --grp-tile-border: var(--dm-border);
 
   /* The DM palette, light. The page uses the sidebar token (white here, near-black in the
      dark theme) so both themes take their surface from one place. */
@@ -287,6 +347,13 @@
   --dm-ring: var(--ui-rail);
   --dm-scrim: rgba(0, 0, 0, 0.6);
   --dm-btn: #363636;
+
+  /* Group chips sit on raised surfaces here, so they lift rather than punch a hole. The fill and
+     border have to carry a whole button on their own: at 0.12 they read as a ghost on #262626. */
+  --grp-pill-bg: rgba(255, 255, 255, 0.16);
+  --grp-pill-border: rgba(255, 255, 255, 0.24);
+  --grp-tile-bg: rgba(255, 255, 255, 0.1);
+  --grp-tile-border: rgba(255, 255, 255, 0.14);
 }
 
 @theme inline {
@@ -568,7 +635,7 @@ body {
    knows their heights, and a chat that is open hides the tab bar.
 --------------------------------------------------------------------------- */
 @layer components {
-  .dm-shell { display: flex; height: 100dvh; min-height: 0; }
+  .dm-shell { display: flex; height: 100dvh; min-height: 0; overflow: hidden; }
   .dm-list {
     display: flex; width: var(--dm-list-width); flex: none; flex-direction: column;
     min-height: 0; border-right: 1px solid var(--dm-border); background-color: var(--dm-bg);
@@ -579,7 +646,7 @@ body {
   }
   /* The thread and its header/composer. The details column, when open, is the row's second
      child rather than a sibling of this one, so it can squeeze or overlay it. */
-  .dm-panel { display: flex; flex: 1 1 0%; min-width: 0; min-height: 0; flex-direction: column; }
+  .dm-panel { position: relative; display: flex; flex: 1 1 0%; min-width: 0; min-height: 0; flex-direction: column; }
 
   /* The phone: one column. The list fills the screen until a conversation is opened,
      when the chat takes over and the tab bar steps aside for the composer. */
@@ -603,28 +670,40 @@ body {
   /* Conversation column: header, tabs, search, rows. */
   .dm-list-head {
     display: flex; flex: none; align-items: center; justify-content: space-between;
-    gap: 12px; padding: 36px 24px 12px;
+    gap: 12px; padding: var(--dm-list-head-top) var(--dm-list-head-x) 12px;
   }
-  .dm-list-title { display: flex; align-items: center; gap: 4px; font-size: 20px; font-weight: 700; color: var(--ui-text); }
-  .dm-list-title svg { width: 16px; height: 16px; }
+  .dm-list-title { display: flex; align-items: center; gap: 4px; font-size: var(--dm-title-size); font-weight: 700; color: var(--ui-text); }
+  .dm-list-title svg { width: var(--dm-title-icon); height: var(--dm-title-icon); }
+  .dm-list-head .dm-icon svg { width: var(--dm-compose-icon); height: var(--dm-compose-icon); }
   .dm-tabs { display: flex; flex: none; border-bottom: 1px solid var(--dm-border); }
   .dm-tab {
-    flex: 1 1 0%; display: flex; align-items: center; justify-content: center; padding: 12px 0;
-    font-size: 14px; font-weight: 600; color: var(--ui-muted); border-bottom: 2px solid transparent;
-    margin-bottom: -1px; transition: color var(--dm-motion) ease, border-color var(--dm-motion) ease;
+    flex: 1 1 0%; height: var(--dm-tab-height); display: flex; align-items: center; justify-content: center;
+    padding: 0 8px; font-size: 14px; font-weight: 600; color: var(--ui-muted);
+    border-bottom: 2px solid transparent; margin-bottom: -1px;
+    transition: color var(--dm-motion) ease, border-color var(--dm-motion) ease;
   }
   .dm-tab:hover { color: var(--ui-text); }
   .dm-tab[aria-current='page'], .dm-tab[aria-pressed='true'] { color: var(--ui-text); border-bottom-color: var(--ui-text); }
   .dm-search {
     display: flex; flex: none; align-items: center; gap: 8px; height: var(--dm-search-height);
-    margin: 8px 24px; padding: 0 12px; border-radius: calc(var(--dm-search-height) / 2);
+    margin: 8px var(--dm-list-head-x) 4px; padding: 0 12px; border-radius: var(--dm-search-radius);
     background-color: var(--dm-surface); transition: box-shadow var(--dm-motion) ease;
   }
   .dm-search:focus-within { box-shadow: 0 0 0 1px var(--dm-border); }
   .dm-search svg { width: 16px; height: 16px; flex: none; color: var(--ui-muted); }
   .dm-search input { min-width: 0; flex: 1 1 0%; border: 0; background: transparent; outline: none; font-size: 14px; color: var(--ui-text); }
   .dm-search input::placeholder { color: var(--ui-muted); }
-  .dm-scroll { min-height: 0; flex: 1 1 0%; overflow-y: auto; padding: 4px 0 8px; }
+  /* The list's one filled action (the Groups folder's "Find groups to join"). The inset lives on
+     its container — the same `--dm-list-head-x` the search pill is inset by — so the two share
+     their left and right edges exactly; inside that, the button is the full width of the column
+     and centres its own label. */
+  .dm-list-action.dm-secondary {
+    display: flex; width: 100%; margin-block: 8px;
+    align-items: center; justify-content: center; text-align: center;
+  }
+  /* The blocks above and below that action (an invitation, say) hold the same inset. */
+  .dm-list-block { padding-inline: var(--dm-list-head-x); padding-bottom: 4px; }
+  .dm-scroll { min-height: 0; flex: 1 1 0%; overflow-y: auto; overscroll-behavior: contain; scrollbar-gutter: stable; padding: 4px 0 8px; }
   .dm-empty-note { padding: 24px; text-align: center; font-size: 14px; color: var(--ui-muted); }
 
   /* One conversation: a real link, 72px tall, whose hover/active fill is inset from the column. */
@@ -668,7 +747,7 @@ body {
   .dm-back { display: flex; }
   @media (min-width: 768px) { .dm-back { display: none; } }
 
-  .dm-thread { position: relative; min-height: 0; flex: 1 1 0%; overflow-y: auto; padding: var(--dm-thread-pad-y) var(--dm-thread-pad-x); }
+  .dm-thread { position: relative; min-height: 0; flex: 1 1 0%; overflow-y: auto; overscroll-behavior: contain; scrollbar-gutter: stable; padding: var(--dm-thread-pad-y) var(--dm-thread-pad-x); }
   .dm-intro { display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 24px 0 20px; text-align: center; }
   .dm-intro-name { font-size: 16px; font-weight: 600; color: var(--ui-text); }
   .dm-intro-handle { font-size: 14px; color: var(--ui-muted); }
@@ -678,6 +757,9 @@ body {
   .dm-cluster + .dm-cluster { margin-top: var(--dm-cluster-gap); }
   .dm-msg { display: flex; align-items: flex-end; gap: 8px; }
   .dm-msg + .dm-msg { margin-top: var(--dm-group-gap); }
+  /* A bubble that touches a card or an image breathes a little wider than two text bubbles. */
+  .dm-msg[data-rich='true'] + .dm-msg,
+  .dm-msg + .dm-msg[data-rich='true'] { margin-top: var(--dm-gap-rich); }
   .dm-msg-sent { justify-content: flex-end; }
   .dm-msg-received { justify-content: flex-start; }
   .dm-msg-avatar { width: var(--dm-avatar-thread); flex: none; }
@@ -698,8 +780,21 @@ body {
   .dm-msg-sent .dm-bubble[data-adj-bottom='true'] { border-bottom-right-radius: var(--dm-bubble-radius-tight); }
   .dm-msg-received .dm-bubble[data-adj-top='true'] { border-top-left-radius: var(--dm-bubble-radius-tight); }
   .dm-msg-received .dm-bubble[data-adj-bottom='true'] { border-bottom-left-radius: var(--dm-bubble-radius-tight); }
-  .dm-bubble-media { max-width: 100%; border-radius: 18px; overflow: hidden; }
-  .dm-bubble-media img, .dm-bubble-media video { display: block; max-width: 100%; border-radius: 18px; }
+  /* The attachment is a block of its own so a caption sits under the picture rather than
+     wrapping into the empty half of the same line. */
+  .dm-bubble-media { display: block; max-width: 100%; border-radius: var(--dm-media-radius); overflow: hidden; }
+  .dm-bubble-media + span:not(.dm-reaction) { display: block; margin-top: 6px; }
+  /* An attachment keeps its own aspect ratio, grows to 240px wide, and never taller than 320px.
+     A very small upload is still drawn at 120px so a stamp does not become a dot. */
+  .dm-bubble-media img, .dm-bubble-media video, .dm-bubble-media > span {
+    display: block; width: auto; height: auto; min-width: var(--dm-media-min);
+    max-width: var(--dm-media-w); max-height: var(--dm-media-max);
+    border-radius: var(--dm-media-radius); object-fit: cover;
+  }
+  /* The failed-load placeholder has no natural size, so it is given the bubble's floor. */
+  .dm-bubble-media > span { height: var(--dm-media-min); }
+  /* A picture-only bubble drops its own fill, so the 18px radius is the picture's, not a box's. */
+  .dm-msg-received .dm-bubble[data-flush='true'] { background-color: transparent; }
 
   .dm-reaction {
     position: absolute; bottom: calc(-1 * var(--dm-reaction-overlap)); display: inline-flex;
@@ -766,15 +861,17 @@ body {
 
 /* The details column (the Info toggle) and the empty chat. */
 @layer components {
+  /* The details column floats over the chat at every width rather than taking a slice of the
+     flex row, so opening or closing it can never reflow the header, the tab row or the thread.
+     It is anchored to the chat's own box, which is `position: relative`. */
   .dm-details {
-    display: flex; width: var(--dm-details-width); flex: none; flex-direction: column; min-height: 0;
-    border-left: 1px solid var(--dm-border); background-color: var(--dm-chat-bg);
-  }
-  @media (max-width: 1199px) {
-    .dm-details { position: absolute; inset: 0 0 0 auto; z-index: 20; box-shadow: -8px 0 24px rgba(0, 0, 0, 0.35); }
+    position: absolute; inset-block: 0; inset-inline-end: 0; z-index: 20;
+    display: flex; width: var(--dm-details-width); max-width: 100%; flex-direction: column; min-height: 0;
+    border-inline-start: 1px solid var(--dm-border); background-color: var(--dm-chat-bg);
+    box-shadow: -8px 0 24px rgba(0, 0, 0, 0.18);
   }
   .dm-details-head { display: flex; flex: none; align-items: center; gap: 12px; height: var(--dm-header-height); padding: 0 16px; border-bottom: 1px solid var(--dm-border); }
-  .dm-details-body { min-height: 0; flex: 1 1 0%; overflow-y: auto; padding: 16px; }
+  .dm-details-body { min-height: 0; flex: 1 1 0%; overflow-y: auto; overscroll-behavior: contain; scrollbar-gutter: stable; padding: 16px; }
   .dm-details-label { display: block; margin-bottom: 8px; font-size: 14px; font-weight: 600; color: var(--ui-text); }
   .dm-media-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px; }
   .dm-media-grid button { display: block; overflow: hidden; border-radius: 4px; }
@@ -828,6 +925,113 @@ body {
   .dm-list-head { justify-content: center; }
 }
 
+/* ---------------------------------------------------------------------------
+   Group conversations. The shell is the DM shell, so the header, thread,
+   composer and details panel are the DM ones; this block adds the tab bar with
+   its one contextual action, the single scrolling column the tab bodies share,
+   and the cards that column is built from.
+--------------------------------------------------------------------------- */
+@layer components {
+  .grp-tabbar {
+    display: flex; flex: none; align-items: center; justify-content: space-between; gap: 8px;
+    height: var(--grp-tab-height); padding-inline-end: var(--grp-tabbar-pad-end); max-width: 100%;
+    border-bottom: 1px solid var(--dm-border); background-color: var(--dm-chat-bg);
+  }
+  /* The contextual action is 32px tall and vertically centred in the 44px row. */
+  .grp-tabbar-action { display: flex; flex: none; align-items: center; }
+  .grp-tabs { display: flex; height: 100%; min-width: 0; overflow-x: auto; scrollbar-width: none; }
+  .grp-tabs::-webkit-scrollbar { display: none; }
+  .grp-tab {
+    display: flex; height: 100%; flex: none; align-items: center; padding: 0 var(--grp-tab-pad-x);
+    font-size: 14px; font-weight: 600; color: var(--ui-muted); white-space: nowrap;
+    border-bottom: 2px solid transparent; margin-bottom: -1px;
+    transition: color var(--dm-motion) ease, border-color var(--dm-motion) ease;
+  }
+  .grp-tab:hover { color: var(--ui-text); }
+  .grp-tab[aria-selected='true'] { color: var(--ui-text); border-bottom-color: var(--ui-text); }
+  .grp-action {
+    display: inline-flex; height: var(--grp-action-height); flex: none; align-items: center; gap: 6px;
+    padding: 0 12px; border-radius: 8px; background-color: var(--dm-surface); color: var(--ui-text);
+    font-size: 14px; font-weight: 600; transition: background-color var(--dm-motion) ease;
+  }
+  .grp-action:hover { background-color: var(--dm-hover); }
+  .grp-action svg { width: 16px; height: 16px; }
+
+  /* The one area that scrolls. It sits below the tab bar, so the scrollbar cannot
+     reach it, and it is the same surface as the rest of the column. */
+  .grp-body { position: relative; min-height: 0; flex: 1 1 0%; overflow-y: auto; overscroll-behavior: contain; scrollbar-gutter: stable; background-color: var(--dm-chat-bg); }
+  .grp-column { width: 100%; max-width: var(--grp-column); margin: 0 auto; padding: var(--grp-pad); }
+  /* The Posts tab is the feed's column, not the group's wider one: 470px of post, centred, with
+     the page's own 16px gutter outside it — the same geometry the feed page uses, so a post is
+     the same width in both places. */
+  .grp-column-posts {
+    width: 100%; max-width: calc(var(--feed-width) + 2 * var(--grp-pad));
+    margin-inline: auto; padding: var(--grp-pad);
+  }
+
+  /* The phone's one action: a round button where the tab bar's ghost button would be. */
+  .grp-fab { display: none; }
+  @media (max-width: 767px) {
+    .grp-tabbar-action { display: none; }
+    .grp-fab {
+      position: absolute; right: 16px; bottom: 16px; z-index: 10; display: flex;
+      width: var(--grp-fab); height: var(--grp-fab); align-items: center; justify-content: center;
+      border-radius: 9999px; background-color: var(--dm-blue); color: #fff;
+      box-shadow: 0 6px 20px rgba(0, 0, 0, 0.4);
+    }
+    .grp-fab svg { width: 20px; height: 20px; }
+  }
+
+  /* A post or an event that lands in the chat stream: the bubble becomes a card. */
+  .dm-bubble[data-embed='true'] {
+    padding: var(--grp-embed-pad); border-radius: var(--grp-embed-radius);
+    background-color: var(--dm-received); background-image: none; color: var(--ui-text);
+  }
+  .grp-embed { display: flex; min-width: var(--grp-embed-min); max-width: var(--grp-embed-max); flex-direction: column; gap: 4px; }
+  /* The card's own copy is the control that opens the Events tab. It is a button rather than a
+     wrapper around the whole card, because the card also holds the two RSVP buttons and a button
+     may not contain buttons. */
+  .grp-embed-btn { display: flex; width: 100%; flex-direction: column; gap: 4px; text-align: start; }
+  .grp-embed-eyebrow { display: inline-flex; align-items: center; gap: 4px; font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; color: var(--ui-muted); }
+  .grp-embed-eyebrow svg { width: 12px; height: 12px; }
+  .grp-embed-title { font-size: 14px; font-weight: 600; color: var(--ui-text); }
+  .grp-embed-when { font-size: 12px; color: var(--ui-muted); }
+  .grp-embed-text { font-size: 14px; line-height: 18px; color: var(--ui-text); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+  /* The RSVP tally and its two answers, banded off the event's copy the same way the events tab
+     bands them. `flex-wrap` keeps both answers reachable in the narrowest chat bubble. */
+  .grp-embed-foot {
+    display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px;
+    margin-top: 4px; padding-top: 8px; border-top: 1px solid var(--dm-border);
+    font-size: 12px; color: var(--ui-muted);
+  }
+}
+
+/* The Posts tab: the feed's own borderless post cards, each with the group's inline thread. */
+@layer components {
+  .grp-comment-toggle { font-size: 14px; color: var(--ui-muted); }
+  .grp-comment-toggle:hover { color: var(--ui-text); }
+  .grp-comment { display: flex; align-items: flex-start; gap: var(--grp-comment-gap); margin-top: var(--grp-comment-space); }
+  .grp-comment-body { display: flex; min-width: 0; align-items: flex-start; gap: var(--grp-comment-gap); }
+  .grp-comment-name { font-size: 14px; font-weight: 600; color: var(--ui-text); }
+  .grp-comment-text { font-size: 14px; font-weight: 400; line-height: 18px; white-space: pre-wrap; overflow-wrap: anywhere; color: var(--ui-text); }
+  .grp-comment-time { display: block; margin-top: 2px; font-size: 12px; color: var(--ui-muted); }
+  /* The comment's "…" is the same 16px muted trigger as the post's, revealed on hover (and
+     always visible on a touch screen, where there is no hover to reveal it). */
+  .grp-comment-menu { opacity: 0; transition: opacity var(--dm-motion) ease; }
+  .grp-comment:hover .grp-comment-menu,
+  .grp-comment:focus-within .grp-comment-menu { opacity: 1; }
+  @media (hover: none) { .grp-comment-menu { opacity: 1; } }
+  .grp-comment-form { display: flex; align-items: center; gap: var(--grp-comment-space); margin-top: var(--grp-comment-input-space); }
+  .grp-comment-field {
+    display: flex; height: var(--grp-comment-field); min-width: 0; flex: 1 1 0%; align-items: center;
+    padding: 0 12px; border-radius: calc(var(--grp-comment-field) / 2); background-color: var(--dm-surface);
+  }
+  .grp-comment-field input { min-width: 0; flex: 1 1 0%; border: 0; background: transparent; outline: none; font-size: 14px; color: var(--ui-text); }
+  .grp-comment-field input::placeholder { color: var(--ui-muted); }
+  .grp-text-action { flex: none; font-size: 14px; font-weight: 600; color: var(--dm-blue); }
+  .grp-text-action:disabled { cursor: not-allowed; opacity: 0.4; }
+}
+
 /* The new-message modal, and the one keyframe the DM surface animates. */
 @layer components {
   .dm-modal { position: fixed; inset: 0; z-index: 50; display: flex; align-items: center; justify-content: center; padding: 16px; background-color: var(--dm-scrim); }
@@ -852,15 +1056,270 @@ body {
   .dm-modal-foot .dm-primary { width: 100%; }
 }
 
+/* The Events and Media tabs. */
+@layer components {
+  .grp-section-title { display: block; font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; color: var(--ui-muted); }
+  .grp-section { margin-bottom: 24px; }
+  .grp-event {
+    display: flex; flex-direction: column; gap: 12px; padding: var(--grp-pad);
+    border-radius: var(--grp-event-radius); background-color: var(--dm-surface);
+  }
+  .grp-event + .grp-event { margin-top: var(--grp-event-gap); }
+  /* A past event is over, but its title and description stay at full contrast — only the tile
+     and the meta lines step back, so the card still reads at AA. */
+  .grp-event[data-past='true'] .grp-event-tile,
+  .grp-event[data-past='true'] .grp-event-when,
+  .grp-event[data-past='true'] .grp-event-by,
+  .grp-event[data-past='true'] .grp-event-count,
+  .grp-event[data-past='true'] .grp-event-response { opacity: 0.85; }
+  /* The tile, the title and the copy are one row; the RSVP controls get a banded footer of
+     their own so a short event does not read as a wide empty rectangle. */
+  .grp-event-body { display: flex; gap: 16px; }
+  .grp-event-main { min-width: 0; flex: 1 1 0%; }
+  .grp-event-tile {
+    display: flex; width: var(--grp-event-tile); height: var(--grp-event-tile); flex: none;
+    flex-direction: column; align-items: center; justify-content: center;
+    border: 1px solid var(--grp-tile-border); border-radius: 8px; background-color: var(--grp-tile-bg);
+  }
+  .grp-event-month { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; color: var(--dm-blue); }
+  .grp-event-day { font-size: 20px; font-weight: 700; color: var(--ui-text); }
+  .grp-event-title { font-size: 16px; font-weight: 600; color: var(--ui-text); }
+  .grp-event-when { display: block; margin-top: 2px; font-size: 14px; color: var(--ui-muted); }
+  .grp-event-text { margin-top: 4px; font-size: 14px; line-height: 18px; color: var(--ui-text); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+  .grp-event-by { margin-top: 4px; font-size: 12px; color: var(--ui-muted); }
+  .grp-event-foot {
+    display: flex; align-items: center; justify-content: space-between; gap: 8px;
+    padding-top: 12px; border-top: 1px solid var(--dm-border);
+  }
+  .grp-event-count { display: inline-flex; align-items: center; gap: 8px; font-size: 12px; color: var(--ui-muted); }
+  .grp-rsvp { display: flex; flex: none; align-items: center; gap: 8px; }
+  .grp-pill {
+    display: inline-flex; height: var(--grp-action-height); flex: none; align-items: center; gap: 6px;
+    padding: 0 12px; border: 1px solid var(--grp-pill-border); border-radius: 8px; background-color: var(--grp-pill-bg);
+    font-size: 14px; font-weight: 600; color: var(--ui-text);
+    transition: background-color var(--dm-motion) ease;
+  }
+  .grp-pill:hover { background-color: var(--dm-hover); }
+  .grp-pill[aria-pressed='true'] { background-color: var(--dm-blue); color: #fff; }
+  .grp-pill:disabled { cursor: not-allowed; opacity: 0.5; }
+  .grp-pill svg { width: 14px; height: 14px; }
+
+  /* The media grid is three columns of 3:4 crops, filling a column 935px wide and centred. */
+  .grp-column-media { width: 100%; max-width: var(--grp-media-column); margin-inline: auto; padding: var(--grp-pad); }
+  .grp-media-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: var(--grp-media-gap); }
+  .grp-media-cell { position: relative; display: block; overflow: hidden; background-color: var(--dm-surface); }
+  .grp-media-cell img, .grp-media-cell video, .grp-media-cell > span { display: block; width: 100%; aspect-ratio: var(--grp-media-ratio); object-fit: cover; object-position: center; }
+  .grp-media-overlay {
+    position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; gap: 6px;
+    background-color: var(--grp-media-scrim); color: #fff; font-size: 14px; font-weight: 600;
+    opacity: 0; transition: opacity var(--dm-motion) ease;
+  }
+  .grp-media-overlay svg { width: 20px; height: 20px; }
+  .grp-media-cell:hover .grp-media-overlay, .grp-media-cell:focus-visible .grp-media-overlay { opacity: 1; }
+  .grp-media-cell:focus-visible { outline: 2px solid var(--ui-text); outline-offset: -2px; }
+
+  .grp-lightbox {
+    position: fixed; inset: 0; z-index: 60; display: flex; flex-direction: column;
+    align-items: center; justify-content: center; gap: 12px; padding: 24px;
+    background-color: rgba(0, 0, 0, 0.85);
+  }
+  .grp-lightbox-image { max-width: 90vw; max-height: 68vh; border-radius: 4px; object-fit: contain; }
+  .grp-lightbox-nav {
+    position: absolute; top: 50%; display: flex; width: 44px; height: 44px; align-items: center;
+    justify-content: center; border-radius: 9999px; background-color: rgba(255, 255, 255, 0.12); color: #fff;
+  }
+  .grp-lightbox-close { position: absolute; top: 16px; right: 16px; }
+  .grp-lightbox-caption { display: flex; width: min(90vw, 640px); align-items: flex-start; gap: 12px; color: #fff; }
+  .grp-lightbox-name { font-size: 14px; font-weight: 600; }
+  .grp-lightbox-time { font-size: 12px; color: rgba(255, 255, 255, 0.7); }
+  .grp-lightbox-text { font-size: 14px; line-height: 18px; white-space: pre-wrap; overflow-wrap: anywhere; }
+}
+
+/* The details panel the Info icon toggles, the create/edit sheet, and the empty states. */
+@layer components {
+  .grp-profile { display: flex; flex-direction: column; align-items: center; gap: 8px; text-align: center; }
+  .grp-profile-name { font-size: 20px; font-weight: 600; color: var(--ui-text); }
+  .grp-profile-desc { font-size: 14px; color: var(--ui-muted); white-space: pre-wrap; overflow-wrap: anywhere; }
+  .grp-member { display: flex; align-items: center; gap: 12px; height: var(--grp-member-row); }
+  .grp-member-name { display: block; font-size: 14px; font-weight: 600; color: var(--ui-text); }
+  .grp-member-handle { display: block; font-size: 12px; color: var(--ui-muted); }
+  .grp-badge { display: inline-flex; height: 20px; flex: none; align-items: center; padding: 0 8px; border-radius: 9999px; background-color: var(--dm-surface); font-size: 12px; color: var(--ui-text); }
+  .grp-rows { margin-top: 16px; border-top: 1px solid var(--dm-border); }
+  .grp-row-action {
+    display: flex; width: 100%; height: 44px; align-items: center; gap: 12px;
+    border-bottom: 1px solid var(--dm-border); font-size: 14px; font-weight: 600; color: var(--ui-text);
+  }
+  .grp-row-action[data-tone='blue'] { color: var(--dm-blue); }
+  .grp-row-action[data-tone='danger'] { color: #ED4956; }
+  .grp-row-action:hover { opacity: 0.7; }
+  /* The one destructive filled button: the danger red the spec names, over the blue primary. */
+  .grp-danger { background-color: #ED4956; }
+
+  .grp-sheet-body { display: flex; min-height: 0; flex-direction: column; gap: 12px; overflow-y: auto; padding: 16px; }
+  .grp-field { display: block; font-size: 14px; color: var(--ui-text); }
+  .grp-field input, .grp-field textarea {
+    display: block; width: 100%; margin-top: 6px; padding: 10px 12px; border-radius: 8px;
+    border: 1px solid var(--dm-composer-border); background-color: transparent;
+    font-size: 14px; color: var(--ui-text); outline: none; resize: vertical;
+  }
+
+  .grp-empty { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; padding: 64px 24px; text-align: center; }
+  .grp-empty svg { width: 40px; height: 40px; color: var(--ui-muted); }
+  .grp-empty-title { font-size: 16px; font-weight: 600; color: var(--ui-text); }
+  .grp-empty-text { font-size: 14px; color: var(--ui-muted); }
+
+  /* The locked room: a group the reader has not been let into yet. It reuses the chat's
+     empty-state rhythm so the panel does not change shape when the gate opens. */
+  .grp-gate {
+    display: flex; min-height: 0; flex: 1 1 0%; flex-direction: column; align-items: center;
+    justify-content: center; gap: 8px; overflow-y: auto; padding: 48px 24px; text-align: center;
+    background-color: var(--dm-chat-bg);
+  }
+  .grp-gate-title { font-size: 20px; font-weight: 600; color: var(--ui-text); }
+  .grp-gate-meta { font-size: 14px; color: var(--ui-muted); }
+  .grp-gate-desc { max-width: 360px; font-size: 14px; line-height: 20px; color: var(--ui-muted); }
+  .grp-gate-action { margin-top: 12px; min-width: 168px; height: 36px; }
+  /* An invitee answers in place, so the gate never asks them to file a request they have
+     already been handed the answer to. */
+  .grp-gate-actions { display: flex; align-items: center; gap: 8px; margin-top: 12px; }
+  .grp-gate-actions .grp-gate-action { margin-top: 0; }
+  .grp-gate-note { max-width: 360px; margin-top: 4px; font-size: 12px; color: var(--ui-muted); }
+
+  /* An invitation, in the narrow conversation column. */
+  .grp-invites { display: flex; flex-direction: column; gap: 8px; }
+  .grp-invites-label { font-size: 13px; font-weight: 600; color: var(--ui-muted); }
+  .grp-invite { display: flex; flex-direction: column; gap: 10px; padding: 12px; border-radius: 12px; background-color: var(--dm-surface); }
+  .grp-invite-title { display: block; font-size: 14px; font-weight: 600; color: var(--ui-text); }
+  .grp-invite-sub { display: block; font-size: 12px; color: var(--ui-muted); }
+  .grp-invite-actions { display: flex; gap: 8px; }
+}
+
+/* ---------------------------------------------------------------------------
+   The one set of primitives the conversation surfaces share: a button, an icon
+   button, the "…" trigger, the loading skeletons and the inline error. Every
+   size and colour is a token, so a second copy cannot drift from this one.
+--------------------------------------------------------------------------- */
+@layer components {
+  .ui-btn {
+    display: inline-flex; height: var(--btn-height); flex: none; align-items: center; justify-content: center;
+    gap: 6px; padding-inline: 12px; border: 1px solid transparent; border-radius: var(--btn-radius);
+    font-size: 14px; font-weight: 600; line-height: 1; white-space: nowrap;
+    transition: background-color var(--dm-motion) ease, opacity var(--dm-motion) ease;
+  }
+  .ui-btn:disabled { cursor: not-allowed; opacity: 0.5; }
+  .ui-btn-primary { background-color: var(--dm-blue); color: #fff; }
+  .ui-btn-primary:hover:not(:disabled) { opacity: 0.9; }
+  .ui-btn-secondary { background-color: var(--dm-btn); color: var(--ui-text); }
+  .ui-btn-secondary:hover:not(:disabled) { background-color: var(--dm-hover); }
+  .ui-btn-ghost { background-color: transparent; color: var(--ui-text); }
+  .ui-btn-ghost:hover:not(:disabled) { background-color: var(--dm-hover); }
+  .ui-btn-danger { background-color: var(--ui-danger); color: #fff; }
+  .ui-btn-danger:hover:not(:disabled) { opacity: 0.9; }
+  .ui-btn-text { background-color: transparent; padding-inline: 4px; color: var(--dm-blue); }
+  .ui-btn-text:hover:not(:disabled) { opacity: 0.7; }
+  .ui-btn svg { width: 16px; height: 16px; flex: none; }
+  .ui-btn-spinner { width: 16px; height: 16px; flex: none; animation: ui-spin 0.7s linear infinite; }
+
+  /* A 24px icon inside a 32px round hit area, with a focus ring a keyboard can see. */
+  .ui-icon-btn {
+    display: inline-flex; width: var(--icon-btn-size); height: var(--icon-btn-size); flex: none;
+    align-items: center; justify-content: center; border-radius: 9999px; color: var(--ui-muted);
+    transition: background-color var(--dm-motion) ease, color var(--dm-motion) ease;
+  }
+  .ui-icon-btn:hover { background-color: var(--dm-hover); color: var(--ui-text); }
+  .ui-icon-btn svg { width: var(--icon-btn-icon); height: var(--icon-btn-icon); }
+  .ui-icon-btn[aria-pressed='true'] { color: var(--ui-text); }
+}
+
+/* The "…" trigger shared by a post, a comment and an event row, and the menu it opens. */
+@layer components {
+  .ui-menu { position: relative; display: inline-flex; }
+  .ui-menu-trigger {
+    display: inline-flex; width: var(--icon-btn-size); height: var(--icon-btn-size); flex: none;
+    align-items: center; justify-content: center; border-radius: 9999px; color: var(--ui-muted);
+    transition: background-color var(--dm-motion) ease, color var(--dm-motion) ease;
+  }
+  .ui-menu-trigger:hover { background-color: var(--dm-hover); color: var(--ui-text); }
+  .ui-menu-trigger svg { width: var(--menu-icon); height: var(--menu-icon); }
+  .ui-menu-panel {
+    position: absolute; z-index: 40; inset-inline-end: 0; top: calc(100% + 6px); min-width: 168px;
+    padding: 4px; border: 1px solid var(--ui-popover-border); border-radius: 12px;
+    background-color: var(--ui-popover); box-shadow: 0 12px 32px rgba(0, 0, 0, 0.28);
+  }
+  .ui-menu-item {
+    display: flex; width: 100%; min-height: 40px; align-items: center; gap: 12px; padding-inline: 12px;
+    border-radius: 8px; text-align: start; font-size: 14px; color: var(--ui-text);
+  }
+  .ui-menu-item:hover, .ui-menu-item:focus-visible { background-color: var(--ui-rail-hover); }
+  .ui-menu-item svg { width: var(--menu-icon); height: var(--menu-icon); flex: none; }
+  .ui-menu-item[data-tone='danger'] { color: var(--ui-danger); }
+
+  /* The tab strip. Roving tabindex is the component's; this is only the look. */
+  .ui-tablist { display: flex; height: 100%; min-width: 0; overflow-x: auto; scrollbar-width: none; }
+  .ui-tablist::-webkit-scrollbar { display: none; }
+  .ui-tab {
+    display: flex; height: 100%; flex: none; align-items: center; justify-content: center;
+    padding-inline: var(--grp-tab-pad-x); font-size: 14px; font-weight: 600; color: var(--ui-muted);
+    white-space: nowrap; border-bottom: 2px solid transparent; margin-bottom: -1px;
+    transition: color var(--dm-motion) ease, border-color var(--dm-motion) ease;
+  }
+  .ui-tab:hover { color: var(--ui-text); }
+  .ui-tab[aria-selected='true'] { color: var(--ui-text); border-bottom-color: var(--ui-text); }
+}
+
+/* Skeletons, an inline failure, and the attendee stack. */
+@layer components {
+  /* Skeletons mirror the real geometry so a list does not jump when it lands. */
+  .grp-skeleton { border-radius: 8px; background-color: var(--skeleton); animation: ui-pulse 1.4s ease-in-out infinite; }
+  .grp-skel-row { display: flex; align-items: center; gap: 12px; padding: 12px 0; }
+  .grp-skel-avatar { width: 40px; height: 40px; flex: none; border-radius: 9999px; }
+  .grp-skel-line { height: 12px; }
+  .grp-skel-block { border-radius: var(--grp-event-radius); padding: var(--grp-pad); background-color: var(--dm-surface); }
+
+  /* An inline failure with a retry beside it, so a tab that could not load still offers a way out. */
+  .grp-error {
+    display: flex; align-items: center; justify-content: space-between; gap: 12px;
+    padding: 12px 16px; border: 1px solid var(--ui-danger); border-radius: var(--btn-radius);
+    background-color: var(--dm-surface); font-size: 14px; color: var(--ui-text);
+  }
+
+  /* The attendee stack: up to three 20px avatars, each overlapping the one before it. */
+  .grp-avatars { display: flex; align-items: center; }
+  .grp-avatars > * { margin-inline-start: calc(-1 * var(--grp-event-avatar-overlap)); border-radius: 9999px; box-shadow: 0 0 0 2px var(--dm-surface); }
+  .grp-avatars > *:first-child { margin-inline-start: 0; }
+  /* The past event's answer, in place of the two buttons it can no longer offer. */
+  .grp-event-response { font-size: 12px; color: var(--ui-muted); }
+}
+
+@keyframes ui-spin { to { transform: rotate(360deg); } }
+@keyframes ui-pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.55; } }
+
+/* The card a share link opened. It flashes once and settles, which is what tells the reader
+   which post the link meant when the tab is a list of them. The flag is on the card for as
+   long as the flash is meant to last, so the animation and the state end together. */
+@keyframes grp-post-flash {
+  0% { background-color: color-mix(in srgb, var(--dm-blue) 18%, transparent); }
+  100% { background-color: transparent; }
+}
+article[data-highlight='true'] { animation: grp-post-flash 1.6s ease-out; }
+
+@media (prefers-reduced-motion: reduce) {
+  .grp-skeleton { animation: none; }
+  .ui-btn, .ui-icon-btn, .ui-menu-trigger, .ui-tab, .grp-comment-menu { transition-duration: 0.01ms !important; }
+  /* The same "this one" signal, held still: a ring for as long as the flag is set. */
+  article[data-highlight='true'] { animation: none; box-shadow: inset 0 0 0 2px var(--dm-blue); }
+}
+
 @keyframes dm-typing {
   0%, 60%, 100% { opacity: 0.35; }
   30% { opacity: 1; }
 }
 
-/* Reduced motion: the typing dots hold still, and every DM hover/transition is instant. */
+/* Reduced motion: the typing dots hold still, and every hover/transition is instant. */
 @media (prefers-reduced-motion: reduce) {
   .dm-typing span { animation: none; opacity: 0.6; }
-  .dm-row, .dm-tab, .dm-icon, .dm-actions, .dm-search, .dm-modal-row, .dm-composer-field { transition-duration: 0.01ms !important; }
+  .dm-row, .dm-tab, .dm-icon, .dm-actions, .dm-search, .dm-modal-row, .dm-composer-field,
+  .grp-tab, .grp-action, .grp-pill, .grp-media-overlay, .grp-row-action { transition-duration: 0.01ms !important; }
 }
 
 /* Deliberately outside `@layer components`: the shell hides the phone's tab bar while a chat
