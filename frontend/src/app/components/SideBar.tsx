@@ -41,7 +41,10 @@ export default function Sidebar({ isCollapsed, setIsCollapsed }: {
       setLoggingOut(false);
     }
   }
-  return <aside id="main-navigation" aria-label="Main navigation" className={`sticky top-0 z-20 hidden h-dvh self-start shrink-0 border-r border-border bg-card/70 backdrop-blur-xl transition-all lg:block ${isCollapsed ? 'w-20' : 'w-72'}`}>
+  // `fixed`, not `sticky`, and deliberately out of the layout flow: opening or collapsing the rail
+  // must not reflow the page, or the feed would slide sideways under the reader. The shell reserves
+  // a matching gutter (`BackendProvider`) so nothing is ever hidden behind the rail.
+  return <aside id="main-navigation" aria-label="Main navigation" className={`fixed inset-y-0 left-0 z-20 hidden h-dvh border-r border-border bg-card/70 backdrop-blur-xl transition-all lg:block ${isCollapsed ? 'w-20' : 'w-72'}`}>
     <div className="flex h-full flex-col overflow-y-auto p-3">
     <Link href="/" aria-label="Social Network home" className="mb-6 mt-2 block shrink-0"><img src={isCollapsed ? '/favicon.svg' : '/logo.svg'} alt="Social Network" className={isCollapsed ? 'mx-auto h-10 w-10 object-contain' : 'h-16 w-full object-contain dark:brightness-125'} /></Link>
     <nav className="space-y-2">{links.map(({ href, label, icon: Icon }) => <Link key={href} href={href} title={label} className={`flex items-center gap-3 rounded-xl px-3 py-3 ${pathname === href || (href !== '/' && pathname.startsWith(href + '/')) ? 'bg-blue-50 text-blue-700' : 'text-slate-600 hover:bg-slate-50'}`}>
