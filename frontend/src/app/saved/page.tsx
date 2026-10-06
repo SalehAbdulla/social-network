@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { type Page, type Post } from '../api/social';
 import { usePagedList } from '../lib/usePagedList';
+import { usePostOverlay } from '../lib/usePostOverlay';
 import PostCard from '../components/PostCard';
 import RequestState from '../components/RequestState';
 import LoadMore from '../components/LoadMore';
@@ -28,6 +29,8 @@ export default function Saved() {
     normalize: raw => ({ items: raw.posts, hasMore: !raw.lastPage }),
     keyOf: post => post.postId,
   });
+  // The same overlay the feed opens, so a card here is not a second, older behaviour.
+  const { openFor, overlay } = usePostOverlay(postId => saved.update(items => items.filter(item => item.postId !== postId)));
 
   return <div className="mx-auto max-w-3xl space-y-6 p-4 py-8 sm:p-8">
     {/* No page title: the rail already names this page, and the note that the list is private is
@@ -40,11 +43,13 @@ export default function Saved() {
         {saved.items.map(post => <PostCard
           key={post.postId}
           post={post}
+          onOpen={openFor(post)}
           onPostRemoved={postId => saved.update(items => items.filter(item => item.postId !== postId))}
           onUnsaved={postId => saved.update(items => items.filter(item => item.postId !== postId))}
         />)}
         {saved.settled && !saved.error && saved.items.length === 0 && <RequestState empty="Nothing saved yet. Use the bookmark button on a post to keep it here." />}
         {saved.items.length > 0 && <LoadMore loading={saved.loadingMore} hasMore={saved.hasMore} onLoadMore={saved.loadMore} label="Load more saved posts" />}
       </>}
+    {overlay}
   </div>;
 }
