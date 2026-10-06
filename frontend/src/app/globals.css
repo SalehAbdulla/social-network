@@ -17,25 +17,27 @@
 :root {
   color-scheme: light;
 
-  --ui-brand-1: #2563eb;
-  --ui-brand-2: #0d9488;
-  --ui-brand-ink: #0f3057;
-  --ui-brand-deep: #0b1f3a;
+  /* Instagram's own palette. One blue carries every accent — the lighter `--ui-brand-2` is its
+     hover/secondary shade — and there is no second brand colour. */
+  --ui-brand-1: #4a5df9;
+  --ui-brand-2: #708dff;
+  --ui-brand-ink: #000000;
+  --ui-brand-deep: #000000;
 
-  --ui-bg: #eef2f7;
-  --ui-bg-grad-1: #eef4ff;
-  --ui-bg-grad-2: #e7f7f5;
+  --ui-bg: #ffffff;
+  --ui-bg-grad-1: #ffffff;
+  --ui-bg-grad-2: #f8f9f9;
 
   --ui-card: #ffffff;
-  --ui-card-2: #f8fafc;
-  --ui-surface-2: #f1f5f9;
-  --ui-text: #162033;
-  --ui-muted: #5b6b83;
-  --ui-border: #e3e9f2;
-  --ui-ring: rgba(37, 99, 235, 0.18);
+  --ui-card-2: #f8f9f9;
+  --ui-surface-2: #f5f5f5;
+  --ui-text: #000000;
+  --ui-muted: #8e8e8e;
+  --ui-border: #ccd0d5;
+  --ui-ring: rgba(74, 93, 249, 0.18);
 
-  --ui-accent: #059669;
-  --ui-danger: #dc2626;
+  --ui-accent: #85a1ff;
+  --ui-danger: #ed4956;
   --ui-warn: #d97706;
 
   /* Glass surfaces: a translucent tint, the blur applied to whatever sits
@@ -51,32 +53,35 @@
   --ui-glass-track: rgba(226, 232, 240, 0.75);
   --ui-glass-inset: rgba(15, 48, 87, 0.18);
 
-  --ui-chat-bg: #f3f7f6;
-  --ui-chat-dots: #cfddd7;
+  --ui-chat-bg: #f8f9f9;
+  --ui-chat-dots: #ccd0d5;
 }
 
+/* The dark theme is Instagram's: a true black page, #262626 hairlines and raised surfaces, white
+   text, #a8a8a8 secondary text, and the same blue accents. The page wash is pinned flat black
+   rather than a gradient, because Instagram's dark UI is one tone. */
 .dark {
   color-scheme: dark;
 
-  --ui-brand-1: #60a5fa;
-  --ui-brand-2: #2dd4bf;
-  --ui-brand-ink: #dbe7ff;
-  --ui-brand-deep: #eef4ff;
+  --ui-brand-1: #4a5df9;
+  --ui-brand-2: #708dff;
+  --ui-brand-ink: #ffffff;
+  --ui-brand-deep: #ffffff;
 
-  --ui-bg: #070b15;
-  --ui-bg-grad-1: #0b1326;
-  --ui-bg-grad-2: #06201f;
+  --ui-bg: #000000;
+  --ui-bg-grad-1: #000000;
+  --ui-bg-grad-2: #000000;
 
-  --ui-card: #101a2b;
-  --ui-card-2: #0c1524;
-  --ui-surface-2: #17243c;
-  --ui-text: #e7eefc;
-  --ui-muted: #93a4bf;
-  --ui-border: #24314b;
-  --ui-ring: rgba(96, 165, 250, 0.35);
+  --ui-card: #000000;
+  --ui-card-2: #0c1014;
+  --ui-surface-2: #262626;
+  --ui-text: #ffffff;
+  --ui-muted: #a8a8a8;
+  --ui-border: #262626;
+  --ui-ring: rgba(112, 141, 255, 0.35);
 
-  --ui-accent: #34d399;
-  --ui-danger: #f87171;
+  --ui-accent: #85a1ff;
+  --ui-danger: #ff5c5c;
   --ui-warn: #fbbf24;
 
   --ui-glass: rgba(255, 255, 255, 0.06);
@@ -88,8 +93,8 @@
   --ui-glass-track: rgba(255, 255, 255, 0.1);
   --ui-glass-inset: rgba(0, 0, 0, 0.5);
 
-  --ui-chat-bg: #0a1220;
-  --ui-chat-dots: #1e2c44;
+  --ui-chat-bg: #000000;
+  --ui-chat-dots: #262626;
 }
 
 @theme inline {
@@ -113,10 +118,32 @@
   --color-accent: var(--ui-accent);
   --color-danger: var(--ui-danger);
   --color-warn: var(--ui-warn);
+
+  /* Instagram draws its whole interface in one blue. Screens written before the token set spell
+     their accents out with Tailwind's own blue and teal, so the shades they actually use are
+     mapped onto the brand tokens here: those screens then follow the theme instead of freezing a
+     second palette into the page. The 600–800 shades land on `brand-1` because they carry white
+     text (a badge, a button); the lighter ones land on `brand-2`. */
+  --color-blue-50: color-mix(in srgb, var(--ui-brand-1) 10%, transparent);
+  --color-blue-100: color-mix(in srgb, var(--ui-brand-1) 22%, transparent);
+  --color-blue-200: color-mix(in srgb, var(--ui-brand-1) 38%, transparent);
+  --color-blue-500: var(--ui-brand-2);
+  --color-blue-600: var(--ui-brand-1);
+  --color-blue-700: var(--ui-brand-1);
+  --color-teal-50: color-mix(in srgb, var(--ui-brand-2) 12%, transparent);
+  --color-teal-100: color-mix(in srgb, var(--ui-brand-2) 24%, transparent);
+  --color-teal-200: color-mix(in srgb, var(--ui-brand-2) 40%, transparent);
+  --color-teal-300: var(--ui-brand-2);
+  --color-teal-400: var(--ui-brand-2);
+  --color-teal-500: var(--ui-brand-2);
+  --color-teal-600: var(--ui-brand-1);
+  --color-teal-700: var(--ui-brand-1);
+  --color-teal-800: var(--ui-brand-1);
+  --color-teal-950: #0c1014;
 }
 
 @layer components {
-  .chat-primary { @apply rounded-xl bg-teal-700 px-4 py-2.5 text-sm font-medium text-white transition hover:bg-teal-800 disabled:cursor-not-allowed disabled:opacity-40 dark:bg-teal-500 dark:text-teal-950 dark:hover:bg-teal-400; }
+  .chat-primary { @apply rounded-xl bg-brand-1 px-4 py-2.5 text-sm font-medium text-white transition hover:bg-brand-1/90 disabled:cursor-not-allowed disabled:opacity-40; }
   .chat-secondary { @apply rounded-xl border border-border bg-card px-3 py-2 text-sm font-medium text-muted transition hover:bg-surface-2 disabled:cursor-not-allowed disabled:opacity-40; }
   .chat-icon { @apply flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-muted transition hover:bg-surface-2; }
   .chat-label { @apply block text-sm font-medium text-text; }
@@ -152,7 +179,7 @@
   }
 }
 
-button, summary, a, input, textarea, select { @apply focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-600; }
+button, summary, a, input, textarea, select { @apply focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-2; }
 button:not(:disabled) { cursor: pointer; }
 
 *{
