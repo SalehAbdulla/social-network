@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Bell, Bookmark, SquarePlus, Compass, House, MessageSquare, Search, UserRound, ChevronLeft, ChevronRight, LogOut } from 'lucide-react';
+import { House, MessageSquare, Compass, Search, Bell, UserRound, ChevronLeft, ChevronRight, LogOut, SquarePlus } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { displayName, errorMessage, request } from '../api/social';
 import { useBackend } from './BackendProvider';
@@ -23,7 +23,7 @@ export default function Sidebar({ isCollapsed, setIsCollapsed }: {
   // the same numbers — so a single request answers both bars and both badges.
   const links = [
     { href: '/', label: 'Feed', icon: House }, { href: '/messages', label: 'Messages', icon: MessageSquare },
-    { href: '/discover', label: 'Discover', icon: Compass }, { href: '/saved', label: 'Saved', icon: Bookmark },
+    { href: '/discover', label: 'Discover', icon: Compass },
     { href: '/search', label: 'Search', icon: Search },
     { href: '/notifications', label: 'Notifications', icon: Bell }, { href: '/profile', label: 'Profile', icon: UserRound },
   ];
