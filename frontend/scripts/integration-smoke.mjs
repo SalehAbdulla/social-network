@@ -313,7 +313,8 @@ try {
   console.log('PASS: the feed offers people you may know, and following one takes them out of it');
 
   await navigate(dummy, '/create-post');
-  await fill(dummy, 'input[placeholder="Give your post a title"]', `Browser ${stamp}`);
+  // A post is a description and its media now — there is no title field — so the text alone names
+  // the post this step reads back.
   await fill(dummy, 'textarea', `Persisted browser integration test ${stamp}`);
   // Two photos rather than one, so the lightbox below has a set to move through.
   const pixel = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aD1sAAAAASUVORK5CYII=';
@@ -332,8 +333,8 @@ try {
   const tileDetails = await evaluate(dummy, `(() => { const tile = document.querySelector('img[alt="Preview of pixel.png"]').closest('div'); const caption = tile && tile.querySelector('span'); return caption && caption.textContent.trim(); })()`);
   assert(/^\d+ × \d+ · \d+ B$/.test(String(tileDetails)), `the picker must show the file's dimensions and size, got ${JSON.stringify(tileDetails)}`);
   await button(dummy, 'Publish Post');
-  await until(dummy, `location.pathname === '/' && document.body.innerText.includes(${JSON.stringify(`Browser ${stamp}`)})`, 'publish post');
-  const created = (await api(dummy, '/posts')).posts.find(post => post.title === `Browser ${stamp}`);
+  await until(dummy, `location.pathname === '/' && document.body.innerText.includes(${JSON.stringify(`Persisted browser integration test ${stamp}`)})`, 'publish post');
+  const created = (await api(dummy, '/posts')).posts.find(post => post.content === `Persisted browser integration test ${stamp}`);
   assert(created); postId = created.postId; mediaURL = created.imageUrls[0]; assert(mediaURL);
   await navigate(dummy, `/post/${postId}`);
   await until(dummy, `!!document.querySelector('button[aria-label="Like post"]')`, 'post details');
@@ -393,19 +394,18 @@ try {
 
   await evaluate(dummy, `document.querySelector('a[aria-label="Edit post"]').click()`);
   await until(dummy, `document.querySelector('h1')?.textContent === 'Edit Post' && !!document.querySelector('img[alt="Photo 1"]')`, 'prefilled post editor');
-  assert.equal(await evaluate(dummy, `document.querySelector('input[placeholder="Give your post a title"]').value`), created.title);
-  await fill(dummy, 'input[placeholder="Give your post a title"]', 'Cancelled edit');
+  assert.equal(await evaluate(dummy, `document.querySelector('textarea').value`), created.content, 'the editor is prefilled with the post text');
+  await fill(dummy, 'textarea', 'Cancelled edit');
   await evaluate(dummy, `[...document.querySelectorAll('main a')].find(link => link.textContent === 'Cancel').click()`);
   await until(dummy, `location.pathname === '/post/${postId}' && !!document.querySelector('a[aria-label="Edit post"]')`, 'cancel edit');
-  assert.equal((await api(dummy, `/post?id=${postId}`)).title, created.title);
+  assert.equal((await api(dummy, `/post?id=${postId}`)).content, created.content);
   await evaluate(dummy, `document.querySelector('a[aria-label="Edit post"]').click()`);
   await until(dummy, `document.querySelector('h1')?.textContent === 'Edit Post'`, 'reopen editor');
-  await fill(dummy, 'input[placeholder="Give your post a title"]', `Updated ${stamp}`);
   await fill(dummy, 'textarea', `Updated browser post content ${stamp}`);
   await button(dummy, 'Save changes');
   await until(dummy, `location.pathname === '/post/${postId}' && document.body.innerText.includes(${JSON.stringify(`Updated browser post content ${stamp}`)})`, 'saved post');
   const edited = await api(dummy, `/post?id=${postId}`);
-  assert.equal(edited.title, `Updated ${stamp}`);
+  assert.equal(edited.content, `Updated browser post content ${stamp}`);
   assert.deepEqual(edited.imageUrls, created.imageUrls);
   assert.equal(edited.score, 1);
   console.log('PASS: owner edit button, prefilled editor, cancel and save preserve photos and votes');
@@ -435,9 +435,9 @@ try {
   await until(dummy, `(async () => (await (await fetch('/api/v1/saved-posts?page=1&size=10')).json()).data.posts.some(post => post.postId === ${postId}))()`, 'the post reaches the saved list');
   await until(dummy, `!!document.querySelector('button[aria-label="Remove from saved"]')`, 'the control reflects the saved state');
   await navigate(dummy, '/saved');
-  await until(dummy, `document.body.innerText.includes(${JSON.stringify(`Updated ${stamp}`)})`, 'the saved page lists the bookmarked post');
+  await until(dummy, `document.body.innerText.includes(${JSON.stringify(`Updated browser post content ${stamp}`)})`, 'the saved page lists the bookmarked post');
   await evaluate(dummy, `document.querySelector('button[aria-label="Remove from saved"]').click()`);
-  await until(dummy, `!document.body.innerText.includes(${JSON.stringify(`Updated ${stamp}`)})`, 'un-saving drops the row');
+  await until(dummy, `!document.body.innerText.includes(${JSON.stringify(`Updated browser post content ${stamp}`)})`, 'un-saving drops the row');
   assert.equal(await evaluate(dummy, `(async () => (await (await fetch('/api/v1/saved-posts?page=1&size=10')).json()).data.totalElements)()`), 0, 'the saved list is empty after un-saving');
   console.log('PASS: a post is saved from its card, listed on the private Saved page, and dropped when un-saved');
 
@@ -462,12 +462,11 @@ try {
   assert(/Add \d+ more character/.test(blockedReason), `the composer must say how much is missing, got ${JSON.stringify(blockedReason)}`);
   assert.equal(await evaluate(dummy, `document.querySelector('textarea').getAttribute('aria-describedby')`), 'publish-blocked', 'the reason belongs to the field it is about');
   assert(await evaluate(dummy, `!!document.querySelector('button[title*="Ctrl/Cmd"]')`), 'the shortcut is discoverable on the publish button');
-  await fill(dummy, 'input[placeholder="Give your post a title"]', `Draft ${stamp}`);
+  await fill(dummy, 'textarea', `Draft ${stamp} of the description`);
   await until(dummy, `(localStorage.getItem(${JSON.stringify(draftKey)}) || '').includes(${JSON.stringify(`Draft ${stamp}`)})`, 'the draft reaches storage');
   await command('Page.navigate', { url: base + '/create-post' }, dummy);
   await until(dummy, `!!document.getElementById('draft-restored')`, 'the draft is offered back after a reload');
-  assert.equal(await evaluate(dummy, `document.querySelector('textarea').value`), 'Too short', 'the restored draft is the text that was typed');
-  assert.equal(await evaluate(dummy, `document.querySelector('input[placeholder="Give your post a title"]').value`), `Draft ${stamp}`);
+  assert.equal(await evaluate(dummy, `document.querySelector('textarea').value`), `Draft ${stamp} of the description`, 'the restored draft is the text that was typed');
   assert(await evaluate(dummy, `!document.querySelector('img[alt^="Preview of"]')`), 'photos cannot survive a reload and must not be implied to');
   await button(dummy, 'Discard draft');
   await until(dummy, `!document.getElementById('draft-restored')`, 'discarding removes the notice');
@@ -539,7 +538,7 @@ try {
   assert(!(await evaluate(alex, `!!document.querySelector('a[aria-label="Edit post"]')`)));
   await navigate(alex, `/post/${postId}/edit`);
   await until(alex, `document.body.innerText.includes('You can only edit your own posts.')`, 'non-owner editor denied');
-  assert(!(await evaluate(alex, `!!document.querySelector('input[placeholder="Give your post a title"]')`)));
+  assert(!(await evaluate(alex, `!!document.querySelector('textarea')`)), 'the editor is not offered to a non-owner');
   await navigate(alex, `/post/${postId}`);
   await until(alex, `!!document.querySelector('article')`, 'Alex post details');
   // A post's insights belong to its author: the panel is on the post page for the account that
@@ -640,7 +639,7 @@ try {
   // returns to the picture that opened it; the phone step below proves the drawer, not this, is what
   // a narrow screen gets.
   await navigate(dummy, '/');
-  const feedMedia = `article:has(a[href="/post/${postId}"]) button[aria-label^="Open image"]`;
+  const feedMedia = `article[data-post-id="${postId}"] button[aria-label^="Open image"]`;
   await until(dummy, `!!document.querySelector(${JSON.stringify(feedMedia)})`, 'the post is on the feed with its media');
   await clickAt(dummy, feedMedia);
   await until(dummy, `!!document.querySelector('[role="dialog"][aria-label="Post"]')`, 'the feed opens the post overlay');
@@ -666,7 +665,7 @@ try {
   // On a phone the feed keeps the bottom drawer and is never offered the overlay.
   await command('Emulation.setDeviceMetricsOverride', { width: 390, height: 844, deviceScaleFactor: 1, mobile: true }, dummy);
   await navigate(dummy, '/');
-  const feedComments = `article:has(a[href="/post/${postId}"]) button[aria-label="Show comments"]`;
+  const feedComments = `article[data-post-id="${postId}"] button[aria-label="Show comments"]`;
   await until(dummy, `!!document.querySelector(${JSON.stringify(feedComments)})`, 'the feed card offers the comment button on a phone');
   assert(!(await evaluate(dummy, `!!document.querySelector('[role="dialog"][aria-label="Post"]')`)), 'no overlay is offered on a phone');
   await evaluate(dummy, `document.querySelector(${JSON.stringify(feedComments)}).click()`);
@@ -834,7 +833,7 @@ try {
   await until(alex, `!!document.querySelector('button[title="Cancel follow request"]')`, 'pending survives navigation');
   await until(dummy, `document.querySelector('section[aria-label="Follow requests"]').innerText.includes('@alexdemo')`, 'second request arrives');
   await button(dummy, 'Accept');
-  await until(alex, `document.body.innerText.includes('Unfollow') && document.body.innerText.includes(${JSON.stringify(`Updated ${stamp}`)})`, 'accept unlocks private profile live');
+  await until(alex, `document.body.innerText.includes('Unfollow') && document.body.innerText.includes(${JSON.stringify(`Updated browser post content ${stamp}`)})`, 'accept unlocks private profile live');
   assert(await evaluate(alex, `!!document.querySelector('a[href="/messages/${originalDummy.userId}"]')`), 'accepting the follow restores the message action');
   assert.equal((await api(dummy, '/users/me')).followers.includes(originalAlex.userId), true);
   assert.equal(await evaluate(alex, `(async () => (await fetch('/api/v1/media/${mediaURL.split('/').pop()}', { cache: 'no-store' })).status)()`), 200);
@@ -948,9 +947,9 @@ try {
   // assertion that matters most is that a term only the post carries brings it back.
   await navigate(dummy, '/search');
   await until(dummy, `!!document.querySelector('input[aria-label="Search posts, people and groups"]')`, 'search page');
-  await fill(dummy, 'input[aria-label="Search posts, people and groups"]', `Updated ${stamp}`);
+  await fill(dummy, 'input[aria-label="Search posts, people and groups"]', `browser post content ${stamp}`);
   await button(dummy, 'Search');
-  await until(dummy, `location.search.includes('q=') && document.body.innerText.includes(${JSON.stringify(`Updated ${stamp}`)})`, 'the post search finds the post');
+  await until(dummy, `location.search.includes('q=') && document.body.innerText.includes(${JSON.stringify(`browser post content ${stamp}`)})`, 'the post search finds the post');
   await fill(dummy, 'input[aria-label="Search posts, people and groups"]', 'alexdemo');
   await button(dummy, 'Search');
   await until(dummy, `document.body.innerText.includes('@alexdemo')`, 'the people half finds Alex');
