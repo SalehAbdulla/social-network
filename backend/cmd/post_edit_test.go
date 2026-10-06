@@ -20,6 +20,11 @@ func TestPostEditingIntegration(t *testing.T) {
 	original := decoded[posts.PostDTO](t, owner.call("POST", "/api/v1/posts", map[string]any{
 		"title": "Original post", "content": "This is the original content.", "privacy": "public",
 	}, 201))
+	// The create response must carry the author's name the way every read does, or a card headed
+	// with it renders "undefined undefined" until the list is refetched.
+	if original.FirstName != "Dummy" || original.LastName != "User" {
+		t.Fatalf("a created post must carry its author's name, got %q %q", original.FirstName, original.LastName)
+	}
 	editURL := "/api/v1/posts/" + strconv.Itoa(original.PostId)
 	readURL := "/api/v1/post?id=" + strconv.Itoa(original.PostId)
 	input := map[string]any{"title": "Updated post", "content": "This is the updated content.", "privacy": "public", "imageUrls": []string{}}
