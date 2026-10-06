@@ -11,3 +11,4 @@
 export const RAIL_AVATAR_SIZE = 20;    // the rail's profile row, level with `--rail-icon`
 export const POST_AVATAR_SIZE = 32;    // the post header, in the card and in the overlay
 export const ACCOUNT_AVATAR_SIZE = 40; // the account block and the people list in the right column
+export const DM_AVATAR_SIZE = 48;      // the conversation list's row avatar, mirroring `--dm-avatar`
