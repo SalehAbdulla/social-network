@@ -96,6 +96,6 @@ export default function Lightbox({ images, startIndex, label, onClose }: {
       className="max-h-[90vh] max-w-[92vw] rounded-lg object-contain shadow-2xl"
     />
     {many && <button type="button" aria-label="Next image" onClick={event => { event.stopPropagation(); step(1); }} className={`absolute right-3 ${control}`}><ChevronRight size={24} /></button>}
-    {many && <p role="status" className="absolute bottom-4 left-1/2 -translate-x-1/2 rounded-full bg-white/10 px-3 py-1 text-xs font-medium text-white">{index + 1} of {total}</p>}
+    {many && <p role="status" className="absolute bottom-4 left-1/2 -translate-x-1/2 rounded-lg bg-white/10 px-3 py-1 text-xs font-medium text-white">{index + 1} of {total}</p>}
   </div>;
 }
