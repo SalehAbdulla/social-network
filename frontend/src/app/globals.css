@@ -81,15 +81,28 @@
   --post-meta-size: 12px;
   --post-audience-icon: 12px;
   --post-header-icon: 16px;
+  --post-header-padding: 6px;
   --post-description-size: 14px;
   --post-description-leading: 18px;
   --post-media-radius: 4px;
-  --post-action-icon: 22px;
-  --post-action-gap: 14px;
-  --post-action-padding: 8px;
-  --post-count-size: 14px;
-  --post-gap: 8px;
-  --post-spacing: 16px;
+  /* The action row's four icons are one size and one stroke, drawn by the `.post-actions svg` rule.
+     Each button is the icon plus `--post-action-hit` on every side, and the row carries the same
+     amount as a negative margin so the first icon lines up with the media's left edge and the
+     bookmark's with its right edge. */
+  --post-action-icon: 20px;
+  --post-action-stroke: 1.75;
+  --post-action-hit: 6px;
+  --post-action-gap: 12px;
+  --post-action-count-gap: 4px;
+  --post-action-padding: 4px;
+  --post-count-size: 13px;
+  /* The card's own rhythm: header to description, description to media, and nothing between the
+     media and the action row, whose 4px padding is the whole gap. Below the card is its 8px, the
+     1px divider, and then `--post-spacing` before the next one. */
+  --post-space-header: 4px;
+  --post-space-media: 8px;
+  --post-bottom: 8px;
+  --post-spacing: 12px;
   --post-menu-width: 180px;
 
   --story-ring: 56px;
@@ -98,10 +111,18 @@
   --story-badge: 16px;
   --story-badge-icon: 10px;
   --story-caption-size: 12px;
-  --story-caption-gap: 6px;
+  --story-caption-gap: 4px;
 
   --aside-name-size: 14px;
-  --aside-handle-size: 14px;
+  --aside-handle-size: 12px;
+
+  /* The feed column's own top padding, and the "New posts" pill that stands above it. */
+  --feed-top: 12px;
+  --notice-height: 32px;
+  --notice-padding-x: 12px;
+  --notice-text-size: 13px;
+  --notice-icon: 14px;
+  --notice-radius: 8px;
 
   --feed-width: 470px;
   --feed-gap: 64px;
@@ -230,6 +251,15 @@
   .chat-primary { @apply rounded-xl bg-brand-1 px-4 py-2.5 text-sm font-medium text-white transition hover:bg-brand-1/90 disabled:cursor-not-allowed disabled:opacity-40; }
   .chat-secondary { @apply rounded-xl border border-border bg-card px-3 py-2 text-sm font-medium text-muted transition hover:bg-surface-2 disabled:cursor-not-allowed disabled:opacity-40; }
   .chat-icon { @apply flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-muted transition hover:bg-surface-2; }
+  /* The feed's "New posts" pill: a small standing button rather than the chat button's shape, and
+     the whole of it is the `--notice-*` block above. */
+  .feed-notice {
+    @apply inline-flex items-center border border-border bg-card font-medium text-muted shadow-sm transition hover:bg-surface-2 disabled:cursor-not-allowed disabled:opacity-40;
+    height: var(--notice-height);
+    padding-inline: var(--notice-padding-x);
+    border-radius: var(--notice-radius);
+    font-size: var(--notice-text-size);
+  }
   .chat-label { @apply block text-sm font-medium text-text; }
   .chat-field { @apply mt-2 block w-full rounded-xl border border-border bg-card p-3 text-sm font-normal text-text outline-none placeholder:text-muted focus:border-brand-2 focus:ring-2 focus:ring-ring; }
   .chat-menu { @apply block w-full rounded-lg px-3 py-2 text-left text-text hover:bg-surface-2 disabled:opacity-40; }
@@ -447,12 +477,12 @@ body {
    attribute, so these lines are what the icons are actually drawn at: a component cannot widen
    one and a wrapper cannot scale one. `stroke-width` is inherited by the paths, which is how
    Lucide's own default reaches them. The rail's active row is read from the two ARIA attributes
-   the rows already carry, so the state is not kept a second time; the action row keeps Lucide's
-   own stroke, since only its size is ours. */
+   the rows already carry, so the state is not kept a second time; the action row's own size and
+   stroke come from the `--post-action-*` pair, so its four icons cannot drift apart either. */
 .app-rail svg { width: var(--rail-icon); height: var(--rail-icon); stroke-width: var(--rail-stroke); }
 .app-rail [aria-current='page'] svg,
 .app-rail [aria-expanded='true'] svg { stroke-width: var(--rail-stroke-active); }
-.post-actions svg { width: var(--post-action-icon); height: var(--post-action-icon); }
+.post-actions svg { width: var(--post-action-icon); height: var(--post-action-icon); stroke-width: var(--post-action-stroke); }
 
 /* Collapsed chrome: the labels are in the DOM (so they can fade) but invisible and clipped,
    and the icon mark stands in for the wordmark. Both images are sized from the tokens, so the

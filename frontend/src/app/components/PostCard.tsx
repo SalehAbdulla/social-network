@@ -321,13 +321,17 @@ export default function PostCard({ post, fetchPosts, onPostRemoved, onUnsaved, o
     </MenuPanel>}
   </>;
   // The description alone, now that the audience is an icon in the header's second line: the grey
-  // chip under this text said the same thing twice, and the header states it once.
-  const caption = <p className="whitespace-pre-wrap break-words text-[length:var(--post-description-size)] leading-[var(--post-description-leading)] text-text">{linkify(post.content)}</p>;
-  const mediaGrid = (overlay: boolean) => hasMedia && <div className={overlay ? `grid w-full gap-1 ${post.imageUrls.length > 1 ? 'grid-cols-2' : 'grid-cols-1'}` : `grid gap-1 overflow-hidden rounded-[var(--post-media-radius)] ${post.imageUrls.length > 1 ? 'grid-cols-2' : ''}`}>{post.imageUrls.map((url, position) => <button key={url} type="button" aria-label={`Open image ${position + 1} of ${post.imageUrls.length}`} onClick={(event) => handleMediaTap(position, event.timeStamp)} className="relative block w-full cursor-zoom-in touch-manipulation"><img {...mediaImageProps(url, post.imageUrls.length > 1 ? '(max-width: 640px) 50vw, 320px' : '(max-width: 768px) 100vw, 640px')} alt="Post attachment" className={overlay ? 'max-h-[92vh] w-full object-contain' : 'aspect-square w-full bg-card-2 object-cover'} />{burst?.position === position && <span key={burst.id} aria-hidden="true" onAnimationEnd={() => setBurst(null)} className="heart-burst text-red-500"><Heart size={80} fill="currentColor" strokeWidth={0} /></span>}</button>)}</div>;
-  // The row's icons are sized by the `.post-actions svg` rule from `--post-action-icon`, so not one
-  // of them carries a `size` prop: 22px is the token, and it holds for the card and the overlay
-  // alike. Only the counts sit at `--post-count-size`.
-  const actionRow = <div className="post-actions flex items-center gap-[var(--post-action-gap)] py-[var(--post-action-padding)] text-text"><button disabled={busy} aria-label={vote.userScore === 1 ? 'Unlike post' : 'Like post'} aria-pressed={vote.userScore === 1} onClick={() => void react(1)} className={`flex items-center gap-1.5 rounded-full p-1 transition hover:opacity-60 ${vote.userScore === 1 ? 'text-danger' : ''}`}><Heart fill={vote.userScore === 1 ? 'currentColor' : 'none'} /><span className="text-[length:var(--post-count-size)] font-semibold">{vote.score}</span></button><button aria-expanded={commentsVisible} aria-label={commentsVisible ? 'Hide comments' : 'Show comments'} onClick={() => { if (inFeed && wide) onOpen?.(); else setCommentsOpen(!commentsVisible); }} className="flex items-center gap-1.5 rounded-full p-1 transition hover:opacity-60"><MessageCircle /><span className="text-[length:var(--post-count-size)] font-semibold">{commentCount}</span></button><button aria-label="Share post" className="rounded-full p-1 transition hover:opacity-60" onClick={async () => { try { await navigator.clipboard.writeText(`${location.origin}/post/${post.postId}`); toast.success('Post link copied'); } catch { toast.error('Could not copy the link'); } }}><Share2 /></button><button disabled={busy} aria-label={saved ? 'Remove from saved' : 'Save post'} aria-pressed={saved} title={saved ? 'Remove from saved' : 'Save post'} onClick={() => void toggleSave()} className={`ml-auto rounded-full p-1 transition hover:opacity-60 ${saved ? 'text-brand-1' : ''}`}><Bookmark fill={saved ? 'currentColor' : 'none'} /></button></div>;
+  // chip under this text said the same thing twice, and the header states it once. Its 4px gap is its
+  // own margin, because the media below it wants 8 and the action row wants none.
+  const caption = <p className={`whitespace-pre-wrap break-words text-[length:var(--post-description-size)] leading-[var(--post-description-leading)] text-text ${asOverlay ? '' : 'mt-[var(--post-space-header)]'}`}>{linkify(post.content)}</p>;
+  const mediaGrid = (overlay: boolean) => hasMedia && <div className={overlay ? `grid w-full gap-1 ${post.imageUrls.length > 1 ? 'grid-cols-2' : 'grid-cols-1'}` : `mt-[var(--post-space-media)] grid gap-1 overflow-hidden rounded-[var(--post-media-radius)] ${post.imageUrls.length > 1 ? 'grid-cols-2' : ''}`}>{post.imageUrls.map((url, position) => <button key={url} type="button" aria-label={`Open image ${position + 1} of ${post.imageUrls.length}`} onClick={(event) => handleMediaTap(position, event.timeStamp)} className="relative block w-full cursor-zoom-in touch-manipulation"><img {...mediaImageProps(url, post.imageUrls.length > 1 ? '(max-width: 640px) 50vw, 320px' : '(max-width: 768px) 100vw, 640px')} alt="Post attachment" className={overlay ? 'max-h-[92vh] w-full object-contain' : 'aspect-square w-full bg-card-2 object-cover'} />{burst?.position === position && <span key={burst.id} aria-hidden="true" onAnimationEnd={() => setBurst(null)} className="heart-burst text-red-500"><Heart size={80} fill="currentColor" strokeWidth={0} /></span>}</button>)}</div>;
+  // The row's icons are sized and stroked by the `.post-actions svg` rule from the `--post-action-*`
+  // tokens, so not one of them carries a `size` prop and the four cannot drift apart. Each button is
+  // its icon plus `--post-action-hit` on every side, and the row carries that same amount again as a
+  // negative margin: that is what puts the first icon on the media's left edge and the bookmark's on
+  // its right, which is the alignment the row is read by. The overlay wants neither, since it has the
+  // panel's own padding around the row.
+  const actionRow = <div className={`post-actions flex items-center gap-[var(--post-action-gap)] py-[var(--post-action-padding)] text-text ${asOverlay ? '' : '-mx-[var(--post-action-hit)]'}`}><button disabled={busy} aria-label={vote.userScore === 1 ? 'Unlike post' : 'Like post'} aria-pressed={vote.userScore === 1} onClick={() => void react(1)} className={`flex items-center gap-[var(--post-action-count-gap)] rounded-full p-[var(--post-action-hit)] transition hover:opacity-60 ${vote.userScore === 1 ? 'text-danger' : ''}`}><Heart fill={vote.userScore === 1 ? 'currentColor' : 'none'} /><span className="text-[length:var(--post-count-size)] font-semibold">{vote.score}</span></button><button aria-expanded={commentsVisible} aria-label={commentsVisible ? 'Hide comments' : 'Show comments'} onClick={() => { if (inFeed && wide) onOpen?.(); else setCommentsOpen(!commentsVisible); }} className="flex items-center gap-[var(--post-action-count-gap)] rounded-full p-[var(--post-action-hit)] transition hover:opacity-60"><MessageCircle /><span className="text-[length:var(--post-count-size)] font-semibold">{commentCount}</span></button><button aria-label="Share post" className="rounded-full p-[var(--post-action-hit)] transition hover:opacity-60" onClick={async () => { try { await navigator.clipboard.writeText(`${location.origin}/post/${post.postId}`); toast.success('Post link copied'); } catch { toast.error('Could not copy the link'); } }}><Share2 /></button><button disabled={busy} aria-label={saved ? 'Remove from saved' : 'Save post'} aria-pressed={saved} title={saved ? 'Remove from saved' : 'Save post'} onClick={() => void toggleSave()} className={`ml-auto rounded-full p-[var(--post-action-hit)] transition hover:opacity-60 ${saved ? 'text-brand-1' : ''}`}><Bookmark fill={saved ? 'currentColor' : 'none'} /></button></div>;
 
   // The feed's pop-up: the media on the left, and on the right the header, the caption, the post's
   // own action row (the same controls the card draws, so a like or a save has one implementation)
@@ -341,17 +345,16 @@ export default function PostCard({ post, fetchPosts, onPostRemoved, onUnsaved, o
     </div>
   </div>;
 
-  return <article data-post-id={post.postId} className="space-y-[var(--post-gap)] border-b border-border pb-[var(--post-spacing)]">
-    <div className="flex items-center justify-between py-1">{authorLink}{ownerControls}</div>
-    {/* The description sits directly under the header — 8px below it, from the `space-y-2` above —
-        and above the media, so the post reads as a caption for what follows. The audience is not
-        repeated here: it is the icon that closes the header's second line, beside the handle and
-        the time, which is also where the reader checks it before the text. */}
+  return <article data-post-id={post.postId} className="border-b border-border pb-[var(--post-bottom)]">
+    <div className="flex items-center justify-between py-[var(--post-header-padding)]">{authorLink}{ownerControls}</div>
+    {/* The description sits `--post-space-header` under the header and `--post-space-media` above the
+        media, so the post reads as a caption for what follows. The audience is not repeated here: it
+        is the icon that closes the header's second line, beside the handle and the time. */}
     {caption}
     {mediaGrid(false)}
     {actionRow}
     {commentsVisible && (wide
-      ? <Comments post={post} onCountChange={bumpComments} />
+      ? <div className="mt-[var(--post-space-media)]"><Comments post={post} onCountChange={bumpComments} /></div>
       : <CommentSheet onClose={closeComments}><Comments post={post} onCountChange={bumpComments} /></CommentSheet>)}
     {viewer !== null && <Lightbox images={post.imageUrls} startIndex={viewer} label="Post photos" onClose={() => setViewer(null)} />}
   </article>;

@@ -36,9 +36,9 @@ export default function Feed() {
   // Instagram's desktop feed: a 470px column with a 319px suggestions rail 64px to its right,
   // the pair centred as a group (all three come from the geometry tokens in globals.css). The
   // rail drops below 1000px rather than moving, so the column simply centres on its own there.
-  return <div className="px-4 py-4">
+  return <div className="px-4 pt-[var(--feed-top)] pb-4">
     <div className="mx-auto flex w-full max-w-[var(--feed-group)] justify-center gap-[var(--feed-gap)]">
-    <div className="w-full min-w-0 max-w-[var(--feed-width)] space-y-4">
+    <div className="w-full min-w-0 max-w-[var(--feed-width)] space-y-[var(--post-spacing)]">
     <StoriesBar />
     {/* Offered, not imposed: a post that arrives over the socket raises this pill, and
         the reader chooses when to fold the newest page in. */}

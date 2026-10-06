@@ -90,12 +90,12 @@ export default function StoriesBar() {
     const timer = setInterval(() => { if (!strip.current || strip.current.scrollLeft === 0) reload(); }, 60000);
     return () => clearInterval(timer);
   }, [reload]);
-  return <section><div ref={strip} className="no-scrollbar flex gap-3 overflow-x-auto pb-2">
+  return <section><div ref={strip} className="no-scrollbar flex gap-3 overflow-x-auto">
     {/* Instagram leads the tray with the viewer's own entry: their face inside a dashed circle
         with a plus on the rim and "Your story" under it, so the first thing in the strip is the
         thing the reader can do rather than somebody else's story. The tray's numbers are the
         `--story-*` tokens: a 56px ring, the face at the 48px it leaves inside it, a 16px plus on
-        the rim, and a 12px caption 6px under it. */}
+        the rim, and a 12px caption 4px under it. */}
     <button type="button" onClick={() => setCreating(true)} className="flex w-[var(--story-item)] shrink-0 flex-col items-center gap-[var(--story-caption-gap)]">
       <span className="relative flex size-[var(--story-ring)] items-center justify-center rounded-full border-2 border-dashed border-border bg-surface-2">
         {user.avatar ? <img src={user.avatar} alt="" className="size-[var(--story-avatar)] rounded-full object-cover" /> : <span className="flex size-[var(--story-avatar)] items-center justify-center rounded-full bg-card text-lg font-semibold text-muted">{displayName(user).slice(0, 1).toUpperCase()}</span>}

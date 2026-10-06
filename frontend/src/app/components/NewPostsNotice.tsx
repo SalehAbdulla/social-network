@@ -19,14 +19,14 @@ export default function NewPostsNotice({ onReload }: { onReload: () => void }) {
   const [pending, setPending] = useState(false);
   useSocketEvent('post_changed', () => setPending(true));
   if (!pending) return null;
-  return <div className="sticky top-0 z-10 flex justify-center py-2">
+  return <div className="sticky top-0 z-10 flex justify-center">
     <button
       type="button"
       aria-label="Show new posts"
       onClick={() => { setPending(false); onReload(); }}
-      className="chat-secondary inline-flex items-center gap-2 shadow-sm"
+      className="feed-notice gap-2"
     >
-      <RefreshCw size={14} aria-hidden="true" />New posts
+      <RefreshCw className="size-[var(--notice-icon)]" aria-hidden="true" />New posts
     </button>
   </div>;
 }
