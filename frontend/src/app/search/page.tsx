@@ -7,6 +7,7 @@ import { Search as SearchIcon, X } from 'lucide-react';
 import { type Group, type Page, type Post, type SocialUser, displayName } from '../api/social';
 import { usePagedList } from '../lib/usePagedList';
 import { useResource } from '../lib/useResource';
+import { usePostOverlay } from '../lib/usePostOverlay';
 import { clearRecentSearches, readRecentSearches, rememberSearch } from '../lib/recentSearches';
 import Avatar from '../components/Avatar';
 import LoadMore from '../components/LoadMore';
@@ -64,6 +65,8 @@ function SearchScreen() {
     enabled: !!query,
   });
 
+  const { openFor, overlay } = usePostOverlay(postId => posts.update(items => items.filter(item => item.postId !== postId)));
+
   const matchedNothing = !!query
     && !people.loading && !groups.loading && !posts.loading
     && !people.error && !groups.error && !posts.error
@@ -111,13 +114,14 @@ function SearchScreen() {
         {posts.loading
           ? <PostListSkeleton />
           : <>
-            {posts.items.map(post => <PostCard key={post.postId} post={post} onPostRemoved={postId => posts.update(items => items.filter(item => item.postId !== postId))} />)}
+            {posts.items.map(post => <PostCard key={post.postId} post={post} onOpen={openFor(post)} onPostRemoved={postId => posts.update(items => items.filter(item => item.postId !== postId))} />)}
             {posts.items.length > 0 && <LoadMore loading={posts.loadingMore} hasMore={posts.hasMore} onLoadMore={posts.loadMore} label="Load more posts" />}
           </>}
       </section>
 
       {matchedNothing && <RequestState empty={`Nothing matched “${query}”. Try another word, or a spelling.`} />}
     </>}
+    {overlay}
   </div>;
 }
 
