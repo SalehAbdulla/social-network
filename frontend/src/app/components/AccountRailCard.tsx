@@ -19,7 +19,7 @@ import { ACCOUNT_AVATAR_SIZE } from '../lib/sizing';
 export default function AccountRailCard() {
   const { user } = useBackend();
   return <section aria-label="Your account">
-    <Link href="/profile" className="flex items-center gap-3 rounded-xl p-2 transition hover:bg-surface-2">
+    <Link href="/profile" className="flex items-center gap-3 rounded-xl px-[var(--aside-padding)] pb-[var(--aside-padding)] transition hover:bg-surface-2">
       <Avatar name={displayName(user)} avatarUrl={user.avatar} size={ACCOUNT_AVATAR_SIZE} />
       <span className="min-w-0">
         <span className="block truncate text-[length:var(--aside-name-size)] font-semibold text-text">{displayName(user)}</span>

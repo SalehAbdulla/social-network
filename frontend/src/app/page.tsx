@@ -53,7 +53,7 @@ export default function Feed() {
         {feed.items.length > 0 && <LoadMore loading={feed.loadingMore} hasMore={feed.hasMore} onLoadMore={feed.loadMore} label={`Load${feed.items.length > FEED_PAGE_SIZE ? ' more' : ' older'} posts`} />}
       </>}
     </div>
-    <aside className="hidden w-[var(--feed-rail)] shrink-0 min-[1000px]:block"><div className="sticky top-6 space-y-6"><AccountRailCard /><SuggestedPeople /></div></aside>
+    <aside className="hidden w-[var(--feed-rail)] shrink-0 min-[1000px]:block"><div className="sticky top-[var(--feed-top)] space-y-6"><AccountRailCard /><SuggestedPeople /></div></aside>
     </div>
     {overlay}
   </div>;

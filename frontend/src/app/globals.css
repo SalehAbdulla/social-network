@@ -57,11 +57,11 @@
   --rail-expanded: 244px;
 
   /* Inside the rail: one icon size and one stroke for every row, a 40px row on a 4px gap (a
-     44px pitch), and the label the hover reveal fades in. The wordmark is 20% shorter than it
-     was, and the mark is the square that stands in for it while collapsed. The profile avatar is
-     the one rail measurement JavaScript has to hand over (`RAIL_AVATAR_SIZE` in `lib/sizing.ts`),
-     because `Avatar` sizes itself with an inline style that nothing in this stylesheet could
-     outrank. */
+     44px pitch), and the label the hover reveal fades in. The wordmark is 20% shorter again than
+     the previous pass left it (15.8px), and the mark is the square that stands in for it while
+     collapsed. The profile avatar is the one rail measurement JavaScript has to hand over
+     (`RAIL_AVATAR_SIZE` in `lib/sizing.ts`), because `Avatar` sizes itself with an inline style that
+     nothing in this stylesheet could outrank. */
   --rail-icon: 20px;
   --rail-stroke: 1.75;
   --rail-stroke-active: 2;
@@ -70,7 +70,7 @@
   --rail-row-radius: 8px;
   --rail-label-size: 14px;
   --rail-mark: 22px;
-  --rail-wordmark: 19.7px;
+  --rail-wordmark: 15.76px;
 
   /* The feed's scale, one group per surface: the post card, the story tray and the right column.
      These are drawn sizes, not spacing guesses — each was read back off the rendered page. The two
@@ -96,14 +96,18 @@
   --post-action-count-gap: 4px;
   --post-action-padding: 4px;
   --post-count-size: 13px;
-  /* The card's own rhythm: header to description, description to media, and nothing between the
-     media and the action row, whose 4px padding is the whole gap. Below the card is its 8px, the
-     1px divider, and then `--post-spacing` before the next one. */
+  /* The card's own rhythm: header to description, description to media, 4px between the media and
+     the action row (`--post-space-actions` — the row's own 4px padding would otherwise be the whole
+     gap and read as cramped), and then the card's 8px, the 1px divider, and `--post-spacing` before
+     the next one. `--post-menu-overhang` is half the "…" button less half its icon: that is how far
+     the button has to hang past the card's edge for the glyph to sit on the media's right edge. */
   --post-space-header: 4px;
   --post-space-media: 8px;
+  --post-space-actions: 4px;
   --post-bottom: 8px;
   --post-spacing: 12px;
   --post-menu-width: 180px;
+  --post-menu-overhang: 8px;
 
   --story-ring: 56px;
   --story-avatar: 48px;
@@ -115,6 +119,11 @@
 
   --aside-name-size: 14px;
   --aside-handle-size: 12px;
+  /* The account card's own padding. It has none at the top on purpose: the avatar is the top of
+     that block, exactly as the story ring is the top of the tray, so the two line up on
+     `--feed-top` instead of the avatar sitting `--aside-padding` below the ring. The column sticks
+     at the same offset, since a larger one would push it down before the reader has scrolled. */
+  --aside-padding: 8px;
 
   /* The feed column's own top padding, and the "New posts" pill that stands above it. */
   --feed-top: 12px;
