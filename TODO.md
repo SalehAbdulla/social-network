@@ -3038,6 +3038,16 @@ keeps its round knob inside a now-square track. Checked by walking every element
 and listing the ones whose computed radius is neither `0px` nor a full circle: the list is empty,
 with 24 circles left.
 
+Changed in the rail-width session (2026-10-06), for review: `frontend/src/app/components/SideBar.tsx`.
+The left rail is thicker and tighter: the expanded width goes `w-64` → `w-72` (256 → 288 px) and the
+rail's inner padding `p-4` → `p-3` (16 → 12 px), with the footer's `pt-4` → `pt-3` to match, so the
+nav rows are 263 px wide instead of 224 and their icons sit 4 px closer to the edge. The collapsed
+rail stays `w-20`: it is icon-only, its rows are already sized to the icon, and widening it further
+would need `justify-center` on every entry to keep those icons centred. Checked at 1440, 1280 and
+1024 px: the rail measures 288, the rows 263, the padding 12, and the document never scrolls
+horizontally — the shell's main column is `min-w-0 flex-1`, so the extra rail width comes out of the
+feed's slack rather than off the page.
+
 ## Definition of done
 
 A task is complete when: the code builds (`go build ./...`, `npm run build`), tests pass
