@@ -158,6 +158,70 @@
 
   --ui-chat-bg: #f8f9f9;
   --ui-chat-dots: #ccd0d5;
+
+  /* -------------------------------------------------------------------------
+     Direct messages (Instagram desktop DMs). Every measurement the list and the
+     chat are drawn against lives here, and the `.dm-*` rules below read them, so
+     tuning the surface is editing this block rather than the class names. The
+     two columns are fixed-width list plus a flexible chat panel; the row, the
+     bubble and the composer each carry exactly one number for their geometry.
+  ------------------------------------------------------------------------- */
+  --dm-list-width: 397px;      /* the conversation column */
+  --dm-list-collapsed: 72px;   /* avatar-only list, 768–999px */
+  --dm-row-height: 72px;
+  --dm-row-inset: 8px;         /* how far the active/hover fill sits from the column edge */
+  --dm-row-pad-x: 16px;        /* + the inset makes the 24px the row's content starts at */
+  --dm-row-gap: 12px;
+  --dm-row-radius: 8px;
+  --dm-avatar: 56px;           /* the list avatar */
+  --dm-avatar-header: 44px;    /* the chat header, the details panel and the new-message modal */
+  --dm-avatar-group: 36px;     /* each half of a stacked group avatar */
+  --dm-avatar-thread: 28px;    /* the sender avatar beside the last bubble of a received group */
+  --dm-avatar-intro: 96px;     /* the thread's intro block and the empty-state circle */
+  --dm-header-height: 68px;
+  --dm-bubble-radius: 22px;
+  --dm-bubble-radius-tight: 4px; /* the corner that meets a neighbour inside a group */
+  --dm-bubble-max: 60%;
+  --dm-bubble-pad-y: 8px;
+  --dm-bubble-pad-x: 12px;
+  --dm-thread-pad-x: 16px;
+  --dm-thread-pad-y: 16px;
+  --dm-group-gap: 2px;         /* between bubbles of one sender */
+  --dm-cluster-gap: 8px;       /* between two groups */
+  --dm-composer-height: 44px;
+  --dm-composer-radius: 22px;
+  --dm-details-width: 340px;
+  --dm-search-height: 40px;
+  --dm-presence: 14px;         /* the online dot on an avatar */
+  --dm-unread: 8px;            /* the unread dot at the end of a row */
+  --dm-icon: 24px;             /* the header's and the composer's icons */
+  --dm-icon-stroke: 1.75;
+  --dm-action-icon: 16px;      /* the hover row's three icons */
+  --dm-reaction-height: 22px;
+  --dm-reaction-overlap: 8px;  /* how far the reaction pill hangs past a bubble's edge */
+  --dm-attach: 64px;           /* an attachment preview above the composer */
+  --dm-btn-height: 32px;
+  --dm-btn: #efefef;           /* the secondary pill ("View profile") */
+  --dm-chrome-top: 56px;       /* the phone's top strip, drawn by the app shell */
+  --dm-chrome-bottom: 56px;    /* the phone's bottom tab bar, drawn by the app shell */
+  --dm-motion: 150ms;
+
+  /* The DM palette, light. The page uses the sidebar token (white here, near-black in the
+     dark theme) so both themes take their surface from one place. */
+  --dm-bg: var(--ui-rail);
+  --dm-chat-bg: var(--ui-rail);
+  --dm-surface: #efefef;       /* the search pill, the reaction pill, a grouped avatar's backing */
+  --dm-received: #efefef;      /* a received bubble */
+  --dm-border: #dbdbdb;        /* the column divider and every hairline */
+  --dm-composer-border: #dbdbdb;
+  --dm-hover: rgba(0, 0, 0, 0.05);
+  --dm-active: rgba(0, 0, 0, 0.08);
+  --dm-sent-from: #4f5bd5;     /* the sent bubble's gradient, fixed to the thread */
+  --dm-sent-to: #7b3ff2;
+  --dm-online: #1cd14f;
+  --dm-blue: #0095f6;
+  --dm-ring: var(--ui-rail);   /* the ring drawn around a presence dot */
+  --dm-scrim: rgba(0, 0, 0, 0.6);
 }
 
 /* The dark theme is Instagram's: a true black page, #262626 hairlines and raised surfaces, white
@@ -206,6 +270,23 @@
 
   --ui-chat-bg: #000000;
   --ui-chat-dots: #262626;
+
+  /* The DM palette, dark — Instagram's near-black surfaces over the blue-tinted rail tone. */
+  --dm-bg: var(--ui-rail);
+  --dm-chat-bg: var(--ui-rail);
+  --dm-surface: #262626;
+  --dm-received: #262626;
+  --dm-border: rgba(255, 255, 255, 0.15);
+  --dm-composer-border: #363636;
+  --dm-hover: rgba(255, 255, 255, 0.05);
+  --dm-active: rgba(255, 255, 255, 0.1);
+  --dm-sent-from: #4f5bd5;
+  --dm-sent-to: #7b3ff2;
+  --dm-online: #1cd14f;
+  --dm-blue: #0095f6;
+  --dm-ring: var(--ui-rail);
+  --dm-scrim: rgba(0, 0, 0, 0.6);
+  --dm-btn: #363636;
 }
 
 @theme inline {
@@ -237,6 +318,18 @@
   --color-popover: var(--ui-popover);
   --color-popover-border: var(--ui-popover-border);
   --color-badge: var(--ui-badge);
+
+  /* The direct-message palette, mapped so the components can use `bg-dm-surface`,
+     `border-dm-border`, `text-dm-blue` and so on, exactly like every other surface. */
+  --color-dm-bg: var(--dm-bg);
+  --color-dm-chat: var(--dm-chat-bg);
+  --color-dm-surface: var(--dm-surface);
+  --color-dm-received: var(--dm-received);
+  --color-dm-border: var(--dm-border);
+  --color-dm-hover: var(--dm-hover);
+  --color-dm-active: var(--dm-active);
+  --color-dm-blue: var(--dm-blue);
+  --color-dm-online: var(--dm-online);
 
   /* Instagram draws its whole interface in one blue. Screens written before the token set spell
      their accents out with Tailwind's own blue and teal, so the shades they actually use are
@@ -466,6 +559,318 @@ body {
   .dark .to-white { --tw-gradient-to: var(--ui-card); }
 }
 
+
+/* ---------------------------------------------------------------------------
+   Direct messages. Instagram's desktop DMs: a fixed conversation column and a
+   flexible chat panel, each scrolling on its own, with the chat's header and
+   composer pinned. Every measurement is a `--dm-*` token from the block above.
+   The shell can read the phone's chrome (top strip, bottom tab bar) because it
+   knows their heights, and a chat that is open hides the tab bar.
+--------------------------------------------------------------------------- */
+@layer components {
+  .dm-shell { display: flex; height: 100dvh; min-height: 0; }
+  .dm-list {
+    display: flex; width: var(--dm-list-width); flex: none; flex-direction: column;
+    min-height: 0; border-right: 1px solid var(--dm-border); background-color: var(--dm-bg);
+  }
+  .dm-chat {
+    position: relative; display: flex; flex: 1 1 0%; min-width: 0; min-height: 0;
+    background-color: var(--dm-chat-bg);
+  }
+  /* The thread and its header/composer. The details column, when open, is the row's second
+     child rather than a sibling of this one, so it can squeeze or overlay it. */
+  .dm-panel { display: flex; flex: 1 1 0%; min-width: 0; min-height: 0; flex-direction: column; }
+
+  /* The phone: one column. The list fills the screen until a conversation is opened,
+     when the chat takes over and the tab bar steps aside for the composer. */
+  @media (max-width: 767px) {
+    .dm-shell { height: calc(100dvh - var(--dm-chrome-top) - var(--dm-chrome-bottom)); }
+    body[data-dm-chat='open'] .dm-shell { height: calc(100dvh - var(--dm-chrome-top)); }
+    .dm-shell[data-active='false'] .dm-chat { display: none; }
+    .dm-shell[data-active='false'] .dm-list { width: 100%; border-right: 0; }
+    .dm-shell[data-active='true'] .dm-list { display: none; }
+  }
+
+  /* The tablet: the list collapses to its avatars and the chat takes what is left. */
+  @media (min-width: 768px) and (max-width: 999px) {
+    .dm-list { width: var(--dm-list-collapsed); }
+    .dm-collapse { display: none !important; }
+    .dm-row { justify-content: center; margin-inline: 4px; padding-inline: 0; }
+    .dm-row-body, .dm-row-dot { display: none; }
+    .dm-row-avatar { margin-inline: auto; }
+  }
+
+  /* Conversation column: header, tabs, search, rows. */
+  .dm-list-head {
+    display: flex; flex: none; align-items: center; justify-content: space-between;
+    gap: 12px; padding: 36px 24px 12px;
+  }
+  .dm-list-title { display: flex; align-items: center; gap: 4px; font-size: 20px; font-weight: 700; color: var(--ui-text); }
+  .dm-list-title svg { width: 16px; height: 16px; }
+  .dm-tabs { display: flex; flex: none; border-bottom: 1px solid var(--dm-border); }
+  .dm-tab {
+    flex: 1 1 0%; display: flex; align-items: center; justify-content: center; padding: 12px 0;
+    font-size: 14px; font-weight: 600; color: var(--ui-muted); border-bottom: 2px solid transparent;
+    margin-bottom: -1px; transition: color var(--dm-motion) ease, border-color var(--dm-motion) ease;
+  }
+  .dm-tab:hover { color: var(--ui-text); }
+  .dm-tab[aria-current='page'], .dm-tab[aria-pressed='true'] { color: var(--ui-text); border-bottom-color: var(--ui-text); }
+  .dm-search {
+    display: flex; flex: none; align-items: center; gap: 8px; height: var(--dm-search-height);
+    margin: 8px 24px; padding: 0 12px; border-radius: calc(var(--dm-search-height) / 2);
+    background-color: var(--dm-surface); transition: box-shadow var(--dm-motion) ease;
+  }
+  .dm-search:focus-within { box-shadow: 0 0 0 1px var(--dm-border); }
+  .dm-search svg { width: 16px; height: 16px; flex: none; color: var(--ui-muted); }
+  .dm-search input { min-width: 0; flex: 1 1 0%; border: 0; background: transparent; outline: none; font-size: 14px; color: var(--ui-text); }
+  .dm-search input::placeholder { color: var(--ui-muted); }
+  .dm-scroll { min-height: 0; flex: 1 1 0%; overflow-y: auto; padding: 4px 0 8px; }
+  .dm-empty-note { padding: 24px; text-align: center; font-size: 14px; color: var(--ui-muted); }
+
+  /* One conversation: a real link, 72px tall, whose hover/active fill is inset from the column. */
+  .dm-row {
+    display: flex; align-items: center; gap: var(--dm-row-gap); height: var(--dm-row-height);
+    margin: 0 var(--dm-row-inset); padding: 8px var(--dm-row-pad-x); border-radius: var(--dm-row-radius);
+    transition: background-color var(--dm-motion) ease;
+  }
+  .dm-row:hover { background-color: var(--dm-hover); }
+  .dm-row[aria-current='page'] { background-color: var(--dm-active); }
+  .dm-row-avatar { position: relative; flex: none; }
+  .dm-row-body { min-width: 0; flex: 1 1 0%; }
+  .dm-row-name { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 14px; font-weight: 400; color: var(--ui-text); }
+  .dm-row-preview { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; margin-top: 2px; font-size: 12px; color: var(--ui-muted); }
+  .dm-row-unread .dm-row-name, .dm-row-unread .dm-row-preview { font-weight: 600; color: var(--ui-text); }
+  .dm-row-dot { flex: none; width: var(--dm-unread); height: var(--dm-unread); border-radius: 9999px; background-color: var(--dm-blue); }
+  .dm-presence {
+    position: absolute; right: 0; bottom: 0; width: var(--dm-presence); height: var(--dm-presence);
+    border-radius: 9999px; background-color: var(--dm-online); box-shadow: 0 0 0 2px var(--dm-ring);
+  }
+  .dm-stack { position: relative; width: var(--dm-avatar); height: var(--dm-avatar); }
+  .dm-stack > :last-child { position: absolute; right: 0; bottom: 0; box-shadow: 0 0 0 2px var(--dm-bg); }
+}
+
+/* The chat panel: a pinned 68px header, a scrolling thread, a pinned composer, and a
+   details column that overlays the thread rather than squeezing it under 1200px. */
+@layer components {
+  .dm-header {
+    display: flex; flex: none; align-items: center; gap: 12px; height: var(--dm-header-height);
+    padding: 0 16px; border-bottom: 1px solid var(--dm-border); background-color: var(--dm-chat-bg);
+  }
+  .dm-header svg { width: var(--dm-icon); height: var(--dm-icon); stroke-width: var(--dm-icon-stroke); }
+  .dm-header-name { display: block; font-size: 16px; font-weight: 600; color: var(--ui-text); }
+  .dm-header-sub { display: block; font-size: 12px; color: var(--ui-muted); }
+  .dm-header-avatar { position: relative; flex: none; }
+  .dm-icon {
+    display: flex; width: 40px; height: 40px; flex: none; align-items: center; justify-content: center;
+    border-radius: 9999px; color: var(--ui-text); transition: background-color var(--dm-motion) ease;
+  }
+  .dm-icon:hover { background-color: var(--dm-hover); }
+  .dm-back { display: flex; }
+  @media (min-width: 768px) { .dm-back { display: none; } }
+
+  .dm-thread { position: relative; min-height: 0; flex: 1 1 0%; overflow-y: auto; padding: var(--dm-thread-pad-y) var(--dm-thread-pad-x); }
+  .dm-intro { display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 24px 0 20px; text-align: center; }
+  .dm-intro-name { font-size: 16px; font-weight: 600; color: var(--ui-text); }
+  .dm-intro-handle { font-size: 14px; color: var(--ui-muted); }
+  .dm-sep { display: flex; justify-content: center; padding: 12px 0; font-size: 12px; color: var(--ui-muted); }
+
+  .dm-cluster { display: flex; flex-direction: column; }
+  .dm-cluster + .dm-cluster { margin-top: var(--dm-cluster-gap); }
+  .dm-msg { display: flex; align-items: flex-end; gap: 8px; }
+  .dm-msg + .dm-msg { margin-top: var(--dm-group-gap); }
+  .dm-msg-sent { justify-content: flex-end; }
+  .dm-msg-received { justify-content: flex-start; }
+  .dm-msg-avatar { width: var(--dm-avatar-thread); flex: none; }
+  .dm-msg-sender { margin-bottom: 2px; font-size: 12px; color: var(--ui-muted); }
+
+  .dm-bubble {
+    position: relative; max-width: 100%; border-radius: var(--dm-bubble-radius);
+    padding: var(--dm-bubble-pad-y) var(--dm-bubble-pad-x); font-size: 14px; line-height: 18px;
+    overflow-wrap: anywhere; word-break: break-word; white-space: pre-wrap;
+  }
+  .dm-msg-received .dm-bubble { background-color: var(--dm-received); color: var(--ui-text); }
+  .dm-msg-sent .dm-bubble {
+    background-color: var(--ui-brand-1);
+    background-image: linear-gradient(120deg, var(--dm-sent-from), var(--dm-sent-to));
+    background-attachment: fixed; color: #fff;
+  }
+  .dm-msg-sent .dm-bubble[data-adj-top='true'] { border-top-right-radius: var(--dm-bubble-radius-tight); }
+  .dm-msg-sent .dm-bubble[data-adj-bottom='true'] { border-bottom-right-radius: var(--dm-bubble-radius-tight); }
+  .dm-msg-received .dm-bubble[data-adj-top='true'] { border-top-left-radius: var(--dm-bubble-radius-tight); }
+  .dm-msg-received .dm-bubble[data-adj-bottom='true'] { border-bottom-left-radius: var(--dm-bubble-radius-tight); }
+  .dm-bubble-media { max-width: 100%; border-radius: 18px; overflow: hidden; }
+  .dm-bubble-media img, .dm-bubble-media video { display: block; max-width: 100%; border-radius: 18px; }
+
+  .dm-reaction {
+    position: absolute; bottom: calc(-1 * var(--dm-reaction-overlap)); display: inline-flex;
+    align-items: center; gap: 4px; height: var(--dm-reaction-height); padding: 0 8px; border-radius: 12px;
+    background-color: var(--dm-surface); border: 2px solid var(--dm-chat-bg); font-size: 12px; line-height: 1; color: var(--ui-text);
+  }
+  .dm-msg-received .dm-reaction { left: 12px; }
+  .dm-msg-sent .dm-reaction { right: 12px; }
+
+  .dm-actions { display: flex; align-items: center; gap: 2px; opacity: 0; transition: opacity var(--dm-motion) ease; }
+  .dm-msg:hover .dm-actions, .dm-msg:focus-within .dm-actions { opacity: 1; }
+  .dm-action {
+    display: flex; width: 24px; height: 24px; flex: none; align-items: center; justify-content: center;
+    border-radius: 9999px; color: var(--ui-muted);
+  }
+  .dm-action:hover { color: var(--ui-text); }
+  .dm-action svg { width: var(--dm-action-icon); height: var(--dm-action-icon); }
+
+  .dm-status { display: block; margin-top: 4px; text-align: right; font-size: 12px; color: var(--ui-muted); }
+  .dm-typing { display: inline-flex; align-items: center; gap: 4px; padding: 2px 0; }
+  .dm-typing span { width: 6px; height: 6px; border-radius: 9999px; background-color: var(--ui-muted); animation: dm-typing 1.2s infinite ease-in-out; }
+  .dm-typing span:nth-child(2) { animation-delay: 0.18s; }
+  .dm-typing span:nth-child(3) { animation-delay: 0.36s; }
+  .dm-newpill {
+    position: sticky; bottom: 8px; display: inline-flex; margin: 0 auto; align-items: center; gap: 6px;
+    height: var(--dm-btn-height); padding: 0 12px; border-radius: 9999px; background-color: var(--dm-blue);
+    color: #fff; font-size: 14px; font-weight: 600;
+  }
+}
+
+/* The composer. One pill, pinned; its icons give way to a Send button once there is text. */
+@layer components {
+  .dm-composer { flex: none; padding: var(--dm-thread-pad-x); }
+  .dm-attach { display: flex; flex-wrap: wrap; gap: 8px; padding-bottom: 8px; }
+  .dm-attach-item { position: relative; width: var(--dm-attach); height: var(--dm-attach); border-radius: 8px; overflow: hidden; background-color: var(--dm-surface); }
+  .dm-attach-item img { width: 100%; height: 100%; object-fit: cover; }
+  .dm-attach-remove {
+    position: absolute; top: 2px; right: 2px; display: flex; width: 20px; height: 20px; align-items: center;
+    justify-content: center; border-radius: 9999px; background-color: rgba(0, 0, 0, 0.55); color: #fff;
+  }
+  .dm-attach-remove svg { width: 12px; height: 12px; }
+  .dm-composer-field {
+    display: flex; align-items: flex-end; gap: 4px; min-height: var(--dm-composer-height);
+    padding: 0 8px; border: 1px solid var(--dm-composer-border); border-radius: var(--dm-composer-radius);
+    background-color: transparent;
+  }
+  .dm-composer-field:focus-within { border-color: var(--ui-muted); }
+  .dm-composer textarea {
+    min-width: 0; flex: 1 1 0%; max-height: 124px; resize: none; border: 0; background: transparent;
+    outline: none; padding: 12px 0; font-size: 14px; line-height: 20px; color: var(--ui-text);
+  }
+  .dm-composer textarea::placeholder { color: var(--ui-muted); }
+  .dm-composer-btn {
+    display: flex; width: 36px; height: 36px; flex: none; align-items: center; justify-content: center;
+    border-radius: 9999px; color: var(--ui-text); margin-bottom: 4px;
+  }
+  .dm-composer-btn svg { width: var(--dm-icon); height: var(--dm-icon); stroke-width: var(--dm-icon-stroke); }
+  .dm-composer-send { flex: none; height: 36px; margin-bottom: 4px; padding: 0 8px; font-size: 14px; font-weight: 600; color: var(--dm-blue); }
+  .dm-composer-emoji { display: flex; flex-wrap: wrap; gap: 4px; padding-bottom: 8px; }
+  .dm-composer-emoji button { width: 36px; height: 36px; border-radius: 8px; font-size: 20px; line-height: 1; }
+  .dm-composer-emoji button:hover { background-color: var(--dm-hover); }
+}
+
+
+/* The details column (the Info toggle) and the empty chat. */
+@layer components {
+  .dm-details {
+    display: flex; width: var(--dm-details-width); flex: none; flex-direction: column; min-height: 0;
+    border-left: 1px solid var(--dm-border); background-color: var(--dm-chat-bg);
+  }
+  @media (max-width: 1199px) {
+    .dm-details { position: absolute; inset: 0 0 0 auto; z-index: 20; box-shadow: -8px 0 24px rgba(0, 0, 0, 0.35); }
+  }
+  .dm-details-head { display: flex; flex: none; align-items: center; gap: 12px; height: var(--dm-header-height); padding: 0 16px; border-bottom: 1px solid var(--dm-border); }
+  .dm-details-body { min-height: 0; flex: 1 1 0%; overflow-y: auto; padding: 16px; }
+  .dm-details-label { display: block; margin-bottom: 8px; font-size: 14px; font-weight: 600; color: var(--ui-text); }
+  .dm-media-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px; }
+  .dm-media-grid button { display: block; overflow: hidden; border-radius: 4px; }
+  .dm-media-grid img, .dm-media-grid video { width: 100%; aspect-ratio: 1; object-fit: cover; background-color: var(--dm-surface); }
+  .dm-file-row { display: flex; width: 100%; align-items: center; gap: 10px; padding: 8px 0; text-align: left; }
+  .dm-file-row svg { width: 20px; height: 20px; flex: none; color: var(--ui-muted); }
+  .dm-member-row { display: flex; align-items: center; gap: 10px; padding: 6px 0; }
+
+  .dm-empty { display: flex; flex: 1 1 0%; flex-direction: column; align-items: center; justify-content: center; gap: 16px; padding: 24px; text-align: center; }
+  .dm-empty-icon { display: flex; width: var(--dm-avatar-intro); height: var(--dm-avatar-intro); align-items: center; justify-content: center; border: 2px solid var(--ui-text); border-radius: 9999px; color: var(--ui-text); }
+  .dm-empty-icon svg { width: 48px; height: 48px; stroke-width: 1.5; }
+  .dm-empty-title { font-size: 20px; font-weight: 400; color: var(--ui-text); }
+  .dm-empty-text { max-width: 320px; font-size: 14px; color: var(--ui-muted); }
+  .dm-primary {
+    display: inline-flex; align-items: center; justify-content: center; height: var(--dm-btn-height);
+    padding: 0 16px; border-radius: 8px; background-color: var(--dm-blue); color: #fff; font-size: 14px; font-weight: 600;
+  }
+  .dm-primary:disabled { cursor: not-allowed; opacity: 0.4; }
+  .dm-secondary {
+    display: inline-flex; align-items: center; justify-content: center; height: var(--dm-btn-height);
+    padding: 0 16px; border-radius: 8px; background-color: var(--dm-btn); color: var(--ui-text); font-size: 14px; font-weight: 600;
+  }
+}
+
+/* A message's bubble and the hover controls that hang off the side facing the thread's
+   center. The controls are out of flow, so a hover never re-widens the bubble. */
+@layer components {
+  .dm-bubble-wrap { display: flex; min-width: 0; max-width: var(--dm-bubble-max); flex-direction: column; }
+  .dm-msg-sent .dm-bubble-wrap { align-items: flex-end; }
+  .dm-msg-received .dm-bubble-wrap { align-items: flex-start; }
+  .dm-bubble .dm-actions { position: absolute; bottom: 0; }
+  .dm-msg-received .dm-actions { right: auto; left: calc(100% + 8px); }
+  .dm-msg-sent .dm-actions { left: auto; right: calc(100% + 8px); }
+  .dm-bubble[data-flush='true'] { padding: 0; }
+  .dm-msg-sent .dm-bubble[data-flush='true'] { background-color: transparent; background-image: none; }
+
+  .dm-menu {
+    position: absolute; z-index: 30; top: calc(100% + 6px); min-width: 168px; padding: 4px;
+    border: 1px solid var(--dm-border); border-radius: 12px; background-color: var(--ui-popover);
+    box-shadow: 0 12px 32px rgba(0, 0, 0, 0.35);
+  }
+  .dm-msg-sent .dm-menu { right: 0; left: auto; }
+  .dm-msg-received .dm-menu { left: 0; right: auto; }
+
+  .dm-reply { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; padding: 8px 12px; border-radius: 12px; background-color: var(--dm-surface); font-size: 12px; color: var(--ui-muted); }
+  .dm-reply-text { min-width: 0; flex: 1 1 0%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .dm-reply svg { width: 16px; height: 16px; flex: none; }
+}
+
+@media (min-width: 768px) and (max-width: 999px) {
+  .dm-list-head { justify-content: center; }
+}
+
+/* The new-message modal, and the one keyframe the DM surface animates. */
+@layer components {
+  .dm-modal { position: fixed; inset: 0; z-index: 50; display: flex; align-items: center; justify-content: center; padding: 16px; background-color: var(--dm-scrim); }
+  .dm-modal-card {
+    display: flex; width: 548px; max-width: 100%; max-height: 90dvh; flex-direction: column; overflow: hidden;
+    border: 1px solid var(--dm-border); border-radius: 12px; background-color: var(--ui-card);
+  }
+  .dm-modal-head { position: relative; display: flex; flex: none; align-items: center; justify-content: center; height: 44px; border-bottom: 1px solid var(--dm-border); font-size: 16px; font-weight: 600; color: var(--ui-text); }
+  .dm-modal-head .dm-icon { position: absolute; right: 4px; }
+  .dm-modal-to { display: flex; flex: none; align-items: center; gap: 8px; padding: 8px 16px; border-bottom: 1px solid var(--dm-border); }
+  .dm-modal-to input { min-width: 0; flex: 1 1 0%; border: 0; background: transparent; outline: none; font-size: 14px; color: var(--ui-text); }
+  .dm-modal-to input::placeholder { color: var(--ui-muted); }
+  .dm-modal-list { min-height: 0; flex: 1 1 0%; overflow-y: auto; padding: 8px 0; }
+  .dm-modal-row { display: flex; width: 100%; align-items: center; gap: 12px; padding: 8px 16px; text-align: left; transition: background-color var(--dm-motion) ease; }
+  .dm-modal-row:hover { background-color: var(--dm-hover); }
+  .dm-modal-name { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 14px; color: var(--ui-text); }
+  .dm-modal-handle { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 14px; color: var(--ui-muted); }
+  .dm-radio { display: flex; width: 20px; height: 20px; flex: none; align-items: center; justify-content: center; border: 1px solid var(--ui-muted); border-radius: 9999px; }
+  .dm-modal-row[aria-checked='true'] .dm-radio { border-color: var(--ui-text); }
+  .dm-modal-row[aria-checked='true'] .dm-radio::after { content: ''; width: 10px; height: 10px; border-radius: 9999px; background-color: var(--ui-text); }
+  .dm-modal-foot { flex: none; padding: 12px 16px; border-top: 1px solid var(--dm-border); }
+  .dm-modal-foot .dm-primary { width: 100%; }
+}
+
+@keyframes dm-typing {
+  0%, 60%, 100% { opacity: 0.35; }
+  30% { opacity: 1; }
+}
+
+/* Reduced motion: the typing dots hold still, and every DM hover/transition is instant. */
+@media (prefers-reduced-motion: reduce) {
+  .dm-typing span { animation: none; opacity: 0.6; }
+  .dm-row, .dm-tab, .dm-icon, .dm-actions, .dm-search, .dm-modal-row, .dm-composer-field { transition-duration: 0.01ms !important; }
+}
+
+/* Deliberately outside `@layer components`: the shell hides the phone's tab bar while a chat
+   is open, so `main`'s reserved strip is reclaimed here too — otherwise the page would be 56px
+   taller than the viewport and scroll. An unlayered rule outranks the Tailwind utility that set
+   the padding, which a layered one could not. */
+@media (max-width: 767px) {
+  body[data-dm-chat='open'] main { padding-bottom: 0; }
+  body[data-dm-chat='open'] nav[aria-label='Primary'] { display: none; }
+}
 
 /* ---------------------------------------------------------------------------
    Left rail layout. The rail is fixed, so every state is pure CSS and nothing

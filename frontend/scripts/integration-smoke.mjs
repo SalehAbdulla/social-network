@@ -532,7 +532,7 @@ try {
   await navigate(alex, '/messages');
   await until(alex, `document.querySelector('aside[aria-label="Conversations"]').innerText.includes('Your conversations will appear here')`, 'empty inbox excludes unrelated users');
   assert.equal((await api(alex, '/messages/users')).length, 0);
-  assert(await evaluate(alex, `!!document.querySelector('a[aria-label="New message"]')`));
+  assert(await evaluate(alex, `!!document.querySelector('button[aria-label="New message"]')`));
   await navigate(alex, `/post/${postId}`);
   await until(alex, `!!document.querySelector('button[aria-label="Like post"]')`, 'other author post');
   assert(!(await evaluate(alex, `!!document.querySelector('a[aria-label="Edit post"]')`)));
@@ -1036,8 +1036,8 @@ try {
 
   await navigate(dummy, `/messages/${originalAlex.userId}`);
   await navigate(alex, `/messages/${originalDummy.userId}`);
-  await until(dummy, `!!document.querySelector('[title="Connected"]')`, 'dummy WebSocket');
-  await until(alex, `!!document.querySelector('[title="Connected"]')`, 'Alex WebSocket');
+  await until(dummy, `!!document.querySelector('[data-connected="true"]')`, 'dummy WebSocket');
+  await until(alex, `!!document.querySelector('[data-connected="true"]')`, 'Alex WebSocket');
   await fill(dummy, 'textarea[aria-label="Message"]', `Browser message ${stamp}`);
   await until(alex, `document.body.innerText.includes('Typing')`, 'live typing', 10000);
   await evaluate(dummy, `document.querySelector('textarea[aria-label="Message"]').focus()`);
@@ -1099,16 +1099,18 @@ try {
   })()`);
   assert(mediaMessage?.mediaUrl, `the media message must be sent: ${JSON.stringify(mediaMessage)}`);
   await navigate(dummy, `/messages/${originalAlex.userId}`);
-  await evaluate(dummy, `[...document.querySelectorAll('nav[aria-label="Conversation tabs"] button')].find(candidate => candidate.textContent === 'Media').click()`);
-  await until(dummy, `!!document.querySelector('button[aria-label="Open attachment 1"]')`, 'the media tab lists the attachment');
+  // The attachments now live in the details panel the header's Info icon opens, rather than
+  // in a tab that replaced the thread.
+  await evaluate(dummy, `document.querySelector('button[aria-label="Conversation details"]').click()`);
+  await until(dummy, `!!document.querySelector('button[aria-label="Open attachment 1"]')`, 'the details panel lists the attachment');
   await evaluate(dummy, `document.querySelector('button[aria-label="Open attachment 1"]').click()`);
   await until(dummy, `!!document.querySelector('[role="dialog"][aria-label="Conversation media viewer"]')`, 'the attachment opens in the lightbox');
   await command('Input.dispatchKeyEvent', { type: 'keyDown', key: 'Escape', code: 'Escape', windowsVirtualKeyCode: 27 }, dummy);
   await until(dummy, `!document.querySelector('[role="dialog"][aria-label="Conversation media viewer"]')`, 'the lightbox closes again');
-  // Back to the thread, because the steps that follow type into the composer and the media
-  // tab does not render one: leaving the conversation on the other tab would break them.
-  await evaluate(dummy, `[...document.querySelectorAll('nav[aria-label="Conversation tabs"] button')].find(candidate => candidate.textContent === 'Chat').click()`);
-  await until(dummy, `!!document.querySelector('textarea[aria-label="Message"]')`, 'the chat tab returns with its composer');
+  // The thread keeps its composer while the details panel is open, so the steps that follow
+  // can type straight away; the panel is closed again to leave the page as it was found.
+  await evaluate(dummy, `document.querySelector('button[aria-label="Close details"]').click()`);
+  await until(dummy, `!!document.querySelector('textarea[aria-label="Message"]')`, 'the thread keeps its composer');
   console.log('PASS: a conversation lists its attachments, and one opens in the app rather than a new tab');
 
   // Fifty sockets through the frontend proxy at once, with one message that every
