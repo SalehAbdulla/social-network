@@ -156,8 +156,49 @@ function CommentSheet({ onClose, children }: { onClose: () => void; children: Re
     </div>
   </>;
 }
-export default function PostCard({ post, fetchPosts, onPostRemoved, onUnsaved, onOpen, onClose, variant = 'card', onNestedDialogChange }: {
+/**
+ * The card is the feed's, and the feed is the only surface it knows: a post row with a privacy
+ * icon, a score to like, a bookmark to keep and a permalink to share.
+ *
+ * `context="group"` says the card is being drawn for a group post, which is stored as a group
+ * content row rather than a post. It is drawn exactly as a feed post is — the same rounded media
+ * grid and square crop — because the group's one file travels as the post's own `imageUrls`. Only
+ * the things the backend really separates differ: the audience mark reads "Group", the thread is
+ * the group's own component rather than the feed's paged one, the like writes the `group_post`
+ * target type, and the bookmark is not drawn at all, since a group post is not in the saved list.
+ */
+export type PostContext = 'feed' | 'group';
+
+/**
+ * The card's props. Exported so a surface that draws the card inside the overlay — a group's Posts
+ * tab — can hand the card its own props through `PostOverlay`.
+ */
+export type PostCardProps = {
   post: Post;
+  /** Which surface this card is drawn for. `feed` is the default and the only other option. */
+  context?: PostContext;
+  /** Group only: the thread, drawn where the feed's own `Comments` would be. */
+  comments?: ReactNode;
+  /** The count on the comment button, when the thread is not the feed's own paged one. */
+  commentCount?: number;
+  /** The rows of the card's "…" menu, when they are not the feed's Edit and Delete. */
+  menuItems?: ReactNode;
+  /** Whether this reader may edit or delete the post, which is not author-only in a group. */
+  canManage?: boolean;
+  /**
+   * Resolves a user's avatar URL from data the caller already holds, for a surface whose rows
+   * carry none. The feed has no avatar on a post row either, so the card falls back to the
+   * signed-in reader's own photo for their own posts; everyone else keeps their initials.
+   */
+  avatarOf?: (userId: string) => string;
+  /**
+   * The path Share copies, when the post's own address is not the feed's `/post/{id}`. A group
+   * post lives inside its group, so the caller hands over the tab link that opens back onto it;
+   * the origin is added when the button is pressed, since it only exists in the browser.
+   */
+  sharePath?: string;
+  /** Flash this card once, for the post a share link named. */
+  highlight?: boolean;
   /** Refetch fallback for surfaces that are not list-backed, such as the single post page. */
   fetchPosts?: () => void;
   /** Preferred: drop the deleted row in place so a long list does not jump. */
@@ -179,12 +220,17 @@ export default function PostCard({ post, fetchPosts, onPostRemoved, onUnsaved, o
    * overlay above it stands down its Escape handling and the innermost thing closes first.
    */
   onNestedDialogChange?: (open: boolean) => void;
-}) {
+};
+
+export default function PostCard({ post, context = 'feed', comments, commentCount, menuItems, canManage, avatarOf, sharePath, highlight = false, fetchPosts, onPostRemoved, onUnsaved, onOpen, onClose, variant = 'card', onNestedDialogChange }: PostCardProps) {
   const { user } = useBackend();
   // Two facts decide every branch below: whether this card is the feed's (so it opens the overlay)
   // and whether it is drawn inside the overlay itself.
   const inFeed = !!onOpen;
   const asOverlay = variant === 'overlay';
+  // The one surface the card is not the feed for. It changes four things and nothing else — see
+  // the props above — so a group post and a feed post are drawn by this same code path.
+  const group = context === 'group';
   const hasMedia = !!post.imageUrls?.length;
   // A wide screen keeps the comment list inline and open, as it always was; a phone gets
   // it as a bottom drawer that stays shut until the reader asks for it. `null` is "follow
@@ -192,9 +238,9 @@ export default function PostCard({ post, fetchPosts, onPostRemoved, onUnsaved, o
   // reader who has already opened or closed the list — once they have, their choice wins.
   const wide = useMediaQuery('(min-width: 1024px)');
   const [commentsOpen, setCommentsOpen] = useState<boolean | null>(null);
-  // The overlay already shows the thread, so its action row reports "expanded". The feed's card
-  // never shows the thread inline — the overlay holds it — while the post page and the phone keep
-  // the `null`-means-follow-the-viewport rule this line has always had.
+  // The overlay already shows the thread, so its action row reports "expanded". A card that opens
+  // the overlay — the feed's and the group's Posts tab alike — never shows the thread inline; the
+  // overlay holds it. The post page and a phone keep the `null`-means-follow-the-viewport rule.
   const commentsVisible = asOverlay || (commentsOpen ?? (wide && !inFeed));
   const [reaction, setReaction] = useState<{ score: number; userScore: number } | null>(null);
   // Comments mutate their own list, so the counter tracks the server value plus
@@ -237,17 +283,19 @@ export default function PostCard({ post, fetchPosts, onPostRemoved, onUnsaved, o
   // double-tap (like) instead of arming the lightbox a second time.
   const lastTap = useRef<{ position: number; at: number; timer: ReturnType<typeof setTimeout> | null }>({ position: -1, at: 0, timer: null });
   const vote = reaction || post;
-  const commentCount = Math.max(0, post.commentsCounter + commentDelta);
+  const shownComments = group ? commentCount ?? 0 : Math.max(0, post.commentsCounter + commentDelta);
   async function react(score: number) {
     if (busy) return;
     setBusy(true);
     // Optimistic like the comment arrows: the vote moves now, the server's total
-    // replaces the estimate when it answers, and a failure puts it back.
+    // replaces the estimate when it answers, and a failure puts it back. A group post is its
+    // own target type — `groupContent`, not `post` — and the two are validated separately on
+    // the server, so the same press writes to whichever table the card is drawn from.
     const previous = { score: vote.score, userScore: vote.userScore };
     const userScore = vote.userScore === score ? 0 : score;
     setReaction({ score: vote.score + (userScore - vote.userScore), userScore });
     try {
-      const result = await request<{ totalScore: number }>('/reactions', 'POST', { entityType: 'post', entityId: post.postId, score });
+      const result = await request<{ totalScore: number }>('/reactions', 'POST', { entityType: group ? 'group_post' : 'post', entityId: post.postId, score });
       setReaction({ score: result.totalScore, userScore });
     } catch (error) {
       setReaction(previous);
@@ -306,25 +354,45 @@ export default function PostCard({ post, fetchPosts, onPostRemoved, onUnsaved, o
       if (onPostRemoved) onPostRemoved(post.postId); else fetchPosts?.();
     } catch (error) { toast.error(errorMessage(error)); } finally { setBusy(false); }
   }
-  const authorLink = <Link href={`/profile/${post.userId}`} className="flex items-center gap-2.5"><Avatar name={displayName(post)} size={POST_AVATAR_SIZE} /><div className="leading-4"><p className="text-[length:var(--post-name-size)] font-semibold">{displayName(post)}</p><p className="text-[length:var(--post-meta-size)] text-muted">@{post.nickname}<span aria-hidden="true"> · </span><time dateTime={isoTimestamp(post.createdAt)} title={dateLabel(post.createdAt)}>{relativeLabel(post.createdAt)}</time><span aria-hidden="true"> · </span><AudienceIcon privacy={post.privacy} /></p></div></Link>;
+  // `location` is read when the button is pressed, never while rendering: the card is
+  // server-rendered too, and the address only exists in the browser. A group post has no
+  // `/post/{id}` row behind it, so the caller hands over the group's own link instead; both
+  // go through this one path, which is what keeps the toast and the clipboard call the same.
+  async function share() {
+    const link = `${location.origin}${sharePath ?? `/post/${post.postId}`}`;
+    try { await navigator.clipboard.writeText(link); toast.success('Post link copied'); }
+    catch { toast.error('Could not copy the link'); }
+  }
+  // The header's avatar, resolved the one way the app resolves one everywhere: a URL when the
+  // surface can supply it, the signed-in reader's own photo for their own post (a feed row carries
+  // no avatar of its own), and the shared `Avatar`'s initials only when both are empty.
+  const avatarUrl = avatarOf?.(post.userId) || (post.userId === user.userId ? user.avatar : '');
+  const authorLink = <Link href={`/profile/${post.userId}`} className="flex items-center gap-2.5"><Avatar name={displayName(post)} avatarUrl={avatarUrl} size={POST_AVATAR_SIZE} /><div className="leading-4"><p className="text-[length:var(--post-name-size)] font-semibold" dir="auto">{displayName(post)}</p><p className="text-[length:var(--post-meta-size)] text-muted">@{post.nickname}<span aria-hidden="true"> · </span><time dateTime={isoTimestamp(post.createdAt)} title={dateLabel(post.createdAt)}>{relativeLabel(post.createdAt)}</time><span aria-hidden="true"> · </span><AudienceIcon privacy={post.privacy} context={context} /></p></div></Link>;
   // Instagram's control here is one "…" that opens Edit and Delete, rather than two icons sitting in
   // the header: a single target, and the destructive one behind a second deliberate click. It is the
   // app's shared menu (`PopoverMenu`), hung under the button's own right edge. `size-8` gives it the
   // 32px hit area the icons it replaced had, and `-mr-[var(--post-menu-overhang)]` hangs that box past
   // the card's edge so the glyph itself lines up with the media's right edge.
-  const ownerControls = post.userId === user.userId && <>
+  const ownerControls = (group ? !!canManage : post.userId === user.userId) && <>
     <button ref={optionsTriggerRef} type="button" aria-label="Post options" aria-haspopup="menu" aria-expanded={!!optionsRect} onClick={event => { const rect = event.currentTarget.getBoundingClientRect(); setOptionsRect(open => open ? null : rect); }} className={`flex size-8 items-center justify-center rounded-full text-muted transition hover:bg-surface-2 ${optionsRect ? 'bg-surface-2' : ''} -mr-[var(--post-menu-overhang)]`}>
       <MoreHorizontal className="size-[var(--post-header-icon)]" aria-hidden="true" />
     </button>
     {optionsRect && <MenuPanel menuRef={optionsRef} rect={optionsRect} width="var(--post-menu-width)" placement="below" label="Post options">
-      <Link href={`/post/${post.postId}/edit`} role="menuitem" onClick={() => setOptionsRect(null)} className={menuRowClass}><Pencil size={20} aria-hidden="true" />Edit</Link>
-      <MenuItem danger onClick={() => { setOptionsRect(null); void remove(); }} disabled={busy}><Trash2 size={20} aria-hidden="true" />Delete</MenuItem>
+      {/* A row's own press closes the menu, so a surface's rows need no callback to dismiss it. */}
+      {group ? <div onClick={() => setOptionsRect(null)}>{menuItems}</div> : <>
+        <Link href={`/post/${post.postId}/edit`} role="menuitem" onClick={() => setOptionsRect(null)} className={menuRowClass}><Pencil size={20} aria-hidden="true" />Edit</Link>
+        <MenuItem danger onClick={() => { setOptionsRect(null); void remove(); }} disabled={busy}><Trash2 size={20} aria-hidden="true" />Delete</MenuItem>
+      </>}
     </MenuPanel>}
   </>;
   // The description alone, now that the audience is an icon in the header's second line: the grey
   // chip under this text said the same thing twice, and the header states it once. Its 4px gap is its
   // own margin, because the media below it wants 8 and the action row wants none.
-  const caption = <p className={`whitespace-pre-wrap break-words text-[length:var(--post-description-size)] leading-[var(--post-description-leading)] text-text ${asOverlay ? '' : 'mt-[var(--post-space-header)]'}`}>{linkify(post.content)}</p>;
+  const caption = <p dir="auto" className={`whitespace-pre-wrap [overflow-wrap:anywhere] text-[length:var(--post-description-size)] leading-[var(--post-description-leading)] text-text ${asOverlay ? '' : 'mt-[var(--post-space-header)]'}`}>{linkify(post.content)}</p>;
+  // One grid for both surfaces: the feed's post and a group post draw the same rounded container,
+  // the same square crop and the same `--post-space-media` gap above it, because a group post's one
+  // file now travels as the post's own `imageUrls`. The overlay draws the file uncropped instead, to
+  // fit the column it shares with the thread.
   const mediaGrid = (overlay: boolean) => hasMedia && <div className={overlay ? `grid w-full gap-1 ${post.imageUrls.length > 1 ? 'grid-cols-2' : 'grid-cols-1'}` : `mt-[var(--post-space-media)] grid gap-1 overflow-hidden rounded-[var(--post-media-radius)] ${post.imageUrls.length > 1 ? 'grid-cols-2' : ''}`}>{post.imageUrls.map((url, position) => <button key={url} type="button" aria-label={`Open image ${position + 1} of ${post.imageUrls.length}`} onClick={(event) => handleMediaTap(position, event.timeStamp)} className="relative block w-full cursor-zoom-in touch-manipulation"><img {...mediaImageProps(url, post.imageUrls.length > 1 ? '(max-width: 640px) 50vw, 320px' : '(max-width: 768px) 100vw, 640px')} alt="Post attachment" className={overlay ? 'max-h-[92vh] w-full object-contain' : 'aspect-square w-full bg-card-2 object-cover'} />{burst?.position === position && <span key={burst.id} aria-hidden="true" onAnimationEnd={() => setBurst(null)} className="heart-burst text-red-500"><Heart size={80} fill="currentColor" strokeWidth={0} /></span>}</button>)}</div>;
   // The row's icons are sized and stroked by the `.post-actions svg` rule from the `--post-action-*`
   // tokens, so not one of them carries a `size` prop and the four cannot drift apart. Each button is
@@ -332,7 +400,36 @@ export default function PostCard({ post, fetchPosts, onPostRemoved, onUnsaved, o
   // negative margin: that is what puts the first icon on the media's left edge and the bookmark's on
   // its right, which is the alignment the row is read by. The overlay wants neither, since it has the
   // panel's own padding around the row.
-  const actionRow = <div className={`post-actions flex items-center gap-[var(--post-action-gap)] py-[var(--post-action-padding)] text-text ${asOverlay ? '' : '-mx-[var(--post-action-hit)] mt-[var(--post-space-actions)]'}`}><button disabled={busy} aria-label={vote.userScore === 1 ? 'Unlike post' : 'Like post'} aria-pressed={vote.userScore === 1} onClick={() => void react(1)} className={`flex items-center gap-[var(--post-action-count-gap)] rounded-full p-[var(--post-action-hit)] transition hover:opacity-60 ${vote.userScore === 1 ? 'text-danger' : ''}`}><Heart fill={vote.userScore === 1 ? 'currentColor' : 'none'} /><span className="text-[length:var(--post-count-size)] font-semibold">{vote.score}</span></button><button aria-expanded={commentsVisible} aria-label={commentsVisible ? 'Hide comments' : 'Show comments'} onClick={() => { if (inFeed && wide) onOpen?.(); else setCommentsOpen(!commentsVisible); }} className="flex items-center gap-[var(--post-action-count-gap)] rounded-full p-[var(--post-action-hit)] transition hover:opacity-60"><MessageCircle /><span className="text-[length:var(--post-count-size)] font-semibold">{commentCount}</span></button><button aria-label="Share post" className="rounded-full p-[var(--post-action-hit)] transition hover:opacity-60" onClick={async () => { try { await navigator.clipboard.writeText(`${location.origin}/post/${post.postId}`); toast.success('Post link copied'); } catch { toast.error('Could not copy the link'); } }}><Share2 /></button><button disabled={busy} aria-label={saved ? 'Remove from saved' : 'Save post'} aria-pressed={saved} title={saved ? 'Remove from saved' : 'Save post'} onClick={() => void toggleSave()} className={`ml-auto rounded-full p-[var(--post-action-hit)] transition hover:opacity-60 ${saved ? 'text-brand-1' : ''}`}><Bookmark fill={saved ? 'currentColor' : 'none'} /></button></div>;
+  //
+  // Like and Share are the same two controls on both surfaces. The like writes to whichever target
+  // the card was drawn from — `react` picks it — and Share copies `sharePath` when there is one.
+  // The bookmark is the one the group does not have: the saved list is built from the `post`
+  // table and would need a second, polymorphic list to hold a group post, so rather than park a
+  // permanently disabled icon in the row the button is simply not drawn for a group. The comment
+  // button writes through the group's own thread either way.
+  const actionRow = <div className={`post-actions flex items-center gap-[var(--post-action-gap)] py-[var(--post-action-padding)] text-text ${asOverlay ? '' : '-mx-[var(--post-action-hit)] mt-[var(--post-space-actions)]'}`}>
+    <button
+      disabled={busy}
+      aria-label={vote.userScore === 1 ? 'Unlike post' : 'Like post'}
+      aria-pressed={vote.userScore === 1}
+      onClick={() => void react(1)}
+      className={`flex items-center gap-[var(--post-action-count-gap)] rounded-full p-[var(--post-action-hit)] transition hover:opacity-60 ${vote.userScore === 1 ? 'text-danger' : ''}`}
+    ><Heart fill={vote.userScore === 1 ? 'currentColor' : 'none'} /><span className="text-[length:var(--post-count-size)] font-semibold">{vote.score}</span></button>
+    <button aria-expanded={commentsVisible} aria-label={commentsVisible ? 'Hide comments' : 'Show comments'} onClick={() => { if (inFeed && wide) onOpen?.(); else setCommentsOpen(!commentsVisible); }} className="flex items-center gap-[var(--post-action-count-gap)] rounded-full p-[var(--post-action-hit)] transition hover:opacity-60"><MessageCircle /><span className="text-[length:var(--post-count-size)] font-semibold">{shownComments}</span></button>
+    <button
+      aria-label="Share post"
+      className="rounded-full p-[var(--post-action-hit)] transition hover:opacity-60"
+      onClick={() => void share()}
+    ><Share2 /></button>
+    {!group && <button
+      disabled={busy}
+      aria-label={saved ? 'Remove from saved' : 'Save post'}
+      aria-pressed={saved}
+      title={saved ? 'Remove from saved' : 'Save post'}
+      onClick={() => void toggleSave()}
+      className={`ml-auto rounded-full p-[var(--post-action-hit)] transition hover:opacity-60 ${saved ? 'text-brand-1' : ''}`}
+    ><Bookmark fill={saved ? 'currentColor' : 'none'} /></button>}
+  </div>;
 
   // The feed's pop-up: the media on the left, and on the right the header, the caption, the post's
   // own action row (the same controls the card draws, so a like or a save has one implementation)
@@ -342,11 +439,11 @@ export default function PostCard({ post, fetchPosts, onPostRemoved, onUnsaved, o
     <div className="flex min-h-0 flex-1 flex-col">
       <div className="flex items-center gap-3 border-b border-border p-4">{authorLink}<div className="ml-auto flex items-center gap-1">{ownerControls}<button type="button" aria-label="Close post" onClick={onClose} className="flex size-9 items-center justify-center rounded-full text-muted transition hover:bg-surface-2"><X size={20} /></button></div></div>
       <div className="space-y-3 border-b border-border p-4">{caption}{actionRow}</div>
-      <Comments post={post} onCountChange={bumpComments} variant="panel" onViewerChange={setCommentViewerOpen} />
+      {group ? comments : <Comments post={post} onCountChange={bumpComments} variant="panel" onViewerChange={setCommentViewerOpen} />}
     </div>
   </div>;
 
-  return <article data-post-id={post.postId} className="border-b border-border pb-[var(--post-bottom)]">
+  return <article data-post-id={post.postId} data-highlight={highlight ? 'true' : undefined} className="border-b border-border pb-[var(--post-bottom)]">
     <div className="flex items-center justify-between py-[var(--post-header-padding)]">{authorLink}{ownerControls}</div>
     {/* The description sits `--post-space-header` under the header and `--post-space-media` above the
         media, so the post reads as a caption for what follows. The audience is not repeated here: it
@@ -354,9 +451,14 @@ export default function PostCard({ post, fetchPosts, onPostRemoved, onUnsaved, o
     {caption}
     {mediaGrid(false)}
     {actionRow}
-    {commentsVisible && (wide
-      ? <div className="mt-[var(--post-space-media)]"><Comments post={post} onCountChange={bumpComments} /></div>
-      : <CommentSheet onClose={closeComments}><Comments post={post} onCountChange={bumpComments} /></CommentSheet>)}
+    {/* A group's thread is its own component, drawn inline when the reader opens it (the card
+        otherwise hands that job to the overlay, as the feed's does). The feed's phone layout uses
+        a drawer; the group keeps its thread inline, since it is what the tab is for. */}
+    {commentsVisible && (group
+      ? <div className="mt-[var(--post-space-media)]">{comments}</div>
+      : wide
+        ? <div className="mt-[var(--post-space-media)]"><Comments post={post} onCountChange={bumpComments} /></div>
+        : <CommentSheet onClose={closeComments}><Comments post={post} onCountChange={bumpComments} /></CommentSheet>)}
     {viewer !== null && <Lightbox images={post.imageUrls} startIndex={viewer} label="Post photos" onClose={() => setViewer(null)} />}
   </article>;
 }
