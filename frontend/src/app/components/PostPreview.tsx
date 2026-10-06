@@ -8,7 +8,6 @@ import Avatar from './Avatar';
 
 interface PostPreviewProps {
   user: SocialUser;
-  title: string;
   content: string;
   privacy: Post['privacy'];
   /** Display URLs: the post's own media when editing, plus blob URLs for files just picked. */
@@ -25,8 +24,7 @@ interface PostPreviewProps {
  * card part is deliberately not interactive: a draft has no `postId`, so there are
  * no links, vote arrows or edit/delete buttons to hang off it.
  */
-export default function PostPreview({ user, title, content, privacy, imageUrls, createdAt, selectedNames = [] }: PostPreviewProps) {
-  const trimmedTitle = title.trim();
+export default function PostPreview({ user, content, privacy, imageUrls, createdAt, selectedNames = [] }: PostPreviewProps) {
   const trimmedContent = content.trim();
   // Who the post will actually reach. It sits above the card rather than inside it,
   // because the article below is meant to be the draft exactly as `PostCard` draws it
@@ -55,10 +53,7 @@ export default function PostPreview({ user, title, content, privacy, imageUrls, 
           </p>
         </div>
       </div>
-      {trimmedTitle && <p className="text-lg font-semibold">{trimmedTitle}</p>}
-      <p className="whitespace-pre-wrap break-words text-text">
-        {trimmedContent ? linkify(trimmedContent) : <span className="text-muted">Your post will appear here…</span>}
-      </p>
+      {trimmedContent ? <p className="whitespace-pre-wrap break-words text-text">{linkify(trimmedContent)}</p> : <p className="text-muted">Your post will appear here…</p>}
       <span className="inline-block rounded-full bg-surface-2 px-2.5 py-1 text-xs font-medium text-muted">{PRIVACY_LABEL[privacy]}</span>
       {imageUrls.length > 0 && (
         <div className={`grid gap-2 ${imageUrls.length > 1 ? 'grid-cols-2' : ''}`}>
