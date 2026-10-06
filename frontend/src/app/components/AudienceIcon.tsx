@@ -20,6 +20,10 @@ const AUDIENCE_ICON: Record<Post['privacy'], LucideIcon> = {
 /**
  * A post's audience, as an icon: no pill, no background, no border, only the muted mark itself.
  *
+ * `context` names the surface when the post is not a feed post: a group post is visible to the
+ * whole group, so it carries the `Users` mark titled "Group" rather than the privacy globe, and
+ * the two share one implementation so the size and the alignment cannot drift apart.
+ *
  * The size is the `--post-audience-icon` token rather than a `size` prop, so the one number lives
  * with the rest of the interface measurements. `inline-block` is needed because Tailwind's
  * preflight makes every `svg` a block, which would drop this onto a line of its own inside the
@@ -34,9 +38,9 @@ const AUDIENCE_ICON: Record<Post['privacy'], LucideIcon> = {
  * titles itself with the child element — so the attribute is spread in from a widened object
  * rather than written inline.
  */
-export default function AudienceIcon({ privacy }: { privacy: Post['privacy'] }) {
-  const Icon = AUDIENCE_ICON[privacy];
-  const label = PRIVACY_LABEL[privacy];
+export default function AudienceIcon({ privacy, context }: { privacy: Post['privacy']; context?: 'feed' | 'group' }) {
+  const label = context === 'group' ? 'Group' : PRIVACY_LABEL[privacy];
+  const Icon = context === 'group' ? Users : AUDIENCE_ICON[privacy];
   const titleAttribute: LucideProps & { title: string } = { title: label };
   return <Icon role="img" aria-label={label} {...titleAttribute} className="inline-block size-[var(--post-audience-icon)] shrink-0 align-middle text-muted"><title>{label}</title></Icon>;
 }
