@@ -3048,6 +3048,22 @@ would need `justify-center` on every entry to keep those icons centred. Checked 
 horizontally — the shell's main column is `min-w-0 flex-1`, so the extra rail width comes out of the
 feed's slack rather than off the page.
 
+Changed in the centring session (2026-10-06), for review: `frontend/src/app/components/SideBar.tsx`,
+`frontend/src/app/components/BackendProvider.tsx`, `frontend/src/app/page.tsx`. Two complaints, one
+cause: the rail sat *in* the layout flow (`sticky` inside the shell's flex row), so it both pushed the
+feed off-centre and moved it whenever the toggle changed its width. The rail is now `fixed` — out of
+flow — and the shell's main column reserves a constant gutter (`lg:pl-72`, the rail's own 18rem) that
+the toggle cannot change; the feed page adds the rest (`xl:pl-16`), so from `xl` the posts themselves
+sit in the middle of the window: the suggestions rail and the grid gap take 20rem + 2rem off the
+right of the post column, and 18rem (shell) + 4rem (page) balances exactly that on the left. Measured
+at 1920, 1440 and 1280 px, the post card's centre is the window's centre to the pixel (delta 0: card
+656–1264 at 1920, 416–1024 at 1440) and collapsing the rail moves it **0 px**. Below `xl` there is
+nothing on the right to balance a 288 px rail, so the feed keeps its full width (736 px at 1024) and
+stays 144 px right of centre — exactly where it already was, since making that case exact would cost
+the posts the rail's 288 px. No other page moves: `/profile`'s block is still at its previous +144.
+Checked at 320, 375, 768, 1024, 1280, 1440 and 1920 px with the rail open and collapsed: the document
+never scrolls horizontally, and the browser suite passes 52/52.
+
 ## Definition of done
 
 A task is complete when: the code builds (`go build ./...`, `npm run build`), tests pass
