@@ -53,8 +53,8 @@ export default function ComponentGallery() {
 
     <Section title="Unread badges" note="The bell is everything but private messages; the Messages entry is only those.">
       <div className="flex flex-wrap items-center gap-3">
-        <span aria-label="3 unread notifications" className="rounded-full bg-red-600 px-1.5 text-xs text-white">3</span>
-        <span aria-label="2 unread messages" className="flex items-center gap-1 rounded-full bg-teal-700 px-1.5 text-xs text-white"><MessageSquare size={11} aria-hidden="true" />2</span>
+        <span aria-label="3 unread notifications" className="rounded-lg bg-red-600 px-1.5 text-xs text-white">3</span>
+        <span aria-label="2 unread messages" className="flex items-center gap-1 rounded-lg bg-teal-700 px-1.5 text-xs text-white"><MessageSquare size={11} aria-hidden="true" />2</span>
       </div>
     </Section>
 
