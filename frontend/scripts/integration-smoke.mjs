@@ -602,7 +602,7 @@ try {
   // half is asserted too so the frame's contract cannot drift in silence.
   await navigate(dummy, '/');
   await navigate(alex, '/');
-  await until(alex, `document.body.innerText.includes('Your feed')`, 'the second account is on the feed');
+  await until(alex, `!!document.querySelector('[aria-label="Your account"]')`, 'the second account is on the feed');
   const socketPosts = [];
   for (let attempt = 0; attempt < 5; attempt++) {
     const posted = await api(alex, '/posts', 'POST', { title: `Socket ${stamp}`, content: `Socket post ${stamp}`, imageUrls: [], privacy: 'public', selectedFollowerIds: [] });
@@ -731,7 +731,7 @@ try {
   console.log('PASS: second user comments and the post owner receives a notification');
 
   await navigate(alex, '/discover');
-  await until(alex, `document.querySelector('h1')?.textContent === 'Discover People' && document.querySelector('main').innerText.includes('@dummyuser')`, 'discover users');
+  await until(alex, `!!document.querySelector('input[aria-label="Search people"]') && document.querySelector('main').innerText.includes('@dummyuser')`, 'discover users');
   await navigate(dummy, '/profile');
   await until(dummy, `!!document.querySelector('[aria-label="Profile statistics"] button')`, 'own profile statistics');
   await evaluate(dummy, `[...document.querySelectorAll('[aria-label="Profile statistics"] button')].find(button => button.textContent.includes('followers')).click()`);
@@ -1012,9 +1012,10 @@ try {
   await evaluate(dummy, `document.querySelector('button[aria-label="Close story"]').click()`);
   await until(dummy, `document.querySelector('[role="dialog"]') === null`, 'the author closes the story');
 
-  // A story that has expired is not gone: it is in the author's own archive, the list the strip
-  // cannot show. The demo seed leaves one expired story behind, because nothing can pass a story's
-  // real 24-hour life inside a run.
+  // A story that has expired is not gone: it is in the author's own archive, which now lives on the
+  // author's profile rather than in the feed's strip. The demo seed leaves one expired story behind,
+  // because nothing can pass a story's real 24-hour life inside a run.
+  await navigate(dummy, '/profile');
   await button(dummy, 'Your archive');
   await until(dummy, `document.querySelector('[role="dialog"][aria-label="Story archive"]')?.innerText.includes('From yesterday, kept in the archive')`, 'the author reads an archived story');
   console.log("PASS: an expired story stays in its author's archive");
