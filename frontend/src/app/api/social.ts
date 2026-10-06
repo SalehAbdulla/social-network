@@ -244,7 +244,19 @@ export async function upload(file: File): Promise<{ url: string; mediaType: 'ima
   return request('/media', 'POST', form);
 }
 
-export function displayName(user: { firstName: string; lastName: string; nickname?: string }) { return `${user.firstName} ${user.lastName}`.trim() || user.nickname || 'Member'; }
+/**
+ * The name to show for a person, or their handle when there is no name.
+ *
+ * It is built from the parts that are actually there rather than interpolated blindly.
+ * A response that predates the name fields — an older backend during a staggered
+ * deploy, or an author row with none — arrives with them absent or blank, and
+ * `` `${undefined} ${undefined}` `` would print "undefined undefined" into the header.
+ * Falling back to the handle is what a card wants anyway.
+ */
+export function displayName(user: { firstName?: string; lastName?: string; nickname?: string }) {
+  const name = [user.firstName, user.lastName].filter(part => typeof part === 'string' && part.trim()).join(' ').trim();
+  return name || user.nickname || 'Member';
+}
 
 /**
  * Bookmarks. Both writes are idempotent on the server — saving a post that is
