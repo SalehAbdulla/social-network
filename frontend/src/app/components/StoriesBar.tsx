@@ -1,6 +1,6 @@
 'use client';
 import { useEffect, useRef, useState } from 'react';
-import { Archive, ChevronLeft, ChevronRight, Eye, MessageCircle, MoreVertical, Plus, Send, Trash2, X } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Eye, MessageCircle, MoreVertical, Plus, Send, Trash2, X } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { type Story, type StoryReply as StoryReplyEntry, type StoryViewer as StoryViewerEntry, displayName, errorMessage, request, upload } from '../api/social';
 import { useDialogFocus } from '../lib/useDialogFocus';
@@ -54,7 +54,6 @@ export default function StoriesBar() {
   });
   const strip = useRef<HTMLDivElement>(null);
   const [creating, setCreating] = useState(false);
-  const [archiveOpen, setArchiveOpen] = useState(false);
   const [viewing, setViewing] = useState<Story | null>(null);
   const [deleting, setDeleting] = useState(false);
   const reload = stories.reload;
@@ -91,7 +90,7 @@ export default function StoriesBar() {
     const timer = setInterval(() => { if (!strip.current || strip.current.scrollLeft === 0) reload(); }, 60000);
     return () => clearInterval(timer);
   }, [reload]);
-  return <section className="space-y-2"><div className="flex items-center justify-end"><button type="button" onClick={() => setArchiveOpen(true)} className="inline-flex items-center gap-1.5 text-xs font-medium text-muted transition hover:text-text"><Archive size={14} aria-hidden="true" />Your archive</button></div><div ref={strip} className="no-scrollbar flex gap-4 overflow-x-auto pb-2">
+  return <section className="space-y-2"><div ref={strip} className="no-scrollbar flex gap-4 overflow-x-auto pb-2">
     {/* Instagram leads the tray with the viewer's own entry: their face inside a dashed circle
         with a plus on the rim and "Your story" under it, so the first thing in the strip is the
         thing the reader can do rather than somebody else's story. */}
@@ -106,7 +105,6 @@ export default function StoriesBar() {
     <LoadMore compact className="h-[66px] w-16" label="Load more stories" endLabel={null} loading={stories.loadingMore} hasMore={stories.hasMore} onLoadMore={stories.loadMore} />
   </div>
     {creating && <CreateStory close={() => setCreating(false)} saved={reload} />}
-    {archiveOpen && <StoryArchive close={() => setArchiveOpen(false)} />}
     {viewing && <StoryViewer key={viewing.storyId} story={viewing} canDelete={viewing.userId === user.userId} close={() => setViewing(null)} onPrevious={showPreviousStory} onNext={showNextStory} hasPrevious={stories.items.findIndex(story => story.storyId === viewing.storyId) > 0} hasNext={stories.items.findIndex(story => story.storyId === viewing.storyId) < stories.items.length - 1 || stories.hasMore} deleting={deleting} onDelete={async () => { setDeleting(true); try { await request(`/stories/${viewing.storyId}`, 'DELETE'); setViewing(null); reload(); } catch (error) { toast.error(errorMessage(error)); } finally { setDeleting(false); } }} />}
   </section>;
 }
@@ -222,7 +220,7 @@ function StoryViewer({ story, canDelete, close, onPrevious, onNext, hasPrevious,
 // The author's own expired stories — the ones that have left the strip and would otherwise
 // disappear. It is the caller's own list by construction (the endpoint answers only the signed-in
 // account's stories), so there is nothing to filter or guard here.
-function StoryArchive({ close }: { close: () => void }) {
+export function StoryArchive({ close }: { close: () => void }) {
   const { user } = useBackend();
   const archived = usePagedList<Story, Story[]>({
     key: ARCHIVE_KEY,
