@@ -3021,6 +3021,23 @@ by reading computed styles back from a running build: `body` is `rgb(0, 0, 0)` w
 a post card at `#000000` on a `rgb(38, 38, 38)` border in dark, white on `rgb(204, 208, 213)` in
 light.
 
+Changed in the square-corners session (2026-10-06), for review: `frontend/src/app/globals.css`,
+`frontend/src/app/components/{SideBar,PostCard,PostPreview,LoadMore,Lightbox,StoriesBar,ThemeToggle}.tsx`,
+`frontend/src/app/search/page.tsx`, `frontend/src/app/dev/components/page.tsx`. Corners are square
+everywhere now, and from one place: the `@theme` radius scale is all `0px` (`--radius` through
+`--radius-4xl`), which is what every sized utility — `rounded`, `rounded-lg`, `rounded-xl`,
+`rounded-2xl`, the `-t`/`-br`/`-bl` sides and the responsive variants — resolves through, so the
+decision lands on all ~210 call sites at once instead of in every class name. `rounded-full` is
+deliberately left alone: it is a literal maximum radius rather than a scale member, and it is what
+makes avatars, story rings, status dots, icon buttons, switch knobs and spinners read as shapes
+rather than boxes. The carry-over was the handful of capsules — the two rail badges, the privacy
+chip on the card and in the preview, the Load-more and recent-search buttons, the lightbox counter,
+the comment sheet's drag handle and the story reply bar — which were `rounded-full` on rectangles
+and would have stayed pills; they read from the scale like everything else, and the theme switch
+keeps its round knob inside a now-square track. Checked by walking every element of a rendered feed
+and listing the ones whose computed radius is neither `0px` nor a full circle: the list is empty,
+with 24 circles left.
+
 ## Definition of done
 
 A task is complete when: the code builds (`go build ./...`, `npm run build`), tests pass
