@@ -59,14 +59,20 @@ export function needsSeparator(previous: string | null, current: string): boolea
   return before.toDateString() !== after.toDateString() || Math.abs(after.getTime() - before.getTime()) > HOUR;
 }
 
-/** The label above a run of messages: `4:39 PM`, `Yesterday`, `Tue 4:39 PM`, or a date. */
+/**
+ * The label above a run of messages: `Wed, Sep 23 · 7:39 PM`, always in the same shape so a
+ * separator reads as a stamp rather than as three different kinds of text. The day and the
+ * clock are both there because the rule that places a separator is about the gap, not about
+ * the date alone — an hour-long pause in the middle of an afternoon deserves its own line.
+ */
 export function separatorLabel(value: string, now = Date.now()): string {
   const date = parse(value);
   if (!date) return '';
-  if (date.toDateString() === new Date(now).toDateString()) return clock(date);
-  if (date.toDateString() === new Date(now - DAY).toDateString()) return 'Yesterday';
-  if (now - date.getTime() < 6 * DAY) return `${date.toLocaleDateString(undefined, { weekday: 'short' })} ${clock(date)}`;
-  return date.toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' });
+  const day = date.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' });
+  const time = clock(date);
+  // The year is only worth a word when it is not the current one.
+  const year = date.getFullYear() === new Date(now).getFullYear() ? '' : `, ${date.getFullYear()}`;
+  return `${day}${year} · ${time}`;
 }
 
 /** The exact instant, for a bubble's tooltip. */
