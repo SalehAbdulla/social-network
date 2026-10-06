@@ -12,15 +12,16 @@ export const THEME_STORAGE_KEY = 'social:theme';
 
 export const DARK_MEDIA_QUERY = '(prefers-color-scheme: dark)';
 
-/** The stored preference. `system` is the default, so a first visit follows the OS. */
+/** The stored preference. `dark` is the default — the app is drawn the way Instagram's is — and
+ * the switch still offers light to anyone who wants it. */
 export function readStoredTheme(): Theme {
-  if (typeof window === 'undefined') return 'system';
+  if (typeof window === 'undefined') return 'dark';
   try {
     const stored = window.localStorage.getItem(THEME_STORAGE_KEY);
-    return stored === 'light' || stored === 'dark' ? stored : 'system';
+    return stored === 'light' || stored === 'dark' ? stored : 'dark';
   } catch {
-    // Storage can be unavailable (private mode, blocked cookies): follow the OS.
-    return 'system';
+    // Storage can be unavailable (private mode, blocked cookies): the default still applies.
+    return 'dark';
   }
 }
 
@@ -40,4 +41,4 @@ export function storeTheme(theme: Theme) {
  * resolution in `ThemeProvider`, which is why the key and the media query are
  * interpolated instead of repeated as literals.
  */
-export const themeScript = `(function(){try{var s=window.localStorage.getItem('${THEME_STORAGE_KEY}');var d=window.matchMedia('${DARK_MEDIA_QUERY}').matches;var t=s==='dark'||s==='light'?s:(d?'dark':'light');var r=document.documentElement;r.classList.toggle('dark',t==='dark');r.dataset.theme=t;}catch(e){}})();`;
+export const themeScript = `(function(){try{var s=window.localStorage.getItem('${THEME_STORAGE_KEY}');var t=s==='light'?'light':'dark';var r=document.documentElement;r.classList.toggle('dark',t==='dark');r.dataset.theme=t;}catch(e){}})();`;
