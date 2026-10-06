@@ -405,7 +405,7 @@ func (db *DB) CreatePost(post models.Post) (models.Post, error) {
 	}
 
 	err = db.Conn.QueryRow(
-		`SELECT p.postId, p.userId, p.privacy, u.nickName, p.title, p.content,
+		`SELECT p.postId, p.userId, p.privacy, u.nickName, u.firstName, u.lastName, p.title, p.content,
 				p.score, p.commentsCounter,
 				p.createdAt, p.updatedAt, p.imageUrls
 		FROM post p
@@ -416,6 +416,8 @@ func (db *DB) CreatePost(post models.Post) (models.Post, error) {
 		&post.UserId,
 		&post.Privacy,
 		&post.Nickname,
+		&post.FirstName,
+		&post.LastName,
 		&post.Title,
 		&post.Content,
 		&post.Score,
