@@ -80,3 +80,74 @@ export function RowsSkeleton({ count = 3 }: { count?: number }) {
     </div>
   );
 }
+
+/**
+ * The group surfaces' skeletons. They are drawn from the `grp-skel-*` classes rather than
+ * Tailwind's own grey, so the shimmer is the same token the rest of the conversation uses and
+ * it follows the theme. Each one mirrors the geometry of the real row, post, event or cell, so
+ * a list's first paint has the loaded state's rhythm instead of collapsing and then jumping.
+ */
+export function GroupRowsSkeleton({ count = 3 }: { count?: number }) {
+  return (
+    <div aria-hidden="true">
+      {Array.from({ length: count }, (_, index) => (
+        <div key={index} className="grp-skel-row">
+          <span className="grp-skeleton grp-skel-avatar" />
+          <span className="flex-1 space-y-2">
+            <span className="grp-skeleton grp-skel-line block w-40" />
+            <span className="grp-skeleton grp-skel-line block w-24" />
+          </span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+export function GroupPostsSkeleton({ count = 2 }: { count?: number }) {
+  return (
+    <div aria-hidden="true">
+      {Array.from({ length: count }, (_, index) => (
+        <div key={index} className="flex flex-col gap-3 py-3">
+          <div className="flex items-center gap-3">
+            <span className="grp-skeleton grp-skel-avatar" />
+            <span className="flex-1 space-y-2">
+              <span className="grp-skeleton grp-skel-line block w-32" />
+              <span className="grp-skeleton grp-skel-line block w-20" />
+            </span>
+          </div>
+          <span className="grp-skeleton block h-16 w-full" />
+          <span className="grp-skeleton block h-40 w-full" />
+        </div>
+      ))}
+    </div>
+  );
+}
+
+export function GroupEventsSkeleton({ count = 2 }: { count?: number }) {
+  return (
+    <div aria-hidden="true">
+      {Array.from({ length: count }, (_, index) => (
+        <div key={index} className="grp-skel-block">
+          <div className="flex gap-4">
+            <span className="grp-skeleton size-14 shrink-0" />
+            <span className="flex-1 space-y-2">
+              <span className="grp-skeleton grp-skel-line block w-48" />
+              <span className="grp-skeleton grp-skel-line block w-32" />
+            </span>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+export function GroupMediaSkeleton({ count = 9 }: { count?: number }) {
+  return (
+    <div className="grp-media-grid" aria-hidden="true">
+      {Array.from({ length: count }, (_, index) => (
+        <span key={index} className="grp-skeleton block w-full" style={{ aspectRatio: 'var(--grp-media-ratio)' }} />
+      ))}
+    </div>
+  );
+}
+
