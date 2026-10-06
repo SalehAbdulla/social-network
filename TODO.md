@@ -1406,6 +1406,23 @@ item still open in this file is post-submission work; see "Status at submission"
 
 ### Instagram-like UI
 
+- [x] **P3** Posts read as a description, and every list opens the same overlay. Closed 2026-10-06.
+  The composer collects one field — `Description` (`components/PostForm.tsx`) — and the title the
+  API still accepts is sent empty; `PostCard`'s caption and `PostPreview` drop the title, and
+  `lib/postDraft.ts` keeps only the description, so a restored draft no longer promises a field
+  that no longer exists. The overlay the feed grew is now shared through `lib/usePostOverlay.tsx`,
+  so `/profile`, `/saved`, `/search` and `/hashtag/[tag]` open the same dialog on a wide screen
+  instead of the older inline-comments card; `PostCard` carries `data-post-id` for the suite to
+  scope to, the same way the story tray carries `data-story-id`. **Saved is a profile tab now**
+  (`app/profile/page.tsx`, own profile only, a fourth `Saved` tab) reading the same `/saved-posts`
+  projection, and the rail no longer offers it (`components/SideBar.tsx`); `/saved` stays a deep
+  link. Fixed alongside: the create response returned `"firstName":""`, so the card drawn from it
+  showed `undefined undefined` — `PostRepository.CreatePost` now selects the author's name like
+  every other read (`cmd/post_edit_test.go` guards it), and `displayName` falls back to the handle
+  rather than interpolating a missing field. Verified: `cd backend && go build ./... && go vet ./...
+  && go test ./... -count=1`; `cd frontend && npx tsc --noEmit`, `npm run lint` (0 errors),
+  `npm run build`, `node scripts/dead-modules.mjs` (0 of 82); and `npm run test:integration` —
+  52 PASS, no runtime exceptions, no console errors.
 - [x] **P3** Instagram pass on the shell: drop the page-title labels the navigation already carries,
   move the story archive onto the profile, and lead the feed's rail with the account. Closed
   2026-10-06. `app/page.tsx`, `app/discover/page.tsx` and `app/saved/page.tsx` no longer draw a page
