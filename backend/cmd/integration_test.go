@@ -58,7 +58,7 @@ func TestPrivateProfilePublicPostVisibility(t *testing.T) {
 	profile.IsPublic = false
 	dummy.call("PUT", "/api/v1/users/me", profile, 200)
 
-	alex.call("GET", "/api/v1/post?id="+strconv.Itoa(post.PostId), nil, 404)
+	alex.call("GET", "/api/v1/post?id="+post.PostId, nil, 404)
 	feed := decoded[posts.PostResponse](t, alex.call("GET", "/api/v1/posts?page=1&size=20", nil, 200))
 	for _, item := range feed.Posts {
 		if item.PostId == post.PostId {
@@ -67,9 +67,9 @@ func TestPrivateProfilePublicPostVisibility(t *testing.T) {
 	}
 
 	alex.call("PUT", "/api/v1/users/dummy-id/follow", nil, 200)
-	alex.call("GET", "/api/v1/post?id="+strconv.Itoa(post.PostId), nil, 404)
+	alex.call("GET", "/api/v1/post?id="+post.PostId, nil, 404)
 	dummy.call("PUT", "/api/v1/follow-requests/alex-id", nil, 200)
-	alex.call("GET", "/api/v1/post?id="+strconv.Itoa(post.PostId), nil, 200)
+	alex.call("GET", "/api/v1/post?id="+post.PostId, nil, 200)
 }
 
 func TestPostPrivacyIntegration(t *testing.T) {
@@ -84,7 +84,7 @@ func TestPostPrivacyIntegration(t *testing.T) {
 	if public.Privacy != "public" {
 		t.Fatalf("expected public privacy, got %q", public.Privacy)
 	}
-	alex.call("GET", "/api/v1/post?id="+strconv.Itoa(public.PostId), nil, 200)
+	alex.call("GET", "/api/v1/post?id="+public.PostId, nil, 200)
 
 	mediaID := "123e4567-e89b-12d3-a456-426614174000"
 	if err := repo.AddMedia(mediaID, "dummy-id", "image/png"); err != nil {
@@ -97,17 +97,17 @@ func TestPostPrivacyIntegration(t *testing.T) {
 		"title": "Followers privacy post", "content": "Only followers can read this post.", "privacy": "followers",
 		"imageUrls": []string{"/api/v1/media/" + mediaID},
 	}, 201))
-	postPath := "/api/v1/post?id=" + strconv.Itoa(followersOnly.PostId)
+	postPath := "/api/v1/post?id=" + followersOnly.PostId
 	alex.call("GET", postPath, nil, 404)
 	alex.call("GET", "/api/v1/users/dummy-id/posts", nil, 200)
-	alex.call("GET", "/api/v1/posts/comments?postId="+strconv.Itoa(followersOnly.PostId), nil, 404)
+	alex.call("GET", "/api/v1/posts/comments?postId="+followersOnly.PostId, nil, 404)
 	alex.call("GET", "/api/v1/media/"+mediaID, nil, 404)
 
 	alex.call("PUT", "/api/v1/users/dummy-id/follow", nil, 200)
 	alex.call("GET", postPath, nil, 200)
 	alex.call("GET", "/api/v1/media/"+mediaID, nil, 200)
 	alex.call("POST", "/api/v1/posts/comments", url.Values{
-		"postId": {strconv.Itoa(followersOnly.PostId)}, "content": {"A visible follower comment"},
+		"postId": {followersOnly.PostId}, "content": {"A visible follower comment"},
 	}, 201)
 
 	selected := decoded[posts.PostDTO](t, dummy.call("POST", "/api/v1/posts", map[string]any{
@@ -117,7 +117,7 @@ func TestPostPrivacyIntegration(t *testing.T) {
 	if len(selected.SelectedUsers) != 1 || selected.SelectedUsers[0] != "alex-id" {
 		t.Fatalf("selected audience was not persisted: %+v", selected.SelectedUsers)
 	}
-	alex.call("GET", "/api/v1/post?id="+strconv.Itoa(selected.PostId), nil, 200)
+	alex.call("GET", "/api/v1/post?id="+selected.PostId, nil, 200)
 
 	if err := repo.InsertUser(models.Registration{
 		UserID: "carol-id", Nickname: "caroldemo", FirstName: "Carol", LastName: "Demo",
@@ -130,7 +130,7 @@ func TestPostPrivacyIntegration(t *testing.T) {
 	serverURL, _ := url.Parse(server.URL)
 	carol := newIntegrationClient(t, server)
 	carol.client.Jar.SetCookies(serverURL, []*http.Cookie{{Name: "session_token", Value: "carol-token", Path: "/"}})
-	carol.call("GET", "/api/v1/post?id="+strconv.Itoa(selected.PostId), nil, 404)
+	carol.call("GET", "/api/v1/post?id="+selected.PostId, nil, 404)
 }
 
 func (c integrationClient) login(email string) json.RawMessage {
@@ -430,12 +430,12 @@ func TestSocialIntegration(t *testing.T) {
 	})
 
 	post := decoded[posts.PostDTO](t, dummy.call("POST", "/api/v1/posts", map[string]any{"title": "Integration post", "content": "A persisted frontend integration post.", "imageUrls": []string{mediaURL}}, 201))
-	postPath := "/api/v1/post?id=" + strconv.Itoa(post.PostId)
+	postPath := "/api/v1/post?id=" + post.PostId
 	readPost := decoded[posts.PostDTO](t, alex.call("GET", postPath, nil, 200))
 	if len(readPost.ImageURLs) != 1 {
 		t.Fatal("post media not persisted")
 	}
-	alex.call("DELETE", "/api/v1/posts?id="+strconv.Itoa(post.PostId), nil, 404)
+	alex.call("DELETE", "/api/v1/posts?id="+post.PostId, nil, 404)
 	dummy.call("POST", "/api/v1/reactions", map[string]any{"entityType": "post", "entityId": post.PostId, "score": 1}, 200)
 	liked := decoded[[]posts.PostDTO](t, dummy.call("GET", "/api/v1/users/me/posts?liked=true", nil, 200))
 	if len(liked) != 1 {
@@ -446,11 +446,11 @@ func TestSocialIntegration(t *testing.T) {
 		t.Fatal("reaction toggle failed")
 	}
 
-	commentData := decoded[comment.CommentDTO](t, alex.call("POST", "/api/v1/posts/comments", url.Values{"postId": {strconv.Itoa(post.PostId)}, "content": {"An integration comment"}}, 201))
+	commentData := decoded[comment.CommentDTO](t, alex.call("POST", "/api/v1/posts/comments", url.Values{"postId": {post.PostId}, "content": {"An integration comment"}}, 201))
 	commentID := strconv.Itoa(commentData.CommentId)
 	dummy.call("PUT", "/api/v1/posts/comments/"+commentID, map[string]string{"content": "Unauthorized edit"}, 404)
 	alex.call("PUT", "/api/v1/posts/comments/"+commentID, map[string]string{"content": "Updated comment"}, 200)
-	comments := decoded[comment.CommentResponse](t, dummy.call("GET", "/api/v1/posts/comments?postId="+strconv.Itoa(post.PostId), nil, 200))
+	comments := decoded[comment.CommentResponse](t, dummy.call("GET", "/api/v1/posts/comments?postId="+post.PostId, nil, 200))
 	if len(comments.Comments) != 1 || comments.Comments[0].CommentText != "Updated comment" {
 		t.Fatal("comment not persisted")
 	}
@@ -554,7 +554,7 @@ func TestSocialIntegration(t *testing.T) {
 			}
 		}
 	})
-	dummy.call("DELETE", "/api/v1/posts?id="+strconv.Itoa(post.PostId), nil, 200)
+	dummy.call("DELETE", "/api/v1/posts?id="+post.PostId, nil, 200)
 	dummy.call("GET", postPath, nil, 404)
 	// Original auth endpoints still accept their original form/cookie contract.
 	dummy.call("POST", "/api/v1/auth/logout", nil, 200)
