@@ -451,6 +451,23 @@ call "$JAR_A" POST /api/v1/auth/login 400 "identifier=$EMAIL_A&password=$PASSWOR
 call "$JAR_A" POST /api/v1/auth/login 200 "identifier=$EMAIL_A&password=$CHANGED_PASSWORD" \
 	application/x-www-form-urlencoded
 
+# --- several accounts on one browser -------------------------------------------------------------
+
+# A second account signs in to the same browser. That revokes B's earlier session in its own jar,
+# which the tour has already finished with, and leaves A remembered alongside it.
+# route: POST /api/v1/auth/login
+call "$JAR_A" POST /api/v1/auth/login 200 "identifier=$EMAIL_B&password=$PASSWORD" \
+	application/x-www-form-urlencoded
+# Both accounts are offered back, newest first, with no session token in the payload.
+# route: GET /api/v1/auth/accounts
+call "$JAR_A" GET /api/v1/auth/accounts 200
+# Switching back to A is passwordless: the server swaps the session cookie for A's saved token.
+# route: POST /api/v1/auth/switch
+call "$JAR_A" POST /api/v1/auth/switch 200 "{\"userId\":\"$USER_A\"}"
+# Forgetting B signs it out of this browser; A stays the active account.
+# route: POST /api/v1/auth/accounts/remove
+call "$JAR_A" POST /api/v1/auth/accounts/remove 200 "{\"userId\":\"$USER_B\"}"
+
 # route: GET /api/v1/auth/me
 call "$JAR_A" GET /api/v1/auth/me 200
 # route: POST /api/v1/auth/logout
