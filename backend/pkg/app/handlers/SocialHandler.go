@@ -71,6 +71,28 @@ func (re *HandlerContext) offset(w http.ResponseWriter, r *http.Request) (int, b
 	return n, true
 }
 
+// Suggestions answers the feed's "Suggested for you" column: a few accounts the caller does
+// not follow yet, ranked by mutual follows. It is read-only and returns only the fields the
+// row draws — no email, no posts, no private collections — so it cannot leak anything the
+// profile route would not. `limit` is validated here and clamped in the service.
+func (re *HandlerContext) Suggestions(w http.ResponseWriter, r *http.Request) {
+	limit := 5
+	if raw := r.URL.Query().Get("limit"); raw != "" {
+		n, err := strconv.Atoi(raw)
+		if err != nil || n < 1 {
+			re.HandleError(w, r, backend.ErrBadRequest)
+			return
+		}
+		limit = n
+	}
+	items, err := re.SocialService.Suggestions(currentUser(r), limit)
+	if err != nil {
+		re.HandleError(w, r, err)
+		return
+	}
+	respond(w, http.StatusOK, items)
+}
+
 func (re *HandlerContext) UserProfile(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("userId")
 	if id == "" || id == "me" {
@@ -164,7 +186,7 @@ func (re *HandlerContext) ProfilePosts(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if !visible {
-		re.HandleError(w, r, backend.ErrForbidden)
+		re.HandleError(w, r, backend.ErrNotFound)
 		return
 	}
 	ids, err := re.SocialService.Repo.ProfilePostIDs(id, r.URL.Query().Get("liked") == "true", offset, currentUser(r))
@@ -206,7 +228,7 @@ func (re *HandlerContext) ProfileMedia(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if !visible {
-		re.HandleError(w, r, backend.ErrForbidden)
+		re.HandleError(w, r, backend.ErrNotFound)
 		return
 	}
 	items, err := re.SocialService.Repo.ProfileMedia(id, offset, currentUser(r))
@@ -286,7 +308,7 @@ func (re *HandlerContext) FollowLists(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if !visible {
-		re.HandleError(w, r, backend.ErrForbidden)
+		re.HandleError(w, r, backend.ErrNotFound)
 		return
 	}
 	u, err := re.SocialService.Repo.SocialProfile(id)
