@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState, type ReactNode } from 'react';
-import { MoreHorizontal } from 'lucide-react';
+import { MoreHorizontal, type LucideIcon } from 'lucide-react';
 
 /**
  * The app's one "…" menu.
@@ -25,12 +25,14 @@ export function MenuItem({ onClick, children, disabled = false, tone }: {
 
 const OPEN_MENUS = new Set<() => void>();
 
-export default function Menu({ label, children, className = '', align = 'end' }: {
+export default function Menu({ label, children, className = '', align = 'end', triggerIcon: TriggerIcon = MoreHorizontal }: {
   label: string;
   children: ReactNode;
   className?: string;
   /** Which edge the panel hangs from. `end` is the "…" in a card's corner. */
   align?: 'start' | 'end';
+  /** The trigger's glyph. Defaults to the shared "…"; a caller can name its own, e.g. a gear. */
+  triggerIcon?: LucideIcon;
 }) {
   const [open, setOpen] = useState(false);
   const root = useRef<HTMLDivElement>(null);
@@ -77,7 +79,7 @@ export default function Menu({ label, children, className = '', align = 'end' }:
         setOpen(value => !value);
       }}
     >
-      <MoreHorizontal aria-hidden="true" />
+      <TriggerIcon aria-hidden="true" />
     </button>
     {open && <div
       role="menu"
