@@ -39,6 +39,18 @@ type SocialUser struct {
 	CanMessage bool `json:"canMessage"`
 }
 
+// SavedAccount is one account a browser may switch to without signing in again.
+// It is deliberately small — the switcher draws an avatar and two names — and it
+// carries no session token: the token that actually performs the switch stays in
+// a server-owned cookie and is never handed to the page (see handlers.Accounts).
+type SavedAccount struct {
+	UserID    string `json:"userId"`
+	Nickname  string `json:"nickname"`
+	FirstName string `json:"firstName"`
+	LastName  string `json:"lastName"`
+	Avatar    string `json:"avatar"`
+}
+
 // UserSuggestion is one account offered in the feed's "Suggested for you" list.
 //
 // It is deliberately a view of `SocialUser` rather than the whole thing: the rail never
