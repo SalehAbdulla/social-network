@@ -226,6 +226,39 @@ export async function changePassword(currentPassword: string, newPassword: strin
   await request('/users/me/password', 'PUT', { currentPassword, newPassword, confirmPassword });
 }
 
+/**
+ * One account a browser has saved, from `GET /auth/accounts`. The session token
+ * that makes switching possible is deliberately absent: it stays in a server-owned
+ * HttpOnly cookie, so the page can offer the account without ever holding the
+ * credential.
+ */
+export interface SavedAccount {
+  userId: string; nickname: string; firstName: string; lastName: string; avatar: string;
+}
+
+export interface SavedAccounts {
+  accounts: SavedAccount[];
+  activeUserId: string;
+}
+
+/** The accounts saved on this browser, newest first, and which one is active. */
+export function savedAccounts(): Promise<SavedAccounts> {
+  return request('/auth/accounts', 'GET');
+}
+
+/** Makes a saved account active without a password; the server swaps the cookie. */
+export async function switchAccount(userId: string): Promise<void> {
+  await request('/auth/switch', 'POST', { userId });
+}
+
+/**
+ * Forgets one saved account on this browser and revokes its session. When it was
+ * the active account the response names the next one, or "" when nothing is left.
+ */
+export function removeSavedAccount(userId: string): Promise<SavedAccounts> {
+  return request('/auth/accounts/remove', 'POST', { userId });
+}
+
 /** The message both reset endpoints answer with, so the copy lives on the server. */
 export interface ResetMessage { message: string }
 
