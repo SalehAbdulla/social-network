@@ -29,7 +29,7 @@ type PostService interface {
 	// PostInsights is the author's own view of one post: how far it reaches, and what it
 	// has drawn. Read access is checked before ownership, so a post the viewer may not
 	// open answers the 404 a read gives rather than confirming that it exists.
-	PostInsights(postID int, viewerID string) (posts.PostInsightsDTO, error)
+	PostInsights(publicID string, viewerID string) (posts.PostInsightsDTO, error)
 }
 
 type PostServiceImpl struct {
@@ -49,7 +49,7 @@ func mapPostToDTO(post models.Post, userScore int) posts.PostDTO {
 	_ = json.Unmarshal([]byte(post.ImageURLs), &images)
 	return posts.PostDTO{
 		ImageURLs:       images,
-		PostId:          post.PostId,
+		PostId:          post.PublicID,
 		UserId:          post.UserId,
 		Nickname:        post.Nickname,
 		FirstName:       post.FirstName,
@@ -238,7 +238,11 @@ func (p PostServiceImpl) UpdatePost(postID int, userID string, title string, con
 // restricted. A post the viewer may not open answers the same 404 a read gives — so the
 // path cannot be used to confirm that a post exists — and a post they may open but did
 // not write answers 403, the answer UpdatePost gives for the same "not yours".
-func (p PostServiceImpl) PostInsights(postID int, viewerID string) (posts.PostInsightsDTO, error) {
+func (p PostServiceImpl) PostInsights(publicID string, viewerID string) (posts.PostInsightsDTO, error) {
+	postID, err := p.db.PostIDByPublicID(publicID)
+	if err != nil {
+		return posts.PostInsightsDTO{}, err
+	}
 	allowed, err := p.db.CanViewPost(postID, viewerID)
 	if err != nil {
 		return posts.PostInsightsDTO{}, err
@@ -258,7 +262,7 @@ func (p PostServiceImpl) PostInsights(postID int, viewerID string) (posts.PostIn
 		days = append(days, posts.ReactionDayDTO{Day: day.Day, Total: day.Total, Up: day.Up, Down: day.Down})
 	}
 	return posts.PostInsightsDTO{
-		PostId:    postID,
+		PostId:    publicID,
 		Reach:     posts.PostAudienceDTO{Audience: insights.Audience, Count: insights.Reach},
 		Reactions: insights.Reactions,
 		Up:        insights.Up,
