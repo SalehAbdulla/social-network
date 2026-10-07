@@ -9,6 +9,7 @@ import { useResource } from '../lib/useResource';
 import { useLiveRefresh } from '../lib/useLiveRefresh';
 import Lightbox from './Lightbox';
 import ChatHeader from './messages/ChatHeader';
+import DockHeader from './messages/DockHeader';
 import MessageThread from './messages/MessageThread';
 import Composer from './messages/Composer';
 import DetailsPanel from './messages/DetailsPanel';
@@ -26,7 +27,19 @@ const MEDIA_PER_PAGE = 30;
  * the paged thread, the paged attachments, the socket's typing and read receipts, and the
  * writes (send, edit, delete, react, read) the endpoints already exposed.
  */
-export default function DirectConversation({ partner, person }: { partner: string; person?: ChatUser }) {
+export default function DirectConversation({ partner, person, variant = 'page', onBack, onExpand, onClose, draft, onDraft }: {
+  partner: string;
+  person?: ChatUser;
+  /** `dock` swaps the page header for the dock's and drops the details column, so the /messages
+   *  page and the floating dock are one conversation with two skins, not two implementations. */
+  variant?: 'page' | 'dock';
+  onBack?: () => void;
+  onExpand?: () => void;
+  onClose?: () => void;
+  draft?: string;
+  onDraft?: (text: string) => void;
+}) {
+  const dock = variant === 'dock';
   const { user, connected, sendEvent } = useBackend();
   const thread = usePagedList<ChatMessage, { messages: ChatMessage[]; totalElements: number }>({
     // Newest first, so page 1 is the newest slice and "load more" walks backwards.
@@ -143,18 +156,29 @@ export default function DirectConversation({ partner, person }: { partner: strin
   }
 
   return <>
-    <div className="dm-panel">
-      <ChatHeader
-        name={name}
-        handle={handle}
-        avatar={avatar}
-        online={!!contact?.isOnline}
-        typing={typing}
-        profileHref={`/profile/${partner}`}
-        connected={connected}
-        detailsOpen={details}
-        onToggleDetails={() => setDetails(value => !value)}
-      />
+    <div className={dock ? 'dm-panel dm-panel-dock' : 'dm-panel'}>
+      {dock
+        ? <DockHeader
+          name={name}
+          handle={handle}
+          avatar={avatar}
+          online={!!contact?.isOnline}
+          profileHref={`/profile/${partner}`}
+          onBack={() => onBack?.()}
+          onExpand={() => onExpand?.()}
+          onClose={() => onClose?.()}
+        />
+        : <ChatHeader
+          name={name}
+          handle={handle}
+          avatar={avatar}
+          online={!!contact?.isOnline}
+          typing={typing}
+          profileHref={`/profile/${partner}`}
+          connected={connected}
+          detailsOpen={details}
+          onToggleDetails={() => setDetails(value => !value)}
+        />}
       <MessageThread
         items={thread.items}
         meId={user.userId}
@@ -169,6 +193,7 @@ export default function DirectConversation({ partner, person }: { partner: strin
         loadingMore={thread.loadingMore}
         onLoadMore={thread.loadMore}
         typing={typing}
+        showIntro={!dock}
         onReact={message => void react(message)}
         onDelete={(id, scope) => void remove(id, scope)}
         onEdit={beginEdit}
@@ -177,17 +202,18 @@ export default function DirectConversation({ partner, person }: { partner: strin
       />
       <Composer
         key={`${editing?.messageId ?? 'new'}-${composerSeed}`}
-        initialText={editing?.textMessage}
+        initialText={editing?.textMessage ?? (dock ? draft : undefined)}
         editing={!!editing}
         onCancel={() => setEditing(null)}
         replyTo={replyTo ? { name: 'your message', snippet: replyTo.textMessage || 'Attachment' } : null}
         onCancelReply={() => setReplyTo(null)}
         onSend={send}
         onTyping={announceTyping}
+        onDraft={onDraft}
         allowVideo
       />
     </div>
-    {details && <DetailsPanel
+    {!dock && details && <DetailsPanel
       name={name}
       avatar={avatar}
       href={`/profile/${partner}`}
