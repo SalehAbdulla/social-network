@@ -33,8 +33,8 @@ export function RowBody({ label, active, badge = 0, children }: {
 /** The More menu, with its "Switch appearance" sub-view that hosts the theme toggle. Its
  *  "Settings" row opens the change-password dialog the rail hosts, rather than linking to a
  *  route the app does not have. */
-export function MoreMenuContent({ onClose, onLogout, onSettings, loggingOut }: {
-  onClose: () => void; onLogout: () => void; onSettings: () => void; loggingOut: boolean;
+export function MoreMenuContent({ onClose, onLogout, onSettings, onSwitchAccounts, loggingOut }: {
+  onClose: () => void; onLogout: () => void; onSettings: () => void; onSwitchAccounts: () => void; loggingOut: boolean;
 }) {
   const [view, setView] = useState<'root' | 'appearance'>('root');
   if (view === 'appearance') return <div className="space-y-1">
@@ -50,7 +50,7 @@ export function MoreMenuContent({ onClose, onLogout, onSettings, loggingOut }: {
     <MenuItem onClick={() => setView('appearance')}><Moon size={20} aria-hidden="true" />Switch appearance</MenuItem>
     <MenuItem onClick={() => { onClose(); toast('Reporting a problem is not wired up yet.'); }}><TriangleAlert size={20} aria-hidden="true" />Report a problem</MenuItem>
     <div className="my-2 border-t-2 border-rail-border" />
-    <MenuItem onClick={() => { onClose(); toast('Account switching is not available yet.'); }}><RefreshCw size={20} aria-hidden="true" />Switch accounts</MenuItem>
+    <MenuItem onClick={() => { onClose(); onSwitchAccounts(); }}><RefreshCw size={20} aria-hidden="true" />Switch accounts</MenuItem>
     <MenuItem onClick={onLogout} disabled={loggingOut}><LogOut size={20} aria-hidden="true" />{loggingOut ? 'Logging out…' : 'Log out'}</MenuItem>
   </>;
 }
