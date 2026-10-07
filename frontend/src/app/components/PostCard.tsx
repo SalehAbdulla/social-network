@@ -202,9 +202,9 @@ export type PostCardProps = {
   /** Refetch fallback for surfaces that are not list-backed, such as the single post page. */
   fetchPosts?: () => void;
   /** Preferred: drop the deleted row in place so a long list does not jump. */
-  onPostRemoved?: (postId: number) => void;
+  onPostRemoved?: (postId: string) => void;
   /** Called when this card un-saves a post, so the saved list can drop the row. */
-  onUnsaved?: (postId: number) => void;
+  onUnsaved?: (postId: string) => void;
   /**
    * Present only in the feed. On a wide screen the card stops being a route link: the media, the
    * title and the comment button open the overlay instead. Absent everywhere else, so the post
