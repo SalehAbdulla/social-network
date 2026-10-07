@@ -14,11 +14,9 @@ import (
 )
 
 func (re *HandlerContext) GetPost(w http.ResponseWriter, r *http.Request) {
-	postIdStr := r.URL.Query().Get("id")
-
-	postId, err := strconv.Atoi(postIdStr)
-	if err != nil || postId < 1 {
-		re.HandleError(w, r, realtimeforum.ErrBadRequest)
+	postId, err := re.resolvePostID(r.URL.Query().Get("id"))
+	if err != nil {
+		re.HandleError(w, r, err)
 		return
 	}
 
@@ -131,10 +129,10 @@ func (re *HandlerContext) DeletePost(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	postIdStr := r.URL.Query().Get("id")
-	postId, err := strconv.Atoi(postIdStr)
-	if err != nil || postId < 1 {
-		re.HandleError(w, r, realtimeforum.ErrBadRequest)
+	publicID := r.URL.Query().Get("id")
+	postId, err := re.resolvePostID(publicID)
+	if err != nil {
+		re.HandleError(w, r, err)
 		return
 	}
 
@@ -145,7 +143,7 @@ func (re *HandlerContext) DeletePost(w http.ResponseWriter, r *http.Request) {
 	}
 
 	re.App.Logger.Info("post deleted successfully",
-		"post_id", postId,
+		"post_id", publicID,
 		"user_id", userID,
 	)
 
@@ -260,9 +258,9 @@ func (re *HandlerContext) postInput(w http.ResponseWriter, r *http.Request, user
 }
 
 func (re *HandlerContext) UpdatePost(w http.ResponseWriter, r *http.Request) {
-	postID, err := strconv.Atoi(r.PathValue("postId"))
-	if err != nil || postID < 1 {
-		re.HandleError(w, r, realtimeforum.ErrBadRequest)
+	postID, err := re.resolvePostID(r.PathValue("postId"))
+	if err != nil {
+		re.HandleError(w, r, err)
 		return
 	}
 	userID := currentUser(r)
