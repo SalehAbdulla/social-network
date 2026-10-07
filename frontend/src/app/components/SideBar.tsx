@@ -9,6 +9,7 @@ import toast from 'react-hot-toast';
 import { displayName, errorMessage, request } from '../api/social';
 import { useBackend } from './BackendProvider';
 import Avatar from './Avatar';
+import ChangePassword from './ChangePassword';
 import SidePanels, { type PanelKind } from './SidePanels';
 import { MenuPanel } from './PopoverMenu';
 import { MoreMenuContent, RowBody, rowClass } from './SideBarMenus';
@@ -42,6 +43,7 @@ export default function Sidebar() {
   const [panelOpen, setPanelOpen] = useState(false);
   const [moreRect, setMoreRect] = useState<DOMRect | null>(null);
   const [loggingOut, setLoggingOut] = useState(false);
+  const [changingPassword, setChangingPassword] = useState(false);
   const closeTimer = useRef<number | null>(null);
   const railRef = useRef<HTMLElement>(null);
   const panelRef = useRef<HTMLDivElement>(null);
@@ -150,8 +152,9 @@ export default function Sidebar() {
     </aside>
     {panelKind && <SidePanels kind={panelKind} open={panelOpen} onClose={closePanel} panelRef={panelRef} />}
     {moreRect && <MenuPanel menuRef={menuRef} rect={moreRect} width={266} placement="above" label="More">
-      <MoreMenuContent onClose={() => setMoreRect(null)} onLogout={() => void logout()} loggingOut={loggingOut} />
+      <MoreMenuContent onClose={() => setMoreRect(null)} onLogout={() => void logout()} onSettings={() => setChangingPassword(true)} loggingOut={loggingOut} />
     </MenuPanel>}
     {create.modal}
+    {changingPassword && <ChangePassword close={() => setChangingPassword(false)} />}
   </>;
 }

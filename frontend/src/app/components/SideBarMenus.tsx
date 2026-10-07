@@ -30,9 +30,11 @@ export function RowBody({ label, active, badge = 0, children }: {
   </>;
 }
 
-/** The More menu, with its "Switch appearance" sub-view that hosts the theme toggle. */
-export function MoreMenuContent({ onClose, onLogout, loggingOut }: {
-  onClose: () => void; onLogout: () => void; loggingOut: boolean;
+/** The More menu, with its "Switch appearance" sub-view that hosts the theme toggle. Its
+ *  "Settings" row opens the change-password dialog the rail hosts, rather than linking to a
+ *  route the app does not have. */
+export function MoreMenuContent({ onClose, onLogout, onSettings, loggingOut }: {
+  onClose: () => void; onLogout: () => void; onSettings: () => void; loggingOut: boolean;
 }) {
   const [view, setView] = useState<'root' | 'appearance'>('root');
   if (view === 'appearance') return <div className="space-y-1">
@@ -43,7 +45,7 @@ export function MoreMenuContent({ onClose, onLogout, loggingOut }: {
     </div>
   </div>;
   return <>
-    <Link href="/profile" role="menuitem" onClick={onClose} className={menuRowClass}><Settings size={20} aria-hidden="true" />Settings</Link>
+    <MenuItem onClick={() => { onClose(); onSettings(); }}><Settings size={20} aria-hidden="true" />Settings</MenuItem>
     <Link href="/saved" role="menuitem" onClick={onClose} className={menuRowClass}><Bookmark size={20} aria-hidden="true" />Saved</Link>
     <MenuItem onClick={() => setView('appearance')}><Moon size={20} aria-hidden="true" />Switch appearance</MenuItem>
     <MenuItem onClick={() => { onClose(); toast('Reporting a problem is not wired up yet.'); }}><TriangleAlert size={20} aria-hidden="true" />Report a problem</MenuItem>
