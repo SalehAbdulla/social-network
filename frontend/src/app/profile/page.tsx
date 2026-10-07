@@ -26,6 +26,7 @@ import EditProfile from '../components/EditProfile';
 import FollowListModal, { type FollowListTab } from '../components/FollowListModal';
 import Loading from '../components/Loading';
 import { usePostModal } from '../lib/usePostModal';
+import { useCreatePost } from '../lib/useCreatePost';
 import { StoryArchive } from '../components/StoriesBar';
 import ProfileHeader, { type FollowState } from '../components/profile/ProfileHeader';
 import ProfileTabs, { type ProfileTab } from '../components/profile/ProfileTabs';
@@ -44,7 +45,7 @@ const OTHER_TABS: ProfileTab[] = ['posts', 'media'];
  * refresh and the back button both land where the reader was.
  */
 export default function Profile() {
-  const { user, refreshUser, openComposer } = useBackend();
+  const { user, refreshUser } = useBackend();
   const params = useParams<{ profileId?: string }>();
   const searchParams = useSearchParams();
   const pathname = usePathname();
@@ -90,6 +91,12 @@ export default function Profile() {
     normalize: raw => ({ items: raw.posts, hasMore: !raw.lastPage }),
     keyOf: post => post.postId,
     enabled: isOwnProfile && canViewProfile && activeTab === 'saved',
+  });
+
+  // The profile's own Create-post entry (the empty "Share your first photo" and the phone's Create
+  // tab, which both open the shared dialog). A shared post is folded into the grid at the top.
+  const create = useCreatePost({
+    onShared: post => { if (post) posts.update(items => [post, ...items]); },
   });
 
   // The media tab lists post and comment photos together, so it reads its own endpoint.
@@ -157,7 +164,7 @@ export default function Profile() {
     router.push(`${pathname}?tab=${tab}`, { scroll: false });
   }
 
-  function removePost(postId: number) {
+  function removePost(postId: string) {
     posts.update(items => items.filter(item => item.postId !== postId));
     saved.update(items => items.filter(item => item.postId !== postId));
   }
@@ -176,7 +183,7 @@ export default function Profile() {
       : activeTab === 'media'
         ? <GridEmpty text="No media yet." />
         : isOwnProfile
-          ? <PhotosEmpty onShare={openComposer} />
+          ? <PhotosEmpty onShare={create.open} />
           : <GridEmpty text="No posts yet." />;
 
 
@@ -217,6 +224,7 @@ export default function Profile() {
       </div>}
 
       {modal}
+      {create.modal}
 
       {isEditing && <EditProfile profile={profile.data} close={() => setIsEditing(false)} saved={profile.reload} />}
       {isChangingPassword && <ChangePassword close={() => setIsChangingPassword(false)} />}
