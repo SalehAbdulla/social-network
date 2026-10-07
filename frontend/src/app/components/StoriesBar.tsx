@@ -167,20 +167,25 @@ export default function StoriesBar() {
           with a plus on the rim and "Your story" under it, so the first thing in the strip is the
           thing the reader can do rather than somebody else's story. Once they have a live story of
           their own the dashed circle becomes their own ring — always the seen style, because you
-          are not surprised by your own story — and the "+" badge stays on the rim. The tray's
-          numbers are the `--story-*` tokens: a 56px ring, the face at the 48px it leaves inside
-          it, a 16px plus on the rim, and a 12px caption 4px under it. */}
-      <button type="button" onClick={() => (ownHead ? openGroup({ userId: user.userId, stories: ownStories }) : setCreating(true))} aria-label={ownHead ? `${displayName(user)}, your story` : 'Add to your story'} className="story-tray-item flex w-[var(--story-item)] shrink-0 flex-col items-center gap-[var(--story-caption-gap)]">
+          are not surprised by your own story. The face and the "+" are two controls: the ring opens
+          what they already have (or the composer when they have nothing), and the badge always
+          opens the composer, so a story can keep being added after the first. A button cannot sit
+          inside a button, so the two are siblings in a relative wrapper rather than one tile-wide
+          button. The tray's numbers are the `--story-*` tokens: a 56px ring, the face at the 48px
+          it leaves inside it, a 16px plus on the rim, and a 12px caption 4px under it. */}
+      <div className="story-tray-item flex w-[var(--story-item)] shrink-0 flex-col items-center gap-[var(--story-caption-gap)]">
         <span className="relative flex shrink-0">
-          {ownHead
-            ? <StoryRing name={displayName(user)} avatarUrl={user.avatar} size={56} seen own marker={false} />
-            : <span className="flex size-[var(--story-ring)] items-center justify-center rounded-full border-2 border-dashed border-border bg-surface-2">
-                {user.avatar ? <img src={user.avatar} alt="" className="size-[var(--story-avatar)] rounded-full object-cover" /> : <span className="flex size-[var(--story-avatar)] items-center justify-center rounded-full bg-card text-lg font-semibold text-muted">{displayName(user).slice(0, 1).toUpperCase()}</span>}
-              </span>}
-          <span className="absolute -bottom-0.5 -right-0.5 flex size-[var(--story-badge)] items-center justify-center rounded-full border-2 border-bg bg-blue-600 text-white"><Plus className="size-[var(--story-badge-icon)]" /></span>
+          <button type="button" onClick={() => (ownHead ? openGroup({ userId: user.userId, stories: ownStories }) : setCreating(true))} aria-label={ownHead ? `${displayName(user)}, your story` : 'Add to your story'} className="block">
+            {ownHead
+              ? <StoryRing name={displayName(user)} avatarUrl={user.avatar} size={56} seen own marker={false} />
+              : <span className="flex size-[var(--story-ring)] items-center justify-center rounded-full border-2 border-dashed border-border bg-surface-2">
+                  {user.avatar ? <img src={user.avatar} alt="" className="size-[var(--story-avatar)] rounded-full object-cover" /> : <span className="flex size-[var(--story-avatar)] items-center justify-center rounded-full bg-card text-lg font-semibold text-muted">{displayName(user).slice(0, 1).toUpperCase()}</span>}
+                </span>}
+          </button>
+          <button type="button" onClick={() => setCreating(true)} aria-label="Add to your story" className="absolute -bottom-0.5 -right-0.5 flex size-[var(--story-badge)] items-center justify-center rounded-full border-2 border-bg bg-blue-600 text-white transition hover:brightness-110 active:scale-95"><Plus className="size-[var(--story-badge-icon)]" aria-hidden="true" /></button>
         </span>
-        <span className="story-tray-label w-full truncate text-center text-[length:var(--story-caption-size)] text-text">Your story</span>
-      </button>
+        <button type="button" onClick={() => (ownHead ? openGroup({ userId: user.userId, stories: ownStories }) : setCreating(true))} className="story-tray-label w-full truncate text-center text-[length:var(--story-caption-size)] text-text">Your story</button>
+      </div>
       {ordered.map(group => <StoryTrayItem key={group.userId} group={group} forceUnseen={fadingSet.has(group.userId)} onView={() => openGroup(group)} />)}
       <LoadMore compact className="h-[var(--story-ring)] w-16" label="Load more stories" endLabel={null} loading={stories.loadingMore} hasMore={stories.hasMore} onLoadMore={stories.loadMore} />
     </div>
