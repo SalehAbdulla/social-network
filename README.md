@@ -1,15 +1,100 @@
+<div align="center">
+
 # Social Network
 
-A Facebook-like social network: profiles, follow requests, posts with three privacy
-levels, comments, groups with events and a shared chat, notifications, and realtime
-private messaging. One Go service owns the data and the WebSocket hub; a Next.js app
-serves the UI and proxies everything to that service, so the browser only ever talks
-to one origin and the session cookie stays first-party.
+### A Facebook-style social network, built full-stack and realtime
 
-The full task description lives in the project handout, not here. This file explains
-what was built, how it is laid out, and how to run it.
+Profiles, follow requests, posts with three privacy levels, comments, groups with events
+and a shared chat, notifications, and realtime private messaging. One Go service owns the
+data and the WebSocket hub; a Next.js app serves the UI and proxies everything to that
+service, so the browser only ever talks to one origin and the session cookie stays
+first-party.
 
-## What it does
+[![CI](https://github.com/SalehAbdulla/social-network/actions/workflows/ci.yml/badge.svg)](https://github.com/SalehAbdulla/social-network/actions/workflows/ci.yml)
+![Go](https://img.shields.io/badge/Go-1.25-00ADD8?logo=go&logoColor=white)
+![Next.js](https://img.shields.io/badge/Next.js-16-000000?logo=nextdotjs&logoColor=white)
+![React](https://img.shields.io/badge/React-19-61DAFB?logo=react&logoColor=black)
+![TypeScript](https://img.shields.io/badge/TypeScript-5-3178C6?logo=typescript&logoColor=white)
+![Tailwind CSS](https://img.shields.io/badge/Tailwind_CSS-4-06B6D4?logo=tailwindcss&logoColor=white)
+![SQLite](https://img.shields.io/badge/SQLite-003B57?logo=sqlite&logoColor=white)
+![Docker](https://img.shields.io/badge/Docker_Compose-2496ED?logo=docker&logoColor=white)
+
+</div>
+
+---
+
+## Overview
+
+A complete, self-hosted social network — accounts and profiles, follow requests, posts with
+three privacy levels, comments and reactions, groups with events and a shared chat,
+notifications, and realtime private messaging — backed by a versioned SQLite schema and a
+single WebSocket hub.
+
+This file explains what was built, how it is laid out, and how to run it. The deeper
+environment and release details live in the [documentation map](#documentation-map).
+
+## Table of contents
+
+- [Screenshots](#screenshots)
+- [Highlights](#highlights)
+- [Architecture](#architecture)
+- [Features](#features)
+- [Tech stack](#tech-stack)
+- [Project layout](#project-layout)
+- [Getting started](#getting-started)
+- [Quality and testing](#quality-and-testing)
+- [Design rules worth knowing](#design-rules-worth-knowing)
+- [Documentation map](#documentation-map)
+
+## Screenshots
+
+<p align="center">
+  <img src="feed.png" alt="Home feed — stories, posts with reactions, and the navigation rail" width="440" />
+  <img src="chat.png" alt="Private messaging — conversations, presence, and a live composer" width="440" />
+</p>
+
+<p align="center"><sub>Left: the home feed. Right: realtime private messaging.</sub></p>
+
+## Highlights
+
+- **One origin, first-party sessions.** The Next.js app rewrites `/api/v1/*` and `/ws` to the
+  Go service, so the HttpOnly session cookie is never third-party and there is no CORS surface.
+- **Privacy that cannot drift.** Every read path — feed, single post, profile, likes, media and
+  comments — shares one SQL visibility fragment, so no surface can disagree about who may read a post.
+- **Realtime by default.** Typing indicators, read receipts, presence, and notification pushes all
+  ride one `gorilla/websocket` hub, with separate notification and message badges.
+- **An upload pipeline, not just a file input.** The type is sniffed from the bytes, every resizable
+  image is stored at three sizes, and a collector reclaims files when their post, comment, story or
+  message is gone.
+- **Cross-language drift guards.** A Go test reads the TypeScript media-limit module and compares the
+  numbers, so the browser and the server can only move together.
+- **A real test suite.** Go unit and integration tests, a query-plan check, an end-to-end API tour,
+  and a headless-Chrome browser suite over an isolated database.
+- **Reproducible, unprivileged containers.** Two images with pinned base-image digests, non-root
+  users, readiness probes, and migrations applied at boot.
+
+## Architecture
+
+```mermaid
+flowchart LR
+  B["Browser<br/>UI + first-party cookie"]
+  F["Frontend · Next.js<br/>:4000 — serves the UI<br/>rewrites /api/v1/* and /ws"]
+  A["Backend · Go<br/>:5174 — REST + WebSocket hub<br/>handler to service to repository"]
+  DB[("SQLite<br/>social-data volume")]
+  UP[("Uploads<br/>original · thumb · large")]
+
+  B --> F
+  F --> A
+  A --> DB
+  A --> UP
+```
+
+The browser only ever reaches the frontend's port; the frontend proxies API calls, uploaded
+media and the WebSocket upgrade to the backend, and the backend is the only writer to SQLite
+and the upload directory. Both containers run as unprivileged users, and only the frontend
+publishes a port (bound to loopback, with a reverse proxy expected in front of it).
+
+## Features
 
 **Accounts and profiles** — register with the five mandatory fields plus an optional
 nickname (generated when left blank), avatar, About Me and a public/private choice;
@@ -86,7 +171,7 @@ and `@mentions` are links wherever text is shown — posts, comments, group post
 a tag opens a page of the posts carrying it, matched as a whole word and behind the same
 privacy rule, and a mention opens the member it names.
 
-## Stack
+## Tech stack
 
 | Layer | Choice |
 | --- | --- |
@@ -98,7 +183,7 @@ privacy rule, and a mention opens the member it names.
 | Client data | `axios` against a typed wrapper, `react-hot-toast` for errors, `lucide-react` icons |
 | Packaging | Docker Compose: one image per service, one named volume for the database and uploads |
 
-## Layout
+## Project layout
 
 ```
 backend/
@@ -126,9 +211,9 @@ TODO.md                    the open work list and the reasoning behind what is c
 .gitlab-ci.yml             the same four checks for the school's GitLab, which is this repo's origin
 ```
 
-## Run it
+## Getting started
 
-### Docker (what a deployment uses)
+### Docker (a full stack)
 
 ```sh
 cp .env.example .env      # APP_ENV + FRONTEND_ORIGIN; see DEPLOYMENT.md for the rest
@@ -164,7 +249,7 @@ The backend also answers `GET /api/v1/health` (liveness) and `GET /api/v1/ready`
 database-backed) without a session; both containers use the second one as their `HEALTHCHECK`.
 They are documented in `DEPLOYMENT.md`.
 
-## Checks
+## Quality and testing
 
 ```sh
 make check          # backend build/vet/test and frontend lint/types/build
@@ -207,7 +292,7 @@ concurrent sockets whose broadcast is asserted, sustained throughput, and the ra
 boundary — and the browser suite opens fifty sockets through the frontend proxy, which is the only
 place the proxy's upgrade path is exercised at concurrency.
 
-## Rules worth knowing before changing code
+## Design rules worth knowing
 
 - **Post visibility** is one SQL fragment shared by every read path — the feed, a single
   post, profile posts, the likes tab, profile media, comments and direct media access — so
@@ -261,3 +346,7 @@ place the proxy's upgrade path is exercised at concurrency.
 | `frontend/README.md` | Local setup, the same-origin proxy contract, the browser checks |
 | `TODO.md` | Every open item with its priority, and the reasoning recorded with each closed one |
 | `SocialNetworkERD.drawio` | Entity-relationship diagram of the schema |
+
+---
+
+<sub><strong>Social Network</strong> — full-stack, realtime, self-hosted · [github.com/SalehAbdulla/social-network](https://github.com/SalehAbdulla/social-network)</sub>
