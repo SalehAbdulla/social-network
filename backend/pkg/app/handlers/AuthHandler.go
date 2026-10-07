@@ -57,6 +57,10 @@ func (re *HandlerContext) Register(w http.ResponseWriter, r *http.Request) {
 		SameSite: http.SameSiteLaxMode,
 	})
 
+	// The new account joins the browser's saved list, so it is reachable from the
+	// switcher without signing in again.
+	re.setSavedAccounts(w, rememberAccountToken(savedAccountTokens(r), registered.Token))
+
 	re.App.Logger.Info("user registered and logged in successfully",
 		"user_id", registered.UserID,
 		"email", req.Email,
@@ -121,6 +125,11 @@ func (re *HandlerContext) Login(w http.ResponseWriter, r *http.Request) {
 
 	http.SetCookie(w, cookie)
 
+	// Remember the account for passwordless switching. The list is independent of
+	// `rememberMe`, which governs only the active session cookie: a saved list that
+	// exists for one browser session would not outlive a page refresh.
+	re.setSavedAccounts(w, rememberAccountToken(savedAccountTokens(r), token))
+
 	re.App.Logger.Info("login successful",
 		"user_id", userID,
 		"identifier", identifier,
@@ -143,9 +152,19 @@ func (re *HandlerContext) Logout(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := re.AuthService.Logout(tokenCookie.Value); err != nil {
-		re.HandleError(w, r, err)
-		return
+	// Logging out signs out of every account this browser saved, not just the
+	// active one, so no token is left behind for a later switch to pick up. The
+	// active cookie is included in case it is not already in the list.
+	revoked := make(map[string]bool)
+	for _, token := range append(savedAccountTokens(r), tokenCookie.Value) {
+		if token == "" || revoked[token] {
+			continue
+		}
+		if err := re.AuthService.Logout(token); err != nil {
+			re.HandleError(w, r, err)
+			return
+		}
+		revoked[token] = true
 	}
 
 	// Drop the user's websocket registration so other users see them go
@@ -156,15 +175,8 @@ func (re *HandlerContext) Logout(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	http.SetCookie(w, &http.Cookie{
-		Name:     "session_token",
-		Value:    "",
-		Path:     "/",
-		MaxAge:   -1,
-		HttpOnly: true,
-		Secure:   re.App.InProduction,
-		SameSite: http.SameSiteLaxMode,
-	})
+	re.clearSessionCookie(w)
+	re.setSavedAccounts(w, nil)
 
 	w.WriteHeader(http.StatusOK)
 	json.NewEncoder(w).Encode(payload.SuccessResponse[logoutResponse]{
