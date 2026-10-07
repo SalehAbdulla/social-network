@@ -26,7 +26,7 @@ func (s *GroupService) RequireMember(groupID int, userID string) error {
 		return err
 	}
 	if !group.IsMember {
-		return backend.ErrForbidden
+		return backend.ErrNotFound
 	}
 	return nil
 }
