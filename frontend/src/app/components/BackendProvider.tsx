@@ -1,6 +1,6 @@
 'use client';
 
-import { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react';
+import { createContext, useCallback, useContext, useEffect, useRef, useState, Suspense } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import { errorMessage, isUnauthorized, request, type SocialUser, type SocketEvent } from '../api/social';
 import { notifyError } from '../lib/notify';
@@ -10,6 +10,7 @@ import Sidebar from './SideBar';
 import TopBar from './TopBar';
 import BottomNav from './BottomNav';
 import ComposerDialog from './ComposerDialog';
+import MessagesDock from './MessagesDock';
 
 interface Session {
   user: SocialUser;
@@ -194,6 +195,10 @@ function AuthenticatedBackend({ children }: { children: React.ReactNode }) {
         {children}
       </main>
       <BottomNav />
+      {/* The floating Messages dock, mounted once for the whole shell. It reads `useSearchParams`
+          to hide itself while a post modal is open, which needs a Suspense boundary on a
+          prerendered route — the same reason the feed wraps its overlay. */}
+      <Suspense fallback={null}><MessagesDock /></Suspense>
       {composing && <ComposerDialog onClose={closeComposer} />}
     </div>
   </div></Context.Provider>;
