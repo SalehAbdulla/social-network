@@ -20,7 +20,7 @@ type PostAudienceDTO struct {
 // PostInsightsDTO is the author-facing view of one post: its reach, its reactions and
 // comments, and how the reactions fall across the days they arrived.
 type PostInsightsDTO struct {
-	PostId    int              `json:"postId"`
+	PostId    string           `json:"postId"`
 	Reach     PostAudienceDTO  `json:"reach"`
 	Reactions int              `json:"reactions"`
 	Up        int              `json:"up"`
