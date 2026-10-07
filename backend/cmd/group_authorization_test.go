@@ -78,8 +78,8 @@ func TestGroupMembershipAuthorizationEdges(t *testing.T) {
 
 	// A plain member may still leave, and leaving closes every member-only door.
 	owner.call("DELETE", base+"/members/dummy-id", nil, 200)
-	owner.call("GET", base+"/members", nil, 403)
-	owner.call("POST", base+"/content/messages", map[string]string{"content": "Am I still here?"}, 403)
+	owner.call("GET", base+"/members", nil, 404)
+	owner.call("POST", base+"/content/messages", map[string]string{"content": "Am I still here?"}, 404)
 	if left := decoded[models.Group](t, owner.call("GET", base, nil, 200)); left.IsMember {
 		t.Fatal("leaving the group kept the membership flag")
 	}
