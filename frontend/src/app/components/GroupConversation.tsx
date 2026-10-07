@@ -9,6 +9,7 @@ import { type Group, type GroupInvitation, errorMessage, request } from '../api/
 import { useBackend } from './BackendProvider';
 import { useResource } from '../lib/useResource';
 import { useLiveRefresh } from '../lib/useLiveRefresh';
+import { useCreatePost } from '../lib/useCreatePost';
 import Avatar from './Avatar';
 import Button from './ui/Button';
 import IconButton from './ui/IconButton';
@@ -125,6 +126,16 @@ export default function GroupConversation({ groupId }: { groupId: string }) {
   const invitations = useResource<GroupInvitation[]>('/groups/invitations');
   useLiveRefresh(group.reload, groupId);
   useLiveRefresh(invitations.reload);
+  // The group's own Create-post entry — the top bar's action and the Posts/Media empty states. It
+  // is the same dialog as the feed's, told it is writing a group post, so it names the group where
+  // the audience picker would be, and refetches the Posts tab once one is shared.
+  const createPost = useCreatePost({
+    context: 'group',
+    groupId,
+    groupName: group.data?.title ?? '',
+    groupAvatar: group.data?.imageUrl ?? '',
+    onShared: () => group.reload(),
+  });
   // A notification that points at a tab is the entry point; a second one arriving while
   // this view is still mounted resets which surface is open, which React documents as the
   // way to adjust state when an input changes.
@@ -154,7 +165,11 @@ export default function GroupConversation({ groupId }: { groupId: string }) {
   const data = group.data;
   const invitation = invitations.data?.find(entry => String(entry.groupId) === groupId) ?? null;
   const active = TABS.find(entry => entry.value === tab) ?? TABS[0];
-  const creates = active.value === 'events' ? 'events' : 'posts';
+  // Posts and Media open the shared Create-post dialog; an Event is its own sheet.
+  function startCreate() {
+    if (active.value === 'events') setCreating('events');
+    else createPost.open();
+  }
   async function answerInvitation(status: 'accepted' | 'declined') {
     if (!invitation || deciding) return;
     setDeciding(true);
@@ -195,7 +210,7 @@ export default function GroupConversation({ groupId }: { groupId: string }) {
             tabs={TABS.map(entry => ({ value: entry.value, label: entry.label }))}
           />
           {active.action && <div className="grp-tabbar-action">
-            <button type="button" className="grp-action" onClick={() => setCreating(creates)}>
+            <button type="button" className="grp-action" onClick={startCreate}>
               <Plus aria-hidden="true" />{active.action}
             </button>
           </div>}
@@ -206,15 +221,15 @@ export default function GroupConversation({ groupId }: { groupId: string }) {
           <GroupChat groupId={groupId} meId={user.userId} isOwner={data.isOwner} onOpenEvents={() => selectTab('events')} onEdit={setEditing} onDelete={item => void remove(item)} />
         </div>}
         {tab === 'posts' && <div id="panel-posts" role="tabpanel" aria-labelledby="tab-posts" className="contents" ref={element => { panels.current.posts = element; }}>
-          <GroupPosts groupId={groupId} meId={user.userId} isOwner={data.isOwner} highlightId={flashId} onCreate={() => setCreating('posts')} onEdit={setEditing} />
+          <GroupPosts groupId={groupId} meId={user.userId} isOwner={data.isOwner} highlightId={flashId} onCreate={createPost.open} onEdit={setEditing} />
         </div>}
         {tab === 'events' && <div id="panel-events" role="tabpanel" aria-labelledby="tab-events" className="contents" ref={element => { panels.current.events = element; }}>
           <GroupEvents groupId={groupId} meId={user.userId} isOwner={data.isOwner} onCreate={() => setCreating('events')} onEdit={setEditing} />
         </div>}
         {tab === 'media' && <div id="panel-media" role="tabpanel" aria-labelledby="tab-media" className="contents" ref={element => { panels.current.media = element; }}>
-          <GroupMedia groupId={groupId} meId={user.userId} isOwner={data.isOwner} onCreate={() => setCreating('posts')} />
+          <GroupMedia groupId={groupId} meId={user.userId} isOwner={data.isOwner} onCreate={createPost.open} />
         </div>}
-        {active.action && <button type="button" aria-label={active.action} className="grp-fab" onClick={() => setCreating(creates)}><Plus aria-hidden="true" /></button>}
+        {active.action && <button type="button" aria-label={active.action} className="grp-fab" onClick={startCreate}><Plus aria-hidden="true" /></button>}
       </> : <div className="grp-gate">
         <Avatar name={data.title} avatarUrl={data.imageUrl} size={96} />
         <h3 className="grp-gate-title" dir="auto">Join {data.title}</h3>
@@ -230,12 +245,13 @@ export default function GroupConversation({ groupId }: { groupId: string }) {
       </div>}
     </section>
     {details && <GroupDetails group={data} meId={user.userId} changed={group.reload} onClose={() => setDetails(false)} />}
-    {(creating || editing) && <GroupContentSheet
+    {(editing || creating === 'events') && <GroupContentSheet
       groupId={groupId}
-      kind={editing ? (editing.kind === 'events' ? 'events' : 'posts') : creating ?? 'posts'}
+      kind={editing ? (editing.kind === 'events' ? 'events' : 'posts') : 'events'}
       item={editing ?? undefined}
       onClose={() => { setCreating(null); setEditing(null); }}
       onSaved={() => { setCreating(null); setEditing(null); group.reload(); }}
     />}
+    {createPost.modal}
   </>;
 }
