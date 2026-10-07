@@ -195,8 +195,7 @@ func (re *HandlerContext) ProfilePosts(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	items := []posts.PostDTO{}
-	for _, raw := range ids {
-		postID, _ := strconv.Atoi(raw)
+	for _, postID := range ids {
 		post, err := re.PostService.GetPostByID(postID, currentUser(r))
 		if err != nil {
 			re.HandleError(w, r, err)
