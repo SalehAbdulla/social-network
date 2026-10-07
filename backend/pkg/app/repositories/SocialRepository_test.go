@@ -63,8 +63,8 @@ func jsonURL(url string) string { return fmt.Sprintf(`["%s"]`, url) }
 
 func insertPost(t *testing.T, db *DB, owner, privacy, imageURLs string) int {
 	t.Helper()
-	result, err := db.Conn.Exec(`INSERT INTO post (userId, title, content, privacy, score, commentsCounter, imageUrls)
-		VALUES (?, 'A title', 'Content long enough to be a post.', ?, 0, 0, ?)`, owner, privacy, imageURLs)
+	result, err := db.Conn.Exec(`INSERT INTO post (publicId, userId, title, content, privacy, score, commentsCounter, imageUrls)
+		VALUES (lower(hex(randomblob(16))), ?, 'A title', 'Content long enough to be a post.', ?, 0, 0, ?)`, owner, privacy, imageURLs)
 	if err != nil {
 		t.Fatal(err)
 	}
