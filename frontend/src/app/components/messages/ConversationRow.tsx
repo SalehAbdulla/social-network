@@ -21,18 +21,18 @@ export interface ConversationItem {
   preview: string;
   stamp: string;
   unread?: boolean;
+  /**
+   * When present the row acts in place — the Messages dock opens its chat in the same panel —
+   * instead of navigating. A row that only ever navigates leaves this off and stays an `<a>`,
+   * which is what keeps the middle-click and the keyboard behaving on the messages page.
+   */
+  onSelect?: () => void;
 }
 
 export default function ConversationRow({ item, active }: { item: ConversationItem; active: boolean }) {
   const secondary = [item.preview, item.stamp].filter(Boolean).join(' · ');
-  return <Link
-    href={item.href}
-    // Shown as a native tooltip, which is how the collapsed (avatar-only) list keeps a
-    // name reachable once the two lines are hidden.
-    title={item.name}
-    aria-current={active ? 'page' : undefined}
-    className={`dm-row${item.unread ? ' dm-row-unread' : ''}`}
-  >
+  const className = `dm-row${item.unread ? ' dm-row-unread' : ''}`;
+  const body = <>
     <span className="dm-row-avatar">
       {item.avatar}
       {!!item.online && <span className="dm-presence" aria-hidden="true" />}
@@ -45,5 +45,20 @@ export default function ConversationRow({ item, active }: { item: ConversationIt
       <span className="dm-row-dot" aria-hidden="true" />
       <span className="sr-only">Unread</span>
     </>}
-  </Link>;
+  </>;
+  // Shown as a native tooltip, which is how the collapsed (avatar-only) list keeps a
+  // name reachable once the two lines are hidden.
+  if (item.onSelect) return <button
+    type="button"
+    title={item.name}
+    aria-current={active ? 'page' : undefined}
+    className={className}
+    onClick={item.onSelect}
+  >{body}</button>;
+  return <Link
+    href={item.href}
+    title={item.name}
+    aria-current={active ? 'page' : undefined}
+    className={className}
+  >{body}</Link>;
 }
