@@ -1,25 +1,24 @@
 package main
 
 import (
-	"strconv"
 	"testing"
 
 	"social-network/backend/pkg/models"
 	"social-network/backend/pkg/payload/posts"
 )
 
-// insightsPath is the author-only route under test.
-func insightsPath(postID int) string { return "/api/v1/posts/" + strconv.Itoa(postID) + "/insights" }
+// insightsPath is the author-only route under test. Its id is the post's public UUID.
+func insightsPath(postID string) string { return "/api/v1/posts/" + postID + "/insights" }
 
 // insightsFor reads a post's insights as its author, the only account allowed to.
-func insightsFor(t *testing.T, client integrationClient, postID int) posts.PostInsightsDTO {
+func insightsFor(t *testing.T, client integrationClient, postID string) posts.PostInsightsDTO {
 	t.Helper()
 	return decoded[posts.PostInsightsDTO](t, client.call("GET", insightsPath(postID), nil, 200))
 }
 
 // newPostForInsights writes one post and returns its id, so each case reads numbers off a post
 // nothing else has touched.
-func newPostForInsights(t *testing.T, client integrationClient, privacy string, selected []string) int {
+func newPostForInsights(t *testing.T, client integrationClient, privacy string, selected []string) string {
 	t.Helper()
 	body := map[string]any{"title": "Insights", "content": "A post whose numbers are about to be read.", "privacy": privacy}
 	if selected != nil {
@@ -55,7 +54,7 @@ func TestPostInsightsIntegration(t *testing.T) {
 	// The author is the only account that may ask, and an unknown post is answered with the 404
 	// a read gives rather than a distinct "no insights", so the path confirms nothing.
 	reader.call("GET", insightsPath(postID), nil, 403)
-	author.call("GET", insightsPath(999999), nil, 404)
+	author.call("GET", insightsPath("00000000-0000-4000-8000-000000000000"), nil, 404)
 
 	// One reaction, then a change of heart. The table keeps one row per account, so the total
 	// follows the row rather than counting the second write as a second reaction.
@@ -72,7 +71,7 @@ func TestPostInsightsIntegration(t *testing.T) {
 	// and the row is moved with SQL here because a test cannot wait for midnight.
 	author.call("POST", "/api/v1/reactions", map[string]any{"entityType": "post", "entityId": postID, "score": 1}, 200)
 	if _, err := repo.Conn.Exec(
-		"UPDATE reaction SET createdAt = ? WHERE userId = ? AND entityType = 'post' AND entityId = ?",
+		"UPDATE reaction SET createdAt = ? WHERE userId = ? AND entityType = 'post' AND entityId = (SELECT postId FROM post WHERE publicId = ?)",
 		"2026-10-01 09:00:00", "alex-id", postID,
 	); err != nil {
 		t.Fatal(err)
