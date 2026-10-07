@@ -3,6 +3,7 @@ package repositories
 import (
 	"database/sql"
 	"errors"
+	"strings"
 
 	backend "social-network/backend"
 	"social-network/backend/pkg/models"
@@ -139,6 +140,95 @@ func (db *DB) DiscoverUsers(currentID, search string, offset int) ([]models.Soci
 		users = append(users, u)
 	}
 	return users, nil
+}
+
+// Suggestions ranks a handful of accounts the viewer does not follow yet, for the feed's
+// right-hand column. It is the one thing `DiscoverUsers` cannot do for itself: a friends-of-
+// friends ordering.
+//
+// The ranking is the number of mutual follows — people the viewer follows who also follow
+// the candidate — which is exactly Instagram's, and it is computed in the query rather than
+// per row. The exclusions are the ones the feed must never suggest: the viewer, anyone they
+// already follow, and anyone they have an outstanding follow request to (a pending request
+// is not a follow yet, but offering to follow again would only produce a 409). Ties break on
+// the account's own recency so a fresh profile surfaces above a dormant one.
+//
+// The mutual names are read in a single second query for the whole page rather than one per
+// row, so the cost is two queries whatever the limit.
+func (db *DB) Suggestions(viewer string, limit int) ([]models.UserSuggestion, error) {
+	rows, err := db.Conn.Query(`
+		SELECT u.userId, u.nickName, u.firstName, u.lastName, COALESCE(u.avatar, ''), u.isPublic,
+			(SELECT COUNT(*)
+			   FROM follow f2
+			   JOIN follow f3 ON f3.followerId = f2.followedId AND f3.followedId = u.userId
+			  WHERE f2.followerId = ?) AS mutualCount
+		FROM user u
+		WHERE u.userId != ?
+		  AND NOT EXISTS (SELECT 1 FROM follow f WHERE f.followerId = ? AND f.followedId = u.userId)
+		  AND NOT EXISTS (SELECT 1 FROM connection c WHERE c.requesterId = ? AND c.recipientId = u.userId AND c.status = 'pending')
+		ORDER BY mutualCount DESC, COALESCE(u.updatedAt, u.createdAt) DESC, u.userId
+		LIMIT ?`,
+		viewer, viewer, viewer, viewer, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	suggestions := []models.UserSuggestion{}
+	ids := []string{}
+	for rows.Next() {
+		var s models.UserSuggestion
+		if err := rows.Scan(&s.UserID, &s.Nickname, &s.FirstName, &s.LastName, &s.Avatar, &s.IsPublic, &s.MutualCount); err != nil {
+			return nil, err
+		}
+		s.Mutuals = []string{}
+		suggestions = append(suggestions, s)
+		ids = append(ids, s.UserID)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	if len(ids) == 0 {
+		return suggestions, nil
+	}
+
+	index := make(map[string]int, len(suggestions))
+	for i := range suggestions {
+		index[suggestions[i].UserID] = i
+	}
+	placeholders := strings.TrimSuffix(strings.Repeat("?,", len(ids)), ",")
+	args := make([]any, 0, len(ids)+1)
+	for _, id := range ids {
+		args = append(args, id)
+	}
+	args = append(args, viewer)
+	nameRows, err := db.Conn.Query(`
+		SELECT f3.followedId, u2.nickName, u2.firstName, u2.lastName
+		FROM follow f2
+		JOIN follow f3 ON f3.followerId = f2.followedId AND f3.followedId IN (`+placeholders+`)
+		JOIN user u2 ON u2.userId = f2.followedId
+		WHERE f2.followerId = ?
+		ORDER BY f3.followedId, u2.nickName`, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer nameRows.Close()
+	for nameRows.Next() {
+		var candidateID, nickname, first, last string
+		if err := nameRows.Scan(&candidateID, &nickname, &first, &last); err != nil {
+			return nil, err
+		}
+		i, ok := index[candidateID]
+		if !ok || len(suggestions[i].Mutuals) >= 2 {
+			continue
+		}
+		name := strings.TrimSpace(first + " " + last)
+		if name == "" {
+			name = nickname
+		}
+		suggestions[i].Mutuals = append(suggestions[i].Mutuals, name)
+	}
+	return suggestions, nameRows.Err()
 }
 
 func (db *DB) UpdateSocialProfile(u models.SocialUser) error {
