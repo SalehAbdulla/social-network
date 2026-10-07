@@ -10,9 +10,10 @@ import { displayName, errorMessage, request } from '../api/social';
 import { useBackend } from './BackendProvider';
 import Avatar from './Avatar';
 import SidePanels, { type PanelKind } from './SidePanels';
-import { MenuPanel, MenuItem } from './PopoverMenu';
+import { MenuPanel } from './PopoverMenu';
 import { MoreMenuContent, RowBody, rowClass } from './SideBarMenus';
 import { RAIL_AVATAR_SIZE } from '../lib/sizing';
+import { useCreatePost } from '../lib/useCreatePost';
 
 type NavItem = { key: string; label: string; icon: LucideIcon; href?: string; panel?: PanelKind; create?: boolean };
 
@@ -21,9 +22,9 @@ type NavItem = { key: string; label: string; icon: LucideIcon; href?: string; pa
  *
  * There is no manual toggle and no wide by default: the rail is icon-only (`app-rail` in
  * globals.css) and grows over the content while the pointer is over it, and only a slide-out panel
- * forces the narrow state. Routes stay real links; Search and Notifications are buttons
- * that open a panel, and Create and More open anchored popovers. The composer, the theme and the
- * account actions are all reused from the rest of the app.
+ * forces the narrow state. Routes stay real links, Search and Notifications are buttons that open a
+ * panel, and More opens an anchored popover. Create opens the Create-post dialog directly — there is
+ * only one kind of post, so there is nothing to choose first.
  *
  * No icon size or stroke is passed down from here: every icon in this rail is drawn at the
  * `--rail-icon` and `--rail-stroke*` tokens by the rail's own `.app-rail svg` rule, and the
@@ -32,11 +33,13 @@ type NavItem = { key: string; label: string; icon: LucideIcon; href?: string; pa
  * `rowClass`. That leaves this component holding behaviour only.
  */
 export default function Sidebar() {
-  const { user, badges, openComposer, composerOpen } = useBackend();
+  const { user, badges } = useBackend();
   const pathname = usePathname();
+  // The Create row opens the one Create-post dialog directly — there is only one kind of post, so
+  // there is no popover to choose one — and stays active while it is open.
+  const create = useCreatePost();
   const [panelKind, setPanelKind] = useState<PanelKind | null>(null);
   const [panelOpen, setPanelOpen] = useState(false);
-  const [createRect, setCreateRect] = useState<DOMRect | null>(null);
   const [moreRect, setMoreRect] = useState<DOMRect | null>(null);
   const [loggingOut, setLoggingOut] = useState(false);
   const closeTimer = useRef<number | null>(null);
@@ -56,35 +59,34 @@ export default function Sidebar() {
   }, []);
   // Clicking the same trigger closes; a different one swaps the content without re-sliding.
   const togglePanel = (kind: PanelKind) => { if (panelKind === kind && panelOpen) closePanel(); else openPanel(kind); };
-  const closeOverlays = () => { if (panelKind) closePanel(); setCreateRect(null); setMoreRect(null); };
+  const closeOverlays = () => { if (panelKind) closePanel(); setMoreRect(null); };
 
   // A panel, a menu, or both can be open; a press outside the rail, the panel and the menu dismisses them.
   useEffect(() => {
-    if (!panelKind && !createRect && !moreRect) return;
+    if (!panelKind && !moreRect) return;
     const onDown = (event: MouseEvent) => {
       const target = event.target as Node;
       if (railRef.current?.contains(target) || panelRef.current?.contains(target) || menuRef.current?.contains(target)) return;
-      closePanel(); setCreateRect(null); setMoreRect(null);
+      closePanel(); setMoreRect(null);
     };
     document.addEventListener('mousedown', onDown);
     return () => document.removeEventListener('mousedown', onDown);
-  }, [panelKind, createRect, moreRect, closePanel]);
+  }, [panelKind, moreRect, closePanel]);
 
   // Escape closes the topmost thing, the way every other overlay in the app behaves.
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
       if (event.key !== 'Escape') return;
       if (moreRect) setMoreRect(null);
-      else if (createRect) setCreateRect(null);
       else if (panelKind) closePanel();
     };
     document.addEventListener('keydown', onKey);
     return () => document.removeEventListener('keydown', onKey);
-  }, [moreRect, createRect, panelKind, closePanel]);
+  }, [moreRect, panelKind, closePanel]);
 
   // A popover is anchored to a fixed rail, so a resize would leave it detached: close it instead.
   useEffect(() => {
-    const onResize = () => { setCreateRect(null); setMoreRect(null); };
+    const onResize = () => setMoreRect(null);
     window.addEventListener('resize', onResize);
     return () => window.removeEventListener('resize', onResize);
   }, []);
@@ -102,14 +104,8 @@ export default function Sidebar() {
     }
   }
 
-  const toggleCreate = (event: ReactMouseEvent<HTMLButtonElement>) => {
-    const rect = event.currentTarget.getBoundingClientRect();
-    setMoreRect(null);
-    setCreateRect(open => open ? null : rect);
-  };
   const toggleMore = (event: ReactMouseEvent<HTMLButtonElement>) => {
     const rect = event.currentTarget.getBoundingClientRect();
-    setCreateRect(null);
     setMoreRect(open => open ? null : rect);
   };
 
@@ -126,7 +122,7 @@ export default function Sidebar() {
   const badgeFor = (key: string) => key === 'notifications' ? (badges?.notifications ?? 0) : key === 'messages' ? (badges?.messages ?? 0) : 0;
 
   const rowFor = (item: NavItem) => {
-    const active = item.panel ? panelKind === item.panel : item.create ? !!(createRect || composerOpen) : item.href ? current(item.href) : false;
+    const active = item.panel ? panelKind === item.panel : item.create ? create.isOpen : item.href ? current(item.href) : false;
     const body = <RowBody label={item.label} active={active} badge={badgeFor(item.key)}>
       {item.key === 'profile'
         ? <Avatar name={displayName(user)} avatarUrl={user.avatar} size={RAIL_AVATAR_SIZE} className={active ? 'ring-2 ring-text' : ''} />
@@ -134,7 +130,7 @@ export default function Sidebar() {
     </RowBody>;
     if (item.href) return <Link key={item.key} href={item.href} aria-current={active ? 'page' : undefined} aria-label={item.label} className={rowClass} onClick={closeOverlays}>{body}</Link>;
     if (item.panel) return <button key={item.key} type="button" aria-label={item.label} aria-expanded={panelKind === item.panel} aria-controls="app-panel" className={rowClass} onClick={() => togglePanel(item.panel as PanelKind)}>{body}</button>;
-    return <button key={item.key} type="button" aria-label={item.label} aria-haspopup="menu" aria-expanded={!!createRect} className={rowClass} onClick={toggleCreate}>{body}</button>;
+    return <button key={item.key} type="button" aria-label={item.label} aria-expanded={create.isOpen} className={rowClass} onClick={() => { setMoreRect(null); create.open(); }}>{body}</button>;
   };
 
   return <>
@@ -153,11 +149,9 @@ export default function Sidebar() {
       </div>
     </aside>
     {panelKind && <SidePanels kind={panelKind} open={panelOpen} onClose={closePanel} panelRef={panelRef} />}
-    {createRect && <MenuPanel menuRef={menuRef} rect={createRect} width={200} placement="right" label="Create">
-      <MenuItem onClick={() => { setCreateRect(null); openComposer(); }}><SquarePlus size={20} aria-hidden="true" />Post</MenuItem>
-    </MenuPanel>}
     {moreRect && <MenuPanel menuRef={menuRef} rect={moreRect} width={266} placement="above" label="More">
       <MoreMenuContent onClose={() => setMoreRect(null)} onLogout={() => void logout()} loggingOut={loggingOut} />
     </MenuPanel>}
+    {create.modal}
   </>;
 }
