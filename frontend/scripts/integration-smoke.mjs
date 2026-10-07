@@ -205,6 +205,15 @@ async function postMenu(page, label) {
   await until(page, `!!document.querySelector('[role="menuitem"]')`, 'the post options menu opens');
   await evaluate(page, `(() => { const item = [...document.querySelectorAll('[role="menuitem"]')].find(node => node.textContent.trim() === ${JSON.stringify(label)}); if (!item) throw new Error('Menu item not found: ' + ${JSON.stringify(label)}); item.click(); })()`);
 }
+// Account actions — Change password, Saved, Theme, Log out — live behind the profile's settings
+// gear rather than as their own buttons, so reaching one is two steps: open the gear, then press
+// the row. `until` between them, because the rows do not exist until React has re-rendered.
+async function settingsItem(page, label) {
+  await until(page, `!!document.querySelector('[aria-label="Options"]')`, 'the profile settings gear');
+  await evaluate(page, `document.querySelector('[aria-label="Options"]').click()`);
+  await until(page, `!!document.querySelector('[role="menuitem"]')`, 'the settings menu opens');
+  await evaluate(page, `(() => { const item = [...document.querySelectorAll('[role="menuitem"]')].find(node => node.textContent.trim() === ${JSON.stringify(label)}); if (!item) throw new Error('Menu item not found: ' + ${JSON.stringify(label)}); item.click(); })()`);
+}
 
 // A click on a page that was just created can land before React has attached its
 // handler. The button is in the server-rendered HTML, so the click is accepted and
@@ -306,20 +315,26 @@ try {
   assert.equal(originalDummy.nickname, 'dummyuser');
   console.log('PASS: authenticated frontend loads through the same-origin proxy');
 
-  // The feed's "People you may know" rail: it offers members the viewer does not follow,
-  // and following one from it takes them out of the rail. The follow is undone at the end,
-  // because the request flows later in this suite start from nobody following anybody.
+  // The feed's "Suggested for you" column: it offers people the viewer does not already
+  // follow, and acting on one switches that row to "Following" (or "Requested" when the
+  // profile is private). The write is undone at the end, because the request flows later in
+  // this suite start from nobody following anybody.
   await until(dummy, `!!document.querySelector('section[aria-label="Suggested for you"]')`, 'the feed offers people to follow', 15000);
-  const suggestion = (await api(dummy, '/users?q=alexdemo')).find(person => person.nickname === 'alexdemo');
-  assert(suggestion, 'Alex must be someone the rail can offer');
-  await until(dummy, `document.querySelector('section[aria-label="Suggested for you"]').innerText.includes('@alexdemo')`, 'the rail offers Alex');
-  await evaluate(dummy, `[...document.querySelectorAll('section[aria-label="Suggested for you"] button')].find(candidate => candidate.textContent === 'Follow').click()`);
-  await until(dummy, `!(document.querySelector('section[aria-label="Suggested for you"]')?.innerText || '').includes('@alexdemo')`, 'the followed member leaves the rail');
-  assert(await evaluate(dummy, `(async () => (await (await fetch('/api/v1/users/me')).json()).data.following.includes(${JSON.stringify(suggestion.userId)}))()`), 'following from the rail must reach the account');
-  await api(dummy, `/users/${suggestion.userId}/follow`, 'DELETE');
+  const findFollow = `[...document.querySelectorAll('section[aria-label="Suggested for you"] button')].find(candidate => candidate.textContent === 'Follow')`;
+  assert(await evaluate(dummy, `!!(${findFollow})`), 'the rail offers a person to follow');
+  const offeredId = await evaluate(dummy, `(() => { const row = (${findFollow}).closest('li'); const link = row.querySelector('a[href^="/profile/"]'); return link ? link.getAttribute('href').split('/').pop() : null; })()`);
+  assert(offeredId, 'the suggested row links to the person it offers');
+  const offeredProfile = await api(dummy, `/users/${offeredId}`);
+  const offeredRow = state => `(() => { const link = document.querySelector('section[aria-label="Suggested for you"] a[href$="/profile/${offeredId}"]'); return !!link && link.closest('li').innerText.includes(${JSON.stringify(state)}); })()`;
+  await evaluate(dummy, `(${findFollow}).click()`);
+  const expected = offeredProfile.isPublic ? 'Following' : 'Requested';
+  await until(dummy, offeredRow(expected), `the acted row switches to ${expected}`);
+  if (offeredProfile.isPublic) assert(await evaluate(dummy, `(async () => (await (await fetch('/api/v1/users/me')).json()).data.following.includes(${JSON.stringify(offeredId)}))()`), 'following from the rail must reach the account');
+  else assert((await api(dummy, `/users/${offeredId}`)).pendingOutgoing === true, 'a private suggestion must leave a pending request');
+  await api(dummy, `/users/${offeredId}/follow`, 'DELETE');
   await navigate(dummy, '/');
-  await until(dummy, `(document.querySelector('section[aria-label="Suggested for you"]')?.innerText || '').includes('@alexdemo')`, 'unfollowing offers the member again');
-  console.log('PASS: the feed offers people you may know, and following one takes them out of it');
+  await until(dummy, `(() => { const link = document.querySelector('section[aria-label="Suggested for you"] a[href$="/profile/${offeredId}"]'); return !!link && link.closest('li').innerText.includes('Follow') && !link.closest('li').innerText.includes('Following') && !link.closest('li').innerText.includes('Requested'); })()`, 'unfollowing offers the member again');
+  console.log('PASS: the feed suggests people to follow, and acting on one settles the row');
 
   await navigate(dummy, '/create-post');
   // A post is a description and its media now — there is no title field — so the text alone names
@@ -547,7 +562,10 @@ try {
   assert(await evaluate(alex, `!!document.querySelector('button[aria-label="New message"]')`));
   await navigate(alex, `/post/${postId}`);
   await until(alex, `!!document.querySelector('button[aria-label="Like post"]')`, 'other author post');
-  assert(!(await evaluate(alex, `!!document.querySelector('[aria-label="Post options"]')`)));
+  await evaluate(alex, `document.querySelector('[aria-label="Post options"]').click()`);
+  await until(alex, `!!document.querySelector('[role="menuitem"]')`, 'the post menu opens');
+  assert(!(await evaluate(alex, `[...document.querySelectorAll('[role="menuitem"]')].some(item => ['Edit', 'Delete'].includes(item.textContent.trim()))`)), 'a non-owner is offered no Edit or Delete');
+  await evaluate(alex, `document.querySelector('[aria-label="Post options"]').click()`);
   await navigate(alex, `/post/${postId}/edit`);
   await until(alex, `document.body.innerText.includes('You can only edit your own posts.')`, 'non-owner editor denied');
   assert(!(await evaluate(alex, `!!document.querySelector('textarea')`)), 'the editor is not offered to a non-owner');
@@ -567,18 +585,18 @@ try {
   console.log("PASS: a post's insights belong to its author alone");
   assert(await evaluate(alex, `!!document.querySelector('#comment-${postId}')`), 'Post comments open by default');
   await fill(alex, `#comment-${postId}`, `Browser comment ${stamp}`);
-  await button(alex, 'Comment');
+  await evaluate(alex, `document.querySelector('.pv-post').click()`);
   await until(alex, `document.body.innerText.includes(${JSON.stringify(`Browser comment ${stamp}`)}) && document.querySelector('textarea').value === ''`, 'comment creation');
   await fill(alex, `#comment-${postId}`, 'Draft preserved while voting');
-  await evaluate(alex, `window.commentRow = document.querySelector('[aria-label="Upvote comment"]').parentElement.parentElement; performance.clearResourceTimings()`);
-  for (const [label, score] of [['Upvote comment', 1], ['Upvote comment', 0], ['Downvote comment', -1], ['Upvote comment', 1]]) {
-    await evaluate(alex, `document.querySelector('[aria-label="${label}"]').click()`);
-    await until(alex, `document.querySelector('[aria-label="Upvote comment"]').nextElementSibling.textContent === '${score}' && !document.querySelector('[aria-label="Upvote comment"]').disabled`, `comment score ${score}`);
-    assert(await evaluate(alex, `window.commentRow === document.querySelector('[aria-label="Upvote comment"]').parentElement.parentElement && document.querySelector('textarea').value === 'Draft preserved while voting'`));
-  }
-  const refetchedWhileVoting = await evaluate(alex, `performance.getEntriesByType('resource').map(entry => entry.name).filter(name => name.includes('/api/v1/post'))`);
-  assert.deepEqual(refetchedWhileVoting, [], `Comment voting must not refetch the post or comments: ${JSON.stringify(refetchedWhileVoting)}`);
-  console.log('PASS: comment votes toggle in place without refetching or losing the draft');
+  await evaluate(alex, `window.commentRow = document.querySelector('[aria-label="Like comment"], [aria-label="Unlike comment"]').closest('.pv-cmt'); performance.clearResourceTimings()`);
+  await evaluate(alex, `document.querySelector('[aria-label="Like comment"]').click()`);
+  await until(alex, `!!document.querySelector('[aria-label="Unlike comment"]') && window.commentRow.innerText.includes('1 like')`, 'the comment is liked');
+  assert(await evaluate(alex, `window.commentRow === document.querySelector('[aria-label="Unlike comment"]').closest('.pv-cmt') && document.querySelector('textarea').value === 'Draft preserved while voting'`), 'liking must keep the draft and the row');
+  await evaluate(alex, `document.querySelector('[aria-label="Unlike comment"]').click()`);
+  await until(alex, `!!document.querySelector('[aria-label="Like comment"]') && !window.commentRow.innerText.includes('1 like')`, 'the comment like is removed');
+  const refetchedWhileVoting = await evaluate(alex, `performance.getEntriesByType('resource').map(entry => entry.name).filter(name => name.includes('/api/v1/post') || name.includes('/api/v1/reaction'))`);
+  assert.deepEqual(refetchedWhileVoting, [], `Comment liking must not refetch the post or comments: ${JSON.stringify(refetchedWhileVoting)}`);
+  console.log('PASS: comment likes toggle in place without refetching or losing the draft');
 
   // A comment can carry an uploaded photo, exactly like a post.
   const commentPhotoFixture = path.join(taskDir, 'comment-photo.png');
@@ -586,9 +604,9 @@ try {
   const commentDocument = await command('DOM.getDocument', {}, alex);
   const commentPicker = await command('DOM.querySelector', { nodeId: commentDocument.root.nodeId, selector: 'input[aria-label="Add photos"]' }, alex);
   await command('DOM.setFileInputFiles', { nodeId: commentPicker.nodeId, files: [commentPhotoFixture] }, alex);
-  await until(alex, `!!document.querySelector('img[alt="Preview of comment-photo.png"]')`, 'comment photo preview');
+  await until(alex, `!!document.querySelector('img[alt="comment-photo.png"]')`, 'comment photo preview');
   await fill(alex, `#comment-${postId}`, `Browser comment with a photo ${stamp}`);
-  await button(alex, 'Comment');
+  await evaluate(alex, `document.querySelector('.pv-post').click()`);
   await until(alex, `!!document.querySelector('img[alt="Comment attachment"]')`, 'comment photo renders');
   const photoComment = (await api(alex, `/posts/comments?postId=${postId}`)).comments.find(item => item.commentText === `Browser comment with a photo ${stamp}`);
   assert(photoComment && photoComment.imageUrls.length === 1, `the comment kept its photo: ${JSON.stringify(photoComment)}`);
@@ -655,11 +673,11 @@ try {
   await until(dummy, `!!document.querySelector(${JSON.stringify(feedMedia)})`, 'the post is on the feed with its media');
   await clickAt(dummy, feedMedia);
   await until(dummy, `!!document.querySelector('[role="dialog"][aria-label="Post"]')`, 'the feed opens the post overlay');
-  assert(await evaluate(dummy, `(() => { const dialog = document.querySelector('[role="dialog"][aria-label="Post"]'); return !!dialog.querySelector('img[alt="Post attachment"]') && !!dialog.querySelector('#comment-${postId}') && !!dialog.querySelector('button[aria-label="Like post"], button[aria-label="Unlike post"]'); })()`), 'the overlay holds the media, the composer and the post actions');
+  assert(await evaluate(dummy, `(() => { const dialog = document.querySelector('[role="dialog"][aria-label="Post"]'); return !!dialog.querySelector('img[alt^="Photo by"]') && !!dialog.querySelector('#comment-${postId}') && !!dialog.querySelector('button[aria-label="Like post"], button[aria-label="Unlike post"]'); })()`), 'the overlay holds the media, the composer and the post actions');
   const overlayDocument = await command('DOM.getDocument', {}, dummy);
   const overlayPicker = await command('DOM.querySelector', { nodeId: overlayDocument.root.nodeId, selector: '[role="dialog"][aria-label="Post"] input[aria-label="Add photos"]' }, dummy);
   await command('DOM.setFileInputFiles', { nodeId: overlayPicker.nodeId, files: [commentPhotoFixture] }, dummy);
-  await until(dummy, `!!document.querySelector('[role="dialog"][aria-label="Post"] img[alt="Preview of comment-photo.png"]')`, 'the overlay previews a comment photo');
+  await until(dummy, `!!document.querySelector('[role="dialog"][aria-label="Post"] img[alt="comment-photo.png"]')`, 'the overlay previews a comment photo');
   await fill(dummy, `[role="dialog"][aria-label="Post"] #comment-${postId}`, `Overlay comment ${stamp}`);
   await evaluate(dummy, `[...document.querySelectorAll('[role="dialog"][aria-label="Post"] button')].find(button => button.textContent.trim() === 'Post').click()`);
   // Wait for this comment's own text, not just any `Comment attachment`: the post already carries a
@@ -698,13 +716,13 @@ try {
   const ownProfileData = await api(alex, '/users/me');
   const shownPostCount = await evaluate(alex, `Number((document.querySelector('[aria-label="Post count"]')?.innerText.match(/[0-9]+/) || [NaN])[0])`);
   assert.equal(shownPostCount, ownProfileData.postCount, `the header shows the profile's own post count: ${shownPostCount} vs ${ownProfileData.postCount}`);
-  await evaluate(alex, `[...document.querySelectorAll('button')].find(item => item.textContent.trim() === 'media').click()`);
+  await evaluate(alex, `document.querySelector('[data-tab="media"]').click()`);
   await until(alex, `[...document.querySelectorAll('a[href="/post/${postId}"] img')].some(image => { const src = image.getAttribute('src') || ''; return src.startsWith(${JSON.stringify(commentPhoto)}) && src.includes('size='); })`, 'comment photo in the profile media tab');
-  // The grid is three columns of squares rather than two columns of fixed-height rectangles.
-  const mediaGrid = await evaluate(alex, `(() => { const grid = document.querySelector('[data-media-grid]'); const tile = grid.querySelector('img'); const box = tile.getBoundingClientRect(); return { columns: getComputedStyle(grid).gridTemplateColumns.split(' ').length, square: Math.abs(box.width - box.height) < 1.5, width: Math.round(box.width) }; })()`);
+  // The 935px column is its full width at any desktop viewport, so the grid is three columns of 3:4 tiles.
+  const mediaGrid = await evaluate(alex, `(() => { const grid = document.querySelector('[data-media-grid]'); const tile = grid.querySelector('img'); const box = tile.getBoundingClientRect(); return { columns: getComputedStyle(grid).gridTemplateColumns.split(' ').length, ratio: box.width / box.height, width: Math.round(box.width) }; })()`);
   assert.equal(mediaGrid.columns, 3, `the media grid is three columns: ${JSON.stringify(mediaGrid)}`);
-  assert(mediaGrid.square, `the media tiles are square: ${JSON.stringify(mediaGrid)}`);
-  console.log('PASS: the profile header counts posts and the media tab is a three-column square grid');
+  assert(Math.abs(mediaGrid.ratio - 3 / 4) < 0.02, `the media tiles are 3:4 portrait: ${JSON.stringify(mediaGrid)}`);
+  console.log('PASS: the profile header counts posts and the media tab is a three-column portrait grid');
   console.log('PASS: the profile media tab lists the comment photo');
 
   // Upload edge cases through the same-origin path the composers use: an empty
@@ -1030,7 +1048,7 @@ try {
   // author's profile rather than in the feed's strip. The demo seed leaves one expired story behind,
   // because nothing can pass a story's real 24-hour life inside a run.
   await navigate(dummy, '/profile');
-  await button(dummy, 'Your archive');
+  await button(dummy, 'View archive');
   await until(dummy, `document.querySelector('[role="dialog"][aria-label="Story archive"]')?.innerText.includes('From yesterday, kept in the archive')`, 'the author reads an archived story');
   console.log("PASS: an expired story stays in its author's archive");
   await evaluate(dummy, `[...document.querySelectorAll('[role="dialog"][aria-label="Story archive"] button')].find(candidate => candidate.textContent.trim() === 'Close')?.click()`);
@@ -1232,7 +1250,7 @@ try {
   // replacement cookie. The seeded password is restored at the end, because the
   // rest of the suite signs in with it.
   await navigate(dummy, '/profile');
-  await button(dummy, 'Change password');
+  await settingsItem(dummy, 'Change password');
   await until(dummy, `!!document.querySelector('[aria-label="Change password"]')`, 'password dialog');
   await fill(dummy, 'input[name="currentPassword"]', 'DummyUser123!');
   await fill(dummy, 'input[name="newPassword"]', 'BrowserRotate123!');
@@ -1246,7 +1264,7 @@ try {
   assert(await evaluate(dummy, `document.cookie.indexOf('session_token') === -1`), 'the rotated session cookie must stay HttpOnly');
   console.log('PASS: the password dialog rotates the session and this tab keeps working');
 
-  await button(dummy, 'Change password');
+  await settingsItem(dummy, 'Change password');
   await until(dummy, `!!document.querySelector('[aria-label="Change password"]')`, 'password dialog for the restore');
   await fill(dummy, 'input[name="currentPassword"]', 'BrowserRotate123!');
   await fill(dummy, 'input[name="newPassword"]', 'DummyUser123!');
