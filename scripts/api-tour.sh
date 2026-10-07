@@ -253,6 +253,11 @@ call "$JAR_A" GET "/api/v1/posts/$POST_A/insights" 200
 
 # route: GET /api/v1/users
 call "$JAR_A" GET "/api/v1/users?page=1" 200
+# The feed's "Suggested for you" column: a few accounts A does not follow yet, ranked by
+# mutual follows. Its literal segment sits beside `{userId}` on purpose — the mux prefers the
+# more specific pattern, so this is not read as a profile id.
+# route: GET /api/v1/users/suggestions
+call "$JAR_A" GET "/api/v1/users/suggestions?limit=5" 200
 # route: GET /api/v1/users/{userId}
 call "$JAR_A" GET "/api/v1/users/$USER_B" 200
 # A mention only has the text of a handle, so this is the route that turns one into the
