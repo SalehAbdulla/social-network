@@ -352,11 +352,30 @@ func (db *DB) DecideFollowRequest(recipient, requester string, accept bool) erro
 	return tx.Commit()
 }
 
-func (db *DB) ProfilePostIDs(userID string, liked bool, offset int, viewerID string) ([]string, error) {
+// ProfilePostIDs lists the posts a profile owns (or the ones it liked), newest first, filtered
+// by the feed's own visibility rule. The ids it answers with are the post table's own keys; the
+// caller reads each post through GetPostByID, which is where the public UUID is attached.
+func (db *DB) ProfilePostIDs(userID string, liked bool, offset int, viewerID string) ([]int, error) {
+	query := "SELECT p.postId FROM post p WHERE p.userId=? AND " + postVisibility + " ORDER BY p.createdAt DESC, p.postId DESC LIMIT 20 OFFSET ?"
+	args := []any{userID, viewerID, viewerID, viewerID, viewerID, offset}
 	if liked {
-		return db.stringList("SELECT CAST(p.postId AS TEXT) FROM post p JOIN reaction r ON r.entityType='post' AND r.entityId=p.postId WHERE r.userId=? AND r.score=1 AND p.userId=? AND "+postVisibility+" ORDER BY p.createdAt DESC, p.postId DESC LIMIT 20 OFFSET ?", userID, userID, viewerID, viewerID, viewerID, viewerID, offset)
+		query = "SELECT p.postId FROM post p JOIN reaction r ON r.entityType='post' AND r.entityId=p.postId WHERE r.userId=? AND r.score=1 AND p.userId=? AND " + postVisibility + " ORDER BY p.createdAt DESC, p.postId DESC LIMIT 20 OFFSET ?"
+		args = []any{userID, userID, viewerID, viewerID, viewerID, viewerID, offset}
 	}
-	return db.stringList("SELECT CAST(p.postId AS TEXT) FROM post p WHERE p.userId=? AND "+postVisibility+" ORDER BY p.createdAt DESC, p.postId DESC LIMIT 20 OFFSET ?", userID, viewerID, viewerID, viewerID, viewerID, offset)
+	rows, err := db.Conn.Query(query, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	ids := []int{}
+	for rows.Next() {
+		var id int
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		ids = append(ids, id)
+	}
+	return ids, rows.Err()
 }
 
 // ProfileMedia merges the photos a user published in posts with the ones they
@@ -365,10 +384,10 @@ func (db *DB) ProfilePostIDs(userID string, liked bool, offset int, viewerID str
 func (db *DB) ProfileMedia(userID string, offset int, viewerID string) ([]models.MediaItem, error) {
 	rows, err := db.Conn.Query(`
 		SELECT image.value, media.postId, media.title, media.createdAt FROM (
-			SELECT p.postId AS postId, p.title AS title, p.imageUrls AS imageUrls, p.createdAt AS createdAt
+			SELECT p.publicId AS postId, p.title AS title, p.imageUrls AS imageUrls, p.createdAt AS createdAt
 			FROM post p WHERE p.userId = ? AND `+postVisibility+`
 			UNION ALL
-			SELECT c.postId AS postId, c.content AS title, c.imageUrls AS imageUrls, c.createdAt AS createdAt
+			SELECT p.publicId AS postId, c.content AS title, c.imageUrls AS imageUrls, c.createdAt AS createdAt
 			FROM comment c JOIN post p ON p.postId = c.postId WHERE c.userId = ? AND `+postVisibility+`
 		) media, json_each(media.imageUrls) image
 		WHERE image.value <> ''
