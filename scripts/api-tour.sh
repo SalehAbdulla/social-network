@@ -219,9 +219,10 @@ call "$JAR_A" GET "$MEDIA_A" 200
 call "$JAR_A" GET "/api/v1/media/00000000-0000-0000-0000-000000000000" 404
 
 # route: POST /api/v1/reactions
-call "$JAR_A" POST /api/v1/reactions 200 "{\"entityType\":\"post\",\"entityId\":$POST_A,\"score\":1}"
+# A post is named by its public UUID (migration 000020), so the id travels as a JSON string.
+call "$JAR_A" POST /api/v1/reactions 200 "{\"entityType\":\"post\",\"entityId\":\"$POST_A\",\"score\":1}"
 # route: POST /api/v1/posts/comments
-call "$JAR_B" POST /api/v1/posts/comments 201 "{\"postId\":$POST_A,\"content\":\"A comment from the API tour.\",\"imageUrls\":[]}"
+call "$JAR_B" POST /api/v1/posts/comments 201 "{\"postId\":\"$POST_A\",\"content\":\"A comment from the API tour.\",\"imageUrls\":[]}"
 COMMENT_B="$(field "$BODY" data.commentId)"
 # route: GET /api/v1/posts/comments
 call "$JAR_A" GET "/api/v1/posts/comments?postId=$POST_A&page=1&size=10&sortBy=createdat&sortOrder=desc" 200
