@@ -27,6 +27,11 @@ test('groupStories keeps first-appearance order and plays each author oldest fir
   assert.deepEqual(groups[1].stories.map(s => s.storyId), [9]);
 });
 
+test('groupStories plays an author unseen first, then seen, each in creation order', () => {
+  const groups = groupStories([story(1, 'a', true), story(2, 'a', false), story(3, 'a', true), story(4, 'a', false)]);
+  assert.deepEqual(groups[0].stories.map(s => s.storyId), [2, 4, 1, 3]);
+});
+
 test('firstUnseenIndex picks the earliest unseen, falls back to the first, handles empty', () => {
   assert.equal(firstUnseenIndex([story(1, 'a', true), story(2, 'a', false), story(3, 'a', false)]), 1);
   assert.equal(firstUnseenIndex([story(1, 'a', true), story(2, 'a', true)]), 0);
@@ -59,16 +64,16 @@ test('findPosition locates a story by id, and null when it is absent', () => {
 
 test('positionForUser opens at the requested story, else the author first unseen', () => {
   const groups = groupStories([story(1, 'a', true), story(2, 'a', false), story(3, 'b')]);
-  assert.deepEqual(positionForUser(groups, 'a', 1), { user: 0, story: 0 });
+  assert.deepEqual(positionForUser(groups, 'a', 1), { user: 0, story: 1 });
   // unknown story id for a known author → first unseen
-  assert.deepEqual(positionForUser(groups, 'a', 42), { user: 0, story: 1 });
+  assert.deepEqual(positionForUser(groups, 'a', 42), { user: 0, story: 0 });
   assert.deepEqual(positionForUser(groups, 'b'), { user: 1, story: 0 });
   assert.equal(positionForUser(groups, 'zzz'), null);
 });
 
 test('startPosition is the first author first unseen, or null with nothing to show', () => {
   const groups = groupStories([story(1, 'a', true), story(2, 'a', false), story(3, 'b')]);
-  assert.deepEqual(startPosition(groups), { user: 0, story: 1 });
+  assert.deepEqual(startPosition(groups), { user: 0, story: 0 });
   assert.equal(startPosition([]), null);
 });
 

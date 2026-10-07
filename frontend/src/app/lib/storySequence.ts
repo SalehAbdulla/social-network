@@ -28,8 +28,10 @@ export interface Position {
 
 /**
  * Groups a flat listing into one group per author, keeping the order of first appearance —
- * which is the server's own order, newest author first — and sorting each author's stories
- * oldest first so a tapped row plays the way it was shot rather than in reverse.
+ * which is the server's own order, unseen author first. Within an author a story the viewer has
+ * not opened plays before one they have, so a ring lands on something new, and each run stays in
+ * the order it was shot (oldest first). A story that has just been viewed therefore moves to the
+ * end of its author's run.
  */
 export function groupStories<T extends SequencedStory>(stories: T[]): StoryGroup<T>[] {
   const groups: StoryGroup<T>[] = [];
@@ -43,7 +45,7 @@ export function groupStories<T extends SequencedStory>(stories: T[]): StoryGroup
     }
     group.stories.push(story);
   }
-  for (const group of groups) group.stories.sort((a, b) => a.storyId - b.storyId);
+  for (const group of groups) group.stories.sort((a, b) => a.viewed === b.viewed ? a.storyId - b.storyId : a.viewed ? 1 : -1);
   return groups;
 }
 
