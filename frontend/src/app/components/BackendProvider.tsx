@@ -2,7 +2,7 @@
 
 import { createContext, useCallback, useContext, useEffect, useRef, useState, Suspense } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
-import { errorMessage, isUnauthorized, request, type SocialUser, type SocketEvent } from '../api/social';
+import { errorMessage, isUnauthorized, request, savedAccounts, type SavedAccount, type SocialUser, type SocketEvent } from '../api/social';
 import { notifyError } from '../lib/notify';
 import { useLiveRefresh } from '../lib/useLiveRefresh';
 import Loading from './Loading';
@@ -10,6 +10,7 @@ import Sidebar from './SideBar';
 import TopBar from './TopBar';
 import BottomNav from './BottomNav';
 import MessagesDock from './MessagesDock';
+import SwitchAccounts from './SwitchAccounts';
 
 interface Session {
   user: SocialUser;
@@ -18,6 +19,9 @@ interface Session {
   sendEvent: (event: SocketEvent) => void;
   /** The bell and Messages badges, fetched once here so both bars read one answer. */
   badges: { notifications: number; messages: number } | null;
+  /** The accounts this browser saved, read once here for the switcher and the rail. */
+  accounts: SavedAccount[];
+  refreshAccounts: () => Promise<void>;
 }
 const Context = createContext<Session | null>(null);
 
@@ -46,6 +50,8 @@ function AuthenticatedBackend({ children }: { children: React.ReactNode }) {
   const [socket, setSocket] = useState<WebSocket | null>(null);
   const [reconnecting, setReconnecting] = useState(false);
   const [badges, setBadges] = useState<{ notifications: number; messages: number } | null>(null);
+  const [accounts, setAccounts] = useState<SavedAccount[]>([]);
+  const [switcherOpen, setSwitcherOpen] = useState(false);
   const sessionRevision = useRef(0);
 
   const redirectToLogin = useCallback(() => {
@@ -124,6 +130,27 @@ function AuthenticatedBackend({ children }: { children: React.ReactNode }) {
     if (socket?.readyState === WebSocket.OPEN) socket.send(JSON.stringify(event));
   }, [socket]);
 
+  // The accounts this browser saved, so the rail's "Switch accounts" and the right
+  // rail's account row can offer them and the switcher can be drawn. Reading also
+  // prunes tokens whose sessions were revoked elsewhere, so the count is the truth.
+  const refreshAccounts = useCallback(async () => {
+    try {
+      const saved = await savedAccounts();
+      setAccounts(saved.accounts);
+    } catch { /* a failed read is not worth a toast; the 401 path above handled it */ }
+  }, []);
+  useEffect(() => {
+    if (!userId) { setAccounts([]); return; }
+    void refreshAccounts();
+  }, [userId, refreshAccounts]);
+  // Every "switch accounts" affordance opens the one dialog mounted here, rather
+  // than each surface growing its own copy.
+  useEffect(() => {
+    const open = () => setSwitcherOpen(true);
+    window.addEventListener('social:switch-accounts', open);
+    return () => window.removeEventListener('social:switch-accounts', open);
+  }, []);
+
   // Both badges are read here rather than in `SideBar`, because two surfaces now show
   // them — the sidebar and the top bar — and a fetch each would be exactly the duplicate
   // the sidebar used to pay. `useLiveRefresh` puts the socket event and the poll in one
@@ -167,7 +194,7 @@ function AuthenticatedBackend({ children }: { children: React.ReactNode }) {
     <button className="rounded-lg bg-blue-600 px-5 py-2 text-white" onClick={() => void initialize()}>Reconnect</button>
   </div>;
   if (!user) return <Loading />;
-  return <Context.Provider value={{ user, refreshUser, connected: socket?.readyState === WebSocket.OPEN, sendEvent, badges }}><div key={user.userId} className="flex min-h-screen w-full min-w-0">
+  return <Context.Provider value={{ user, refreshUser, connected: socket?.readyState === WebSocket.OPEN, sendEvent, badges, accounts, refreshAccounts }}><div key={user.userId} className="flex min-h-screen w-full min-w-0">
     <Sidebar />
     {/* The rail is `fixed` and overlays this column, so its width never reflows it: the posts stay
         exactly where they are whether the rail has grown under the pointer, is at rest, or a
@@ -187,5 +214,6 @@ function AuthenticatedBackend({ children }: { children: React.ReactNode }) {
           prerendered route — the same reason the feed wraps its overlay. */}
       <Suspense fallback={null}><MessagesDock /></Suspense>
     </div>
+    <SwitchAccounts open={switcherOpen} onClose={() => setSwitcherOpen(false)} accounts={accounts} activeUserId={user.userId} refreshAccounts={refreshAccounts} />
   </div></Context.Provider>;
 }
