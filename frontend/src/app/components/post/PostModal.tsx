@@ -14,7 +14,7 @@ import PostView from './PostView';
 export default function PostModal({ post, onClose, onRemoved, onPrev, onNext, group = false, avatarOf, canManage, sharePath, thread, onEdit, onDelete }: {
   post: Post;
   onClose: () => void;
-  onRemoved?: (postId: number) => void;
+  onRemoved?: (postId: string) => void;
   /** Present only when the opener held a list: the grid, saved, a hashtag, search. */
   onPrev?: () => void;
   onNext?: () => void;
