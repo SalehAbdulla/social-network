@@ -7,6 +7,7 @@ import (
 	"flag"
 	"fmt"
 	"log"
+	"os"
 	"path/filepath"
 
 	"github.com/google/uuid"
@@ -28,12 +29,13 @@ const (
 
 func main() {
 	demo := flag.Bool("demo", false, "also create Alex Demo for testing social features")
+	showcase := flag.Bool("showcase", false, "seed the full showcase dataset: members, posts, comments, stories, groups, chats, notifications and suggestions")
 	flag.Parse()
 	backendDir, err := config.BackendDir()
 	if err != nil {
 		log.Fatal(err)
 	}
-	database, err := sql.Open("sqlite3", filepath.Join(backendDir, "pkg", "db", "socialnetwork.db"))
+	database, err := sql.Open("sqlite3", filepath.Join(backendDir, "pkg", "db", "socialnetwork.db")+"?_busy_timeout=5000")
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -43,21 +45,37 @@ func main() {
 		log.Fatal(err)
 	}
 
-	userID, created, err := seedDummyUser(&repositories.DB{Conn: database})
+	repo := &repositories.DB{Conn: database}
+	userID, created, err := seedDummyUser(repo)
 	if err != nil {
 		log.Fatal(err)
 	}
-	if *demo {
-		if _, _, err := seedUser(&repositories.DB{Conn: database}, "alex@example.com", "alexdemo", "Alex", "Demo"); err != nil {
+	// Both richer modes need the second fixture account: the demo for two-party flows, the showcase
+	// because it posts as Alex and addresses Alex by handle.
+	if *demo || *showcase {
+		if _, _, err := seedUser(repo, "alex@example.com", "alexdemo", "Alex", "Demo"); err != nil {
 			log.Fatal(err)
 		}
 		// A story that has already expired, so the author's archive has something in it: a fresh
 		// database can never pass a story's own 24-hour life inside a run, and the archive is a
 		// surface that shows nothing without one.
-		if err := seedArchivedStory(&repositories.DB{Conn: database}, userID); err != nil {
+		if err := seedArchivedStory(repo, userID); err != nil {
 			log.Fatal(err)
 		}
-		fmt.Println("Alex Demo is ready (alex@example.com).")
+		if *demo {
+			fmt.Println("Alex Demo is ready (alex@example.com).")
+		}
+	}
+	if *showcase {
+		uploadsDir := os.Getenv("UPLOAD_DIR")
+		if uploadsDir == "" {
+			uploadsDir = filepath.Join(backendDir, "uploads")
+		}
+		if err := seedShowcase(repo, uploadsDir); err != nil {
+			log.Fatal(err)
+		}
+		fmt.Printf("Showcase dataset is ready.\nSign in as %s or alex@example.com with %s, or as any of the %d seeded members with %s.\n",
+			dummyEmail, dummyPassword, len(showcaseMembers), showcasePassword)
 	}
 	if !created {
 		fmt.Printf("Dummy user already exists: %s (userId: %s). Left unchanged.\n", dummyEmail, userID)
