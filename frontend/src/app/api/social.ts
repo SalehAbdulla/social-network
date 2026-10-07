@@ -36,7 +36,7 @@ export interface UserSuggestion {
   avatar: string; isPublic: boolean; mutuals: string[]; mutualCount: number;
 }
 export interface Post {
-  postId: number; userId: string; nickname: string; firstName: string; lastName: string; title: string; content: string;
+  postId: string; userId: string; nickname: string; firstName: string; lastName: string; title: string; content: string;
   imageUrls: string[]; privacy: 'public' | 'followers' | 'selected'; selectedFollowerIds?: string[];
   score: number; userScore: number; commentsCounter: number; createdAt: string; updatedAt: string;
   // Viewer-relative: true when the signed-in member has this post bookmarked.
@@ -52,7 +52,7 @@ export interface ReactionDay { day: string; total: number; up: number; down: num
  * reaches followers only, the same distinction `audienceSummary` draws for the composer.
  */
 export interface PostInsights {
-  postId: number;
+  postId: string;
   reach: { audience: 'everyone' | 'followers' | 'selected'; count: number };
   reactions: number; up: number; down: number; comments: number;
   days: ReactionDay[];
@@ -109,11 +109,11 @@ function listNames(names: string[]): string {
 
 export interface Page<T> { posts: T[]; totalPages: number; totalElements: number; lastPage: boolean }
 export interface Comment {
-  commentId: number; postId: number; userId: string; nickname: string; commentText: string;
+  commentId: number; postId: string; userId: string; nickname: string; commentText: string;
   imageUrls: string[]; score: number; userScore: number; createdAt: string;
 }
 /** One photo in a profile's media tab, from a post or from a comment. */
-export interface MediaItem { url: string; postId: number; title: string; createdAt: string }
+export interface MediaItem { url: string; postId: string; title: string; createdAt: string }
 export interface Story {
   storyId: number; userId: string; nickname: string; avatar: string; content: string;
   mediaUrl: string; mediaType: 'text' | 'image' | 'video'; backgroundColor: string; createdAt: string; expiresAt: string;
@@ -136,7 +136,7 @@ export interface ChatMessage {
 export interface ConversationMedia { messageId: number; mediaUrl: string; mediaType: string; timeStamp: string }
 
 export interface Notification {
-  notificationId: number; actorId: string; actorNickname: string; entityType: string; entityId: number; postId?: number; isRead: number; createdAt: string;
+  notificationId: number; actorId: string; actorNickname: string; entityType: string; entityId: number; postId?: string; isRead: number; createdAt: string;
 }
 export type FollowLists = Record<'followers' | 'following', SocialUser[]>;
 export interface Group { groupId: number; ownerId: string; ownerName: string; imageUrl: string; title: string; description: string; memberCount: number; isMember: boolean; isOwner: boolean; joinRequested: boolean; createdAt: string }
@@ -238,7 +238,7 @@ export async function resetPassword(token: string, password: string, confirmPass
  * the same limits again from the bytes themselves; this is the sooner, friendlier
  * half of a rule that is enforced there.
  */
-export async function upload(file: File): Promise<{ url: string; mediaType: 'image' | 'video' }> {
+export async function upload(file: File, signal?: AbortSignal): Promise<{ url: string; mediaType: 'image' | 'video' }> {
   if (!file.size) throw new Error('The selected file is empty.');
   if (!isImageType(file.type) && !isVideoType(file.type)) throw new Error('Choose a JPEG, PNG, GIF, WebP, MP4 or WebM file.');
   if (file.size > (isVideoType(file.type) ? MAX_VIDEO_BYTES : MAX_IMAGE_BYTES)) throw new Error(oversizeMessage(file));
@@ -250,7 +250,9 @@ export async function upload(file: File): Promise<{ url: string; mediaType: 'ima
   const prepared = await prepareUpload(file);
   const form = new FormData();
   form.append('file', prepared);
-  return request('/media', 'POST', form);
+  // `signal` lets the create-post dialog abandon an upload when the reader discards a
+  // failed share, so the request does not keep running after the dialog is gone.
+  return request('/media', 'POST', form, signal);
 }
 
 /**
@@ -273,11 +275,11 @@ export function displayName(user: { firstName?: string; lastName?: string; nickn
  * state — so the caller only has to decide what to show while the request is in
  * flight, not guard against a double click.
  */
-export async function savePost(postId: number): Promise<void> {
+export async function savePost(postId: string): Promise<void> {
   await request(`/posts/${postId}/save`, 'POST');
 }
 
-export async function unsavePost(postId: number): Promise<void> {
+export async function unsavePost(postId: string): Promise<void> {
   await request(`/posts/${postId}/save`, 'DELETE');
 }
 
