@@ -10,7 +10,8 @@ import { ImagePlus } from 'lucide-react';
  * helper text is now the photo button's tooltip.
  */
 export default function CommentComposer({ postId, value, onChange, onSubmit, busy, canAddPhoto, onPickFiles }: {
-  postId: number;
+  /** The post this thread belongs to: its public UUID for a feed post, a group row's id for a group. */
+  postId: string;
   value: string;
   onChange: (value: string) => void;
   onSubmit: () => void;
