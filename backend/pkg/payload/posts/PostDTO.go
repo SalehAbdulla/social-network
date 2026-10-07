@@ -2,7 +2,7 @@ package posts
 
 type PostDTO struct {
 	ImageURLs     []string `json:"imageUrls"`
-	PostId        int      `json:"postId"`
+	PostId        string   `json:"postId"`
 	UserId        string   `json:"userId"`
 	Privacy       string   `json:"privacy"`
 	SelectedUsers []string `json:"selectedFollowerIds,omitempty"`
