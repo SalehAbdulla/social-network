@@ -4,6 +4,8 @@ import (
 	"database/sql"
 	"errors"
 	"log/slog"
+	"strings"
+
 	realtimeforum "social-network/backend"
 	"social-network/backend/pkg/models"
 )
@@ -20,6 +22,10 @@ type AuthRepository interface {
 	PasswordHash(userID string) (string, error)
 	UpdatePassword(userID, hashedPassword string) error
 	UserIDByEmail(email string) (string, error)
+	// AccountsForUsers reads the account-switcher's view of a set of ids in one
+	// round trip. The caller has already resolved which tokens are live; this is
+	// only the display data.
+	AccountsForUsers(userIDs []string) (map[string]models.SavedAccount, error)
 }
 
 // UserIDByEmail resolves an address to the account that owns it. The address is
@@ -169,6 +175,42 @@ func (db *DB) DoesUserExists(userID string) error {
 		return realtimeforum.ErrNotFound
 	}
 	return nil
+}
+
+// AccountsForUsers reads an avatar and two names for each id, in one query. A id
+// that no longer exists is simply absent from the map, which lets the switcher
+// drop it rather than draw a blank row.
+func (db *DB) AccountsForUsers(userIDs []string) (map[string]models.SavedAccount, error) {
+	accounts := make(map[string]models.SavedAccount, len(userIDs))
+	if len(userIDs) == 0 {
+		return accounts, nil
+	}
+	// The placeholder list is built from the slice's own length, so the query is
+	// always parameterised — no id is ever interpolated into the SQL.
+	placeholders := strings.TrimSuffix(strings.Repeat("?,", len(userIDs)), ",")
+	args := make([]any, len(userIDs))
+	for i, id := range userIDs {
+		args[i] = id
+	}
+	rows, err := db.Conn.Query(
+		"SELECT userId, nickName, firstName, lastName, COALESCE(avatar, '') FROM user WHERE userId IN ("+placeholders+")",
+		args...,
+	)
+	if err != nil {
+		return nil, realtimeforum.ErrInternal
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var account models.SavedAccount
+		if err := rows.Scan(&account.UserID, &account.Nickname, &account.FirstName, &account.LastName, &account.Avatar); err != nil {
+			return nil, realtimeforum.ErrInternal
+		}
+		accounts[account.UserID] = account
+	}
+	if err := rows.Err(); err != nil {
+		return nil, realtimeforum.ErrInternal
+	}
+	return accounts, nil
 }
 
 func (db *DB) GetUserNickname(userID string) (string, error) {
