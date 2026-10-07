@@ -116,7 +116,7 @@ export default function Sidebar() {
     { key: 'messages', label: 'Messages', icon: MessageCircle, href: '/messages' },
     { key: 'discover', label: 'Discover', icon: Compass, href: '/discover' },
     { key: 'search', label: 'Search', icon: SearchIcon, panel: 'search' },
-    { key: 'notifications', label: 'Notifications', icon: Bell, panel: 'notifications' },
+    { key: 'notifications', label: 'Notifications', icon: Bell, href: '/notifications' },
     { key: 'profile', label: 'Profile', icon: UserRound, href: '/profile' },
     { key: 'create', label: 'Create', icon: SquarePlus, create: true },
   ];

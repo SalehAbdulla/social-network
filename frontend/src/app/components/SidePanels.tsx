@@ -1,44 +1,17 @@
 'use client';
 
-import { useEffect, useMemo, useState, type RefObject } from 'react';
+import { useEffect, useState, type RefObject } from 'react';
 import { useRouter } from 'next/navigation';
 import { Search as SearchIcon, X } from 'lucide-react';
-import { type Notification, errorMessage, relativeLabel, request } from '../api/social';
-import toast from 'react-hot-toast';
-import { useResource } from '../lib/useResource';
 import { clearRecentSearches, readRecentSearches, rememberSearch } from '../lib/recentSearches';
-import Avatar from './Avatar';
 
-export type PanelKind = 'search' | 'notifications';
-
-/** Where a notification row leads. The panel keeps the mapping local rather than importing a
- *  page, and it is kept in step with the notifications page by hand. */
-function notificationPath(item: Notification) {
-  if (item.entityType === 'group_invitation') return '/messages/groups';
-  if (item.entityType === 'group_request') return `/messages/groups/${item.entityId}?tab=info`;
-  if (item.entityType === 'group_event') return `/messages/groups/${item.entityId}?tab=events`;
-  if (item.entityType.startsWith('group_')) return `/messages/groups/${item.entityId}`;
-  if (item.entityType === 'message') return `/messages/${item.actorId}`;
-  if (item.entityType === 'comment') return item.postId ? `/post/${item.postId}` : '/profile';
-  return `/profile/${item.actorId}`;
-}
-
-function notificationText(item: Notification) {
-  if (item.entityType === 'group_invitation') return 'invited you to a group.';
-  if (item.entityType === 'group_request') return 'requested to join your group.';
-  if (item.entityType === 'group_event') return 'created a group event.';
-  if (item.entityType === 'message') return 'sent you a private message.';
-  if (item.entityType === 'comment') return 'commented on your post.';
-  if (item.entityType === 'follow_request') return 'requested to follow you.';
-  if (item.entityType === 'follow') return 'followed you.';
-  return 'updated a connection request.';
-}
+export type PanelKind = 'search';
 
 /**
- * The slide-out panel on the rail's right edge — Instagram's Search and Notifications drawer.
- * It is one fixed element whose content swaps, so switching between the two never closes and
- * reopens it. It slides with a transform (`app-panel`), and only the `open` prop toggles it,
- * which lets the sidebar keep it mounted through the exit animation.
+ * The slide-out panel on the rail's right edge — Instagram's Search drawer. The bell no longer
+ * opens a panel; it links to /notifications, so this drawer now holds only the search field and
+ * its recent terms. It slides with a transform (`app-panel`), and only the `open` prop toggles
+ * it, which lets the sidebar keep it mounted through the exit animation.
  */
 export default function SidePanels({ kind, open, onClose, panelRef }: {
   kind: PanelKind;
@@ -47,7 +20,7 @@ export default function SidePanels({ kind, open, onClose, panelRef }: {
   panelRef: RefObject<HTMLDivElement | null>;
 }) {
   return <div id="app-panel" ref={panelRef} className={`app-panel fixed inset-y-0 left-[72px] z-30 hidden w-[397px] overflow-y-auto rounded-r-[16px] border-r border-rail-border bg-rail font-sans leading-5 shadow-[0_0_30px_rgba(0,0,0,0.18)] md:block ${open ? 'translate-x-0 opacity-100' : 'pointer-events-none -translate-x-6 opacity-0'}`}>
-    {kind === 'search' ? <SearchPanel onClose={onClose} /> : <NotificationsPanel onClose={onClose} />}
+    {kind === 'search' && <SearchPanel onClose={onClose} />}
   </div>;
 }
 
@@ -97,80 +70,4 @@ function SearchPanel({ onClose }: { onClose: () => void }) {
       </ul>
     </> : <p className="px-4 text-sm text-muted">No recent searches.</p>}
   </div>;
-}
-
-/** Title, then the newest notifications grouped by age the way Instagram groups them. */
-function NotificationsPanel({ onClose }: { onClose: () => void }) {
-  const router = useRouter();
-  const { data, loading, reload } = useResource<{ notifications: Notification[]; totalElements: number }>('/notifications?limit=30&unread=false');
-  const groups = useMemo(() => groupByAge(data?.notifications ?? []), [data]);
-  const [markingAll, setMarkingAll] = useState(false);
-  const hasUnread = (data?.notifications ?? []).some(item => !item.isRead);
-
-  const open = (item: Notification) => {
-    onClose();
-    // Fire-and-forget: the row leads somewhere, and the badges are settled by the event.
-    if (!item.isRead) {
-      request(`/notifications/${item.notificationId}/read`, 'PATCH')
-        .then(() => window.dispatchEvent(new Event('social:notifications')))
-        .catch(() => { /* the notifications page's own button can retry */ });
-    }
-    router.push(notificationPath(item));
-  };
-
-  // The drawer's own bulk action: one PATCH clears every type, then the list is
-  // re-read so the unread dots and the rail badge settle together. It is disabled
-  // while a sweep is in flight and when nothing is left to clear.
-  async function markAll() {
-    setMarkingAll(true);
-    try {
-      await request('/notifications/read-all', 'PATCH');
-      reload();
-      window.dispatchEvent(new Event('social:notifications'));
-    } catch (error) { toast.error(errorMessage(error)); } finally { setMarkingAll(false); }
-  }
-
-  return <div className="flex h-full flex-col">
-    <div className="flex items-center justify-between gap-3 px-4 pb-5 pt-6">
-      <h2 className="text-base font-bold text-text">Notifications</h2>
-      <button type="button" disabled={markingAll || !hasUnread} onClick={() => void markAll()} className="shrink-0 text-xs font-semibold text-brand-1 hover:underline disabled:cursor-default disabled:opacity-50">Mark all as read</button>
-    </div>
-    {loading && <p className="px-4 text-sm text-muted">Loading…</p>}
-    {!loading && groups.every(group => group.items.length === 0) && <p className="px-4 text-sm text-muted">No notifications yet.</p>}
-    {groups.map(group => group.items.length === 0 ? null : <section key={group.label} className="pb-2">
-      <h3 className="px-4 pb-1 pt-3 text-base font-bold text-text">{group.label}</h3>
-      <ul className="px-2">
-        {group.items.map(item => <li key={item.notificationId}>
-          <button type="button" onClick={() => open(item)} className={`flex w-full items-start gap-3 rounded-[8px] px-2 py-3 text-left hover:bg-rail-hover ${item.isRead ? '' : 'bg-rail-hover'}`}>
-            <Avatar name={item.actorNickname} size={40} />
-            <span className="min-w-0 flex-1">
-              <span className="block text-sm text-text"><span className="font-semibold">@{item.actorNickname}</span> {notificationText(item)}</span>
-              <span className="mt-0.5 block text-xs text-muted">{relativeLabel(item.createdAt)}</span>
-            </span>
-            {!item.isRead && <span aria-label="Unread" className="mt-1.5 size-2 shrink-0 rounded-full bg-badge" />}
-          </button>
-        </li>)}
-      </ul>
-    </section>)}
-  </div>;
-}
-
-/** This week / this month / earlier, the three buckets Instagram splits notifications into. */
-function groupByAge(items: Notification[]) {
-  const now = Date.now();
-  const week = 7 * 24 * 60 * 60 * 1000;
-  const month = 30 * 24 * 60 * 60 * 1000;
-  const groups: Array<{ label: string; items: Notification[] }> = [
-    { label: 'This week', items: [] },
-    { label: 'This month', items: [] },
-    { label: 'Earlier', items: [] },
-  ];
-  for (const item of items) {
-    const value = item.createdAt.includes('T') ? item.createdAt : `${item.createdAt.replace(' ', 'T')}Z`;
-    const age = now - new Date(value).getTime();
-    if (age < week) groups[0].items.push(item);
-    else if (age < month) groups[1].items.push(item);
-    else groups[2].items.push(item);
-  }
-  return groups;
 }

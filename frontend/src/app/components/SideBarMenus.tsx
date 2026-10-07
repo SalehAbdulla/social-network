@@ -24,7 +24,7 @@ export function RowBody({ label, active, badge = 0, children }: {
   return <>
     <span className="relative shrink-0">
       {children}
-      {badge > 0 && <span aria-hidden="true" className="absolute -right-1.5 -top-1.5 flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-badge px-1 text-[10px] font-semibold leading-none text-white">{badge > 99 ? '99+' : badge}</span>}
+      {badge > 0 && <span aria-label={`${badge} unread ${label.toLowerCase()}`} className="absolute -right-1.5 -top-1.5 flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-badge px-1 text-[10px] font-semibold leading-none text-white">{badge > 99 ? '99+' : badge}</span>}
     </span>
     <span className={`app-rail-label ${active ? 'font-bold' : 'font-normal'}`}>{label}</span>
   </>;
