@@ -281,7 +281,7 @@ The last command in that block builds temporary backend and frontend servers, se
 database under `backend/tmp`, and drives headless Chrome through the real UI; it needs Chrome
 installed (`CHROME_PATH` overrides the location; the fallbacks are the usual install
 paths per platform, and a Linux runner normally sets it). `docker compose config` and
-`docker compose build` are the container checks, and `npm audit` / `govulncheck ./...` cover
+`docker compose build` are the container checks, and `npm audit --omit=dev` / `govulncheck ./...` cover
 dependency advisories. `node scripts/pin-base-images.mjs` asks a different question — whether the
 base-image digests the Dockerfiles and `.gitlab-ci.yml` pin are still what their tags point at, and
 which toolchain they carry — and it reports drift without blocking. Everything except the browser

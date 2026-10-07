@@ -72,9 +72,9 @@ frontend:
     # declares the image module types `tsc` needs. `make check` builds first too.
     - npm run build
     - npx tsc --noEmit
-    # Blocking since the framework bump cleared every advisory; a new finding
-    # should stop the pipeline rather than sit in the log.
-    - npm audit --audit-level=high
+    # Blocking on shipped dependencies (`--omit=dev`), not the build toolchain —
+    # `braces` (via eslint-config-next) has no upstream fix just now.
+    - npm audit --omit=dev --audit-level=high
 
 govulncheck:
   stage: checks

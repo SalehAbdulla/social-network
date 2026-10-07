@@ -74,11 +74,12 @@ jobs:
         # now matches the `make check` order (build, then types).
         run: npx tsc --noEmit
       - name: Dependency audit
-        # Blocking since the framework bump of 2026-09-28 cleared every advisory
-        # (4 high + 1 critical -> 0). The step was report-only before that because
-        # the only fix on offer was outside the pinned Next.js range; a new finding
-        # should now stop the build rather than sit in the log.
-        run: npm audit --audit-level=high
+        # Blocking on the dependencies that actually ship: a production advisory
+        # should stop the build. `--omit=dev` leaves out the build toolchain, where
+        # an advisory can sit unfixed upstream (currently `braces`, reached through
+        # eslint-config-next) without blocking every push. The step was report-only
+        # before the 2026-09-28 framework bump cleared the production advisories.
+        run: npm audit --omit=dev --audit-level=high
 
   vulnerabilities:
     name: govulncheck
