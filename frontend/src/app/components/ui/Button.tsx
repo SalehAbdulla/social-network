@@ -1,6 +1,6 @@
 'use client';
 
-import type { ButtonHTMLAttributes, ReactNode } from 'react';
+import { forwardRef, type ButtonHTMLAttributes, type ReactNode } from 'react';
 import { Loader2 } from 'lucide-react';
 
 /**
@@ -22,13 +22,17 @@ const VARIANT: Record<Variant, string> = {
   text: 'ui-btn-text',
 };
 
-export default function Button({ variant = 'primary', loading = false, disabled = false, children, className = '', ...rest }: {
+const Button = forwardRef<HTMLButtonElement, {
   variant?: Variant;
   loading?: boolean;
   children: ReactNode;
   className?: string;
-} & Omit<ButtonHTMLAttributes<HTMLButtonElement>, 'className' | 'children'>) {
+} & Omit<ButtonHTMLAttributes<HTMLButtonElement>, 'className' | 'children'>>(function Button(
+  { variant = 'primary', loading = false, disabled = false, children, className = '', ...rest },
+  ref,
+) {
   return <button
+    ref={ref}
     type="button"
     {...rest}
     disabled={disabled || loading}
@@ -38,4 +42,6 @@ export default function Button({ variant = 'primary', loading = false, disabled 
     {loading && <Loader2 aria-hidden="true" className="ui-btn-spinner" />}
     {children}
   </button>;
-}
+});
+
+export default Button;
