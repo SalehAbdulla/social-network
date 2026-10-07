@@ -28,12 +28,12 @@ func TestUnreachableObjectsAreNotFound(t *testing.T) {
 	}, 201))
 	mediaID := "123e4567-e89b-12d3-a456-426614174777"
 	addOwnedMedia(t, repo, "dummy-id", mediaID)
-	owner.call("PUT", "/api/v1/posts/"+strconv.Itoa(post.PostId), map[string]any{
+	owner.call("PUT", "/api/v1/posts/"+post.PostId, map[string]any{
 		"title": "Restricted", "content": "Only followers should read this one.", "privacy": "followers",
 		"imageUrls": []string{"/api/v1/media/" + mediaID},
 	}, 200)
 
-	id := strconv.Itoa(post.PostId)
+	id := post.PostId
 	// The owner can read what they wrote; the stranger is answered 404 on every one of them.
 	owner.call("GET", "/api/v1/post?id="+id, nil, 200)
 	stranger.call("GET", "/api/v1/post?id="+id, nil, 404)
