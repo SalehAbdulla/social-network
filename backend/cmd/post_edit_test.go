@@ -4,7 +4,6 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
-	"strconv"
 	"strings"
 	"testing"
 
@@ -25,14 +24,14 @@ func TestPostEditingIntegration(t *testing.T) {
 	if original.FirstName != "Dummy" || original.LastName != "User" {
 		t.Fatalf("a created post must carry its author's name, got %q %q", original.FirstName, original.LastName)
 	}
-	editURL := "/api/v1/posts/" + strconv.Itoa(original.PostId)
-	readURL := "/api/v1/post?id=" + strconv.Itoa(original.PostId)
+	editURL := "/api/v1/posts/" + original.PostId
+	readURL := "/api/v1/post?id=" + original.PostId
 	input := map[string]any{"title": "Updated post", "content": "This is the updated content.", "privacy": "public", "imageUrls": []string{}}
 	guest.call("PUT", editURL, input, 401)
 	follower.call("PUT", editURL, input, 403)
 	owner.call("PUT", "/api/v1/posts/0", input, 400)
-	owner.call("PUT", "/api/v1/posts/999999", input, 404)
-	follower.call("POST", "/api/v1/posts/comments", url.Values{"postId": {strconv.Itoa(original.PostId)}, "content": {"Keep this comment when editing"}}, 201)
+	owner.call("PUT", "/api/v1/posts/00000000-0000-4000-8000-000000000000", input, 404)
+	follower.call("POST", "/api/v1/posts/comments", url.Values{"postId": {original.PostId}, "content": {"Keep this comment when editing"}}, 201)
 	follower.call("POST", "/api/v1/reactions", map[string]any{"entityType": "post", "entityId": original.PostId, "score": 1}, 200)
 	if _, err := repo.Conn.Exec("UPDATE post SET updatedAt='2000-01-01 00:00:00' WHERE postId=?", original.PostId); err != nil {
 		t.Fatal(err)
