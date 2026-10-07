@@ -78,8 +78,8 @@ func planRepo(t *testing.T) *DB {
 	}
 	privacy := []string{"public", "followers", "selected"}
 	for index := 0; index < planPosts; index++ {
-		exec(`INSERT INTO post (userId, title, content, privacy, score, commentsCounter, createdAt, imageUrls)
-			VALUES (?,?,?,?,?,?,?,?)`,
+		exec(`INSERT INTO post (publicId, userId, title, content, privacy, score, commentsCounter, createdAt, imageUrls)
+			VALUES (lower(hex(randomblob(16))),?,?,?,?,?,?,?,?)`,
 			account(1+index%40), fmt.Sprintf("Post %d", index), fmt.Sprintf("Body %d", index),
 			privacy[index%len(privacy)], index%50, index%7,
 			fmt.Sprintf("2026-09-%02d %02d:%02d:%02d", 1+index%28, index%24, index%60, index%60), "[]")
