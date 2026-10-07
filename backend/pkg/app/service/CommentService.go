@@ -31,7 +31,7 @@ func mapCommentToDTO(com models.Comment) comment.CommentDTO {
 	_ = json.Unmarshal([]byte(com.ImageURLs), &images)
 	return comment.CommentDTO{
 		CommentId:   com.CommentId,
-		PostId:      com.PostId,
+		PostId:      com.PostPublicID,
 		UserId:      com.UserId,
 		Nickname:    com.Nickname,
 		CommentText: com.CommentText,
