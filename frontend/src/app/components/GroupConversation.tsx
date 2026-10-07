@@ -181,13 +181,6 @@ export default function GroupConversation({ groupId }: { groupId: string }) {
       toast.success(status === 'accepted' ? `You joined ${invitation.groupTitle}` : 'Invitation declined');
     } catch (error) { toast.error(errorMessage(error)); } finally { setDeciding(false); }
   }
-  async function remove(item: GroupItem) {
-    try {
-      await request(`/groups/${groupId}/content/${item.kind}/${item.id}?parentId=${item.parentId}`, 'DELETE');
-      setEditing(null);
-    } catch (error) { toast.error(errorMessage(error)); }
-  }
-
   return <>
     <section className="dm-panel" aria-label={`Group conversation: ${data.title}`}>
       <header className="dm-header" data-connected="true">
@@ -218,7 +211,7 @@ export default function GroupConversation({ groupId }: { groupId: string }) {
         {/* `display: contents` keeps the shell's one flex column while still giving each tab a
             panel a screen reader can point at from its `aria-controls`. */}
         {tab === 'timeline' && <div id="panel-timeline" role="tabpanel" aria-labelledby="tab-timeline" className="contents" ref={element => { panels.current.timeline = element; }}>
-          <GroupChat groupId={groupId} meId={user.userId} isOwner={data.isOwner} onOpenEvents={() => selectTab('events')} onEdit={setEditing} onDelete={item => void remove(item)} />
+          <GroupChat groupId={groupId} meId={user.userId} isOwner={data.isOwner} onOpenEvents={() => selectTab('events')} onEdit={setEditing} />
         </div>}
         {tab === 'posts' && <div id="panel-posts" role="tabpanel" aria-labelledby="tab-posts" className="contents" ref={element => { panels.current.posts = element; }}>
           <GroupPosts groupId={groupId} meId={user.userId} isOwner={data.isOwner} highlightId={flashId} onCreate={createPost.open} onEdit={setEditing} />

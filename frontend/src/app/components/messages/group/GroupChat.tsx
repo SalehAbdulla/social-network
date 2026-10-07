@@ -41,14 +41,13 @@ function toMessage(item: GroupItem): ChatMessage {
  * record, and the reaction endpoint knows only direct messages. The member list is read once so
  * those names, avatars and the event card's stack are real.
  */
-export default function GroupChat({ groupId, meId, isOwner, onOpenEvents, onEdit, onDelete }: {
+export default function GroupChat({ groupId, meId, isOwner, onOpenEvents, onEdit }: {
   groupId: string;
   meId: string;
   isOwner: boolean;
   /** Opens the Events tab — the event card in the stream is a control, not a dead panel. */
   onOpenEvents: () => void;
   onEdit: (item: GroupItem) => void;
-  onDelete: (item: GroupItem) => void;
 }) {
   const resource = usePagedList<GroupItem, GroupItem[]>({
     key: `/groups/${groupId}/content/timeline?parentId=0`,
@@ -77,6 +76,21 @@ export default function GroupChat({ groupId, meId, isOwner, onOpenEvents, onEdit
     setAnswering(true);
     try { await request(`/groups/${groupId}/events/${item.id}/rsvp`, 'PUT', { status }); resource.reload(); }
     catch (error) { toast.error(errorMessage(error)); } finally { setAnswering(false); }
+  }
+
+  // A deleted row leaves the stream at once, and is put back only if the write fails — the same
+  // optimistic removal the posts and comments tabs make. The live refresh merges the newest page
+  // and dedupes, so it can add rows but can never drop one that is simply gone; without this the
+  // deleting reader keeps looking at the row the server already removed.
+  async function remove(item: GroupItem) {
+    const previous = resource.items;
+    resource.update(items => items.filter(entry => entry.id !== item.id));
+    try {
+      await request(`/groups/${groupId}/content/${item.kind}/${item.id}?parentId=${item.parentId}`, 'DELETE');
+    } catch (error) {
+      resource.update(() => previous);
+      toast.error(errorMessage(error));
+    }
   }
 
   // The event card. Its own copy is the control that opens the Events tab — the whole card cannot
@@ -135,7 +149,7 @@ export default function GroupChat({ groupId, meId, isOwner, onOpenEvents, onEdit
         }}
         embedOf={embed}
         onReact={() => {}}
-        onDelete={messageId => { const item = byId.get(messageId); if (item) onDelete(item); }}
+        onDelete={messageId => { const item = byId.get(messageId); if (item) void remove(item); }}
         onEdit={message => { const item = byId.get(message.messageId); if (item) onEdit(item); }}
         onReply={message => { const item = byId.get(message.messageId); if (item) setReplyTo(item); }}
         onOpenMedia={images => setViewer(resource.items.find(entry => entry.mediaUrl === images[0]) ?? null)}
@@ -160,7 +174,7 @@ export default function GroupChat({ groupId, meId, isOwner, onOpenEvents, onEdit
       avatarOf={userId => roster.get(userId)?.avatar ?? ''}
       onClose={() => setViewer(null)}
       onIndex={() => {}}
-      onDelete={item => { onDelete(item); setViewer(null); }}
+      onDelete={item => { void remove(item); setViewer(null); }}
     />}
   </>;
 }

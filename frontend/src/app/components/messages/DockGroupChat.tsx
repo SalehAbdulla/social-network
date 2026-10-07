@@ -13,9 +13,10 @@ import { memberCount } from './group/groupContent';
  *
  * It is the group's own `GroupChat` (the same thread and composer the group page's Chat tab
  * draws), wrapped in the dock header. The group's other folders — posts, events, media — and
- * its management live on the full page, so the header carries an "Open group" link for them
- * and the row's edit/delete actions hand off to that page rather than duplicating the writes
- * here. A viewer who is not a member sees the gate instead of a panel the server would 404.
+ * its management live on the full page, so the header carries an "Open group" link for them and
+ * the row's edit action hands off to that page. Deleting a message is the one write the dock
+ * makes itself, through the same `GroupChat` the group page draws, so it disappears here too.
+ * A viewer who is not a member sees the gate instead of a panel the server would 404.
  */
 export default function DockGroupChat({ groupId, onBack, onExpand, onClose, onOpenGroup }: {
   groupId: string;
@@ -44,7 +45,7 @@ export default function DockGroupChat({ groupId, onBack, onExpand, onClose, onOp
     {group.loading
       ? <div className="dock-scroll"><div className="dock-row-skel"><span className="dock-skel dock-skel-face" /></div></div>
       : data?.isMember
-        ? <GroupChat groupId={groupId} meId={user.userId} isOwner={data.isOwner} onOpenEvents={onOpenGroup} onEdit={onOpenGroup} onDelete={onOpenGroup} />
+        ? <GroupChat groupId={groupId} meId={user.userId} isOwner={data.isOwner} onOpenEvents={onOpenGroup} onEdit={onOpenGroup} />
         : <div className="dock-empty">
           <p>Join this group to read its messages.</p>
           <Link href={`/groups/${groupId}`} className="dock-primary">Open group</Link>
