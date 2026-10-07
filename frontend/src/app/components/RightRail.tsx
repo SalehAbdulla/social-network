@@ -15,9 +15,9 @@ import { SUGGEST_AVATAR_SIZE } from '../lib/sizing';
  * are one column and only the list is interesting enough to own behaviour.
  *
  * The account row is the viewer, named the way Instagram names them: the username on top,
- * the full name muted below. This app has no second account to hand the session to, so
- * where Instagram offers a "Switch" the only honest control is "Log out" — the same write
- * the rail's More menu makes.
+ * the full name muted below. Once a second account has been saved the row offers Instagram's
+ * "Switch", which opens the account switcher; with only one account it stays the plain
+ * "Log out" the rail's More menu also makes.
  *
  * Instagram's footer is a list of links, and every one of them (About, Help, Press, API,
  * Jobs, Privacy, Terms, Locations, Language) points at a page this app does not have. A dead
@@ -27,7 +27,7 @@ import { SUGGEST_AVATAR_SIZE } from '../lib/sizing';
 const FOOTER_LINKS: { label: string; href: string }[] = [];
 
 export default function RightRail() {
-  const { user } = useBackend();
+  const { user, accounts } = useBackend();
   const [loggingOut, setLoggingOut] = useState(false);
 
   async function logout() {
@@ -54,7 +54,9 @@ export default function RightRail() {
           <span dir="auto" className="block truncate text-[length:var(--rc-sub-size)] text-muted">{displayName(user)}</span>
         </span>
       </Link>
-      <button type="button" disabled={loggingOut} onClick={() => void logout()} className="shrink-0 text-[length:var(--rc-follow-size)] font-semibold text-[color:var(--rc-link)] hover:opacity-70 disabled:opacity-50">{loggingOut ? 'Logging out…' : 'Log out'}</button>
+      {accounts.length > 1
+        ? <button type="button" onClick={() => window.dispatchEvent(new Event('social:switch-accounts'))} className="shrink-0 text-[length:var(--rc-follow-size)] font-semibold text-[color:var(--rc-link)] hover:opacity-70">Switch</button>
+        : <button type="button" disabled={loggingOut} onClick={() => void logout()} className="shrink-0 text-[length:var(--rc-follow-size)] font-semibold text-[color:var(--rc-link)] hover:opacity-70 disabled:opacity-50">{loggingOut ? 'Logging out…' : 'Log out'}</button>}
     </section>
     <SuggestedUsers />
     <footer className="rc-footer">
