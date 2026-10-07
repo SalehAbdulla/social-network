@@ -459,7 +459,7 @@ try {
   // writes are idempotent on the server, so the waits are on the resulting state.
   await until(dummy, `!!document.querySelector('button[aria-label="Save post"]')`, 'the save control is on the post');
   await evaluate(dummy, `document.querySelector('button[aria-label="Save post"]').click()`);
-  await until(dummy, `(async () => (await (await fetch('/api/v1/saved-posts?page=1&size=10')).json()).data.posts.some(post => post.postId === ${postId}))()`, 'the post reaches the saved list');
+  await until(dummy, `(async () => (await (await fetch('/api/v1/saved-posts?page=1&size=10')).json()).data.posts.some(post => post.postId === ${JSON.stringify(postId)}))()`, 'the post reaches the saved list');
   await until(dummy, `!!document.querySelector('button[aria-label="Remove from saved"]')`, 'the control reflects the saved state');
   await navigate(dummy, '/saved');
   await until(dummy, `document.body.innerText.includes(${JSON.stringify(`Updated browser post content ${stamp}`)})`, 'the saved page lists the bookmarked post');
