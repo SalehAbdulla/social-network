@@ -1,9 +1,10 @@
 'use client';
 
+import { Suspense } from 'react';
 import { useParams } from 'next/navigation';
 import { type Page, type Post } from '../../api/social';
 import { usePagedList } from '../../lib/usePagedList';
-import { usePostOverlay } from '../../lib/usePostOverlay';
+import { usePostModal } from '../../lib/usePostModal';
 import PostCard from '../../components/PostCard';
 import RequestState from '../../components/RequestState';
 import LoadMore from '../../components/LoadMore';
@@ -17,7 +18,7 @@ const POSTS_PER_PAGE = 10;
  * endpoint, which is why a post the reader may not open is simply absent rather than
  * hidden here. The tag is lowercased to match what the linkifier produces.
  */
-export default function Hashtag() {
+function HashtagScreen() {
   const tag = String(useParams<{ tag?: string }>().tag ?? '').toLowerCase();
   const posts = usePagedList<Post, Page<Post>>({
     key: `/hashtags/${encodeURIComponent(tag)}?size=${POSTS_PER_PAGE}`,
@@ -27,7 +28,7 @@ export default function Hashtag() {
     keyOf: post => post.postId,
     enabled: !!tag,
   });
-  const { openFor, overlay } = usePostOverlay(postId => posts.update(items => items.filter(item => item.postId !== postId)));
+  const { openFor, modal } = usePostModal(posts.items, postId => posts.update(items => items.filter(item => item.postId !== postId)));
 
   return <div className="mx-auto max-w-3xl space-y-6 p-4 py-8 sm:p-8">
     <header>
@@ -42,6 +43,10 @@ export default function Hashtag() {
         {posts.settled && !posts.error && posts.items.length === 0 && <RequestState empty={`Nothing carries #${tag} yet.`} />}
         {posts.items.length > 0 && <LoadMore loading={posts.loadingMore} hasMore={posts.hasMore} onLoadMore={posts.loadMore} label="Load more posts" />}
       </>}
-    {overlay}
+    {modal}
   </div>;
+}
+
+export default function Hashtag() {
+  return <Suspense fallback={<PostListSkeleton />}><HashtagScreen /></Suspense>;
 }
