@@ -88,6 +88,12 @@ func TestCommentMediaIntegration(t *testing.T) {
 	if created.UserId != "alex-id" {
 		t.Fatalf("comment lost its author: %+v", created)
 	}
+	// The client splices the comment this endpoint returns straight into the thread,
+	// so the author's handle has to travel with it, not only on the next list read:
+	// without it the row a reader just posted renders as an anonymous "Member".
+	if created.Nickname != "alexdemo" {
+		t.Fatalf("comment lost its author's nickname: %+v", created)
+	}
 	var stored string
 	if err := repo.Conn.QueryRow("SELECT imageUrls FROM comment WHERE commentId = ?", created.CommentId).Scan(&stored); err != nil {
 		t.Fatal(err)

@@ -133,16 +133,18 @@ func (db *DB) CreateComment(userId string, postId int, content string, imageURLs
 
 	var com models.Comment
 	err = db.Conn.QueryRow(
-		`SELECT c.commentId, c.postId, p.publicId, c.userId, c.content, c.imageUrls, c.createdAt
-		 FROM comment c JOIN post p ON p.postId = c.postId
+		`SELECT c.commentId, c.postId, p.publicId, c.userId, u.nickName, c.content, c.imageUrls, c.score, c.createdAt
+		 FROM comment c JOIN post p ON p.postId = c.postId JOIN user u ON u.userId = c.userId
 		 WHERE c.commentId = ?`, commentID,
 	).Scan(
 		&com.CommentId,
 		&com.PostId,
 		&com.PostPublicID,
 		&com.UserId,
+		&com.Nickname,
 		&com.CommentText,
 		&com.ImageURLs,
+		&com.Score,
 		&com.CreatedAt,
 	)
 
