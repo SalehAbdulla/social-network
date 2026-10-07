@@ -9,7 +9,6 @@ import Loading from './Loading';
 import Sidebar from './SideBar';
 import TopBar from './TopBar';
 import BottomNav from './BottomNav';
-import ComposerDialog from './ComposerDialog';
 import MessagesDock from './MessagesDock';
 
 interface Session {
@@ -19,10 +18,6 @@ interface Session {
   sendEvent: (event: SocketEvent) => void;
   /** The bell and Messages badges, fetched once here so both bars read one answer. */
   badges: { notifications: number; messages: number } | null;
-  /** Opens the Instagram composer dialog over the current page. */
-  openComposer: () => void;
-  /** Whether the composer dialog is open, so the rail's Create row can stay active. */
-  composerOpen: boolean;
 }
 const Context = createContext<Session | null>(null);
 
@@ -49,7 +44,6 @@ function AuthenticatedBackend({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<SocialUser | null>(null);
   const [error, setError] = useState('');
   const [socket, setSocket] = useState<WebSocket | null>(null);
-  const [composing, setComposing] = useState(false);
   const [reconnecting, setReconnecting] = useState(false);
   const [badges, setBadges] = useState<{ notifications: number; messages: number } | null>(null);
   const sessionRevision = useRef(0);
@@ -130,13 +124,6 @@ function AuthenticatedBackend({ children }: { children: React.ReactNode }) {
     if (socket?.readyState === WebSocket.OPEN) socket.send(JSON.stringify(event));
   }, [socket]);
 
-  // The composer is opened from several places — the feed's "New post", the sidebar's
-  // "Create Post" and the bottom bar's Create tab — so its state lives here and each of
-  // them calls `openComposer()` instead of navigating to `/create-post` (which stays a
-  // deep link for its own page).
-  const openComposer = useCallback(() => setComposing(true), []);
-  const closeComposer = useCallback(() => setComposing(false), []);
-
   // Both badges are read here rather than in `SideBar`, because two surfaces now show
   // them — the sidebar and the top bar — and a fetch each would be exactly the duplicate
   // the sidebar used to pay. `useLiveRefresh` puts the socket event and the poll in one
@@ -180,7 +167,7 @@ function AuthenticatedBackend({ children }: { children: React.ReactNode }) {
     <button className="rounded-lg bg-blue-600 px-5 py-2 text-white" onClick={() => void initialize()}>Reconnect</button>
   </div>;
   if (!user) return <Loading />;
-  return <Context.Provider value={{ user, refreshUser, connected: socket?.readyState === WebSocket.OPEN, sendEvent, badges, openComposer, composerOpen: composing }}><div key={user.userId} className="flex min-h-screen w-full min-w-0">
+  return <Context.Provider value={{ user, refreshUser, connected: socket?.readyState === WebSocket.OPEN, sendEvent, badges }}><div key={user.userId} className="flex min-h-screen w-full min-w-0">
     <Sidebar />
     {/* The rail is `fixed` and overlays this column, so its width never reflows it: the posts stay
         exactly where they are whether the rail has grown under the pointer, is at rest, or a
@@ -199,7 +186,6 @@ function AuthenticatedBackend({ children }: { children: React.ReactNode }) {
           to hide itself while a post modal is open, which needs a Suspense boundary on a
           prerendered route — the same reason the feed wraps its overlay. */}
       <Suspense fallback={null}><MessagesDock /></Suspense>
-      {composing && <ComposerDialog onClose={closeComposer} />}
     </div>
   </div></Context.Provider>;
 }
