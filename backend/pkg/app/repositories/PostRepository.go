@@ -2,6 +2,9 @@ package repositories
 
 import (
 	"database/sql"
+	"errors"
+
+	"github.com/google/uuid"
 
 	realtimeforum "social-network/backend"
 	"social-network/backend/pkg/models"
@@ -12,6 +15,9 @@ type PostRepository interface {
 	CreatePost(post models.Post) (models.Post, error)
 	UpdatePost(post models.Post) (models.Post, error)
 	DoesPostExists(postId int) error
+	// PostIDByPublicID resolves the public UUID the API speaks to the table's own integer
+	// key, which is what every other method here is keyed on.
+	PostIDByPublicID(publicID string) (int, error)
 	GetPostByID(postId int, viewerID string) (models.Post, error)
 	CanViewPost(postID int, viewerID string) (bool, error)
 	// PostInsights is the author-facing numbers for one post, in one round trip. It is
@@ -60,7 +66,7 @@ const postVisibility = `(p.userId = ? OR (p.privacy = 'public' AND (EXISTS (SELE
 // against a paraphrase would keep passing while the real query changed shape. The
 // ORDER BY and LIMIT stay at the call site because both come from the request.
 const postFeedSelect = `
-		SELECT p.postId, p.userId, p.privacy, u.nickName, u.firstName, u.lastName, p.title, p.content,
+		SELECT p.postId, p.publicId, p.userId, p.privacy, u.nickName, u.firstName, u.lastName, p.title, p.content,
 			   p.score, p.commentsCounter,
 			   p.createdAt, p.updatedAt, p.imageUrls
 		FROM post p
@@ -130,6 +136,7 @@ func (db *DB) scanPostPage(rows *sql.Rows, viewerID string) ([]models.Post, erro
 		var post models.Post
 		if err := rows.Scan(
 			&post.PostId,
+			&post.PublicID,
 			&post.UserId,
 			&post.Privacy,
 			&post.Nickname,
@@ -259,6 +266,21 @@ func (db *DB) HashtagPosts(tag string, pageNumber int, pageSize int, viewerID st
 	return posts, totalElements, nil
 }
 
+// PostIDByPublicID resolves a post's public UUID to the table's own integer key, which is
+// what every internal read and write is keyed on. A malformed id and an unknown one get the
+// same ErrNotFound, so the resolver cannot be used to learn which ids exist.
+func (db *DB) PostIDByPublicID(publicID string) (int, error) {
+	var postID int
+	err := db.Conn.QueryRow("SELECT postId FROM post WHERE publicId = ?", publicID).Scan(&postID)
+	if errors.Is(err, sql.ErrNoRows) {
+		return 0, realtimeforum.ErrNotFound
+	}
+	if err != nil {
+		return 0, realtimeforum.ErrInternal
+	}
+	return postID, nil
+}
+
 func (db *DB) DoesPostExists(postId int) error {
 	var count int
 	err := db.Conn.QueryRow("SELECT COUNT(*) FROM post WHERE postId = ?", postId).Scan(&count)
@@ -274,7 +296,7 @@ func (db *DB) DoesPostExists(postId int) error {
 func (db *DB) GetPostByID(postId int, viewerID string) (models.Post, error) {
 	var post models.Post
 	err := db.Conn.QueryRow(
-		`SELECT p.postId, p.userId, p.privacy, u.nickName, u.firstName, u.lastName, p.title, p.content,
+		`SELECT p.postId, p.publicId, p.userId, p.privacy, u.nickName, u.firstName, u.lastName, p.title, p.content,
 				p.score, p.commentsCounter,
 				p.createdAt, p.updatedAt, p.imageUrls
 		FROM post p
@@ -282,6 +304,7 @@ func (db *DB) GetPostByID(postId int, viewerID string) (models.Post, error) {
 			WHERE p.postId = ? AND `+postVisibility, postId, viewerID, viewerID, viewerID, viewerID,
 	).Scan(
 		&post.PostId,
+		&post.PublicID,
 		&post.UserId,
 		&post.Privacy,
 		&post.Nickname,
@@ -390,10 +413,13 @@ func (db *DB) UpdatePost(post models.Post) (models.Post, error) {
 
 func (db *DB) CreatePost(post models.Post) (models.Post, error) {
 	now := "datetime('now')"
+	// The public UUID is minted here. The table's rowid stays the key the rest of the schema
+	// points at (see migration 000020), so the outside never sees an incrementing number.
+	post.PublicID = uuid.NewString()
 	result, err := db.Conn.Exec(
-		`INSERT INTO post (userId, title, content, privacy, score, commentsCounter, createdAt, updatedAt, imageUrls)
-		 VALUES (?, ?, ?, ?, 0, 0, `+now+`, `+now+`, ?)`,
-		post.UserId, post.Title, post.Content, post.Privacy, post.ImageURLs,
+		`INSERT INTO post (publicId, userId, title, content, privacy, score, commentsCounter, createdAt, updatedAt, imageUrls)
+		 VALUES (?, ?, ?, ?, ?, 0, 0, `+now+`, `+now+`, ?)`,
+		post.PublicID, post.UserId, post.Title, post.Content, post.Privacy, post.ImageURLs,
 	)
 	if err != nil {
 		return models.Post{}, err
@@ -405,7 +431,7 @@ func (db *DB) CreatePost(post models.Post) (models.Post, error) {
 	}
 
 	err = db.Conn.QueryRow(
-		`SELECT p.postId, p.userId, p.privacy, u.nickName, u.firstName, u.lastName, p.title, p.content,
+		`SELECT p.postId, p.publicId, p.userId, p.privacy, u.nickName, u.firstName, u.lastName, p.title, p.content,
 				p.score, p.commentsCounter,
 				p.createdAt, p.updatedAt, p.imageUrls
 		FROM post p
@@ -413,6 +439,7 @@ func (db *DB) CreatePost(post models.Post) (models.Post, error) {
 		WHERE p.postId = ?`, postID,
 	).Scan(
 		&post.PostId,
+		&post.PublicID,
 		&post.UserId,
 		&post.Privacy,
 		&post.Nickname,
