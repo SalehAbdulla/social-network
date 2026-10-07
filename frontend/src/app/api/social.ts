@@ -26,6 +26,15 @@ export interface SocialUser {
   canMessage?: boolean;
 }
 export interface FollowRequest { userId: string; nickname: string; createdAt: string }
+/**
+ * One account in the feed's "Suggested for you" column, from `GET /users/suggestions`.
+ * `mutuals` names (up to two) the people the viewer follows who also follow this account,
+ * and `mutualCount` is the whole number — together they word the row's second line.
+ */
+export interface UserSuggestion {
+  userId: string; nickname: string; firstName: string; lastName: string;
+  avatar: string; isPublic: boolean; mutuals: string[]; mutualCount: number;
+}
 export interface Post {
   postId: number; userId: string; nickname: string; firstName: string; lastName: string; title: string; content: string;
   imageUrls: string[]; privacy: 'public' | 'followers' | 'selected'; selectedFollowerIds?: string[];
