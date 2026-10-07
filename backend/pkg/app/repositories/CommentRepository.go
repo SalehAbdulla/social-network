@@ -15,10 +15,11 @@ type CommentRepository interface {
 // plan test (query_plan_test.go) so what that measures is the query this runs. The
 // ORDER BY is appended at the call site because it comes from the request.
 const commentPageSelect = `
-		SELECT c.commentId, c.postId, c.userId, u.nickName, c.content, c.imageUrls, c.score, c.createdAt,
+		SELECT c.commentId, c.postId, p.publicId, c.userId, u.nickName, c.content, c.imageUrls, c.score, c.createdAt,
 		       COALESCE(r.score, 0) AS userScore
 		FROM comment c
 		JOIN user u ON c.userId = u.userId
+		JOIN post p ON p.postId = c.postId
 		LEFT JOIN reaction r ON r.entityType = 'comment' AND r.entityId = c.commentId AND r.userId = ?
 		WHERE c.postId = ?
 		ORDER BY `
@@ -74,6 +75,7 @@ func (db *DB) GetComments(postId int, pageNumber int, pageSize int, sortBy strin
 		err := rows.Scan(
 			&com.CommentId,
 			&com.PostId,
+			&com.PostPublicID,
 			&com.UserId,
 			&com.Nickname,
 			&com.CommentText,
@@ -131,12 +133,13 @@ func (db *DB) CreateComment(userId string, postId int, content string, imageURLs
 
 	var com models.Comment
 	err = db.Conn.QueryRow(
-		`SELECT commentId, postId, userId, content, imageUrls, createdAt
-		 FROM comment
-		 WHERE commentId = ?`, commentID,
+		`SELECT c.commentId, c.postId, p.publicId, c.userId, c.content, c.imageUrls, c.createdAt
+		 FROM comment c JOIN post p ON p.postId = c.postId
+		 WHERE c.commentId = ?`, commentID,
 	).Scan(
 		&com.CommentId,
 		&com.PostId,
+		&com.PostPublicID,
 		&com.UserId,
 		&com.CommentText,
 		&com.ImageURLs,
