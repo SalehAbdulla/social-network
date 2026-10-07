@@ -202,7 +202,7 @@ frontend/
   src/proxy.ts             page-level session gate (the API and /ws are excluded)
   scripts/                 browser smoke suite driven over the Chrome DevTools Protocol
 scripts/                   the API tour, the base-image pin check, the WSL launcher
-make help                  the commands in one place: dev, check, smoke, seed, api-tour, pin-check
+make help                  the commands in one place: dev, check, smoke, seed, seed-showcase, api-tour, pin-check
 compose.yaml               both services and the social-data volume
 deploy/Caddyfile.example   a sample reverse proxy, reviewed rather than run here
 DEPLOYMENT.md              environment variables, headers, limits, backup, release checklist and checks
@@ -242,8 +242,17 @@ cd frontend && npm ci && npm run dev
 
 The frontend needs `BACKEND_URL` in `frontend/.env.local` (copy `.env.example`); Next.js
 rewrites `/api/v1/*` and `/ws` to that origin, so the browser keeps using port 4000 only.
-Register an account on the login page — nothing is seeded, and there is no development
+Register an account on the login page — startup seeds nothing, and there is no development
 login shortcut.
+
+For a lived-in instance rather than an empty one, `make seed-showcase` fills the database with
+a showcase dataset: 24 members (plus the two fixtures), a feed of posts with generated photos,
+comments — some carrying an inline SVG card — replies, likes, stories, groups with events and
+chats, direct conversations, notifications, bookmarks and a populated "Suggested for you" rail.
+It is idempotent and safe to re-run. Sign in with any of the members' handles (or
+`dummy@example.com` / `alex@example.com`) using `DummyUser123!` for the two fixtures and
+`Password123!` for the rest; the command prints the same reminder when it finishes. `make seed`
+and `make seed -demo` remain the small fixtures the automated suites rely on.
 
 The backend also answers `GET /api/v1/health` (liveness) and `GET /api/v1/ready` (readiness,
 database-backed) without a session; both containers use the second one as their `HEALTHCHECK`.
