@@ -45,7 +45,7 @@ func TestCommentMediaIntegration(t *testing.T) {
 	post := decoded[posts.PostDTO](t, dummy.call("POST", "/api/v1/posts", map[string]any{
 		"title": "Comment media post", "content": "Comments on this post can carry a photo.", "privacy": "followers",
 	}, 201))
-	commentsPath := "/api/v1/posts/comments?postId=" + strconv.Itoa(post.PostId)
+	commentsPath := "/api/v1/posts/comments?postId=" + post.PostId
 	commenterImage := commenterImages[0]
 
 	// Authorization and validation.
@@ -125,7 +125,7 @@ func TestCommentMediaIntegration(t *testing.T) {
 	// follower of the post's author can open it, a stranger cannot.
 	alex.call("GET", commenterImage, nil, 200)
 	dummy.call("GET", commenterImage, nil, 200)
-	guest.call("GET", "/api/v1/post?id="+strconv.Itoa(post.PostId), nil, 404)
+	guest.call("GET", "/api/v1/post?id="+post.PostId, nil, 404)
 	guest.call("GET", commenterImage, nil, 404)
 	guest.call("GET", "/api/v1/users/alex-id/media", nil, 200)
 
@@ -150,7 +150,7 @@ func TestCommentMediaIntegration(t *testing.T) {
 
 	// The legacy form encoding still creates a text comment.
 	legacy := decoded[comment.CommentDTO](t, alex.call("POST", "/api/v1/posts/comments", url.Values{
-		"postId": {strconv.Itoa(post.PostId)}, "content": {"A form encoded comment"},
+		"postId": {post.PostId}, "content": {"A form encoded comment"},
 	}, 201))
 	if len(legacy.ImageURLs) != 0 || legacy.CommentText != "A form encoded comment" {
 		t.Fatalf("legacy form comment broke: %+v", legacy)
