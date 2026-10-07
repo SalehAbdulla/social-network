@@ -364,7 +364,28 @@ over).
 - [x] **P1** Update `DEPLOYMENT.md` and `backend/README.md`, which currently document the
   in-memory limitation as accepted.
 
-## Groups
+## Multiple accounts on one browser
+
+Reference: `AuthHandler.go`, `handlers/saved_accounts.go`, `AuthService.go`,
+`repositories/AuthRepository.go`, `cmd/router.go`, `frontend/src/app/components/SwitchAccounts.tsx`.
+
+- [x] **P1** Save several accounts per browser and switch between them without a password.
+  The list lives in an HttpOnly `saved_accounts` cookie the server owns, one session token per
+  account (max 5, newest first); login and register add to it. `GET /api/v1/auth/accounts`
+  resolves what is still live — dropping revoked tokens and pruning the cookie — and answers an
+  `{accounts, activeUserId}` view with no token in it; `POST /api/v1/auth/switch` points
+  `session_token` at a saved account's token; `POST /api/v1/auth/accounts/remove` forgets one,
+  revoking its session and, when it was active, handing the session to the next saved account.
+  `POST /api/v1/auth/logout` now revokes every saved session and clears both cookies. The tokens
+  never reach JavaScript, so switching adds no new way for script to read a credential. UI:
+  `SwitchAccounts.tsx`, mounted once in `BackendProvider` and opened from the rail's More menu,
+  the feed's account row (which shows "Switch" once a second account exists) and the profile's
+  gear menu.
+- [x] **P1** Tests: `backend/cmd/account_switch_test.go` (two accounts sign in on one browser,
+  the switcher lists them newest-first, a switch is passwordless, an unsaved account is refused,
+  removing the active account hands over, and logout revokes every saved session) and three new
+  `# route:` lines in `scripts/api-tour.sh`.
+
 
 Reference: `GroupHandler.go`, `GroupManagementHandler.go`, `GroupContentHandler.go`,
 `GroupService.go`, `frontend/src/app/components/GroupConversation.tsx`.
