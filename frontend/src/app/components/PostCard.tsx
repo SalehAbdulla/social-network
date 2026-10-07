@@ -171,7 +171,7 @@ export type PostContext = 'feed' | 'group';
 
 /**
  * The card's props. Exported so a surface that draws the card inside the overlay — a group's Posts
- * tab — can hand the card its own props through `PostOverlay`.
+ * tab — can hand the card its own props through `PostModal`.
  */
 export type PostCardProps = {
   post: Post;
