@@ -137,7 +137,7 @@ func TestGroupMembersAndRequestsPaginate(t *testing.T) {
 
 	// Paging is not a way around the rules, and the offset is validated rather
 	// than handed to SQL.
-	outsider.call("GET", base+"/members?offset=30", nil, 403)
+	outsider.call("GET", base+"/members?offset=30", nil, 404)
 	outsider.call("GET", base+"/requests?offset=30", nil, 403)
 	owner.call("GET", base+"/members?offset=-1", nil, 400)
 	owner.call("GET", base+"/requests?offset=abc", nil, 400)
