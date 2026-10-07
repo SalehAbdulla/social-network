@@ -74,8 +74,8 @@
 
   /* The feed's scale, one group per surface: the post card, the story tray and the right column.
      These are drawn sizes, not spacing guesses — each was read back off the rendered page. The two
-     avatars the `Avatar` component draws (the post header's and the account block's) are not here,
-     because it sets its own size inline; they are `POST_AVATAR_SIZE` and `ACCOUNT_AVATAR_SIZE` in
+     avatars the `Avatar` component draws (the post header's and the right column's) are not here,
+     because it sets its own size inline; they are `POST_AVATAR_SIZE` and `SUGGEST_AVATAR_SIZE` in
      `lib/sizing.ts`, next to the rail's. */
   --post-name-size: 14px;
   --post-meta-size: 12px;
@@ -124,6 +124,24 @@
      `--feed-top` instead of the avatar sitting `--aside-padding` below the ring. The column sticks
      at the same offset, since a larger one would push it down before the reader has scrolled. */
   --aside-padding: 8px;
+
+  /* The feed's right column ("Suggested for you"): the account row, the five-row list and
+     the footer, plus the bottom pad that keeps the floating Messages pill off the footer.
+     Instagram's geometry — a 44px face on a 56px row, a 14px name over a 12px meta line —
+     and the one blue the column's text actions wear. `--rc-safe-bottom` is the pill (48px)
+     plus its 24px inset plus a breath, so the last footer line is never covered. */
+  --rc-avatar: 44px;
+  --rc-row-height: 56px;
+  --rc-name-size: 14px;
+  --rc-sub-size: 14px;
+  --rc-meta-size: 12px;
+  --rc-meta-line: 16px;
+  --rc-header-top: 20px;
+  --rc-header-bottom: 8px;
+  --rc-follow-size: 12px;
+  --rc-footer-top: 24px;
+  --rc-safe-bottom: 96px;
+  --rc-link: #0095f6;
 
   /* The feed column's own top padding, and the "New posts" pill that stands above it. */
   --feed-top: 12px;
@@ -217,6 +235,32 @@
   --dm-chrome-top: 56px;       /* the phone's top strip, drawn by the app shell */
   --dm-chrome-bottom: 56px;    /* the phone's bottom tab bar, drawn by the app shell */
   --dm-motion: 150ms;
+
+  /* The floating Messages dock. Its pill and panel are the same elevated surface a popover
+     uses (never the page), and the chat inside reuses the `--dm-*` rules scaled down, so the
+     dock and the /messages page cannot drift apart. */
+  --dock-avatar: 44px;
+  --dock-row-height: 56px;
+  --dock-pill-height: 48px;
+  --dock-pill-radius: 24px;
+  --dock-pill-face: 22px;
+  --dock-stack-overlap: 8px;
+  --dock-panel-w: 340px;
+  --dock-panel-h: min(480px, 70vh);
+  --dock-panel-radius: 16px;
+  --dock-header-height: 56px;
+  --dock-icon: 20px;
+  --dock-inset: 24px;
+  --dock-fab: 44px;
+  --dock-badge: 18px;
+  --dock-dot: 8px;
+  --dock-title-size: 16px;
+  --dock-name-size: 14px;
+  --dock-sub-size: 12px;
+  --dock-motion: 150ms;
+  --dock-surface: var(--ui-popover);
+  --dock-border: var(--ui-popover-border);
+  --dock-hover: var(--dm-active);
 
   /* -------------------------------------------------------------------------
      Group conversations. The shell is the DM shell — a pinned header, a tab bar
@@ -624,6 +668,119 @@ body {
   .dark .from-blue-200 { --tw-gradient-from: color-mix(in srgb, var(--ui-brand-1) 30%, transparent); }
   .dark .to-teal-100 { --tw-gradient-to: color-mix(in srgb, var(--ui-brand-2) 26%, transparent); }
   .dark .to-white { --tw-gradient-to: var(--ui-card); }
+}
+
+
+/* The feed's right column: the account block, the suggested list and the footer. The rows
+   are Tailwind utilities reading the `--rc-*` tokens above, which keeps a measurement in
+   globals.css; only the footer's three lines earn a class of their own. */
+@layer components {
+  .rc-footer {
+    margin-top: var(--rc-footer-top);
+    font-size: var(--rc-meta-size);
+    line-height: var(--rc-meta-line);
+    color: var(--ui-muted);
+  }
+  .rc-footer a:hover { color: var(--ui-text); }
+  .rc-footer p { text-transform: uppercase; }
+}
+
+/* ---------------------------------------------------------------------------
+   The floating Messages dock (bottom-right). A pill that opens into a panel; the
+   panel's list reuses the messages page's `.dm-row` and a chat reuses its
+   `.dm-panel`, both scaled by the `dock-*` overrides at the end. All sizes are the
+   `--dock-*` tokens, and the surface is the popover's, theme included.
+--------------------------------------------------------------------------- */
+@layer components {
+  .dock-pill {
+    position: fixed; inset-inline-end: var(--dock-inset); bottom: var(--dock-inset); z-index: 40;
+    display: flex; height: var(--dock-pill-height); align-items: center; gap: 10px;
+    padding: 0 16px; border: 1px solid var(--dock-border); border-radius: var(--dock-pill-radius);
+    background-color: var(--dock-surface); color: var(--ui-text);
+    box-shadow: 0 8px 28px rgba(0, 0, 0, 0.18);
+    transition: background-color var(--dock-motion) ease;
+  }
+  .dock-pill:hover { background-color: var(--dock-hover); }
+  .dock-pill-icon { position: relative; display: flex; flex: none; }
+  .dock-pill-icon svg { width: var(--dock-icon); height: var(--dock-icon); stroke-width: var(--dm-icon-stroke); }
+  .dock-pill-label { font-size: var(--dock-name-size); font-weight: 600; }
+  .dock-pill-badge {
+    position: absolute; top: -2px; inset-inline-start: calc(var(--dock-icon) - 6px);
+    display: flex; height: var(--dock-badge); min-width: var(--dock-badge); align-items: center; justify-content: center;
+    padding: 0 4px; border-radius: 9999px; background-color: var(--ui-badge); color: #fff;
+    font-size: 10px; font-weight: 600; line-height: 1;
+  }
+  .dock-pill-stack { display: flex; align-items: center; }
+  .dock-pill-face { position: relative; display: flex; border-radius: 9999px; box-shadow: 0 0 0 2px var(--dock-surface); }
+  .dock-pill-face + .dock-pill-face { margin-inline-start: calc(-1 * var(--dock-stack-overlap)); }
+  .dock-pill-dot {
+    position: absolute; inset-block-end: 0; inset-inline-end: 0; width: var(--dock-dot); height: var(--dock-dot);
+    border-radius: 9999px; background-color: var(--dm-blue); box-shadow: 0 0 0 2px var(--dock-surface);
+  }
+  .dock-pulse { animation: dock-pulse 700ms ease; }
+  @keyframes dock-pulse { 0%, 100% { transform: none; } 30% { transform: translateY(-4px); } }
+
+  .dock-panel {
+    position: fixed; inset-inline-end: var(--dock-inset); bottom: var(--dock-inset); z-index: 40;
+    display: flex; width: var(--dock-panel-w); max-width: calc(100vw - 2 * var(--dock-inset));
+    height: var(--dock-panel-h); flex-direction: column; overflow: hidden; outline: none;
+    border: 1px solid var(--dock-border); border-radius: var(--dock-panel-radius);
+    background-color: var(--dock-surface);
+    box-shadow: 0 16px 48px rgba(0, 0, 0, 0.24);
+    animation: dock-in var(--dock-motion) ease;
+  }
+  @keyframes dock-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+  @media (max-width: 767px) { .dock-pill, .dock-panel { display: none; } }
+  @media (prefers-reduced-motion: reduce) { .dock-pill, .dock-pulse, .dock-panel { animation: none; } }
+
+  .dock-header {
+    display: flex; flex: none; align-items: center; gap: 8px; height: var(--dock-header-height);
+    padding: 0 12px; border-bottom: 1px solid var(--dock-border);
+  }
+  .dock-header .dock-icon { width: 32px; height: 32px; flex: none; }
+  .dock-header .dock-icon svg { width: var(--dock-icon); height: var(--dock-icon); stroke-width: var(--dm-icon-stroke); }
+  .dock-header-name { display: block; font-size: var(--dock-name-size); font-weight: 600; color: var(--ui-text); }
+  .dock-header-sub { display: block; font-size: var(--dock-sub-size); color: var(--ui-muted); }
+  .dock-header-avatar { position: relative; flex: none; }
+  .dock-list-head { justify-content: space-between; }
+  .dock-title { font-size: var(--dock-title-size); font-weight: 700; color: var(--ui-text); }
+  .dock-open-group { flex: none; font-size: var(--dock-sub-size); font-weight: 600; color: var(--dm-blue); }
+  .dock-open-group:hover { opacity: 0.7; }
+}
+
+@layer components {
+  .dock-scroll { position: relative; min-height: 0; flex: 1 1 0%; overflow-y: auto; overscroll-behavior: contain; padding: 4px 0 8px; scrollbar-width: thin; }
+  .dock-scroll::-webkit-scrollbar { width: 6px; }
+  .dock-scroll::-webkit-scrollbar-thumb { background: transparent; border-radius: 9999px; }
+  .dock-scroll:hover::-webkit-scrollbar-thumb { background: var(--ui-border); }
+  /* The dock's rows are the messages page's `.dm-row`, compacted to a 56px row. */
+  .dock-scroll .dm-row { height: var(--dock-row-height); }
+
+  .dock-row-skel { display: flex; height: var(--dock-row-height); align-items: center; gap: 12px; padding: 8px 12px; }
+  .dock-skel { background-color: var(--ui-rail-hover-strong); border-radius: 6px; animation: dock-shimmer 2s ease-in-out infinite; }
+  .dock-skel-face { width: var(--dock-avatar); height: var(--dock-avatar); border-radius: 9999px; flex: none; }
+  @keyframes dock-shimmer { 0%, 100% { opacity: 1; } 50% { opacity: 0.45; } }
+
+  .dock-empty { display: flex; flex: 1 1 0%; flex-direction: column; align-items: center; justify-content: center; gap: 12px; padding: 24px; text-align: center; font-size: 14px; color: var(--ui-muted); }
+  .dock-empty-icon { display: flex; width: 56px; height: 56px; align-items: center; justify-content: center; border: 2px solid var(--ui-text); border-radius: 9999px; color: var(--ui-text); }
+  .dock-empty-icon svg { width: 28px; height: 28px; stroke-width: 1.5; }
+  .dock-error { display: flex; flex-direction: column; align-items: center; gap: 12px; padding: 32px 16px; text-align: center; font-size: 14px; color: var(--ui-muted); }
+  .dock-primary { display: inline-flex; align-items: center; justify-content: center; height: 32px; padding: 0 16px; border-radius: 8px; background-color: var(--dm-blue); color: #fff; font-size: 14px; font-weight: 600; }
+  .dock-fab {
+    position: absolute; inset-block-end: 16px; inset-inline-end: 16px; display: flex;
+    width: var(--dock-fab); height: var(--dock-fab); align-items: center; justify-content: center;
+    border-radius: 9999px; background-color: var(--dm-blue); color: #fff;
+    box-shadow: 0 6px 18px rgba(0, 0, 0, 0.22); transition: transform var(--dock-motion) ease;
+  }
+  .dock-fab:hover { transform: translateY(-1px); }
+  .dock-fab svg { width: var(--dock-icon); height: var(--dock-icon); stroke-width: var(--dm-icon-stroke); }
+
+  /* A chat in the dock is the messages page's `.dm-panel`, scaled down. Overriding here — rather
+     than rewriting the classes — is what keeps the two surfaces one implementation, so a change
+     to a bubble or the thread on /messages changes the dock too. */
+  .dock-panel .dm-thread { padding: 12px; }
+  .dock-panel .dm-bubble { border-radius: 18px; font-size: 14px; line-height: 18px; }
+  .dock-panel .dm-composer { padding: 12px; }
 }
 
 
@@ -1428,3 +1585,353 @@ article[data-highlight='true'] { animation: grp-post-flash 1.6s ease-out; }
   }
 }
 
+
+/* ---------------------------------------------------------------------------
+   Profile (Instagram's current desktop profile). One 1326px column centred in
+   the area right of the rail: a centred 626px header, a centred icon-only tab
+   row, and a 3:4 tile grid that gains columns with the column's own width. Every
+   measurement is a token here; the classes below only arrange them.
+--------------------------------------------------------------------------- */
+:root {
+  --profile-bg: var(--ui-rail);     /* the app's near-black, not pure #000 */
+  --profile-max: 935px;
+  --profile-pad-top: 24px;
+  --profile-pad-x: 0px;
+  --profile-bottom: 0px;
+  --profile-header-gap: 48px;       /* the avatar to the info column */
+  --profile-avatar: 150px;
+  --profile-username-size: 20px;
+  --profile-name-size: 14px;        /* the display-name line */
+  --profile-row-gap: 16px;          /* between the info column's stacked rows */
+  --profile-stats-size: 14px;
+  --profile-stats-gap: 24px;
+  --profile-bio-size: 14px;
+  --profile-bio-leading: 18px;
+  --profile-section-gap: 24px;      /* the header block to the tab row (0 tabs to grid) */
+  --profile-action-gap: 8px;        /* between two action buttons */
+  --profile-btn-height: 32px;
+  --profile-btn-radius: 8px;
+  --profile-tab-width: 120px;
+  --profile-tab-height: 44px;
+  --profile-tab-underline: 40px;
+  --profile-icon: var(--rail-icon);          /* a tab icon and the gear — the rail's own size */
+  --profile-icon-stroke: var(--rail-stroke); /* and its stroke, so the two cannot drift apart */
+  --profile-tile-badge: 16px;                /* the Play / Layers / Pin mark on a tile */
+  --profile-tab-border: var(--dm-border);
+  --profile-grid-gap: 1px;
+  --profile-tile-icon: 20px;
+  --profile-tile-text-size: 16px;
+  --profile-tile-pad: 16px;
+  --profile-tile-scrim: rgba(0, 0, 0, 0.3);
+  --profile-empty-gap: 56px;
+  --profile-empty-icon: 62px;
+  --profile-empty-glyph: 32px;
+  --profile-empty-title: 28px;
+  --profile-follow-width: 400px;
+  --profile-follow-radius: 12px;
+  --profile-follow-avatar: 44px;
+  --profile-mobile-avatar: 77px;
+  --profile-overlay-arrow: 34px;
+}
+
+@layer components {
+  /* The page: full-bleed background, then the 1326px column. `content-box` keeps the max-width on
+     the grid itself, so the 24px page padding sits outside it and the grid is the full 1326 the
+     reference measured — which is what makes a tile come out at ~220px across six columns. */
+  .profile-page { min-height: 100%; background-color: var(--profile-bg); }
+  .profile {
+    width: 100%; max-width: var(--profile-max);
+    margin-inline: auto; padding: var(--profile-pad-top) var(--profile-pad-x) var(--profile-bottom);
+    container-type: inline-size; container-name: profile;
+  }
+
+  /* ---- Header: the avatar and the info column, filling the shared 935px container ---- */
+  .profile-header { display: flex; gap: var(--profile-header-gap); align-items: flex-start; }
+  .profile-avatar-col { display: flex; flex: none; }
+  .profile-avatar { padding: 0; border: 0; background: none; border-radius: 9999px; line-height: 0; cursor: default; }
+  .profile-avatar[data-clickable='true'] { cursor: pointer; transition: opacity 150ms ease; }
+  .profile-avatar[data-clickable='true']:hover { opacity: 0.9; }
+  .profile-info { display: flex; min-width: 0; flex: 1 1 0%; flex-direction: column; gap: var(--profile-row-gap); }
+
+  /* The handle row: the username and the one settings/more button. */
+  .profile-actions { display: flex; align-items: center; gap: 12px; }
+  .profile-username { font-size: var(--profile-username-size); font-weight: 600; line-height: 1.25; overflow-wrap: anywhere; }
+  .profile-name { font-size: var(--profile-name-size); font-weight: 400; overflow-wrap: anywhere; }
+  .profile-gear .ui-menu-trigger svg { width: var(--profile-icon); height: var(--profile-icon); stroke-width: var(--profile-icon-stroke); }
+
+  /* The two action buttons fill the column, side by side, 16px under the bio (the column's gap). */
+  .profile-actions-buttons { display: grid; grid-template-columns: 1fr 1fr; gap: var(--profile-action-gap); }
+  .profile-btn { height: var(--profile-btn-height); border-radius: var(--profile-btn-radius); font-size: 14px; font-weight: 600; }
+
+  /* Row 2: the stats, one line, 16px. */
+  .profile-stats { display: flex; align-items: center; gap: var(--profile-stats-gap); font-size: var(--profile-stats-size); }
+  .profile-stat { display: inline-flex; align-items: baseline; gap: 4px; color: var(--ui-text); }
+  .profile-stat strong { font-weight: 600; }
+  button.profile-stat { cursor: pointer; }
+  button.profile-stat:not(:disabled):hover { text-decoration: underline; }
+  button.profile-stat:disabled { cursor: default; }
+
+  /* Row 3: the bio. */
+  .profile-bio { font-size: var(--profile-bio-size); line-height: var(--profile-bio-leading); }
+  .profile-bio-text { white-space: pre-wrap; overflow-wrap: anywhere; }
+  .profile-bio-text[data-clamped='true'] { display: -webkit-box; overflow: hidden; -webkit-box-orient: vertical; -webkit-line-clamp: 4; }
+  .profile-bio-toggle { color: var(--ui-muted); font-weight: 600; }
+  .profile-bio-location { display: inline-flex; align-items: center; gap: 4px; color: var(--ui-muted); }
+  .profile-bio-location svg { width: 14px; height: 14px; flex: none; }
+  .profile-bio a { color: var(--dm-blue); }
+}
+
+@layer components {
+  /* ---- Tabs: icon-only, centred, one short line under the active icon ---- */
+  .profile-tabs-wrap { margin-top: var(--profile-section-gap); }
+  .profile-tabs { display: flex; justify-content: center; }
+  .profile-tab {
+    position: relative; display: inline-flex; width: var(--profile-tab-width); height: var(--profile-tab-height);
+    align-items: center; justify-content: center; color: var(--ui-muted); transition: color var(--dm-motion) ease;
+  }
+  .profile-tab:hover { color: var(--ui-text); }
+  .profile-tab[aria-selected='true'] { color: var(--ui-text); }
+  /* The 58px line sits on the tab's bottom edge, centred over the icon. */
+  .profile-tab[aria-selected='true']::after { content: ''; position: absolute; inset-inline-start: 50%; bottom: 0; width: var(--profile-tab-underline); height: 1px; background-color: currentColor; transform: translateX(-50%); }
+  .profile-tab svg { width: var(--profile-icon); height: var(--profile-icon); stroke-width: var(--profile-icon-stroke); flex: none; }
+
+  /* ---- Grid: 3:4 tiles; three columns in the 935px container, four only past 1200px ---- */
+  .profile-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: var(--profile-grid-gap); }
+  @container profile (min-width: 1200px) { .profile-grid { grid-template-columns: repeat(4, 1fr); } }
+  .profile-tile { position: relative; display: block; width: 100%; padding: 0; border: 0; aspect-ratio: 3 / 4; overflow: hidden; background-color: var(--dm-surface); cursor: pointer; }
+  .profile-tile img, .profile-tile video { display: block; width: 100%; height: 100%; object-fit: cover; object-position: center; }
+  .profile-tile-badge { position: absolute; top: 8px; inset-inline-end: 8px; color: #fff; }
+  .profile-tile-badge[data-side='start'] { inset-inline-end: auto; inset-inline-start: 8px; }
+  .profile-tile-badge svg { width: var(--profile-tile-badge); height: var(--profile-tile-badge); filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.6)); }
+  .profile-tile-scrim { position: absolute; inset: 0; display: none; align-items: center; justify-content: center; gap: 24px; background-color: var(--profile-tile-scrim); color: #fff; font-size: 16px; font-weight: 600; }
+  .profile-tile:hover .profile-tile-scrim, .profile-tile:focus-visible .profile-tile-scrim { display: flex; }
+  .profile-tile-scrim span { display: inline-flex; align-items: center; gap: 6px; }
+  .profile-tile-scrim svg { width: var(--profile-tile-icon); height: var(--profile-tile-icon); }
+  .profile-tile-copy { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; padding: var(--profile-tile-pad); }
+  .profile-tile-copy p { display: -webkit-box; overflow: hidden; -webkit-box-orient: vertical; -webkit-line-clamp: 6; font-size: var(--profile-tile-text-size); font-weight: 400; text-align: center; overflow-wrap: anywhere; }
+  @media (hover: none) { .profile-tile:hover .profile-tile-scrim { display: none; } }
+  .profile-tile-skeleton { aspect-ratio: 3 / 4; background-color: var(--dm-surface); animation: ui-pulse 1.4s ease-in-out infinite; }
+}
+
+@layer components {
+  /* ---- Empty and error states ---- */
+  .profile-empty { display: flex; flex-direction: column; align-items: center; padding-block: 50px; text-align: center; }
+  .profile-empty-icon { display: flex; width: var(--profile-empty-icon); height: var(--profile-empty-icon); align-items: center; justify-content: center; border: 2px solid var(--ui-text); border-radius: 9999px; }
+  .profile-empty-icon svg { width: var(--profile-empty-glyph); height: var(--profile-empty-glyph); }
+  .profile-empty-copy { display: flex; flex-direction: column; align-items: center; gap: 8px; margin-top: var(--profile-empty-gap); }
+  .profile-empty-title { font-size: var(--profile-empty-title); font-weight: 300; }
+  .profile-empty-text { max-width: 320px; font-size: 14px; color: var(--ui-muted); }
+  .profile-error { display: flex; align-items: center; justify-content: center; gap: 12px; padding: 40px 16px; font-size: 14px; color: var(--ui-muted); }
+
+  /* ---- Followers / following dialog ---- */
+  .follow-scrim { position: fixed; inset: 0; z-index: 50; display: flex; align-items: center; justify-content: center; padding: 16px; background-color: rgba(0, 0, 0, 0.5); }
+  .follow-card { display: flex; width: 100%; max-width: var(--profile-follow-width); max-height: 85vh; flex-direction: column; overflow: hidden; border-radius: var(--profile-follow-radius); background-color: var(--ui-card); color: var(--ui-text); }
+  .follow-head { display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid var(--dm-border); padding: 12px 16px; }
+  .follow-title { font-size: 16px; font-weight: 600; }
+  .follow-search { padding: 8px 16px; border-bottom: 1px solid var(--dm-border); }
+  .follow-search input { width: 100%; height: 36px; padding-inline: 12px; border: 0; border-radius: 8px; background-color: var(--dm-surface); font-size: 14px; color: var(--ui-text); outline: none; }
+  .follow-body { min-height: 0; flex: 1 1 0%; overflow-y: auto; padding: 8px; }
+  .follow-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 8px; }
+  .follow-user { display: flex; min-width: 0; align-items: center; gap: 12px; }
+  .follow-name { font-size: 14px; font-weight: 600; }
+  .follow-handle { font-size: 14px; color: var(--ui-muted); }
+}
+
+/* ---- Responsive: the header gap tightens, then the whole header stacks ---- */
+@media (max-width: 899px) {
+  .profile-header { gap: 24px; }
+}
+
+@media (max-width: 735px) {
+  .profile { padding-bottom: 72px; }
+  .profile-header {
+    display: grid;
+    grid-template-columns: var(--profile-mobile-avatar) 1fr;
+    grid-template-areas: "avatar handle" "name name" "bio bio" "stats stats" "buttons buttons";
+    column-gap: 20px; row-gap: 16px; align-items: center;
+  }
+  .profile-avatar-col { grid-area: avatar; }
+  .profile-info { display: contents; }
+  .profile-actions { grid-area: handle; }
+  .profile-name { grid-area: name; }
+  .profile-bio { grid-area: bio; }
+  .profile-actions-buttons { grid-area: buttons; }
+  .profile-stats {
+    grid-area: stats; display: grid; grid-template-columns: repeat(3, 1fr); gap: 0;
+    padding-block: 12px; border-block: 1px solid var(--profile-tab-border); font-size: 14px; text-align: center;
+  }
+  .profile-stat { flex-direction: column; align-items: center; gap: 2px; }
+  .profile-tabs { justify-content: space-between; }
+  .profile-tab { width: auto; flex: 1 1 0%; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .profile-avatar, .profile-tab { transition-duration: 0.01ms !important; }
+  .profile-tile-skeleton { animation: none; }
+}
+
+/* The prev/next arrows a grid's overlay draws to move through the grid. */
+.post-overlay-arrow {
+  position: fixed; top: 50%; z-index: 51; display: flex;
+  width: var(--profile-overlay-arrow); height: var(--profile-overlay-arrow);
+  align-items: center; justify-content: center; border-radius: 9999px;
+  background-color: rgba(255, 255, 255, 0.92); color: #000;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.35); transform: translateY(-50%);
+  transition: background-color 150ms ease;
+}
+.post-overlay-arrow:hover { background-color: #fff; }
+.post-overlay-arrow[data-side='prev'] { inset-inline-start: 16px; }
+.post-overlay-arrow[data-side='next'] { inset-inline-end: 16px; }
+.post-overlay-arrow svg { width: 20px; height: 20px; }
+@media (prefers-reduced-motion: reduce) { .post-overlay-arrow { transition-duration: 0.01ms !important; } }
+
+/* ---------------------------------------------------------------------------
+   The post view — the modal and the standalone /post/[id] page draw the same
+   component: the media pane on the left, a 405px panel on the right, and one
+   stacked column below 900px. Every measurement is a token here.
+--------------------------------------------------------------------------- */
+:root {
+  --pv-radius: 4px;
+  --pv-max-h: min(90vh, 700px);
+  --pv-max-w: min(94vw, 1100px);
+  --pv-panel: 405px;
+  --pv-panel-min: 340px;
+  --pv-min-pane: 400px;
+  --pv-header-h: 60px;
+  --pv-composer-h: 56px;
+  --pv-avatar: 32px;
+  --pv-icon: 20px;
+  --pv-icon-stroke: 1.75;
+  --pv-hit: 36px;
+  --pv-gap: 4px;
+  --pv-scrollbar: 6px;
+  --pv-cmt-like-hit: 32px;
+  --pv-cmt-like-icon: 14px;
+  --pv-scrim: rgba(0, 0, 0, 0.65);
+  --pv-bg: var(--ui-rail);
+  --pv-border: var(--dm-border);
+  --pv-surface: var(--dm-surface);
+  --pv-media-bg: #000;
+  --pv-like: #ff3040;
+  --pv-blue: var(--dm-blue);
+  --pv-muted: var(--ui-muted);
+  --pv-text: var(--ui-text);
+  --pv-chevron: 32px;
+  --pv-arrow: 28px;
+  --pv-dot: 6px;
+  --pv-comment-photo: 200px;
+  --pv-close: 24px;
+  --pv-edge: 16px;
+}
+
+@layer components {
+  .pv-scrim { position: fixed; inset: 0; z-index: 40; background-color: var(--pv-scrim); }
+  .pv-root { position: fixed; inset: 0; z-index: 50; display: flex; align-items: center; justify-content: center; padding: 16px; outline: none; }
+  .pv-dialog { display: flex; width: var(--pv-max-w); max-width: 100%; height: var(--pv-max-h); overflow: hidden; border-radius: var(--pv-radius); background-color: var(--pv-bg); color: var(--pv-text); }
+  .pv-dialog[data-anim='true'] { animation: pv-in 150ms ease; }
+  /* The pane follows the picture: the dialog is as wide as `ratio × height + 405px`, floored at the
+     400px pane and capped at the max width, so a portrait gets a narrow pane and a landscape a wide one. */
+  .pv-dialog[data-ratio='true'] { width: clamp(calc(var(--pv-panel) + var(--pv-min-pane)), calc(var(--pv-ratio, 1) * var(--pv-max-h) + var(--pv-panel)), var(--pv-max-w)); }
+  @keyframes pv-in { from { opacity: 0; transform: scale(0.98); } to { opacity: 1; transform: scale(1); } }
+
+  .pv-close { position: fixed; top: var(--pv-edge); inset-inline-end: var(--pv-edge); z-index: 51; display: flex; width: var(--pv-close); height: var(--pv-close); align-items: center; justify-content: center; color: #fff; }
+  .pv-close svg { width: var(--pv-close); height: var(--pv-close); }
+  .pv-nav { position: fixed; top: 50%; z-index: 51; display: flex; width: var(--pv-chevron); height: var(--pv-chevron); align-items: center; justify-content: center; border-radius: 9999px; background-color: rgba(255, 255, 255, 0.92); color: #000; transform: translateY(-50%); }
+  .pv-nav[data-side='prev'] { inset-inline-start: var(--pv-edge); }
+  .pv-nav[data-side='next'] { inset-inline-end: var(--pv-edge); }
+  .pv-nav svg { width: 16px; height: 16px; }
+
+  .pv-media { position: relative; display: flex; min-width: var(--pv-min-pane); flex: 1 1 0%; align-items: center; justify-content: center; padding: 0; background-color: var(--pv-media-bg); }
+  .pv-media img, .pv-media video { max-width: 100%; max-height: 100%; object-fit: contain; }
+  .pv-media-btn { position: absolute; top: 50%; display: flex; width: var(--pv-arrow); height: var(--pv-arrow); align-items: center; justify-content: center; border-radius: 9999px; background-color: rgba(38, 38, 38, 0.8); color: #fff; transform: translateY(-50%); }
+  .pv-media-btn[data-side='prev'] { inset-inline-start: 12px; }
+  .pv-media-btn[data-side='next'] { inset-inline-end: 12px; }
+  .pv-media-btn svg { width: 16px; height: 16px; }
+  .pv-dots { position: absolute; bottom: 12px; inset-inline: 0; display: flex; justify-content: center; gap: 4px; }
+  .pv-dot { width: var(--pv-dot); height: var(--pv-dot); border-radius: 9999px; background-color: rgba(255, 255, 255, 0.4); }
+  .pv-dot[data-active='true'] { background-color: #fff; }
+  .pv-mute { position: absolute; bottom: 12px; inset-inline-end: 12px; display: flex; width: 32px; height: 32px; align-items: center; justify-content: center; border-radius: 9999px; background-color: rgba(38, 38, 38, 0.8); color: #fff; }
+  .pv-mute svg { width: 18px; height: 18px; }
+  .pv-text-tile { display: flex; width: 100%; align-items: center; justify-content: center; padding: 24px; background-color: var(--pv-surface); }
+  .pv-text-tile p { display: -webkit-box; overflow: hidden; -webkit-box-orient: vertical; -webkit-line-clamp: 10; font-size: 24px; font-weight: 600; line-height: 28px; text-align: center; overflow-wrap: anywhere; white-space: pre-wrap; }
+}
+
+@media (prefers-reduced-motion: reduce) { .pv-dialog[data-anim='true'] { animation: none; } }
+
+@layer components {
+  .pv-panel { display: flex; width: var(--pv-panel); min-width: 0; flex: none; flex-direction: column; }
+  .pv-header { display: flex; height: var(--pv-header-h); flex: none; align-items: center; gap: 12px; border-bottom: 1px solid var(--pv-border); padding: 14px 16px; }
+  .pv-header .ui-menu { margin-inline-start: auto; }
+  .pv-head-text { min-width: 0; flex: 1 1 0%; }
+  .pv-name { font-size: 14px; font-weight: 600; }
+  .pv-meta { display: flex; align-items: center; gap: 4px; font-size: 12px; color: var(--pv-muted); }
+  .pv-meta svg { width: 12px; height: 12px; flex: none; }
+  .pv-scroll { display: flex; min-height: 0; flex: 1 1 0%; flex-direction: column; gap: 16px; overflow-y: auto; overscroll-behavior: contain; padding: 16px; scrollbar-gutter: stable; }
+  .pv-scroll::-webkit-scrollbar { width: var(--pv-scrollbar); }
+  .pv-scroll::-webkit-scrollbar-thumb { border-radius: 3px; background-color: transparent; }
+  .pv-scroll:hover::-webkit-scrollbar-thumb { background-color: var(--pv-border); }
+  .pv-row { display: flex; gap: 12px; }
+  .pv-body { font-size: 14px; line-height: 18px; overflow-wrap: anywhere; white-space: pre-wrap; }
+  .pv-body a { color: var(--pv-blue); }
+  .pv-body[data-clamped='true'] { display: -webkit-box; overflow: hidden; -webkit-box-orient: vertical; -webkit-line-clamp: 6; }
+  .pv-more { font-size: 14px; font-weight: 600; color: var(--pv-muted); }
+  .pv-line { font-size: 12px; color: var(--pv-muted); }
+  .pv-cmts { display: flex; flex-direction: column; gap: 16px; }
+  .pv-cmt { position: relative; display: flex; gap: 12px; padding-inline-end: 20px; }
+  .pv-cmt-like { position: absolute; top: 0; inset-inline-end: 0; display: flex; width: var(--pv-cmt-like-hit); height: var(--pv-cmt-like-hit); align-items: center; justify-content: center; color: var(--pv-muted); }
+  .pv-cmt-like[data-liked='true'] { color: var(--pv-like); }
+  .pv-cmt-like svg { width: var(--pv-cmt-like-icon); height: var(--pv-cmt-like-icon); }
+  .pv-cmt-menu { position: absolute; top: 0; inset-inline-end: 24px; opacity: 0; }
+  .pv-cmt:hover .pv-cmt-menu, .pv-cmt:focus-within .pv-cmt-menu { opacity: 1; }
+  @media (hover: none) { .pv-cmt-menu { opacity: 1; } }
+  .pv-photo { display: block; margin-top: 8px; width: var(--pv-comment-photo); max-width: 100%; border-radius: 8px; overflow: hidden; cursor: zoom-in; }
+  .pv-replies { margin-inline-start: 24px; font-size: 12px; font-weight: 600; color: var(--pv-muted); }
+
+  .pv-actions { display: flex; flex: none; align-items: center; gap: var(--pv-gap); border-bottom: 1px solid var(--pv-border); padding: 4px 8px; }
+  .pv-action { display: flex; width: var(--pv-hit); height: var(--pv-hit); align-items: center; justify-content: center; color: var(--pv-text); }
+  .pv-action svg { width: var(--pv-icon); height: var(--pv-icon); stroke-width: var(--pv-icon-stroke); }
+  .pv-action[data-liked='true'] { color: var(--pv-like); }
+  .pv-count { padding-inline-end: 8px; font-size: 14px; font-weight: 600; }
+  .pv-end { margin-inline-start: auto; }
+
+  .pv-likes { flex: none; padding: 8px 16px 0; font-size: 14px; font-weight: 600; }
+  .pv-likes-zero { font-weight: 400; color: var(--pv-muted); }
+  .pv-date { flex: none; padding: 4px 16px 12px; font-size: 12px; color: var(--pv-muted); }
+  .pv-composer { display: flex; flex: none; align-items: center; gap: 12px; min-height: var(--pv-composer-h); border-top: 1px solid var(--pv-border); padding: 0 16px; transition: border-top-color 150ms ease; }
+  .pv-composer:focus-within { border-top-color: var(--pv-text); }
+  .pv-composer textarea { min-width: 0; flex: 1 1 0%; resize: none; border: 0; background: transparent; box-shadow: none; outline: none; padding: 0; font-size: 14px; line-height: 18px; color: var(--pv-text); }
+  .pv-composer textarea:focus, .pv-composer textarea:focus-visible { outline: none; }
+  .pv-composer textarea::placeholder { color: var(--pv-muted); }
+  .pv-post { flex: none; font-size: 14px; font-weight: 600; color: var(--pv-blue); }
+  .pv-post:disabled { opacity: 0.4; }
+  .pv-off { flex: none; padding: 16px; font-size: 14px; color: var(--pv-muted); }
+  .pv-previews { display: flex; flex-wrap: wrap; gap: 8px; padding: 8px 16px 0; }
+  .pv-thumb { position: relative; width: 56px; height: 56px; overflow: hidden; border-radius: 8px; }
+  .pv-thumb img { width: 100%; height: 100%; object-fit: cover; }
+
+  .pv-state { display: flex; flex: 1 1 0%; flex-direction: column; align-items: center; justify-content: center; gap: 8px; padding: 40px 16px; text-align: center; }
+  .pv-state-title { font-size: 20px; font-weight: 700; }
+  .pv-state-text { font-size: 14px; color: var(--pv-muted); }
+  .pv-more-row { display: flex; justify-content: center; }
+  .pv-more-btn { display: flex; width: var(--pv-hit); height: var(--pv-hit); align-items: center; justify-content: center; color: var(--pv-text); }
+  .pv-more-btn svg { width: var(--pv-icon); height: var(--pv-icon); }
+  .pv-skel { display: flex; gap: 12px; }
+  .pv-skel span { display: block; border-radius: 4px; background-color: var(--pv-surface); animation: ui-pulse 1.4s ease-in-out infinite; }
+
+  /* The standalone /post/[id] page: the same dialog, inline in the flow. */
+  .pv-page { width: 100%; max-width: 935px; margin: 24px auto 0; overflow: hidden; border: 1px solid var(--pv-border); border-radius: var(--pv-radius); background-color: var(--pv-bg); color: var(--pv-text); }
+  .pv-page .pv-dialog { width: 100%; max-width: 100%; height: var(--pv-max-h); border-radius: 0; }
+  .pv-more-posts { margin-top: 24px; }
+  .pv-more-title { margin-bottom: 12px; font-size: 12px; font-weight: 600; color: var(--pv-muted); }
+}
+
+@media (max-width: 899px) {
+  .pv-root { padding: 0; }
+  .pv-dialog { width: 100%; height: 100%; max-width: 100%; flex-direction: column; border-radius: 0; }
+  .pv-media { min-width: 0; flex: none; max-height: 60%; }
+  .pv-panel { width: 100%; flex: 1 1 0%; }
+  .pv-page { margin-top: 0; border: 0; border-radius: 0; }
+  .pv-page .pv-dialog { height: 100dvh; }
+}
+
+@media (prefers-reduced-motion: reduce) { .pv-skel span, .pv-dialog[data-anim='true'] { animation: none; } }
