@@ -12,5 +12,5 @@ require github.com/gorilla/websocket v1.5.3
 
 require (
 	github.com/golang-migrate/migrate/v4 v4.19.1
-	golang.org/x/image v0.20.0
+	golang.org/x/image v0.45.0
 )
