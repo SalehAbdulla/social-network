@@ -126,7 +126,7 @@ func TestCommentMediaIntegration(t *testing.T) {
 	alex.call("GET", commenterImage, nil, 200)
 	dummy.call("GET", commenterImage, nil, 200)
 	guest.call("GET", "/api/v1/post?id="+strconv.Itoa(post.PostId), nil, 404)
-	guest.call("GET", commenterImage, nil, 403)
+	guest.call("GET", commenterImage, nil, 404)
 	guest.call("GET", "/api/v1/users/alex-id/media", nil, 200)
 
 	// The profile media tab merges post and comment photos.
@@ -139,13 +139,13 @@ func TestCommentMediaIntegration(t *testing.T) {
 	alexProfile := decoded[models.SocialUser](t, alex.call("GET", "/api/v1/users/me", nil, 200))
 	alexProfile.IsPublic = false
 	alex.call("PUT", "/api/v1/users/me", alexProfile, 200)
-	guest.call("GET", "/api/v1/users/alex-id/media", nil, 403)
+	guest.call("GET", "/api/v1/users/alex-id/media", nil, 404)
 	alexProfile.IsPublic = true
 	alex.call("PUT", "/api/v1/users/me", alexProfile, 200)
 
 	// Deleting the comment revokes the photo for everyone but its uploader.
 	alex.call("DELETE", "/api/v1/posts/comments?id="+strconv.Itoa(created.CommentId), nil, 200)
-	dummy.call("GET", commenterImage, nil, 403)
+	dummy.call("GET", commenterImage, nil, 404)
 	alex.call("GET", commenterImage, nil, 200)
 
 	// The legacy form encoding still creates a text comment.
