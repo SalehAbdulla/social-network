@@ -29,6 +29,13 @@ func routes() http.Handler {
 	mux.Handle("POST /api/v1/auth/logout", pkgmiddleware.AuthMiddleware(http.HandlerFunc(handlers.HandlerCtx.Logout)))
 	mux.Handle("GET /api/v1/auth/me", pkgmiddleware.AuthMiddleware(http.HandlerFunc(handlers.HandlerCtx.Me)))
 
+	// Multiple accounts on one browser. The list a browser saved is read back for
+	// the switcher, and a switch or a removal is performed server-side so the
+	// session tokens never reach the page.
+	mux.Handle("GET /api/v1/auth/accounts", pkgmiddleware.AuthMiddleware(http.HandlerFunc(handlers.HandlerCtx.Accounts)))
+	mux.Handle("POST /api/v1/auth/switch", pkgmiddleware.AuthMiddleware(http.HandlerFunc(handlers.HandlerCtx.SwitchAccount)))
+	mux.Handle("POST /api/v1/auth/accounts/remove", pkgmiddleware.AuthMiddleware(http.HandlerFunc(handlers.HandlerCtx.RemoveSavedAccount)))
+
 	mux.Handle("GET /api/v1/posts", pkgmiddleware.AuthMiddleware(http.HandlerFunc(handlers.HandlerCtx.GetPosts)))
 	mux.Handle("GET /api/v1/post", pkgmiddleware.AuthMiddleware(http.HandlerFunc(handlers.HandlerCtx.GetPost)))
 	mux.Handle("POST /api/v1/posts", pkgmiddleware.AuthMiddleware(http.HandlerFunc(handlers.HandlerCtx.CreatePost)))
