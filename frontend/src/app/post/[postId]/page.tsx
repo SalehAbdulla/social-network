@@ -1,7 +1,7 @@
 'use client';
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
-import { type Page, type Post, displayName } from '../../api/social';
+import { type Post, displayName } from '../../api/social';
 import { useResource } from '../../lib/useResource';
 import { usePagedList } from '../../lib/usePagedList';
 import PostView from '../../components/post/PostView';
@@ -20,11 +20,13 @@ export default function SinglePost() {
   const router = useRouter();
   const post = useResource<Post>(`/post?id=${postId}`);
   const author = post.data?.userId;
-  const more = usePagedList<Post, Page<Post>>({
+  // `/users/{id}/posts` answers a bare array, so the page is normalized from the array itself
+  // (`raw`), not from a `posts` member that endpoint never sends.
+  const more = usePagedList<Post, Post[]>({
     key: author ? `/users/${author}/posts?size=7` : '',
     pageQuery: page => `&page=${page}`,
     pageSize: 7,
-    normalize: raw => ({ items: raw.posts, hasMore: false }),
+    normalize: raw => ({ items: raw, hasMore: false }),
     keyOf: item => item.postId,
     enabled: !!author,
   });
