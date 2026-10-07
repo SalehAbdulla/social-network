@@ -1,11 +1,11 @@
 'use client';
 
 import { Suspense } from 'react';
-import Link from 'next/link';
 import { RefreshCw } from 'lucide-react';
 import { type Page, type Post } from './api/social';
 import { usePagedList } from './lib/usePagedList';
 import { usePostModal } from './lib/usePostModal';
+import { useCreatePost } from './lib/useCreatePost';
 import StoriesBar from './components/StoriesBar';
 import RightRail from './components/RightRail';
 import PostCard from './components/PostCard';
@@ -33,6 +33,16 @@ function FeedScreen() {
   // carries no title of its own, the way Instagram's feed does not.
   const { openFor, modal } = usePostModal(feed.items, postId => feed.update(items => items.filter(item => item.postId !== postId)));
 
+  // The feed's empty state opens the shared Create-post dialog. A shared post is dropped straight in
+  // at the top, then the column is scrolled back to it.
+  const create = useCreatePost({
+    context: 'feed',
+    onShared: post => {
+      if (post) feed.update(items => [post, ...items]);
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    },
+  });
+
   // Instagram's desktop feed: a 470px column and a 319px suggestions rail 64px to its right, wrapped
   // as one group and centred as one — 853px of it — in the content area, so the pair sits in the
   // middle of the page to the right of the rail. `max-content` is what lets that centring follow the
@@ -53,13 +63,14 @@ function FeedScreen() {
       : <>
         {feed.items.map(post => <PostCard key={post.postId} post={post} onOpen={openFor(post)} onPostRemoved={postId => feed.update(items => items.filter(item => item.postId !== postId))} />)}
         {feed.settled && !feed.error && feed.items.length === 0 && <RequestState variant="feed" empty="No posts yet. Share your first post to get started." />}
-        {feed.settled && !feed.error && feed.items.length === 0 && <Link href="/create-post" className="block text-center text-brand-1">Create a post</Link>}
+        {feed.settled && !feed.error && feed.items.length === 0 && <button type="button" onClick={create.open} className="block w-full text-center text-brand-1">Create a post</button>}
         {feed.items.length > 0 && <LoadMore loading={feed.loadingMore} hasMore={feed.hasMore} onLoadMore={feed.loadMore} label={`Load${feed.items.length > FEED_PAGE_SIZE ? ' more' : ' older'} posts`} />}
       </>}
     </div>
     <aside className="ml-[var(--feed-gap)] hidden w-[var(--feed-rail)] shrink-0 min-[1000px]:block"><div className="pb-[var(--rc-safe-bottom)]"><RightRail /></div></aside>
     </div>
     {modal}
+    {create.modal}
   </div>;
 }
 
