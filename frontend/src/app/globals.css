@@ -1926,3 +1926,249 @@ article[data-highlight='true'] { animation: grp-post-flash 1.6s ease-out; }
 }
 
 @media (prefers-reduced-motion: reduce) { .pv-skel span, .pv-dialog[data-anim='true'] { animation: none; } }
+
+/* ---------------------------------------------------------------------------
+   Create post — the Instagram-style three-step dialog (select, crop, details),
+   shared by every entry point. Every measurement is a token here, the way the
+   post-view dialog above is written, so the geometry lives in one block.
+   The dialog surface is the app's own elevated surface (`--ui-rail`: white in
+   the light theme, near-black in the dark one), never a second palette.
+--------------------------------------------------------------------------- */
+:root {
+  --cp-radius: 12px;
+  --cp-header-h: 44px;
+  --cp-dialog-w: 520px;              /* steps 1 and 2 */
+  --cp-media: 520px;                 /* the square media area, steps 2 and 3 */
+  --cp-panel: 340px;                 /* the details side panel */
+  --cp-max-h: 90vh;
+  --cp-scrim: rgba(0, 0, 0, 0.65);
+  --cp-surface: var(--ui-rail);
+  --cp-border: var(--dm-border);
+  --cp-text: var(--ui-text);
+  --cp-muted: var(--ui-muted);
+  --cp-blue: var(--dm-blue);         /* Instagram's #0095f6 */
+  --cp-danger: var(--ui-danger);
+  --cp-field: var(--dm-surface);     /* a subtle fill: the segmented track, a hovered control */
+  --cp-media-bg: var(--cp-surface);  /* letterbox bars blend into the dialog, never black */
+  --cp-caption-min: 168px;
+  --cp-caption-min-text: 220px;
+  --cp-row-h: 44px;
+  --cp-control: 32px;                /* the round overlay buttons on the crop step */
+  --cp-control-bg: rgba(21, 21, 21, 0.7);
+  --cp-control-icon: 16px;
+  --cp-thumb: 64px;
+  --cp-thumb-radius: 4px;
+  --cp-avatar: 28px;
+  --cp-close: 24px;
+  --cp-edge: 16px;
+  --cp-gap: 16px;
+  --cp-motion: 150ms;
+}
+
+@layer components {
+  .cp-scrim { position: fixed; inset: 0; z-index: 60; background-color: var(--cp-scrim); }
+  .cp-root { position: fixed; inset: 0; z-index: 61; display: flex; align-items: center; justify-content: center; padding: 16px; outline: none; }
+
+  .cp-dialog {
+    display: flex; flex-direction: column; overflow: hidden;
+    width: var(--cp-dialog-w); max-width: 100%; max-height: var(--cp-max-h);
+    border: 0; border-radius: var(--cp-radius);
+    background-color: var(--cp-surface); color: var(--cp-text);
+    box-shadow: 0 12px 40px rgba(0, 0, 0, 0.5);
+    transition: width var(--cp-motion) ease;
+  }
+  /* The details step is the media area plus the side panel; the width animation is what grows it. */
+  .cp-dialog[data-step='details'] { width: min(calc(var(--cp-media) + var(--cp-panel)), 94vw); }
+  /* Text-only mode has no media and no side panel: it stays the narrow dialog with a full panel. */
+  .cp-dialog[data-mode='text'] { width: var(--cp-dialog-w); }
+  .cp-dialog[data-mode='text'] .cp-panel { width: 100%; border-inline-start: 0; }
+  .cp-dialog[data-anim='true'] { animation: cp-in var(--cp-motion) ease; }
+  @keyframes cp-in { from { opacity: 0; transform: scale(0.98); } to { opacity: 1; transform: scale(1); } }
+
+  /* The close X sits on the viewport, 16px from the corner, not inside the dialog. */
+  .cp-close { position: fixed; top: var(--cp-edge); inset-inline-end: var(--cp-edge); z-index: 62; display: flex; width: var(--cp-close); height: var(--cp-close); align-items: center; justify-content: center; color: #fff; }
+  .cp-close svg { width: var(--cp-close); height: var(--cp-close); }
+  .cp-close:disabled { opacity: 0.4; }
+
+  .cp-header { display: flex; flex: none; align-items: center; height: var(--cp-header-h); border-bottom: 1px solid var(--cp-border); padding: 0 8px; }
+  .cp-head-zone { display: flex; flex: 1 1 0%; align-items: center; }
+  .cp-head-zone[data-align='end'] { justify-content: flex-end; }
+  .cp-back { display: flex; width: 32px; height: 32px; align-items: center; justify-content: center; color: var(--cp-text); }
+  .cp-back[hidden] { display: none; }
+  .cp-title { flex: 1 1 0%; text-align: center; font-size: 14px; font-weight: 600; }
+  .cp-action { background: transparent; padding: 0 8px; font-size: 14px; font-weight: 600; color: var(--cp-blue); }
+  .cp-action:disabled { opacity: 0.4; cursor: not-allowed; }
+  .cp-action:not(:disabled):hover { opacity: 0.7; }
+
+  /* The dialog is capped at 90vh, so on a short viewport the body scrolls rather than the header
+     and the actions being clipped off-screen. On a roomy screen nothing overflows and no scrollbar
+     appears; the crop square keeps its fixed size either way, since its geometry is computed in JS. */
+  .cp-body { display: flex; min-height: 0; flex: 1 1 0%; overflow-y: auto; }
+  .cp-media { position: relative; display: flex; width: var(--cp-media); height: var(--cp-media); flex: none; align-items: center; justify-content: center; overflow: hidden; background-color: var(--cp-media-bg); }
+  /* Below 736px the dialog becomes a full-screen sheet: the media is a full-width square. */
+  @media (max-width: 735px) {
+    .cp-root { padding: 0; align-items: stretch; }
+    .cp-dialog, .cp-dialog[data-step='details'] { width: 100%; max-width: 100%; height: 100dvh; max-height: none; border-radius: 0; }
+    .cp-body { flex-direction: column; overflow-y: auto; }
+    .cp-media { width: 100%; height: auto; aspect-ratio: 1 / 1; }
+    /* Step 1 has nothing to frame, so its drop zone fills the sheet rather than sitting in a square. */
+    .cp-dialog[data-step='select'] .cp-media { flex: 1 1 auto; aspect-ratio: auto; }
+    .cp-header { position: sticky; top: 0; z-index: 1; background-color: var(--cp-surface); }
+  }
+  /* Below 900px the details panel stacks under the media rather than beside it. */
+  @media (max-width: 899px) {
+    .cp-dialog[data-step='details'] .cp-body { flex-direction: column; overflow-y: auto; }
+    .cp-dialog[data-step='details'] .cp-media { width: 100%; height: auto; aspect-ratio: 1 / 1; }
+    .cp-dialog[data-step='details'] .cp-panel { width: 100%; border-inline-start: 0; border-top: 1px solid var(--cp-border); }
+  }
+}
+
+@layer components {
+  /* Step 1: a dashed drop zone is the hero, with the two ways in stacked beneath it. The zone is the
+     same target the dialog already listens for, drawn as a box so the invitation reads as somewhere
+     to drop rather than as empty space around two stray buttons. */
+  .cp-select { display: flex; width: 100%; align-self: stretch; flex-direction: column; justify-content: center; gap: 16px; padding: 24px; }
+  .cp-dropzone { display: flex; min-height: 0; flex: 1 1 auto; flex-direction: column; align-items: center; justify-content: center; gap: 12px; border: 1.5px dashed var(--cp-border); border-radius: 12px; padding: 24px; text-align: center; cursor: pointer; transition: border-color var(--cp-motion) ease, background-color var(--cp-motion) ease; }
+  /* The zone is itself a button — it opens the picker — so it reads as pressable and takes the ring. */
+  .cp-dropzone:hover { border-color: var(--cp-muted); }
+  .cp-dropzone:focus-visible { outline: 2px solid var(--cp-blue); outline-offset: 2px; }
+  .cp-media[data-drop='true'] .cp-dropzone { border-color: var(--cp-blue); border-style: solid; background-color: color-mix(in srgb, var(--cp-blue) 8%, transparent); }
+  .cp-select-icon { display: flex; width: 56px; height: 56px; flex: none; align-items: center; justify-content: center; border-radius: 9999px; background-color: var(--cp-field); color: var(--cp-text); }
+  .cp-select-icon svg { width: 26px; height: 26px; stroke-width: 1.5; }
+  .cp-select-copy { display: flex; flex-direction: column; gap: 4px; }
+  .cp-select-title { font-size: 16px; font-weight: 600; color: var(--cp-text); }
+  .cp-select-hint { font-size: 13px; color: var(--cp-muted); }
+  .cp-select-helper { font-size: 12px; font-weight: 500; color: var(--cp-danger); }
+  /* The two ways in: the app's own Button component, centred and split by an "or" so they can never
+     touch. `.cp-or` spans the widest of them, so the rule reads as one column. */
+  .cp-select-actions { display: flex; flex: none; flex-direction: column; align-items: center; gap: 12px; }
+  .cp-or { display: flex; width: 100%; align-items: center; gap: 12px; font-size: 13px; color: var(--cp-muted); }
+  .cp-or::before, .cp-or::after { content: ''; height: 1px; flex: 1 1 0%; background-color: var(--cp-border); }
+  .cp-link { background: transparent; font-size: 14px; color: var(--cp-blue); }
+  .cp-link:hover { opacity: 0.7; }
+
+  /* Drag and drop: step 1 swaps its drop zone's dashes for a solid blue edge, so the target reads as
+     live; the crop step has no zone of its own, so its media square tints with the same cue. */
+  .cp-dialog:not([data-step='select']) .cp-media[data-drop='true']::after { content: 'Drop to add'; position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; color: var(--cp-blue); font-size: 16px; font-weight: 600; background-color: color-mix(in srgb, var(--cp-blue) 8%, transparent); }
+
+  /* Step 2: the crop viewport. The image is positioned with translate/scale driven by JS; the
+     square holds whatever does not fill it, and the bars are the dialog surface. */
+  .cp-crop { position: absolute; inset: 0; overflow: hidden; }
+  .cp-crop-box { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); overflow: hidden; }
+  .cp-crop-img { position: absolute; user-select: none; -webkit-user-drag: none; }
+  .cp-crop[data-dragging='true'] { cursor: grabbing; }
+  .cp-crop:not([data-dragging='true']) { cursor: grab; }
+
+  /* The overlay controls, bottom-left (aspect, zoom) and bottom-right (the media strip). */
+  .cp-controls { position: absolute; bottom: 16px; inset-inline-start: 16px; display: flex; gap: 8px; z-index: 2; }
+  .cp-ctl-group { position: relative; }
+  .cp-ctl { display: flex; width: var(--cp-control); height: var(--cp-control); align-items: center; justify-content: center; border-radius: 9999px; background-color: var(--cp-control-bg); color: #fff; }
+  .cp-ctl[aria-expanded='true'] { background-color: rgba(21, 21, 21, 0.9); }
+  .cp-ctl svg { width: var(--cp-control-icon); height: var(--cp-control-icon); }
+
+  /* The aspect menu, above its control. Dark and translucent in both themes. */
+  .cp-aspect { position: absolute; bottom: calc(100% + 8px); inset-inline-start: 0; width: 120px; padding: 4px; border-radius: 8px; background-color: rgba(38, 38, 38, 0.95); box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4); }
+  .cp-aspect-row { display: flex; width: 100%; height: 40px; align-items: center; justify-content: space-between; gap: 8px; padding: 0 12px; border-radius: 6px; font-size: 13px; font-weight: 600; color: var(--cp-muted); }
+  .cp-aspect-row[aria-checked='true'] { color: #fff; }
+  .cp-aspect-row:hover, .cp-aspect-row:focus-visible { background-color: rgba(255, 255, 255, 0.12); }
+  .cp-aspect-note { padding: 4px 12px 8px; font-size: 11px; line-height: 1.3; color: var(--cp-muted); }
+
+  /* The zoom slider, in a popover above its control. */
+  .cp-zoom { position: absolute; bottom: calc(100% + 8px); inset-inline-start: 0; display: flex; width: 100px; align-items: center; padding: 8px 12px; border-radius: 8px; background-color: rgba(38, 38, 38, 0.95); box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4); }
+  .cp-zoom input { width: 100%; accent-color: #fff; }
+
+  /* The media strip: thumbnails along the bottom with reorder and remove. */
+  .cp-strip { position: absolute; inset-inline: 0; bottom: 0; z-index: 1; display: flex; align-items: center; gap: 8px; overflow-x: auto; padding: 12px 16px; background-color: rgba(21, 21, 21, 0.55); }
+  .cp-strip[hidden] { display: none; }
+  .cp-thumb { position: relative; width: var(--cp-thumb); height: var(--cp-thumb); flex: none; overflow: hidden; border-radius: var(--cp-thumb-radius); }
+  .cp-thumb img { width: 100%; height: 100%; object-fit: cover; }
+  .cp-thumb[data-selected='true'] { outline: 2px solid #fff; outline-offset: -2px; }
+  .cp-thumb-remove { position: absolute; top: 2px; inset-inline-end: 2px; display: flex; width: 18px; height: 18px; align-items: center; justify-content: center; border-radius: 9999px; background-color: rgba(0, 0, 0, 0.6); color: #fff; opacity: 0; transition: opacity var(--cp-motion) ease; }
+  .cp-thumb:hover .cp-thumb-remove, .cp-thumb:focus-within .cp-thumb-remove { opacity: 1; }
+  .cp-thumb-remove svg { width: 12px; height: 12px; }
+  .cp-thumb-add { display: flex; width: var(--cp-thumb); height: var(--cp-thumb); flex: none; align-items: center; justify-content: center; border: 1px solid rgba(255, 255, 255, 0.5); border-radius: var(--cp-thumb-radius); color: #fff; }
+  .cp-thumb-add svg { width: 20px; height: 20px; }
+}
+
+@layer components {
+  /* Step 3: the details panel. Only this column scrolls; the media stays put. */
+  .cp-panel { display: flex; width: var(--cp-panel); flex: none; flex-direction: column; min-height: 0; border-inline-start: 1px solid var(--cp-border); }
+  .cp-author { display: flex; align-items: center; gap: 12px; padding: 16px; }
+  .cp-author-name { font-size: 14px; font-weight: 600; }
+
+  .cp-caption-wrap { display: flex; min-height: 0; flex: 1 1 0%; flex-direction: column; }
+  .cp-caption { flex: 1 1 0%; width: 100%; min-height: var(--cp-caption-min); resize: none; border: 0; outline: none; background: transparent; padding: 0 16px; font-size: 14px; line-height: 18px; color: var(--cp-text); }
+  .cp-caption:focus, .cp-caption:focus-visible { outline: none; }
+  .cp-caption::placeholder { color: var(--cp-muted); }
+  .cp-caption-foot { display: flex; flex: none; align-items: center; justify-content: space-between; padding: 0 16px 8px; }
+  .cp-emoji-btn { display: flex; width: 28px; height: 28px; align-items: center; justify-content: center; border-radius: 9999px; color: var(--cp-text); }
+  .cp-emoji-btn:hover { background-color: var(--cp-field); }
+  .cp-emoji-btn svg { width: 20px; height: 20px; }
+  .cp-counter { font-size: 12px; color: var(--cp-muted); }
+  .cp-counter[data-over='true'] { color: var(--cp-danger); }
+  .cp-emoji-pop { display: flex; flex-wrap: wrap; gap: 2px; padding: 8px 16px; border-top: 1px solid var(--cp-border); }
+  .cp-emoji-pop button { display: flex; width: 32px; height: 32px; align-items: center; justify-content: center; border-radius: 8px; font-size: 18px; }
+  .cp-emoji-pop button:hover { background-color: var(--cp-field); }
+
+  /* The settings rows: 44px each with a 1px top border, a label and a right-hand value. */
+  .cp-rows { flex: none; }
+  .cp-row { display: flex; width: 100%; align-items: center; gap: 8px; height: var(--cp-row-h); border-top: 1px solid var(--cp-border); padding: 0 16px; font-size: 14px; color: var(--cp-text); }
+  .cp-row-label { flex: 1 1 0%; text-align: start; }
+  .cp-row-value { display: flex; align-items: center; gap: 6px; color: var(--cp-muted); }
+  .cp-row-value svg { width: 20px; height: 20px; }
+  .cp-row-chev { width: 16px; height: 16px; color: var(--cp-muted); transition: transform var(--cp-motion) ease; }
+  .cp-row[aria-expanded='true'] .cp-row-chev { transform: rotate(180deg); }
+
+  .cp-sub { border-top: 1px solid var(--cp-border); padding: 8px 16px 12px; }
+  .cp-radio { display: flex; align-items: flex-start; gap: 12px; padding: 8px 0; cursor: pointer; }
+  .cp-radio input { margin-top: 2px; accent-color: var(--cp-blue); }
+  .cp-radio-text { display: flex; flex-direction: column; gap: 2px; }
+  .cp-radio-title { font-size: 14px; font-weight: 600; }
+  .cp-radio-desc { font-size: 12px; color: var(--cp-muted); }
+  .cp-selected-list { display: flex; flex-wrap: wrap; gap: 6px; padding-top: 4px; }
+  .cp-chip { display: inline-flex; align-items: center; gap: 6px; border: 1px solid var(--cp-border); border-radius: 9999px; padding: 2px 10px; font-size: 12px; }
+  .cp-alt-row { display: flex; align-items: center; gap: 12px; padding: 8px 0; }
+  .cp-alt-thumb { width: 44px; height: 44px; flex: none; overflow: hidden; border-radius: 4px; }
+  .cp-alt-thumb img { width: 100%; height: 100%; object-fit: cover; }
+  .cp-alt-input { min-width: 0; flex: 1 1 0%; border: 1px solid var(--cp-border); border-radius: 8px; padding: 8px 10px; font-size: 14px; background: transparent; color: var(--cp-text); }
+
+  /* Text-only mode: no side panel, a taller caption and an "Add photos" row. */
+  .cp-dialog[data-mode='text'] .cp-caption { min-height: var(--cp-caption-min-text); font-size: 16px; line-height: 22px; }
+  .cp-text-panel { display: flex; flex: 1 1 0%; flex-direction: column; min-height: 0; }
+  .cp-addrow { display: flex; align-items: center; gap: 12px; height: var(--cp-row-h); border-top: 1px solid var(--cp-border); padding: 0 16px; font-size: 14px; }
+  .cp-addrow svg { width: 20px; height: 20px; }
+}
+
+@layer components {
+  /* Sharing, success and failure. */
+  .cp-progress { height: 2px; flex: none; background-color: transparent; }
+  .cp-progress-fill { height: 100%; background-color: var(--cp-blue); transition: width 150ms linear; }
+  .cp-status { display: flex; flex: 1 1 0%; flex-direction: column; align-items: center; justify-content: center; gap: 12px; padding: 40px 24px; text-align: center; }
+  .cp-status-title { font-size: 20px; font-weight: 300; }
+  .cp-status-text { max-width: 34ch; font-size: 14px; color: var(--cp-muted); }
+  .cp-status-actions { display: flex; flex-direction: column; align-items: center; gap: 12px; margin-top: 8px; }
+  .cp-spinner { width: 48px; height: 48px; color: var(--cp-muted); animation: ui-spin 0.7s linear infinite; }
+  .cp-status-icon { width: 64px; height: 64px; }
+  .cp-check-circle { fill: none; stroke: var(--cp-text); stroke-width: 1.5; }
+  .cp-check-mark { fill: none; stroke: var(--cp-text); stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; stroke-dasharray: 32; stroke-dashoffset: 32; animation: cp-check 250ms ease forwards; }
+  @keyframes cp-check { to { stroke-dashoffset: 0; } }
+
+  /* The discard confirmation, centred over the dialog. */
+  .cp-confirm-scrim { position: fixed; inset: 0; z-index: 63; background-color: rgba(0, 0, 0, 0.4); }
+  .cp-confirm { position: fixed; z-index: 64; top: 50%; left: 50%; width: 400px; max-width: calc(100vw - 32px); transform: translate(-50%, -50%); overflow: hidden; border-radius: 12px; background-color: var(--cp-surface); color: var(--cp-text); box-shadow: 0 12px 40px rgba(0, 0, 0, 0.5); }
+  .cp-confirm-body { padding: 28px 24px; text-align: center; }
+  .cp-confirm-title { font-size: 20px; font-weight: 400; }
+  .cp-confirm-text { margin-top: 8px; font-size: 14px; color: var(--cp-muted); }
+  .cp-confirm-row { display: flex; width: 100%; height: 48px; align-items: center; justify-content: center; border-top: 1px solid var(--cp-border); font-size: 14px; }
+  .cp-confirm-row[data-tone='danger'] { color: var(--cp-danger); font-weight: 700; }
+  .cp-confirm-row:hover { background-color: var(--cp-field); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .cp-dialog[data-anim='true'] { animation: none; }
+  .cp-spinner { animation: none; }
+  .cp-check-mark { animation: none; stroke-dashoffset: 0; }
+  .cp-dialog, .cp-thumb-remove, .cp-row-chev { transition-duration: 0.01ms; }
+  .cp-progress-fill { transition-duration: 0.01ms; }
+}
+
