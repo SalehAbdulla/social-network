@@ -68,8 +68,10 @@ frontend:
     # itself is the same `npm ci` against the same lockfile.
     - npm ci --cache .npm-cache --prefer-offline
     - npm run lint
-    - npx tsc --noEmit
+    # Build before typecheck: `next build` writes the gitignored `next-env.d.ts`, which
+    # declares the image module types `tsc` needs. `make check` builds first too.
     - npm run build
+    - npx tsc --noEmit
     # Blocking since the framework bump cleared every advisory; a new finding
     # should stop the pipeline rather than sit in the log.
     - npm audit --audit-level=high

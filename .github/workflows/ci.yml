@@ -60,8 +60,6 @@ jobs:
         run: npm ci
       - name: Lint
         run: npm run lint
-      - name: Typecheck
-        run: npx tsc --noEmit
       - name: Build
         # A production build refuses to guess the backend address, because the value
         # is compiled into the rewrites (see frontend/next.config.ts). A build never
@@ -69,6 +67,12 @@ jobs:
         env:
           BACKEND_URL: http://backend:5174
         run: npm run build
+      - name: Typecheck
+        # Build first: `next build` writes the gitignored `next-env.d.ts`, which is what
+        # declares the image module types (png/svg/jpg) that `tsc` resolves. Running this
+        # before the build leaves those modules undeclared and fails with TS2307; this
+        # now matches the `make check` order (build, then types).
+        run: npx tsc --noEmit
       - name: Dependency audit
         # Blocking since the framework bump of 2026-09-28 cleared every advisory
         # (4 high + 1 critical -> 0). The step was report-only before that because
