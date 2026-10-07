@@ -138,7 +138,7 @@ export default function Sidebar() {
   };
 
   return <>
-    <aside ref={railRef} id="main-navigation" aria-label="Main navigation" data-panel-open={panelKind ? 'true' : 'false'} data-pinned={createRect || moreRect ? 'true' : 'false'} className="app-rail fixed inset-y-0 left-0 z-40 hidden border-r border-rail-border bg-rail md:block">
+    <aside ref={railRef} id="main-navigation" aria-label="Main navigation" data-panel-open={panelKind ? 'true' : 'false'} className="app-rail fixed inset-y-0 left-0 z-40 hidden border-r border-rail-border bg-rail md:block">
       <div className="flex h-full flex-col px-3 py-2 font-sans leading-5">
         <Link href="/" aria-label="Social Network home" className="mb-8 mt-4 flex h-[var(--rail-wordmark)] shrink-0 items-center px-3">
           <img src="/logo.svg" alt="" className="app-rail-wordmark w-auto object-contain dark:brightness-125" />

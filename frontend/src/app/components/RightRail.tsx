@@ -12,7 +12,7 @@ import { SUGGEST_AVATAR_SIZE } from '../lib/sizing';
 /**
  * The feed's right-hand column: the signed-in account, the "Suggested for you" list, and
  * Instagram's footer — one component rather than the two it used to be, because the three
- * are one sticky column and only the list is interesting enough to own behaviour.
+ * are one column and only the list is interesting enough to own behaviour.
  *
  * The account row is the viewer, named the way Instagram names them: the username on top,
  * the full name muted below. This app has no second account to hand the session to, so

@@ -57,7 +57,7 @@ function FeedScreen() {
         {feed.items.length > 0 && <LoadMore loading={feed.loadingMore} hasMore={feed.hasMore} onLoadMore={feed.loadMore} label={`Load${feed.items.length > FEED_PAGE_SIZE ? ' more' : ' older'} posts`} />}
       </>}
     </div>
-    <aside className="ml-[var(--feed-gap)] hidden w-[var(--feed-rail)] shrink-0 min-[1000px]:block"><div className="sticky top-[var(--feed-top)] pb-[var(--rc-safe-bottom)]"><RightRail /></div></aside>
+    <aside className="ml-[var(--feed-gap)] hidden w-[var(--feed-rail)] shrink-0 min-[1000px]:block"><div className="pb-[var(--rc-safe-bottom)]"><RightRail /></div></aside>
     </div>
     {modal}
   </div>;

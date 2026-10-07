@@ -121,8 +121,7 @@
   --aside-handle-size: 12px;
   /* The account card's own padding. It has none at the top on purpose: the avatar is the top of
      that block, exactly as the story ring is the top of the tray, so the two line up on
-     `--feed-top` instead of the avatar sitting `--aside-padding` below the ring. The column sticks
-     at the same offset, since a larger one would push it down before the reader has scrolled. */
+     `--feed-top` instead of the avatar sitting `--aside-padding` below the ring. */
   --aside-padding: 8px;
 
   /* The feed's right column ("Suggested for you"): the account row, the five-row list and
@@ -159,7 +158,7 @@
      pair while the rail is shown, and the column alone once it is hidden, so the feed is centred
      either way. The rail's 64px is a `margin-left` on the column rather than a gap the wrapper adds,
      which is why the group is the two widths plus this one number. `--feed-top` is where the stories
-     avatar starts, and the rail sticks at that same offset so its top lines up with the ring. */
+     avatar starts, and the rail's own top aligns with it as the two columns start together. */
 
   /* Glass surfaces: a translucent tint, the blur applied to whatever sits
      behind it, a specular 1px edge and an inset highlight on the rim. */
@@ -1531,28 +1530,20 @@ article[data-highlight='true'] { animation: grp-post-flash 1.6s ease-out; }
 .app-content { padding-left: 0; }
 @media (min-width: 768px) { .app-content { padding-left: var(--rail-collapsed); } }
 
-/* Hover/focus expansion, on hover-capable devices only (a touch screen never matches
-   `hover: hover`, so it stays icon-only). `data-pinned` keeps the rail open while one of its
-   popovers is open, since the pointer has left the rail to reach it. Rows are laid out from the
-   rail's left edge, so the icons hold their position while the width grows around them. */
+/* Hover expansion, on hover-capable devices only (a touch screen never matches `hover: hover`,
+   so it stays icon-only). Hover is the *only* thing that grows the rail: not focus, and not an
+   open popover. That is deliberate — anything else can be left behind (a clicked row keeps
+   focus; a popover outlives the pointer) and would strand the rail standing open, so the sole
+   trigger is the pointer being over it, and it collapses the moment the pointer leaves. Rows are
+   laid out from the rail's left edge, so the icons hold their position while the width grows
+   around them. */
 @media (hover: hover) and (min-width: 768px) {
-  .app-rail:hover,
-  .app-rail:focus-within,
-  .app-rail[data-pinned='true'] {
+  .app-rail:hover {
     width: var(--rail-expanded);
-    /* Growing starts at once. The hold that stops the rail snapping shut on mouseleave lives on
-       the collapsed rule below, which is what the element falls back to when the pointer leaves. */
-    transition-delay: 0s;
   }
-  .app-rail:hover .app-rail-label,
-  .app-rail:focus-within .app-rail-label,
-  .app-rail[data-pinned='true'] .app-rail-label { opacity: 1; }
-  .app-rail:hover .app-rail-wordmark,
-  .app-rail:focus-within .app-rail-wordmark,
-  .app-rail[data-pinned='true'] .app-rail-wordmark { display: block; }
-  .app-rail:hover .app-rail-mark,
-  .app-rail:focus-within .app-rail-mark,
-  .app-rail[data-pinned='true'] .app-rail-mark { display: none; }
+  .app-rail:hover .app-rail-label { opacity: 1; }
+  .app-rail:hover .app-rail-wordmark { display: block; }
+  .app-rail:hover .app-rail-mark { display: none; }
 }
 
 /* A slide-out panel forces the narrow rail on every screen: the Search and Notifications panels
@@ -1564,10 +1555,10 @@ article[data-highlight='true'] { animation: grp-post-flash 1.6s ease-out; }
 .app-rail[data-panel-open='true'] .app-rail-mark { display: block; }
 
 @media (prefers-reduced-motion: no-preference) {
-  /* The collapse holds for 100ms after the pointer leaves, so merely crossing the rail's edge on
-     the way somewhere else does not open and shut it. Growing carries no hold — the hover rule
-     above resets this delay — and the content gutter never moves, so it needs no transition. */
-  .app-rail { transition: width 200ms ease 100ms; }
+  /* No hold in either direction: the rail begins shrinking the instant the pointer leaves it, so
+     it is never left standing open behind a wandering cursor. The content gutter never moves, so
+     it needs no transition. */
+  .app-rail { transition: width 200ms ease; }
   .app-rail-label { transition: opacity 150ms ease; }
   .app-panel { transition: transform 250ms cubic-bezier(0.32, 0.72, 0, 1), opacity 250ms ease; }
 }
@@ -1577,7 +1568,7 @@ article[data-highlight='true'] { animation: grp-post-flash 1.6s ease-out; }
    own transition utilities (`transition-colors`, `group-hover:scale-*`) are covered here because
    they are not wrapped in the `no-preference` query above. */
 @media (prefers-reduced-motion: reduce) {
-  /* The 100ms hold is part of the motion, so it goes too: reduced motion means instant. */
+  /* Every transition collapses to an instant change — nothing animates or lingers. */
   .app-rail { transition-delay: 0ms !important; }
   .app-rail, .app-rail *, .app-panel, .app-panel *, [role='menu'], [role='menu'] * {
     transition-duration: 0.01ms !important;
