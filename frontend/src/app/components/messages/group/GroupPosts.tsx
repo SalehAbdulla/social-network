@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef } from 'react';
 import { Pencil, Trash2 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { errorMessage, request, type GroupMember, type Post } from '../../../api/social';
@@ -13,9 +13,9 @@ import { MenuItem } from '../../PopoverMenu';
 import { GroupPostsSkeleton } from '../../Skeletons';
 import LoadMore from '../../LoadMore';
 import PostCard from '../../PostCard';
-import PostOverlay from '../../PostOverlay';
+import { usePostModal } from '../../../lib/usePostModal';
 import { GROUP_PAGE_SIZE, type GroupItem } from './groupContent';
-import GroupComments, { useGroupComments } from './GroupComments';
+import GroupComments, { useGroupComments, GroupThread } from './GroupComments';
 
 /**
  * The adapter: one group content row, read as the `Post` the feed's card draws.
@@ -95,41 +95,6 @@ function GroupPostRow({ item, groupId, meId, isOwner, avatarOf, highlight, onOpe
 }
 
 /**
- * One post opened in the feed's overlay: the same dialog the feed's own cards open, with the
- * group's thread in its right column. It is a `PostOverlay` handed the group card's props, so the
- * header, the media, the action row, the menu and the comments are the group card's own — only the
- * frame (the backdrop, the dialog and the focus trap) is the feed's.
- */
-function GroupPostOverlay({ item, groupId, meId, isOwner, avatarOf, onClose, onEdit, onDelete }: {
-  item: GroupItem;
-  groupId: string;
-  meId: string;
-  isOwner: boolean;
-  avatarOf: (userId: string) => string;
-  onClose: () => void;
-  onEdit: (item: GroupItem) => void;
-  onDelete: (item: GroupItem) => void;
-}) {
-  const comments = useGroupComments(groupId, item.id);
-  return <PostOverlay
-    post={toPost(item)}
-    onClose={onClose}
-    cardProps={{
-      context: 'group',
-      sharePath: `/messages/groups/${groupId}?tab=posts&post=${item.id}`,
-      comments: <GroupComments groupId={groupId} postId={item.id} meId={meId} isOwner={isOwner} comments={comments} avatarOf={avatarOf} variant="panel" />,
-      commentCount: comments.items.length,
-      canManage: item.userId === meId || isOwner,
-      avatarOf,
-      menuItems: <>
-        {item.userId === meId && <MenuItem onClick={() => { onEdit(item); onClose(); }}><Pencil size={20} aria-hidden="true" />Edit</MenuItem>}
-        <MenuItem danger onClick={() => { onDelete(item); onClose(); }}><Trash2 size={20} aria-hidden="true" />Delete</MenuItem>
-      </>,
-    }}
-  />;
-}
-
-/**
  * The Posts tab.
  *
  * Every post is the feed's card — one implementation of a post in the app rather than two that
@@ -151,7 +116,6 @@ export default function GroupPosts({ groupId, meId, isOwner, highlightId, onCrea
   // The overlay is the wide-screen behaviour only, exactly as it is in the feed: a phone keeps the
   // thread inline, and a share link still lands on the card itself.
   const wide = useMediaQuery('(min-width: 1024px)');
-  const [open, setOpen] = useState<GroupItem | null>(null);
   const resource = usePagedList<GroupItem, GroupItem[]>({
     key: `/groups/${groupId}/content/posts?parentId=0`,
     pageQuery: page => `&offset=${(page - 1) * GROUP_PAGE_SIZE}`,
@@ -177,6 +141,24 @@ export default function GroupPosts({ groupId, meId, isOwner, highlightId, onCrea
     }
   }
 
+  // The same modal every list opens: `?post=<id>` reopens it on a refresh, the arrows step through
+  // the tab, and the group's own thread travels in as an element so the shared `PostView` draws it
+  // where the feed's comments would be.
+  const posts = useMemo(() => resource.items.map(toPost), [resource.items]);
+  const { openFor, modal } = usePostModal(posts, postId => resource.update(items => items.filter(entry => entry.id !== postId)), post => {
+    const item = resource.items.find(entry => entry.id === post.postId);
+    if (!item) return {};
+    return {
+      group: true,
+      avatarOf,
+      canManage: item.userId === meId || isOwner,
+      sharePath: `/messages/groups/${groupId}?tab=posts&post=${item.id}`,
+      thread: <GroupThread groupId={groupId} postId={item.id} meId={meId} isOwner={isOwner} avatarOf={avatarOf} />,
+      onEdit: () => onEdit(item),
+      onDelete: () => void remove(item),
+    };
+  });
+
   // The card a share link named is scrolled to once the page it belongs to is actually on
   // screen: the effect waits for `settled`, because on the first render the list is still
   // loading and there is no card to look for.
@@ -201,11 +183,11 @@ export default function GroupPosts({ groupId, meId, isOwner, highlightId, onCrea
       </div>}
       {/* The feed's own cadence: `--post-spacing` between one divider and the next post. */}
       <div className="space-y-[var(--post-spacing)]">
-        {resource.items.map(item => <GroupPostRow key={item.id} item={item} groupId={groupId} meId={meId} isOwner={isOwner} avatarOf={avatarOf} highlight={item.id === highlightId} onOpen={wide ? () => setOpen(item) : undefined} onEdit={onEdit} onDelete={entry => void remove(entry)} />)}
+        {resource.items.map(item => <GroupPostRow key={item.id} item={item} groupId={groupId} meId={meId} isOwner={isOwner} avatarOf={avatarOf} highlight={item.id === highlightId} onOpen={wide ? openFor(toPost(item)) : undefined} onEdit={onEdit} onDelete={entry => void remove(entry)} />)}
       </div>
       <LoadMore loading={resource.loadingMore} hasMore={resource.hasMore} onLoadMore={resource.loadMore} endLabel={null} />
     </div>
-    {wide && open && <GroupPostOverlay item={open} groupId={groupId} meId={meId} isOwner={isOwner} avatarOf={avatarOf} onClose={() => setOpen(null)} onEdit={onEdit} onDelete={entry => void remove(entry)} />}
+    {modal}
   </div>;
 }
 
