@@ -27,7 +27,9 @@ import GroupComments, { useGroupComments, GroupThread } from './GroupComments';
  */
 function toPost(item: GroupItem): Post {
   return {
-    postId: item.id,
+    // A group row's id is its own integer key, so the shared `Post` shape carries it as text —
+    // the feed's ids are UUIDs, and the card treats both the same.
+    postId: String(item.id),
     userId: item.userId,
     nickname: item.nickname,
     firstName: item.firstName,
@@ -145,8 +147,8 @@ export default function GroupPosts({ groupId, meId, isOwner, highlightId, onCrea
   // the tab, and the group's own thread travels in as an element so the shared `PostView` draws it
   // where the feed's comments would be.
   const posts = useMemo(() => resource.items.map(toPost), [resource.items]);
-  const { openFor, modal } = usePostModal(posts, postId => resource.update(items => items.filter(entry => entry.id !== postId)), post => {
-    const item = resource.items.find(entry => entry.id === post.postId);
+  const { openFor, modal } = usePostModal(posts, postId => resource.update(items => items.filter(entry => String(entry.id) !== postId)), post => {
+    const item = resource.items.find(entry => String(entry.id) === post.postId);
     if (!item) return {};
     return {
       group: true,
