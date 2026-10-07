@@ -155,3 +155,19 @@ export default function GroupComments({ groupId, postId, meId, isOwner, comments
     {form}
   </div>;
 }
+
+/**
+ * The group's thread in the post view's panel. The modal is handed an element rather than a value,
+ * so `GroupThread` reads the comments itself and hands them to `GroupComments` in its panel layout
+ * — the same thread the inline card draws, in the shape the overlay's column expects.
+ */
+export function GroupThread({ groupId, postId, meId, isOwner, avatarOf }: {
+  groupId: string;
+  postId: number;
+  meId: string;
+  isOwner: boolean;
+  avatarOf?: (userId: string) => string;
+}) {
+  const comments = useGroupComments(groupId, postId);
+  return <GroupComments groupId={groupId} postId={postId} meId={meId} isOwner={isOwner} comments={comments} avatarOf={avatarOf} variant="panel" />;
+}
