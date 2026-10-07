@@ -37,7 +37,7 @@ export default function PostView({ post, group = false, avatarOf, canManage, sha
   /** A group's own thread, drawn in place of the feed's comment list and composer. */
   thread?: ReactNode;
   onEdit?: () => void;
-  onRemoved?: (postId: number) => void;
+  onRemoved?: (postId: string) => void;
   /** Overrides the built-in delete, for a post that is not in the `post` table (a group post). */
   onDelete?: () => void;
   /** Reports a nested dialog (a photo viewer or the post menu) so the modal stands its trap down. */
