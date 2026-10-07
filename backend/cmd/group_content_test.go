@@ -15,8 +15,8 @@ func TestGroupContentPrivacyAndRSVP(t *testing.T) {
 	group := decoded[models.Group](t, owner.call("POST", "/api/v1/groups", map[string]string{"title": "Integration group"}, 201))
 	base := fmt.Sprintf("/api/v1/groups/%d", group.GroupID)
 	for _, kind := range []string{"posts", "events", "messages"} {
-		member.call("GET", base+"/content/"+kind, nil, 403)
-		member.call("POST", base+"/content/"+kind, map[string]string{"content": "Forbidden"}, 403)
+		member.call("GET", base+"/content/"+kind, nil, 404)
+		member.call("POST", base+"/content/"+kind, map[string]string{"content": "Forbidden"}, 404)
 	}
 	owner.call("POST", base+"/invite/alex-id", nil, 200)
 	owner.call("POST", base+"/invite/alex-id", nil, 200)
