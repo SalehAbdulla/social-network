@@ -71,6 +71,10 @@ func routes() http.Handler {
 		"PUT /api/v1/follow-requests/{userId}":    handlers.HandlerCtx.DecideFollowRequest,
 		"DELETE /api/v1/follow-requests/{userId}": handlers.HandlerCtx.DecideFollowRequest,
 		"GET /api/v1/users":                       handlers.HandlerCtx.Discover,
+		// A literal segment beside `{userId}` is fine here for the reason the handle route
+		// below records: Go's mux prefers the more specific pattern, so `/users/suggestions`
+		// is not read as a userId.
+		"GET /api/v1/users/suggestions":           handlers.HandlerCtx.Suggestions,
 		"GET /api/v1/users/{userId}":              handlers.HandlerCtx.UserProfile,
 		"PUT /api/v1/users/me":                    handlers.HandlerCtx.UpdateProfile,
 		"PUT /api/v1/users/me/password":           handlers.HandlerCtx.ChangePassword,
