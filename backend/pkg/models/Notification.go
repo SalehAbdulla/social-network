@@ -34,7 +34,8 @@ type Notification struct {
 	ActorNickname  string
 	EntityType     string
 	EntityId       int
-	PostId         int
-	IsRead         int
-	CreatedAt      string
+	// PostId is the commented post's public UUID, empty for a type that carries none.
+	PostId    string
+	IsRead    int
+	CreatedAt string
 }
