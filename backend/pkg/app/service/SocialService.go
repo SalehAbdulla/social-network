@@ -54,6 +54,23 @@ func (s *SocialService) UpdateProfile(u models.SocialUser) (models.SocialUser, e
 	return s.Repo.SocialProfile(u.UserID)
 }
 
+// Suggestions offers a small ranked list of accounts the viewer does not follow yet. The
+// only rule this owns is the shape of the arguments — the ranking and the exclusions are the
+// repository's query — so the limit is clamped here rather than trusted: a caller asking for
+// a hundred suggestions gets the thirty a column could ever show.
+func (s *SocialService) Suggestions(viewer string, limit int) ([]models.UserSuggestion, error) {
+	if viewer == "" {
+		return nil, backend.ErrUnauthorized
+	}
+	if limit <= 0 {
+		limit = 5
+	}
+	if limit > 30 {
+		limit = 30
+	}
+	return s.Repo.Suggestions(viewer, limit)
+}
+
 func (s *SocialService) ValidateTarget(actor, target string) error {
 	if actor == target || target == "" {
 		return backend.ErrBadRequest
