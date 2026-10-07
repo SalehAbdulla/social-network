@@ -16,7 +16,7 @@ import Loading from '../Loading';
  * Escape, the close icon and the backdrop all dismiss it, and focus is trapped while it is
  * open, through the app's shared dialog contract.
  */
-export default function NewMessageModal({ onClose, meId }: { onClose: () => void; meId: string }) {
+export default function NewMessageModal({ onClose, meId, onPick }: { onClose: () => void; meId: string; onPick?: (userId: string) => void }) {
   const router = useRouter();
   const [search, setSearch] = useState('');
   const [query, setQuery] = useState('');
@@ -30,7 +30,10 @@ export default function NewMessageModal({ onClose, meId }: { onClose: () => void
     if (!selected) return;
     const partner = selected;
     onClose();
-    router.push(`/messages/${partner}`);
+    // A surface that owns its own chat panel (the Messages dock) takes the pick instead of a
+    // route change; everything else navigates to the conversation, as it always did.
+    if (onPick) onPick(partner);
+    else router.push(`/messages/${partner}`);
   }
   return <div className="dm-modal" onClick={onClose}>
     <div ref={dialog} role="dialog" aria-modal="true" aria-labelledby="dm-new-message" tabIndex={-1} className="dm-modal-card" onClick={event => event.stopPropagation()}>
