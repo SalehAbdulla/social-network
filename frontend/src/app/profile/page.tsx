@@ -1,8 +1,8 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import Link from 'next/link';
-import { useParams } from 'next/navigation';
+import { useParams, usePathname, useRouter, useSearchParams } from 'next/navigation';
+import { Camera, Lock } from 'lucide-react';
 import toast from 'react-hot-toast';
 
 import {
@@ -11,8 +11,6 @@ import {
   type Post,
   type SocialUser,
   type SocketEvent,
-  dateLabel,
-  displayName,
   errorMessage,
   request,
 } from '../api/social';
@@ -20,67 +18,71 @@ import {
 import { useBackend } from '../components/BackendProvider';
 import { usePagedList } from '../lib/usePagedList';
 import { useResource } from '../lib/useResource';
-import { usePostOverlay } from '../lib/usePostOverlay';
-import { mediaImageProps } from '../lib/mediaVariants';
+import { useMediaQuery } from '../lib/useMediaQuery';
 
-import Avatar from '../components/Avatar';
+import Button from '../components/ui/Button';
 import ChangePassword from '../components/ChangePassword';
 import EditProfile from '../components/EditProfile';
-import FollowListModal, {
-  type FollowListTab,
-} from '../components/FollowListModal';
+import FollowListModal, { type FollowListTab } from '../components/FollowListModal';
 import Loading from '../components/Loading';
-import LoadMore from '../components/LoadMore';
-import MessageAction from '../components/MessageAction';
-import PostCard from '../components/PostCard';
+import { usePostModal } from '../lib/usePostModal';
 import { StoryArchive } from '../components/StoriesBar';
-import RequestState from '../components/RequestState';
-import { PostListSkeleton } from '../components/Skeletons';
+import ProfileHeader, { type FollowState } from '../components/profile/ProfileHeader';
+import ProfileTabs, { type ProfileTab } from '../components/profile/ProfileTabs';
+import PostGrid, { MediaGrid } from '../components/profile/PostGrid';
 
 const POSTS_PER_PAGE = 20;
+const OWN_TABS: ProfileTab[] = ['posts', 'media', 'likes', 'saved'];
+const OTHER_TABS: ProfileTab[] = ['posts', 'media'];
 
-type ProfileTab = 'posts' | 'media' | 'likes' | 'saved';
-
-const PROFILE_TABS: ProfileTab[] = ['posts', 'media', 'likes'];
-
+/**
+ * A profile — the viewer's own and anyone else's, one page for both.
+ *
+ * The header, the stats and the tab row are shared; `isOwner` decides the buttons and which of
+ * the tabs exist. Each tab is a grid of tiles, and a tile opens the feed's overlay, which steps
+ * to the neighbouring tile with its arrows. The active tab lives in the URL (`?tab=`) so a
+ * refresh and the back button both land where the reader was.
+ */
 export default function Profile() {
-  const { user, refreshUser } = useBackend();
+  const { user, refreshUser, openComposer } = useBackend();
   const params = useParams<{ profileId?: string }>();
+  const searchParams = useSearchParams();
+  const pathname = usePathname();
+  const router = useRouter();
 
   const profileId = params.profileId || user.userId;
   const profile = useResource<SocialUser>(`/users/${profileId}`);
-
   const isOwnProfile = profileId === user.userId;
   const isFollowing = user.following.includes(profileId);
-  // The follow control flips before the server answers. `isFollowing` is global
-  // state and `pendingOutgoing` belongs to the fetched profile, so the intent is
-  // held here until the refreshed values replace it — and it is three states rather
-  // than one because a follow on a private profile is a request, not a follow.
-  const [followIntent, setFollowIntent] = useState<'following' | 'requested' | 'none' | null>(null);
-  const followState = followIntent
+
+  // The follow control flips before the server answers. `isFollowing` is global state and
+  // `pendingOutgoing` belongs to the fetched profile, so the intent is held here until the
+  // refreshed values replace it — and it is three states rather than one, because a follow on a
+  // private profile is a request, not a follow.
+  const [followIntent, setFollowIntent] = useState<FollowState | null>(null);
+  const followState: FollowState = followIntent
     ?? (isFollowing ? 'following' : profile.data?.pendingOutgoing ? 'requested' : 'none');
+  const canViewProfile = isOwnProfile || !!profile.data?.isPublic || followState === 'following';
 
-  const canViewProfile =
-    isOwnProfile ||
-    !!profile.data?.isPublic ||
-    followState === 'following';
+  const tabs = isOwnProfile ? OWN_TABS : OTHER_TABS;
+  const requested = searchParams.get('tab') as ProfileTab | null;
+  const activeTab: ProfileTab = requested && tabs.includes(requested) ? requested : 'posts';
 
-
-  const [activeTab, setActiveTab] = useState<ProfileTab>('posts');
+  // The avatar is sized in JS because `Avatar` sets its width and height inline, so the one number
+  // that has to match the CSS breakpoints is chosen here.
+  const isWide = useMediaQuery('(min-width: 900px)');
+  const isTablet = useMediaQuery('(min-width: 736px)');
+  const avatarSize = isWide ? 150 : isTablet ? 110 : 77;
 
   const posts = usePagedList<Post, Post[]>({
-    // The tab is part of the identity, so switching tabs restarts from offset 0.
     key: `/users/${profileId}/posts?liked=${activeTab === 'likes'}`,
     pageQuery: page => `&offset=${(page - 1) * POSTS_PER_PAGE}`,
     pageSize: POSTS_PER_PAGE,
     normalize: raw => ({ items: raw }),
     keyOf: post => post.postId,
-    enabled: !!profile.data && canViewProfile,
+    enabled: !!profile.data && canViewProfile && (activeTab === 'posts' || activeTab === 'likes'),
   });
 
-  // The bookmark list is the member's own and lives here now, the way Instagram's Saved is a tab
-  // on your profile rather than a page of its own. It reads the same `/saved-posts` projection the
-  // standalone page does, and is only fetched while the tab is open.
   const saved = usePagedList<Post, Page<Post>>({
     key: `/saved-posts?size=${POSTS_PER_PAGE}`,
     pageQuery: page => `&page=${page}`,
@@ -90,11 +92,9 @@ export default function Profile() {
     enabled: isOwnProfile && canViewProfile && activeTab === 'saved',
   });
 
-  // The media tab lists post and comment photos together, so it reads its own
-  // endpoint instead of deriving the grid from the posts above.
+  // The media tab lists post and comment photos together, so it reads its own endpoint.
   const media = usePagedList<MediaItem, MediaItem[]>({
     key: `/users/${profileId}/media`,
-    // No query in the key, so the first page parameter carries the `?` itself.
     pageQuery: page => `?offset=${(page - 1) * POSTS_PER_PAGE}`,
     pageSize: POSTS_PER_PAGE,
     normalize: raw => ({ items: raw }),
@@ -102,9 +102,12 @@ export default function Profile() {
     enabled: !!profile.data && canViewProfile && activeTab === 'media',
   });
 
+  // Posts, likes and saved are three projections of a list of posts; the media tab is its own grid.
+  const list = activeTab === 'saved' ? saved : posts;
 
   const [isEditing, setIsEditing] = useState(false);
   const [isChangingPassword, setIsChangingPassword] = useState(false);
+  const [archiveOpen, setArchiveOpen] = useState(false);
   const [followListTab, setFollowListTab] = useState<FollowListTab | null>(null);
   const [isFollowingBusy, setIsFollowingBusy] = useState(false);
 
@@ -114,14 +117,9 @@ export default function Profile() {
     const handleSocketEvent = (event: Event) => {
       const socketEvent = event as CustomEvent<SocketEvent>;
       const eventType = socketEvent.detail.type;
-
       if (eventType === 'social_changed' || eventType === 'connected') {
-        // The follow endpoints push this event to the target *and* to the actor
-        // (`chatEvent(actor, target, …)`, carrying both ids). For the actor it is
-        // the echo of a click whose result this page has already applied, so
-        // re-reading the post and media lists here would undo the point of doing it
-        // optimistically. A reconnect still reloads everything, because events were
-        // missed while the socket was down.
+        // The follow endpoints echo to the actor too; that click already applied its result here,
+        // so the actor's own echo is ignored and a reconnect still reloads everything.
         if (eventType === 'social_changed' && socketEvent.detail.payload?.actorId === user.userId) return;
         profile.reload();
         posts.reload();
@@ -129,37 +127,21 @@ export default function Profile() {
         saved.reload();
       }
     };
-
     window.addEventListener('social:socket', handleSocketEvent);
-
-    return () => {
-      window.removeEventListener('social:socket', handleSocketEvent);
-    };
+    return () => window.removeEventListener('social:socket', handleSocketEvent);
   }, [profile.reload, posts.reload, media.reload, saved.reload, user.userId]);
 
   async function handleToggleFollow() {
     if (isFollowingBusy) return;
-
     setIsFollowingBusy(true);
-
     const cancels = followState === 'following' || followState === 'requested';
-    // A follow on a private profile becomes a request, which grants nothing yet.
-    const intent: 'following' | 'requested' | 'none' = cancels
+    const intent: FollowState = cancels
       ? 'none'
       : profile.data?.isPublic === false ? 'requested' : 'following';
-    // Only following or unfollowing a private profile changes what this viewer may
-    // read, so that is the only case that re-reads the posts.
     const reloadsPosts = profile.data?.isPublic === false && intent !== 'requested';
     setFollowIntent(intent);
-
     try {
-      await request(
-        `/users/${profileId}/follow`,
-        cancels ? 'DELETE' : 'PUT',
-      );
-
-      // The counts are single small resources this page displays, so they are still
-      // re-read; the post list is not, which is the refetch this change removes.
+      await request(`/users/${profileId}/follow`, cancels ? 'DELETE' : 'PUT');
       await refreshUser();
       profile.reload();
       if (reloadsPosts) posts.reload();
@@ -171,411 +153,92 @@ export default function Profile() {
     }
   }
 
-  function handleTabChange(tab: ProfileTab) {
-    setActiveTab(tab);
+  function changeTab(tab: ProfileTab) {
+    router.push(`${pathname}?tab=${tab}`, { scroll: false });
   }
 
-  // Posts, likes and saved are three projections of a list of posts; media is a grid of its own.
-  // `list` is whichever of the three the active tab shows, so the loading, empty and load-more
-  // branches below are written once rather than three times.
-  const list = activeTab === 'saved' ? saved : posts;
+  function removePost(postId: number) {
+    posts.update(items => items.filter(item => item.postId !== postId));
+    saved.update(items => items.filter(item => item.postId !== postId));
+  }
 
-  return (
-    <div className="mx-auto max-w-3xl space-y-6 p-6">
-      {/* Profile loading state */}
-      {profile.loading && <Loading />}
+  const followers = (isOwnProfile ? user.followers : profile.data?.followers ?? []).length;
+  const following = (isOwnProfile ? user.following : profile.data?.following ?? []).length;
 
-      {/* Profile */}
-      {profile.data && (
-        <>
-          <ProfileHeader
-            profile={profile.data}
-            currentUser={user}
-            isOwnProfile={isOwnProfile}
-            isFollowing={followState === 'following'}
-            pendingOutgoing={followState === 'requested'}
-            isFollowingBusy={isFollowingBusy}
-            onEdit={() => setIsEditing(true)}
-            onChangePassword={() => setIsChangingPassword(true)}
-            onToggleFollow={() => void handleToggleFollow()}
-            canOpenFollowLists={canViewProfile}
-            onOpenFollowList={setFollowListTab}
-          />
+  // The grid and its modal are the shared pieces; `gridPosts` is the order the arrows step through.
+  const gridPosts = activeTab === 'saved' ? saved.items : posts.items;
+  const { openFor, modal } = usePostModal(gridPosts, removePost);
 
-          {/* Private profile */}
-          {!canViewProfile ? (
-            <RequestState
-              empty="This profile is private. Follow this person to see their posts and activity."
-            />
-          ) : (
-            <>
-              <ProfileTabs
-                tabs={isOwnProfile ? [...PROFILE_TABS, 'saved'] : PROFILE_TABS}
-                activeTab={activeTab}
-                onChange={handleTabChange}
-              />
-
-              {/* Posts, likes, saved and media */}
-              {(activeTab === 'media' ? media.loading : list.loading) && <PostListSkeleton />}
-
-              {activeTab === 'media' ? (
-                <MediaGrid items={media.items} />
-              ) : (
-                <PostList
-                  posts={list.items}
-                  onRemoved={postId => list.update(items => items.filter(item => item.postId !== postId))}
-                />
-              )}
-
-              {/* Empty state */}
-              {activeTab === 'media'
-                ? media.settled && !media.error && media.items.length === 0 && (
-                    <RequestState empty="No photos yet." />
-                  )
-                : list.settled && !list.error && list.items.length === 0 && (
-                    <RequestState
-                      empty={activeTab === 'saved' ? 'Nothing saved yet.' : activeTab === 'likes' ? 'No liked posts yet.' : 'No posts yet.'}
-                    />
-                  )}
-
-              {activeTab === 'media'
-                ? media.items.length > 0 && (
-                    <LoadMore
-                      loading={media.loadingMore}
-                      hasMore={media.hasMore}
-                      onLoadMore={media.loadMore}
-                      label="Load more photos"
-                    />
-                  )
-                : list.items.length > 0 && (
-                    <LoadMore
-                      loading={list.loadingMore}
-                      hasMore={list.hasMore}
-                      onLoadMore={list.loadMore}
-                      label={activeTab === 'saved' ? 'Load more saved posts' : 'Load more posts'}
-                    />
-                  )}
-            </>
-          )}
-
-          {/* Edit profile */}
-          {isEditing && (
-            <EditProfile
-              profile={profile.data}
-              close={() => setIsEditing(false)}
-              saved={profile.reload}
-            />
-          )}
-          {/* Change password — the backend rotates the session, so nothing here
-              has to refresh the signed-in user afterwards. */}
-          {isChangingPassword && (
-            <ChangePassword close={() => setIsChangingPassword(false)} />
-          )}
-        {/* Followers and following */}
-          {followListTab && (
-            <FollowListModal
-              userId={profile.data.userId}
-              initialTab={followListTab}
-              close={closeFollowList}
-            />
-          )}
-        </>
-      )}
-    </div>
-  );
-}
+  const empty = activeTab === 'likes'
+    ? <GridEmpty text="Posts you like will appear here." />
+    : activeTab === 'saved'
+      ? <GridEmpty text="Save posts to see them here. Only you can see what you've saved." />
+      : activeTab === 'media'
+        ? <GridEmpty text="No media yet." />
+        : isOwnProfile
+          ? <PhotosEmpty onShare={openComposer} />
+          : <GridEmpty text="No posts yet." />;
 
 
-type ProfileHeaderProps = {
-  profile: SocialUser;
-  currentUser: SocialUser;
-  isOwnProfile: boolean;
-  isFollowing: boolean;
-  pendingOutgoing: boolean;
-  isFollowingBusy: boolean;
-  onEdit: () => void;
-  onChangePassword: () => void;
-  onToggleFollow: () => void;
-  canOpenFollowLists: boolean;
-  onOpenFollowList: (tab: FollowListTab) => void;
-};
+  return <div className="profile-page">
+    <div className="profile">
+    {profile.loading && <Loading />}
+    {!!profile.error && <p className="profile-error" role="alert">{profile.error}</p>}
 
-function ProfileHeader({
-  profile,
-  currentUser,
-  isOwnProfile,
-  isFollowing,
-  pendingOutgoing,
-  isFollowingBusy,
-  onEdit,
-  onChangePassword,
-  onToggleFollow,
-  canOpenFollowLists,
-  onOpenFollowList,
-}: ProfileHeaderProps) {
-  const profileOwner = isOwnProfile ? currentUser : profile;
-  // The author's own expired stories live here now, not in the feed's strip: the profile is where a
-  // member's own content belongs, and the strip is for what is still live.
-  const [archiveOpen, setArchiveOpen] = useState(false);
-
-  return <>
-    <section className="overflow-hidden rounded-xl bg-white shadow-sm">
-      {/* Cover */}
-      <div className="h-44 bg-linear-to-r from-brand-1/30 to-brand-2/25">
-        {profile.coverPhoto && (
-          <img
-            src={profile.coverPhoto}
-            alt="Cover photo"
-            className="h-full w-full object-cover"
-          />
-        )}
-      </div>
-
-      <div className="space-y-4 p-6">
-        {/* Instagram shape: the avatar on the left, with the handle, the actions and the
-            counts stacked on the right, and the name and bio below the pair. On a phone the
-            same row simply narrows. */}
-        <div className="flex items-center gap-6 sm:items-start">
-          <Avatar
-            name={displayName(profile)}
-            avatarUrl={profile.avatar}
-            size={80}
-          />
-
-          <div className="min-w-0 flex-1 space-y-3">
-            <div className="flex flex-wrap items-center gap-3">
-              <p className="text-lg font-semibold text-slate-800">
-                @{profile.nickname}
-              </p>
-
-              {isOwnProfile ? (
-                <div className="flex flex-wrap gap-2">
-                  <button
-                    type="button"
-                    onClick={onEdit}
-                    className="rounded-lg border border-slate-200 px-4 py-2"
-                  >
-                    Edit profile
-                  </button>
-                  <button
-                    type="button"
-                    onClick={onChangePassword}
-                    className="rounded-lg border border-slate-200 px-4 py-2"
-                  >
-                    Change password
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setArchiveOpen(true)}
-                    className="rounded-lg border border-slate-200 px-4 py-2"
-                  >
-                    Your archive
-                  </button>
-                </div>
-              ) : (
-                <ProfileActions
-                  pendingOutgoing={pendingOutgoing}
-                  pendingIncoming={profile.pendingIncoming}
-                  canMessage={profile.canMessage === true}
-                  isFollowing={isFollowing}
-                  isFollowingBusy={isFollowingBusy}
-                  profileId={profile.userId}
-                  onToggleFollow={onToggleFollow}
-                />
-              )}
-            </div>
-
-            {/* Statistics. The post count is its own labelled element; the followers and
-                following pair keeps the `Profile statistics` label it had, so the new count
-                is readable without changing what that row already answers. */}
-            <div className="flex flex-wrap gap-5 text-sm">
-              {/* The post count comes from this profile's own resource rather than from
-                  `profileOwner`: the provider's copy of the signed-in user is only re-read
-                  after a follow, so it would be stale here after writing a post, while this
-                  resource is fetched whenever the page is opened. */}
-              <span aria-label="Post count">
-                <b>{profile.postCount}</b> posts
-              </span>
-
-              <div aria-label="Profile statistics" className="flex flex-wrap gap-5">
-                <button
-                  type="button"
-                  disabled={!canOpenFollowLists}
-                  onClick={() => onOpenFollowList('followers')}
-                  className={canOpenFollowLists ? 'hover:underline' : 'cursor-default'}
-                >
-                  <b>{profileOwner.followers.length}</b> followers
-                </button>
-
-                <button
-                  type="button"
-                  disabled={!canOpenFollowLists}
-                  onClick={() => onOpenFollowList('following')}
-                  className={canOpenFollowLists ? 'hover:underline' : 'cursor-default'}
-                >
-                  <b>{profileOwner.following.length}</b> following
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Name, bio and meta */}
-        <div className="space-y-1">
-          <h1 className="text-2xl font-bold">
-            {displayName(profile)}
-          </h1>
-
-          {/* Bio */}
-          {profile.bio && (
-            <p className="whitespace-pre-wrap wrap-break-word">
-              {profile.bio}
-            </p>
-          )}
-
-          {/* Location / Joined */}
-          <p className="min-w-0 text-sm text-slate-400 [overflow-wrap:anywhere]">
-            {profile.location && `${profile.location} • `}
-            Joined {dateLabel(profile.createdAt)}
-          </p>
-        </div>
-      </div>
-    </section>
-    {archiveOpen && <StoryArchive close={() => setArchiveOpen(false)} />}
-  </>;
-}
-
-type ProfileActionsProps = {
-  pendingOutgoing: boolean;
-  pendingIncoming: boolean;
-  canMessage: boolean;
-  profileId: string;
-  isFollowing: boolean;
-  isFollowingBusy: boolean;
-  onToggleFollow: () => void;
-};
-
-function ProfileActions({
-  pendingOutgoing,
-  pendingIncoming,
-  canMessage,
-  profileId,
-  isFollowing,
-  isFollowingBusy,
-  onToggleFollow,
-}: ProfileActionsProps) {
-  return (
-    <div className="flex flex-wrap gap-2">
-      {pendingIncoming && <Link href="/notifications" className="rounded-lg border border-border px-4 py-2 text-brand-1">Review follow request</Link>}
-      <button
-        type="button"
-        disabled={isFollowingBusy || (pendingIncoming && !isFollowing)}
-        title={pendingOutgoing ? 'Cancel follow request' : isFollowing ? 'Unfollow' : undefined}
-        onClick={onToggleFollow}
-        className="rounded-lg border border-blue-200 px-4 py-2 text-blue-700 disabled:opacity-50"
-      >
-        {isFollowingBusy
-          ? 'Updating...'
-          : isFollowing
-            ? 'Unfollow'
-            : pendingOutgoing ? 'Requested' : 'Follow'}
-      </button>
-
-      <MessageAction
-        userId={profileId}
-        allowed={canMessage}
-        className="rounded-lg bg-blue-600 px-4 py-2 text-white"
+    {profile.data && <>
+      <ProfileHeader
+        profile={profile.data}
+        followers={followers}
+        following={following}
+        isOwner={isOwnProfile}
+        avatarSize={avatarSize}
+        followState={followState}
+        canMessage={profile.data.canMessage === true}
+        isFollowingBusy={isFollowingBusy}
+        onAvatarClick={() => setIsEditing(true)}
+        onEdit={() => setIsEditing(true)}
+        onArchive={() => setArchiveOpen(true)}
+        onChangePassword={() => setIsChangingPassword(true)}
+        onOpenFollows={setFollowListTab}
+        onToggleFollow={() => void handleToggleFollow()}
       />
+
+      {canViewProfile ? <>
+        <div className="profile-tabs-wrap"><ProfileTabs tabs={tabs} value={activeTab} onChange={changeTab} label="Profile" /></div>
+        {activeTab === 'media'
+          ? <MediaGrid items={media.items} loading={media.loading} error={media.error} settled={media.settled} hasMore={media.hasMore} loadingMore={media.loadingMore} onLoadMore={media.loadMore} onRetry={media.reload} empty={empty} />
+          : <PostGrid posts={list.items} loading={list.loading} error={list.error} settled={list.settled} hasMore={list.hasMore} loadingMore={list.loadingMore} onLoadMore={list.loadMore} onRetry={list.reload} onOpen={post => openFor(post)()} empty={empty} />}
+      </> : <div className="profile-empty">
+        <span className="profile-empty-icon"><Lock aria-hidden="true" /></span>
+        <div className="profile-empty-copy">
+          <p className="profile-empty-title">This account is private</p>
+          <p className="profile-empty-text">Follow this account to see their photos and videos.</p>
+        </div>
+      </div>}
+
+      {modal}
+
+      {isEditing && <EditProfile profile={profile.data} close={() => setIsEditing(false)} saved={profile.reload} />}
+      {isChangingPassword && <ChangePassword close={() => setIsChangingPassword(false)} />}
+      {archiveOpen && <StoryArchive close={() => setArchiveOpen(false)} />}
+      {followListTab && <FollowListModal userId={profile.data.userId} initialTab={followListTab} close={closeFollowList} />}
+    </>}
     </div>
-  );
+  </div>;
 }
 
-
-type ProfileTabsProps = {
-  /** Which tabs to draw: the viewer's own profile adds Saved to the three everyone has. */
-  tabs: ProfileTab[];
-  activeTab: ProfileTab;
-  onChange: (tab: ProfileTab) => void;
-};
-
-function ProfileTabs({
-  tabs,
-  activeTab,
-  onChange,
-}: ProfileTabsProps) {
-  return (
-    <div className="flex flex-wrap justify-center items-center gap-2">
-      {tabs.map((tab) => {
-        const isActive = activeTab === tab;
-
-        return (
-          <button
-            key={tab}
-            type="button"
-            onClick={() => onChange(tab)}
-            className={`px-5 py-2 capitalize cursor-pointer ${
-              isActive
-                ? 'bg-blue-600 text-white'
-                : 'bg-white'
-            }`}
-          >
-            {tab}
-          </button>
-        );
-      })}
-    </div>
-  );
+function GridEmpty({ text }: { text: string }) {
+  return <div className="profile-empty"><p className="profile-empty-text">{text}</p></div>;
 }
 
-
-type PostListProps = {
-  posts: Post[];
-  /** Drops a deleted post from the loaded pages without re-reading them. */
-  onRemoved: (postId: number) => void;
-};
-
-function PostList({
-  posts,
-  onRemoved,
-}: PostListProps) {
-  // The feed's overlay, so a card on a profile opens the same dialog a card on the feed does
-  // instead of keeping the older inline-comments shape this page used to show on a wide screen.
-  const { openFor, overlay } = usePostOverlay(onRemoved);
-  return (
-    <div className="space-y-4">
-      {posts.map((post) => (
-        <PostCard
-          key={post.postId}
-          post={post}
-          onOpen={openFor(post)}
-          onPostRemoved={onRemoved}
-        />
-      ))}
-      {overlay}
+function PhotosEmpty({ onShare }: { onShare: () => void }) {
+  return <div className="profile-empty">
+    <span className="profile-empty-icon"><Camera aria-hidden="true" /></span>
+    <div className="profile-empty-copy">
+      <p className="profile-empty-title">Share photos</p>
+      <p className="profile-empty-text">When you share photos, they will appear on your profile.</p>
+      <Button variant="text" onClick={onShare}>Share your first photo</Button>
     </div>
-  );
+  </div>;
 }
 
-type MediaGridProps = {
-  items: MediaItem[];
-};
-
-function MediaGrid({ items }: MediaGridProps) {
-  return (
-    <div data-media-grid className="grid grid-cols-3 gap-1">
-      {items.map((item) => (
-        <Link
-          key={`${item.postId}-${item.url}`}
-          href={`/post/${item.postId}`}
-          className="group relative block overflow-hidden bg-slate-100"
-        >
-          <img
-            {...mediaImageProps(item.url, '(max-width: 640px) 33vw, 320px')}
-            alt={item.title}
-            className="aspect-square w-full object-cover transition duration-300 group-hover:scale-105"
-          />
-        </Link>
-      ))}
-    </div>
-  );
-}
