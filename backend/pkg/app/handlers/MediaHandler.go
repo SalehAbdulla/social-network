@@ -258,7 +258,7 @@ func (re *HandlerContext) GetMedia(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if !allowed {
-		re.HandleError(w, r, backend.ErrForbidden)
+		re.HandleError(w, r, backend.ErrNotFound)
 		return
 	}
 	// The stored row decides the type, so it is checked against the same list the
