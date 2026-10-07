@@ -7,7 +7,7 @@ import { Search as SearchIcon, X } from 'lucide-react';
 import { type Group, type Page, type Post, type SocialUser, displayName } from '../api/social';
 import { usePagedList } from '../lib/usePagedList';
 import { useResource } from '../lib/useResource';
-import { usePostOverlay } from '../lib/usePostOverlay';
+import { usePostModal } from '../lib/usePostModal';
 import { clearRecentSearches, readRecentSearches, rememberSearch } from '../lib/recentSearches';
 import Avatar from '../components/Avatar';
 import LoadMore from '../components/LoadMore';
@@ -65,7 +65,7 @@ function SearchScreen() {
     enabled: !!query,
   });
 
-  const { openFor, overlay } = usePostOverlay(postId => posts.update(items => items.filter(item => item.postId !== postId)));
+  const { openFor, modal } = usePostModal(posts.items, postId => posts.update(items => items.filter(item => item.postId !== postId)));
 
   const matchedNothing = !!query
     && !people.loading && !groups.loading && !posts.loading
@@ -121,7 +121,7 @@ function SearchScreen() {
 
       {matchedNothing && <RequestState empty={`Nothing matched “${query}”. Try another word, or a spelling.`} />}
     </>}
-    {overlay}
+    {modal}
   </div>;
 }
 
