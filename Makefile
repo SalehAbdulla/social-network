@@ -28,7 +28,7 @@ BASE_URL ?= http://127.0.0.1:5174
 CHROME_PATH ?=
 
 .DEFAULT_GOAL := help
-.PHONY: help dev status seed seed-demo build lint types test test-race smoke check pin-check compose-config api-tour
+.PHONY: help dev status seed seed-demo seed-showcase build lint types test test-race smoke check pin-check compose-config api-tour
 
 help: ## Show this list
 	@awk 'BEGIN {FS = ":.*?## "} /^[a-zA-Z_-]+:.*?## / {printf "  %-16s %s\n", $$1, $$2}' $(MAKEFILE_LIST)
@@ -52,6 +52,9 @@ seed: ## Create the local development account (dummy@example.com)
 
 seed-demo: ## Create both development accounts, for flows that need two people
 	cd backend && go run ./cmd/seed -demo
+
+seed-showcase: ## Seed the full showcase dataset: 20+ members, posts, comments, stories, groups, chats
+	cd backend && go run ./cmd/seed -showcase
 
 build: ## Build the backend and the frontend
 	cd backend && go build ./...
