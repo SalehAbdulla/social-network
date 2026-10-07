@@ -316,6 +316,14 @@ place the proxy's upgrade path is exercised at concurrency.
   restart does not sign anyone out. Logging in revokes the previous token, and so does
   changing the password (`PUT /api/v1/users/me/password`), which returns the replacement
   cookie to the browser that made the change.
+- **Multiple accounts on one browser** are saved in a second HttpOnly cookie,
+  `saved_accounts`, that holds one session token per account (up to five, newest first).
+  Login and register add to it, `GET /api/v1/auth/accounts` lists the ones that are still
+  live, `POST /api/v1/auth/switch` makes one active without a password, and
+  `POST /api/v1/auth/accounts/remove` forgets one and revokes its session. The tokens never
+  reach the page — the browser asks by `userId` and the server swaps the `session_token`
+  cookie — so the switcher adds no new way for script to read a credential, and logging out
+  clears the list and revokes every saved session.
 - **Password reset** is the one unauthenticated flow that answers identically for an unknown
   address: `POST /api/v1/auth/password-reset` always answers `202` with the same sentence, and the
   confirm endpoint takes the token, stores the new password and revokes every session the account
