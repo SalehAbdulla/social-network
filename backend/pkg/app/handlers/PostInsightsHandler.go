@@ -14,9 +14,9 @@ import (
 // answers the same 404 a read gives and this cannot be used to learn that a post exists;
 // only then does "you did not write this" become a 403.
 func (re *HandlerContext) PostInsights(w http.ResponseWriter, r *http.Request) {
-	postID, err := postPathID(r)
-	if err != nil {
-		re.HandleError(w, r, err)
+	publicID := r.PathValue("postId")
+	if publicID == "" {
+		re.HandleError(w, r, realtimeforum.ErrBadRequest)
 		return
 	}
 	userID := currentUser(r)
@@ -24,7 +24,7 @@ func (re *HandlerContext) PostInsights(w http.ResponseWriter, r *http.Request) {
 		re.HandleError(w, r, realtimeforum.ErrUnauthorized)
 		return
 	}
-	insights, err := re.PostService.PostInsights(postID, userID)
+	insights, err := re.PostService.PostInsights(publicID, userID)
 	if err != nil {
 		re.HandleError(w, r, err)
 		return
