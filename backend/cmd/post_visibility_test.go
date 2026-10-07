@@ -3,7 +3,6 @@ package main
 import (
 	"os"
 	"path/filepath"
-	"strconv"
 	"testing"
 
 	"social-network/backend/pkg/app/repositories"
@@ -44,8 +43,8 @@ func TestPostVisibilityReadPaths(t *testing.T) {
 		"title": "Chosen audience", "content": "Only the follower I picked should read this.", "privacy": "selected",
 		"selectedFollowerIds": []string{"alex-id"},
 	}, 201))
-	postPath := "/api/v1/post?id=" + strconv.Itoa(post.PostId)
-	commentsPath := "/api/v1/posts/comments?postId=" + strconv.Itoa(post.PostId)
+	postPath := "/api/v1/post?id=" + post.PostId
+	commentsPath := "/api/v1/posts/comments?postId=" + post.PostId
 	comment := decoded[comment.CommentDTO](t, owner.call("POST", "/api/v1/posts/comments", map[string]any{
 		"postId": post.PostId, "content": "A comment only the audience may read",
 	}, 201))
@@ -53,7 +52,7 @@ func TestPostVisibilityReadPaths(t *testing.T) {
 	mediaID := "123e4567-e89b-12d3-a456-426614174301"
 	addOwnedMedia(t, repo, "dummy-id", mediaID)
 	imageURL := "/api/v1/media/" + mediaID
-	owner.call("PUT", "/api/v1/posts/"+strconv.Itoa(post.PostId), map[string]any{
+	owner.call("PUT", "/api/v1/posts/"+post.PostId, map[string]any{
 		"title": "Chosen audience", "content": "Only the follower I picked should read this.", "privacy": "selected",
 		"selectedFollowerIds": []string{"alex-id"}, "imageUrls": []string{imageURL},
 	}, 200)
@@ -89,7 +88,7 @@ func TestPostVisibilityReadPaths(t *testing.T) {
 	}
 	// Reacting to something invisible must not have written anything either.
 	var postScore int
-	if err := repo.Conn.QueryRow("SELECT score FROM post WHERE postId = ?", post.PostId).Scan(&postScore); err != nil {
+	if err := repo.Conn.QueryRow("SELECT score FROM post WHERE publicId = ?", post.PostId).Scan(&postScore); err != nil {
 		t.Fatal(err)
 	}
 	if postScore != 1 {
@@ -134,7 +133,7 @@ func TestSelectedAudienceIsAGrantNotALiveRelation(t *testing.T) {
 		"title": "Grant", "content": "Shared with one follower on purpose.", "privacy": "selected",
 		"selectedFollowerIds": []string{"alex-id"}, "imageUrls": []string{imageURL},
 	}, 201))
-	postPath := "/api/v1/post?id=" + strconv.Itoa(post.PostId)
+	postPath := "/api/v1/post?id=" + post.PostId
 
 	// The author cannot record someone who is not a follower yet, which is what
 	// makes the recorded list meaningful in the first place.
@@ -158,11 +157,11 @@ func TestSelectedAudienceIsAGrantNotALiveRelation(t *testing.T) {
 	// Editing re-validates the audience against current followers, which is the
 	// author's lever: the now-unfollowed member can no longer be kept, and the
 	// post is readable by everyone once the author chooses a public audience.
-	owner.call("PUT", "/api/v1/posts/"+strconv.Itoa(post.PostId), map[string]any{
+	owner.call("PUT", "/api/v1/posts/"+post.PostId, map[string]any{
 		"title": "Grant", "content": "Rewritten audience.", "privacy": "selected",
 		"selectedFollowerIds": []string{"alex-id"},
 	}, 400)
-	owner.call("PUT", "/api/v1/posts/"+strconv.Itoa(post.PostId), map[string]any{
+	owner.call("PUT", "/api/v1/posts/"+post.PostId, map[string]any{
 		"title": "Grant", "content": "Now public, like any other post.", "privacy": "public",
 		"imageUrls": []string{imageURL},
 	}, 200)
