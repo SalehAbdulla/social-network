@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
-import { ChevronDown, Link2, Mail, MapPin, Phone, Settings } from 'lucide-react';
+import { ChevronDown, Link2, Mail, MapPin, Phone, RefreshCw, Settings } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { type SocialUser, displayName, errorMessage, request } from '../../api/social';
 import { linkify } from '../../lib/linkify';
@@ -145,6 +145,7 @@ function SettingsMenu({ onChangePassword }: { onChangePassword: () => void }) {
     <MenuItem onClick={onChangePassword}>Change password</MenuItem>
     <Link href="/saved" role="menuitem" className="ui-menu-item">Saved</Link>
     <div className="ui-menu-item justify-between"><span>Theme</span><ThemeToggle /></div>
+    <MenuItem onClick={() => window.dispatchEvent(new Event('social:switch-accounts'))}><RefreshCw size={16} aria-hidden="true" />Switch accounts</MenuItem>
     <MenuItem onClick={() => void logout()} disabled={loggingOut}>{loggingOut ? 'Logging out…' : 'Log out'}</MenuItem>
   </Menu>;
 }
