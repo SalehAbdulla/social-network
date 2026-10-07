@@ -152,7 +152,7 @@ export default function Sidebar() {
     </aside>
     {panelKind && <SidePanels kind={panelKind} open={panelOpen} onClose={closePanel} panelRef={panelRef} />}
     {moreRect && <MenuPanel menuRef={menuRef} rect={moreRect} width={266} placement="above" label="More">
-      <MoreMenuContent onClose={() => setMoreRect(null)} onLogout={() => void logout()} onSettings={() => setChangingPassword(true)} loggingOut={loggingOut} />
+      <MoreMenuContent onClose={() => setMoreRect(null)} onLogout={() => void logout()} onSettings={() => setChangingPassword(true)} onSwitchAccounts={() => window.dispatchEvent(new Event('social:switch-accounts'))} loggingOut={loggingOut} />
     </MenuPanel>}
     {create.modal}
     {changingPassword && <ChangePassword close={() => setChangingPassword(false)} />}
