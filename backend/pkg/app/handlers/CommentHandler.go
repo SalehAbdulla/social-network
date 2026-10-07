@@ -21,15 +21,15 @@ func (re *HandlerContext) GetComments(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	postId := strings.TrimSpace(r.URL.Query().Get("postId"))
-	if postId == "" {
+	postIdStr := strings.TrimSpace(r.URL.Query().Get("postId"))
+	if postIdStr == "" {
 		re.HandleError(w, r, realtimeforum.ErrMissingPostId)
 		return
 	}
 
-	postIdInt, err := strconv.Atoi(postId)
+	postIdInt, err := re.resolvePostID(postIdStr)
 	if err != nil {
-		re.HandleError(w, r, realtimeforum.ErrBadRequest)
+		re.HandleError(w, r, err)
 		return
 	}
 	if _, err := re.PostService.GetPostByID(postIdInt, userID); err != nil {
@@ -87,7 +87,9 @@ func (re *HandlerContext) GetComments(w http.ResponseWriter, r *http.Request) {
 const maxCommentImages = 4
 
 type createCommentRequest struct {
-	PostID    int      `json:"postId"`
+	// PostID is the post's public UUID (see migration 000020), resolved to the table's own
+	// key before anything is written.
+	PostID    string   `json:"postId"`
 	Content   string   `json:"content"`
 	ImageURLs []string `json:"imageUrls"`
 }
@@ -103,7 +105,11 @@ func (re *HandlerContext) CreateComments(w http.ResponseWriter, r *http.Request)
 	if !valid {
 		return
 	}
-	postId := req.PostID
+	postId, err := re.resolvePostID(req.PostID)
+	if err != nil {
+		re.HandleError(w, r, err)
+		return
+	}
 
 	if _, err := re.PostService.GetPostByID(postId, userID); err != nil {
 		re.HandleError(w, r, err)
@@ -172,22 +178,16 @@ func (re *HandlerContext) commentInput(w http.ResponseWriter, r *http.Request, u
 			re.HandleError(w, r, realtimeforum.ErrBadRequest)
 			return req, false
 		}
-		if req.PostID < 1 {
+		if strings.TrimSpace(req.PostID) == "" {
 			re.HandleError(w, r, realtimeforum.ErrMissingPostId)
 			return req, false
 		}
 	} else {
-		postIDStr := strings.TrimSpace(r.FormValue("postId"))
-		if postIDStr == "" {
+		req.PostID = strings.TrimSpace(r.FormValue("postId"))
+		if req.PostID == "" {
 			re.HandleError(w, r, realtimeforum.ErrMissingPostId)
 			return req, false
 		}
-		postID, err := strconv.Atoi(postIDStr)
-		if err != nil {
-			re.HandleError(w, r, realtimeforum.ErrBadRequest)
-			return req, false
-		}
-		req.PostID = postID
 		req.Content = r.FormValue("content")
 		// Repeated `imageUrls` fields carry the gallery in form mode.
 		req.ImageURLs = r.Form["imageUrls"]
