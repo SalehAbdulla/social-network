@@ -9,8 +9,14 @@ const (
 )
 
 type Post struct {
-	ImageURLs     string
-	PostId        int      `json:"postId"`
+	ImageURLs string
+	// PostId is the table's own integer key. It is what comments, bookmarks, the
+	// selected-follower grants and the polymorphic reaction table point at, so it never
+	// leaves the server.
+	PostId int `json:"-"`
+	// PublicID is the UUID a post is addressed by outside the server — the API's `postId`
+	// and every `?post=` URL. See migration 000020.
+	PublicID      string   `json:"postId"`
 	UserId        string   `json:"userId"`
 	Privacy       string   `json:"privacy"`
 	SelectedUsers []string `json:"selectedFollowerIds,omitempty"`
