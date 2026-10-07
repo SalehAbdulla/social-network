@@ -1,13 +1,13 @@
 'use client';
 
+import { Suspense } from 'react';
 import Link from 'next/link';
 import { RefreshCw } from 'lucide-react';
 import { type Page, type Post } from './api/social';
 import { usePagedList } from './lib/usePagedList';
-import { usePostOverlay } from './lib/usePostOverlay';
+import { usePostModal } from './lib/usePostModal';
 import StoriesBar from './components/StoriesBar';
-import SuggestedPeople from './components/SuggestedPeople';
-import AccountRailCard from './components/AccountRailCard';
+import RightRail from './components/RightRail';
 import PostCard from './components/PostCard';
 import RequestState from './components/RequestState';
 import LoadMore from './components/LoadMore';
@@ -19,7 +19,7 @@ const FEED_PAGE_SIZE = 10;
 // changes (a filter, a new sort) `usePagedList` restarts from page 1.
 const FEED_KEY = `/posts?size=${FEED_PAGE_SIZE}&sortBy=createdat&sortOrder=desc`;
 
-export default function Feed() {
+function FeedScreen() {
   const feed = usePagedList<Post, Page<Post>>({
     key: FEED_KEY,
     pageQuery: page => `&page=${page}`,
@@ -31,7 +31,7 @@ export default function Feed() {
   // screen, where a card stops being a route link and becomes the thing Instagram pops open. It is
   // pure state — `/post/{postId}` stays the deep link — so the page never touches the URL, and it
   // carries no title of its own, the way Instagram's feed does not.
-  const { openFor, overlay } = usePostOverlay(postId => feed.update(items => items.filter(item => item.postId !== postId)));
+  const { openFor, modal } = usePostModal(feed.items, postId => feed.update(items => items.filter(item => item.postId !== postId)));
 
   // Instagram's desktop feed: a 470px column and a 319px suggestions rail 64px to its right, wrapped
   // as one group and centred as one — 853px of it — in the content area, so the pair sits in the
@@ -57,9 +57,15 @@ export default function Feed() {
         {feed.items.length > 0 && <LoadMore loading={feed.loadingMore} hasMore={feed.hasMore} onLoadMore={feed.loadMore} label={`Load${feed.items.length > FEED_PAGE_SIZE ? ' more' : ' older'} posts`} />}
       </>}
     </div>
-    <aside className="ml-[var(--feed-gap)] hidden w-[var(--feed-rail)] shrink-0 min-[1000px]:block"><div className="sticky top-[var(--feed-top)] space-y-6"><AccountRailCard /><SuggestedPeople /></div></aside>
+    <aside className="ml-[var(--feed-gap)] hidden w-[var(--feed-rail)] shrink-0 min-[1000px]:block"><div className="sticky top-[var(--feed-top)] pb-[var(--rc-safe-bottom)]"><RightRail /></div></aside>
     </div>
-    {overlay}
+    {modal}
   </div>;
+}
+
+export default function Feed() {
+  // `usePostModal` reads `useSearchParams`, which needs a Suspense boundary on a prerendered
+  // route; this default export provides it, the same shape the search page uses.
+  return <Suspense fallback={<PostListSkeleton />}><FeedScreen /></Suspense>;
 }
 
