@@ -4,17 +4,20 @@ import (
 	"net/http"
 	"strconv"
 
+	"github.com/google/uuid"
+
 	realtimeforum "social-network/backend"
 )
 
-// postPathID reads the {postId} a route put in the path, refusing anything that
-// is not a positive number before a query runs.
-func postPathID(r *http.Request) (int, error) {
-	postID, err := strconv.Atoi(r.PathValue("postId"))
-	if err != nil || postID < 1 {
+// resolvePostID turns the public UUID a route path or query carries into the post table's own
+// integer key, which every internal read and write is keyed on. A value that is not a UUID is a
+// 400 — a client that mangled the id — while a well-formed id that matches no row is the same 404
+// a post read gives, so the resolver cannot be used to learn which posts exist.
+func (re *HandlerContext) resolvePostID(publicID string) (int, error) {
+	if _, err := uuid.Parse(publicID); err != nil {
 		return 0, realtimeforum.ErrBadRequest
 	}
-	return postID, nil
+	return re.SocialService.Repo.PostIDByPublicID(publicID)
 }
 
 // pageParams reads the `page`/`size` pair the list endpoints share, with the same
@@ -45,7 +48,8 @@ func (re *HandlerContext) pageParams(w http.ResponseWriter, r *http.Request) (in
 // UnsavePost answer with the resulting state, because both are idempotent: the
 // second press of a save button is not a conflict.
 func (re *HandlerContext) SavePost(w http.ResponseWriter, r *http.Request) {
-	postID, err := postPathID(r)
+	publicID := r.PathValue("postId")
+	postID, err := re.resolvePostID(publicID)
 	if err != nil {
 		re.HandleError(w, r, err)
 		return
@@ -59,11 +63,12 @@ func (re *HandlerContext) SavePost(w http.ResponseWriter, r *http.Request) {
 		re.HandleError(w, r, err)
 		return
 	}
-	respond(w, http.StatusOK, map[string]any{"postId": postID, "saved": true})
+	respond(w, http.StatusOK, map[string]any{"postId": publicID, "saved": true})
 }
 
 func (re *HandlerContext) UnsavePost(w http.ResponseWriter, r *http.Request) {
-	postID, err := postPathID(r)
+	publicID := r.PathValue("postId")
+	postID, err := re.resolvePostID(publicID)
 	if err != nil {
 		re.HandleError(w, r, err)
 		return
@@ -77,7 +82,7 @@ func (re *HandlerContext) UnsavePost(w http.ResponseWriter, r *http.Request) {
 		re.HandleError(w, r, err)
 		return
 	}
-	respond(w, http.StatusOK, map[string]any{"postId": postID, "saved": false})
+	respond(w, http.StatusOK, map[string]any{"postId": publicID, "saved": false})
 }
 
 // SavedPosts is the caller's bookmark list, in the feed's response shape.
