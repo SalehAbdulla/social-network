@@ -3,7 +3,8 @@
 import { useEffect, useMemo, useState, type RefObject } from 'react';
 import { useRouter } from 'next/navigation';
 import { Search as SearchIcon, X } from 'lucide-react';
-import { type Notification, relativeLabel, request } from '../api/social';
+import { type Notification, errorMessage, relativeLabel, request } from '../api/social';
+import toast from 'react-hot-toast';
 import { useResource } from '../lib/useResource';
 import { clearRecentSearches, readRecentSearches, rememberSearch } from '../lib/recentSearches';
 import Avatar from './Avatar';
@@ -101,8 +102,10 @@ function SearchPanel({ onClose }: { onClose: () => void }) {
 /** Title, then the newest notifications grouped by age the way Instagram groups them. */
 function NotificationsPanel({ onClose }: { onClose: () => void }) {
   const router = useRouter();
-  const { data, loading } = useResource<{ notifications: Notification[]; totalElements: number }>('/notifications?limit=30&unread=false');
+  const { data, loading, reload } = useResource<{ notifications: Notification[]; totalElements: number }>('/notifications?limit=30&unread=false');
   const groups = useMemo(() => groupByAge(data?.notifications ?? []), [data]);
+  const [markingAll, setMarkingAll] = useState(false);
+  const hasUnread = (data?.notifications ?? []).some(item => !item.isRead);
 
   const open = (item: Notification) => {
     onClose();
@@ -115,8 +118,23 @@ function NotificationsPanel({ onClose }: { onClose: () => void }) {
     router.push(notificationPath(item));
   };
 
+  // The drawer's own bulk action: one PATCH clears every type, then the list is
+  // re-read so the unread dots and the rail badge settle together. It is disabled
+  // while a sweep is in flight and when nothing is left to clear.
+  async function markAll() {
+    setMarkingAll(true);
+    try {
+      await request('/notifications/read-all', 'PATCH');
+      reload();
+      window.dispatchEvent(new Event('social:notifications'));
+    } catch (error) { toast.error(errorMessage(error)); } finally { setMarkingAll(false); }
+  }
+
   return <div className="flex h-full flex-col">
-    <PanelTitle>Notifications</PanelTitle>
+    <div className="flex items-center justify-between gap-3 px-4 pb-5 pt-6">
+      <h2 className="text-base font-bold text-text">Notifications</h2>
+      <button type="button" disabled={markingAll || !hasUnread} onClick={() => void markAll()} className="shrink-0 text-xs font-semibold text-brand-1 hover:underline disabled:cursor-default disabled:opacity-50">Mark all as read</button>
+    </div>
     {loading && <p className="px-4 text-sm text-muted">Loading…</p>}
     {!loading && groups.every(group => group.items.length === 0) && <p className="px-4 text-sm text-muted">No notifications yet.</p>}
     {groups.map(group => group.items.length === 0 ? null : <section key={group.label} className="pb-2">
