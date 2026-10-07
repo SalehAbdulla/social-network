@@ -2,7 +2,7 @@
 
 Run `sh ./dev.sh` (Linux/macOS/WSL) or `.\dev.cmd` (Windows). Go and a C compiler are required for SQLite. The server listens on port 5174; `PORT` overrides it.
 
-Register an account in the frontend, then sign in normally. Startup does not seed development users, and there is no development session endpoint or password-free account switching. The seed command is only used explicitly by isolated integration test fixtures.
+Register an account in the frontend, then sign in normally. Startup does not seed development users, and there is no development session endpoint or password-free account switching. The plain seed command is only used explicitly by isolated integration test fixtures, while `go run ./cmd/seed -showcase` (or `make seed-showcase` from the repository root) fills the development database with a full showcase dataset — two dozen members, posts, comments, stories, groups, chats, notifications and a populated suggestion rail. It is idempotent, and every generated picture is written to `UPLOAD_DIR` (default `backend/uploads`) and recorded in the `media` table, so it is served by `GET /api/v1/media/{id}` like any other upload.
 
 `DATABASE_PATH` selects the SQLite database, `UPLOAD_DIR` selects file storage, and `FRONTEND_ORIGIN` selects the browser origin (default `http://localhost:4000`). Set `APP_ENV=production` when serving through HTTPS to enable secure session cookies. Sessions live in the `session` table and survive a restart: they expire after 14 days of inactivity or 30 days after login, and expired rows are cleaned up hourly.
 
@@ -29,6 +29,10 @@ From the repository root, `docker compose up --build -d` builds separate backend
 ## Profiles
 
 `GET /api/v1/users/{userId}` (and `/users/me`, and the mention route `GET /api/v1/handles/{nickname}`) answers with the member's profile, including a **viewer-relative** `postCount`. It is computed with the same `postVisibility` fragment the posts list uses, so the number on the header and the page under it cannot disagree, and a post the viewer may not read is not counted for them. A profile the viewer may not read masks the count along with the name, avatar and follower lists in `writeProfile` — it is zeroed there rather than left to the fragment, because a `selected` grant can keep a post readable to someone who may not read the profile at all, and a count that still moved would leak that the post exists. The count rides `post_userId_createdAt` (it is the posts list's own fragment over one author), which `query_plan_test.go` asserts as its own case.
+
+## Post identifiers
+
+A post is addressed outside the server by a **public UUID**, not by the `post` table's own rowid (migration `000020`). Every API answer's `postId`, every `?post=` a feed modal reflects into the URL, and every `/post/{postId}` link carries that UUID, so an incrementing key is never exposed and posts cannot be enumerated by guessing the next number. The integer key stays internal: it is what `comment.postId`, `savedPost`, `post_selected_follower` and the polymorphic `reaction.entityId` already point at, so none of those relationships changed. A handler resolves the UUID to that key through `PostRepository.PostIDByPublicID` at the edge (`HandlerContext.resolvePostID`), and a value that is not a UUID is a 400 rather than an unknown-id 404. The reaction endpoint is the one place both spellings travel: it keys a post by its UUID and a comment, message or group row by its own integer id, and the type decides how `entityId` is read.
 
 ## Bookmarks
 
