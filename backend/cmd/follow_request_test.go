@@ -131,8 +131,8 @@ func TestFollowRequests(t *testing.T) {
 	if other.PendingIncoming || other.PendingOutgoing {
 		t.Fatal("pending flags leaked")
 	}
-	requester.call("GET", "/api/v1/users/dummy-id/posts", nil, 403)
-	requester.call("GET", "/api/v1/users/dummy-id/follows", nil, 403)
+	requester.call("GET", "/api/v1/users/dummy-id/posts", nil, 404)
+	requester.call("GET", "/api/v1/users/dummy-id/follows", nil, 404)
 	alerts := decoded[notification.NotificationResponse](t, owner.call("GET", "/api/v1/notifications", nil, 200))
 	if len(alerts.Notifications) != 1 || alerts.Notifications[0].EntityType != "follow_request" {
 		t.Fatalf("unexpected alerts: %+v", alerts)
@@ -153,7 +153,7 @@ func TestFollowRequests(t *testing.T) {
 	}
 	requester.call("PUT", path, nil, 409)
 	requester.call("DELETE", path, nil, 200)
-	requester.call("GET", "/api/v1/users/dummy-id/posts", nil, 403)
+	requester.call("GET", "/api/v1/users/dummy-id/posts", nil, 404)
 	for _, action := range []string{"decline", "cancel"} {
 		requester.call("PUT", path, nil, 200)
 		if action == "decline" {
@@ -161,7 +161,7 @@ func TestFollowRequests(t *testing.T) {
 		} else {
 			requester.call("DELETE", path, nil, 200)
 		}
-		requester.call("GET", "/api/v1/users/dummy-id/posts", nil, 403)
+		requester.call("GET", "/api/v1/users/dummy-id/posts", nil, 404)
 		items := decoded[[]models.FollowRequest](t, owner.call("GET", "/api/v1/follow-requests", nil, 200))
 		if len(items) != 0 {
 			t.Fatal(action + " left pending request")
