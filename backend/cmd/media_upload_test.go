@@ -399,7 +399,7 @@ func TestOrphanedMediaIsCollected(t *testing.T) {
 		remove func()
 	}{
 		{"post", "post", func() {
-			owner.call("DELETE", "/api/v1/posts?id="+strconv.Itoa(post.PostId), nil, 200)
+			owner.call("DELETE", "/api/v1/posts?id="+post.PostId, nil, 200)
 		}},
 		{"comment", "comment", func() {
 			owner.call("DELETE", "/api/v1/posts/comments?id="+strconv.Itoa(commentDTO.CommentId), nil, 200)
