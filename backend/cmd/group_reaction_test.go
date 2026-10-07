@@ -50,7 +50,9 @@ func TestGroupPostReactions(t *testing.T) {
 	post := decoded[models.GroupContent](t, owner.call("POST", base+"/content/posts", map[string]string{"content": "Like me"}, 201))
 	comment := decoded[models.GroupContent](t, member.call("POST", fmt.Sprintf("%s/content/comments?parentId=%d", base, post.ID), map[string]string{"content": "Nice one"}, 201))
 
-	like := func(c integrationClient, entityType string, id int) int {
+	// `id` is `any` because a post reaction names the post by its public UUID while a group
+	// row is still named by its own integer key; the endpoint accepts either.
+	like := func(c integrationClient, entityType string, id any) int {
 		c.t.Helper()
 		return decoded[reaction.ReactionResponse](t, c.call("POST", "/api/v1/reactions",
 			map[string]any{"entityType": entityType, "entityId": id, "score": 1}, 200)).TotalScore
@@ -135,7 +137,7 @@ func TestGroupPostReactions(t *testing.T) {
 	if remaining != 0 {
 		t.Fatalf("expected the deleted post's reactions to be gone, %d left", remaining)
 	}
-	if err := repo.Conn.QueryRow("SELECT COUNT(*) FROM reaction WHERE entityType = 'post' AND entityId = ?", feedPost.PostId).Scan(&remaining); err != nil {
+	if err := repo.Conn.QueryRow("SELECT COUNT(*) FROM reaction WHERE entityType = 'post' AND entityId = (SELECT postId FROM post WHERE publicId = ?)", feedPost.PostId).Scan(&remaining); err != nil {
 		t.Fatal(err)
 	}
 	if remaining != 1 {
