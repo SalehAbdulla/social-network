@@ -93,7 +93,7 @@ func TestPostEditingIntegration(t *testing.T) {
 	if len(cleared.SelectedUsers) != 0 || len(cleared.ImageURLs) != 0 {
 		t.Fatalf("old audience or photo retained: %+v", cleared)
 	}
-	follower.call("GET", "/api/v1/media/"+mediaID, nil, 403)
+	follower.call("GET", "/api/v1/media/"+mediaID, nil, 404)
 	input["privacy"] = "followers"
 	owner.call("PUT", editURL, input, 200)
 	follower.call("DELETE", "/api/v1/users/dummy-id/follow", nil, 200)
