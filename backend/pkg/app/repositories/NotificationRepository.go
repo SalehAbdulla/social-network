@@ -44,10 +44,11 @@ func notificationTypeFilter(column string, types []string) (string, []any) {
 // the plan test (query_plan_test.go) so the plan it prints is this query's. The type
 // filter and the userId predicate are appended at the call site, both of them dynamic.
 const notificationPageSelect = `
-		SELECT n.notificationId, n.userId, n.actorId, COALESCE(u.nickName, ''), n.entityType, n.entityId, n.isRead, n.createdAt, COALESCE(c.postId, 0)
+		SELECT n.notificationId, n.userId, n.actorId, COALESCE(u.nickName, ''), n.entityType, n.entityId, n.isRead, n.createdAt, COALESCE(p.publicId, '')
 		FROM notification n
 		LEFT JOIN user u ON n.actorId = u.userId
 		LEFT JOIN comment c ON n.entityType = 'comment' AND n.entityId = c.commentId
+		LEFT JOIN post p ON p.postId = c.postId
 		WHERE `
 
 func (db *DB) GetNotifications(userID string, offset, limit int, unreadOnly bool, types []string) ([]models.Notification, int, error) {
@@ -152,10 +153,11 @@ func (db *DB) CreateNotification(userID, actorID, entityType string, entityID in
 
 	var n models.Notification
 	err = db.Conn.QueryRow(
-		`SELECT n.notificationId, n.userId, n.actorId, COALESCE(u.nickName, ''), n.entityType, n.entityId, n.isRead, n.createdAt, COALESCE(c.postId, 0)
+		`SELECT n.notificationId, n.userId, n.actorId, COALESCE(u.nickName, ''), n.entityType, n.entityId, n.isRead, n.createdAt, COALESCE(p.publicId, '')
 		 FROM notification n
 		 LEFT JOIN user u ON n.actorId = u.userId
 		 LEFT JOIN comment c ON n.entityType = 'comment' AND n.entityId = c.commentId
+		 LEFT JOIN post p ON p.postId = c.postId
 		 WHERE n.notificationId = ?`,
 		notificationID,
 	).Scan(&n.NotificationId, &n.UserId, &n.ActorId, &n.ActorNickname, &n.EntityType, &n.EntityId, &n.IsRead, &n.CreatedAt, &n.PostId)
