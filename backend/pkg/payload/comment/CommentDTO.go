@@ -2,7 +2,7 @@ package comment
 
 type CommentDTO struct {
 	CommentId   int      `json:"commentId"`
-	PostId      int      `json:"postId"`
+	PostId      string   `json:"postId"`
 	UserId      string   `json:"userId"`
 	Nickname    string   `json:"nickname"`
 	CommentText string   `json:"commentText"`
