@@ -101,7 +101,7 @@ func TestPostPrivacyIntegration(t *testing.T) {
 	alex.call("GET", postPath, nil, 404)
 	alex.call("GET", "/api/v1/users/dummy-id/posts", nil, 200)
 	alex.call("GET", "/api/v1/posts/comments?postId="+strconv.Itoa(followersOnly.PostId), nil, 404)
-	alex.call("GET", "/api/v1/media/"+mediaID, nil, 403)
+	alex.call("GET", "/api/v1/media/"+mediaID, nil, 404)
 
 	alex.call("PUT", "/api/v1/users/dummy-id/follow", nil, 200)
 	alex.call("GET", postPath, nil, 200)
@@ -312,10 +312,10 @@ func TestSocialIntegration(t *testing.T) {
 		if redacted.Bio != "" || len(redacted.Followers) != 0 {
 			t.Fatal("private profile exposed details to a non-follower")
 		}
-		alex.call("GET", "/api/v1/users/dummy-id/posts", nil, 403)
-		alex.call("GET", "/api/v1/users/dummy-id/follows", nil, 403)
+		alex.call("GET", "/api/v1/users/dummy-id/posts", nil, 404)
+		alex.call("GET", "/api/v1/users/dummy-id/follows", nil, 404)
 		alex.call("PUT", "/api/v1/users/dummy-id/follow", nil, 200)
-		alex.call("GET", "/api/v1/users/dummy-id/posts", nil, 403)
+		alex.call("GET", "/api/v1/users/dummy-id/posts", nil, 404)
 		dummy.call("PUT", "/api/v1/follow-requests/alex-id", nil, 200)
 		visible := decoded[models.SocialUser](t, alex.call("GET", "/api/v1/users/dummy-id", nil, 200))
 		if visible.Bio != privateProfile.Bio || len(visible.Followers) != 1 {
