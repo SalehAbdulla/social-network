@@ -477,13 +477,14 @@ func (db *DB) CreateStory(s models.Story) (int, error) {
 // Stories lists the live stories a viewer may see — their own, a public author's, or a private
 // author's they follow — with the viewer-relative `viewed` flag already folded in. A story is as
 // private as the account behind it: it reaches its author and the accepted followers of a private
-// author, never a stranger, so a private account's story cannot leak into the wider strip. Unseen
-// authors are listed before seen ones and each run is newest first, so a story that has just been
-// opened drops to the end. The flag rides a LEFT JOIN on `storyView` rather than a second query
-// per row, and the join is keyed on `(storyId, userId)` — the table's primary key — so it costs
-// one lookup per story and nothing when there are no views.
+// author, never a stranger, so a private account's story cannot leak into the wider strip. The
+// viewer's own stories come first, so their own tile reads the ring correctly however many other
+// authors they follow; the rest put unseen authors before seen ones and each run newest first, so
+// a story that has just been opened drops to the end. The flag rides a LEFT JOIN on `storyView`
+// rather than a second query per row, and the join is keyed on `(storyId, userId)` — the table's
+// primary key — so it costs one lookup per story and nothing when there are no views.
 func (db *DB) Stories(offset int, viewerID string) ([]models.Story, error) {
-	rows, err := db.Conn.Query(`SELECT s.storyId,s.userId,u.nickName,COALESCE(u.avatar,''),s.content,s.mediaUrl,s.mediaType,s.backgroundColor,s.createdAt,s.expiresAt,(v.userId IS NOT NULL),EXISTS(SELECT 1 FROM reaction r WHERE r.entityType='story' AND r.entityId=s.storyId AND r.userId=? AND r.score>0),(SELECT COUNT(*) FROM reaction r2 WHERE r2.entityType='story' AND r2.entityId=s.storyId AND r2.score>0) FROM story s JOIN user u ON u.userId=s.userId LEFT JOIN storyView v ON v.storyId=s.storyId AND v.userId=? WHERE s.expiresAt > datetime('now') AND (s.userId=? OR u.isPublic=1 OR EXISTS(SELECT 1 FROM follow f WHERE f.followerId=? AND f.followedId=s.userId)) ORDER BY (v.userId IS NOT NULL),s.createdAt DESC,s.storyId DESC LIMIT 30 OFFSET ?`, viewerID, viewerID, viewerID, viewerID, offset)
+	rows, err := db.Conn.Query(`SELECT s.storyId,s.userId,u.nickName,COALESCE(u.avatar,''),s.content,s.mediaUrl,s.mediaType,s.backgroundColor,s.createdAt,s.expiresAt,(v.userId IS NOT NULL),EXISTS(SELECT 1 FROM reaction r WHERE r.entityType='story' AND r.entityId=s.storyId AND r.userId=? AND r.score>0),(SELECT COUNT(*) FROM reaction r2 WHERE r2.entityType='story' AND r2.entityId=s.storyId AND r2.score>0) FROM story s JOIN user u ON u.userId=s.userId LEFT JOIN storyView v ON v.storyId=s.storyId AND v.userId=? WHERE s.expiresAt > datetime('now') AND (s.userId=? OR u.isPublic=1 OR EXISTS(SELECT 1 FROM follow f WHERE f.followerId=? AND f.followedId=s.userId)) ORDER BY (s.userId=?) DESC,(v.userId IS NOT NULL),s.createdAt DESC,s.storyId DESC LIMIT 30 OFFSET ?`, viewerID, viewerID, viewerID, viewerID, viewerID, offset)
 	if err != nil {
 		return nil, err
 	}
