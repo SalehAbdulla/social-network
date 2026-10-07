@@ -1,15 +1,17 @@
 'use client';
-import { useEffect, useRef, useState } from 'react';
-import { ChevronLeft, ChevronRight, Eye, MessageCircle, MoreVertical, Plus, Send, Trash2, X } from 'lucide-react';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { useRouter } from 'next/navigation';
+import { ChevronLeft, ChevronRight, MoreVertical, Plus, Trash2 } from 'lucide-react';
 import toast from 'react-hot-toast';
-import { type Story, type StoryReply as StoryReplyEntry, type StoryViewer as StoryViewerEntry, displayName, errorMessage, request, upload } from '../api/social';
+import { type Story, displayName, errorMessage, request, upload } from '../api/social';
 import { useDialogFocus } from '../lib/useDialogFocus';
 import { usePagedList } from '../lib/usePagedList';
-import { useResource } from '../lib/useResource';
 import { mediaImageProps } from '../lib/mediaVariants';
+import { authorHasUnseen, firstUnseenIndex, findPosition, groupStories, startPosition, type StoryGroup } from '../lib/storySequence';
 import { useBackend } from './BackendProvider';
-import Avatar from './Avatar';
 import LoadMore from './LoadMore';
+import StoryRing from './stories/StoryRing';
+import StoryViewer from './stories/StoryViewer';
 
 export function CreateStory({ close, saved }: { close: () => void; saved: () => void }) {
   const [text, setText] = useState('');
@@ -42,9 +44,15 @@ const STORIES_PER_PAGE = 30;
 const STORIES_KEY = '/stories';
 // The author's own expired stories: the same page size and offset shape, a different list.
 const ARCHIVE_KEY = '/stories/archive';
+// Which authors wore the glowing ring the last time the tray painted, for this session. The
+// viewer is its own route, so the tray unmounts while it is open and remounts on the way back; this
+// small memory lets a ring the reader has just watched cross-fade blue→grey instead of appearing
+// already grey. A full reload starts it empty, which is correct — nothing was watched this session.
+const lastUnseen = new Set<string>();
 
 export default function StoriesBar() {
   const { user } = useBackend();
+  const router = useRouter();
   const stories = usePagedList<Story, Story[]>({
     key: STORIES_KEY,
     pageQuery: page => `?offset=${(page - 1) * STORIES_PER_PAGE}`,
@@ -54,87 +62,146 @@ export default function StoriesBar() {
   });
   const strip = useRef<HTMLDivElement>(null);
   const [creating, setCreating] = useState(false);
-  const [viewing, setViewing] = useState<Story | null>(null);
-  const [deleting, setDeleting] = useState(false);
+  const [edges, setEdges] = useState({ left: false, right: false });
+  const drag = useRef({ active: false, startX: 0, startLeft: 0, moved: false });
   const reload = stories.reload;
-  // Opening a story is also the moment it stops being new: the ring turns immediately,
-  // because a round trip should not decide whether a ring the reader just opened stays lit.
-  // The write is best-effort — a mark that fails falls back to a reload, which puts the
-  // ring back where the server says it belongs rather than leaving a lie on screen.
-  function markViewed(storyId: number) {
-    stories.update(list => list.map(story => (story.storyId === storyId ? { ...story, viewed: true } : story)));
-    void request(`/stories/${storyId}/view`, 'POST').catch(() => reload());
-  }
-  function viewStory(story: Story) {
-    setViewing(story);
-    if (!story.viewed) markViewed(story.storyId);
-  }
-  function showNextStory() {
-    const items = stories.items;
-    const index = viewing ? items.findIndex(story => story.storyId === viewing.storyId) : -1;
-    if (index < 0) return;
-    // Running off the end of the loaded strip asks for the next page instead of
-    // closing the viewer, so a long story row can be watched end to end. A story the
-    // viewer advances into is being displayed, so it is marked seen the same way.
-    if (index < items.length - 1) viewStory(items[index + 1]);
-    else stories.loadMore();
-  }
-  function showPreviousStory() {
-    const items = stories.items;
-    const index = viewing ? items.findIndex(story => story.storyId === viewing.storyId) : -1;
-    if (index > 0) setViewing(items[index - 1]);
-  }
   // A background refresh would collapse the pages the reader scrolled through,
   // so it only runs while the strip still shows the newest stories.
   useEffect(() => {
     const timer = setInterval(() => { if (!strip.current || strip.current.scrollLeft === 0) reload(); }, 60000);
     return () => clearInterval(timer);
   }, [reload]);
-  return <section><div ref={strip} className="no-scrollbar flex gap-3 overflow-x-auto">
-    {/* Instagram leads the tray with the viewer's own entry: their face inside a dashed circle
-        with a plus on the rim and "Your story" under it, so the first thing in the strip is the
-        thing the reader can do rather than somebody else's story. The tray's numbers are the
-        `--story-*` tokens: a 56px ring, the face at the 48px it leaves inside it, a 16px plus on
-        the rim, and a 12px caption 4px under it. */}
-    <button type="button" onClick={() => setCreating(true)} className="flex w-[var(--story-item)] shrink-0 flex-col items-center gap-[var(--story-caption-gap)]">
-      <span className="relative flex size-[var(--story-ring)] items-center justify-center rounded-full border-2 border-dashed border-border bg-surface-2">
-        {user.avatar ? <img src={user.avatar} alt="" className="size-[var(--story-avatar)] rounded-full object-cover" /> : <span className="flex size-[var(--story-avatar)] items-center justify-center rounded-full bg-card text-lg font-semibold text-muted">{displayName(user).slice(0, 1).toUpperCase()}</span>}
-        <span className="absolute -bottom-0.5 -right-0.5 flex size-[var(--story-badge)] items-center justify-center rounded-full border-2 border-bg bg-blue-600 text-white"><Plus className="size-[var(--story-badge-icon)]" /></span>
-      </span>
-      <span className="w-full truncate text-center text-[length:var(--story-caption-size)] text-text">Your story</span>
-    </button>
-    {stories.items.map(story => <StoryTrayItem key={story.storyId} story={story} currentUserId={user.userId} onView={viewStory} onDelete={async () => { await request(`/stories/${story.storyId}`, 'DELETE'); reload(); if (viewing?.storyId === story.storyId) setViewing(null); }} />)}
-    <LoadMore compact className="h-[var(--story-ring)] w-16" label="Load more stories" endLabel={null} loading={stories.loadingMore} hasMore={stories.hasMore} onLoadMore={stories.loadMore} />
-  </div>
+
+  // One ring per author, the authors with something new first — Instagram's tray order. The
+  // viewer's own stories are held out here: their own tile carries them, so nobody appears twice
+  // and the own ring can never be mistaken for "new".
+  const groups = groupStories(stories.items.filter(story => story.userId !== user.userId));
+  const ordered = [
+    ...groups.filter(group => authorHasUnseen(group.stories)),
+    ...groups.filter(group => !authorHasUnseen(group.stories)),
+  ];
+  const ownStories = stories.items.filter(story => story.userId === user.userId).sort((a, b) => a.storyId - b.storyId);
+  const ownHead = ownStories.length ? ownStories[ownStories.length - 1] : null;
+
+  // Rings that were unseen last paint but are seen now (just watched) stay glowing for one frame,
+  // so the component's own cross-fade eases them to grey rather than snapping.
+  const unseenIds = groups.filter(group => authorHasUnseen(group.stories)).map(group => group.userId);
+  const [fading, setFading] = useState<string[]>([]);
+  useEffect(() => {
+    if (!groups.length) return;
+    const watched = groups.filter(group => !authorHasUnseen(group.stories) && lastUnseen.has(group.userId)).map(group => group.userId);
+    lastUnseen.clear();
+    for (const id of unseenIds) lastUnseen.add(id);
+    if (watched.length) { const reveal = () => setFading(watched); reveal(); }
+  }, [groups, unseenIds]);
+  useEffect(() => {
+    if (!fading.length) return;
+    const clear = () => setFading([]);
+    const frame = requestAnimationFrame(clear);
+    return () => cancelAnimationFrame(frame);
+  }, [fading]);
+  const fadingSet = new Set(fading);
+
+  function openGroup(group: StoryGroup<Story>) {
+    const story = group.stories[firstUnseenIndex(group.stories)];
+    router.push(`/stories/${story.nickname}/${story.storyId}`);
+  }
+
+  // The left/right fades and the chevrons follow the scroll position and the content width.
+  const syncEdges = useCallback(() => {
+    const el = strip.current; if (!el) return;
+    setEdges({ left: el.scrollLeft > 2, right: el.scrollLeft + el.clientWidth < el.scrollWidth - 2 });
+  }, []);
+  useEffect(() => { syncEdges(); }, [syncEdges, stories.items.length]);
+  useEffect(() => {
+    const el = strip.current; if (!el) return;
+    const observer = new ResizeObserver(syncEdges);
+    observer.observe(el);
+    window.addEventListener('resize', syncEdges);
+    return () => { observer.disconnect(); window.removeEventListener('resize', syncEdges); };
+  }, [syncEdges]);
+
+  function nudge(direction: number) {
+    const el = strip.current; if (!el) return;
+    el.scrollBy({ left: direction * Math.max(160, el.clientWidth * 0.7), behavior: 'smooth' });
+  }
+  function onTrayKey(event: React.KeyboardEvent) {
+    if (event.key === 'ArrowRight') { event.preventDefault(); nudge(1); }
+    else if (event.key === 'ArrowLeft') { event.preventDefault(); nudge(-1); }
+  }
+  // Mouse drag scrolls the strip; a drag suppresses the click it ends on, so releasing over a
+  // ring never opens it. Touch scrolls natively (the strip sets `touch-action: pan-x`).
+  function onDragStart(event: React.PointerEvent) {
+    if (event.pointerType !== 'mouse') return;
+    const el = strip.current; if (!el) return;
+    drag.current = { active: true, startX: event.clientX, startLeft: el.scrollLeft, moved: false };
+  }
+  function onDragMove(event: React.PointerEvent) {
+    const el = strip.current; const state = drag.current;
+    if (!el || !state.active) return;
+    const delta = event.clientX - state.startX;
+    if (Math.abs(delta) > 4) state.moved = true;
+    if (state.moved) el.scrollLeft = state.startLeft - delta;
+  }
+  function onDragEnd() { drag.current.active = false; }
+  function onTrayClickCapture(event: React.MouseEvent) {
+    if (drag.current.moved) { event.preventDefault(); event.stopPropagation(); drag.current.moved = false; }
+  }
+
+  return <section className="relative">
+    <div
+      ref={strip}
+      tabIndex={0}
+      role="group"
+      aria-label="Stories"
+      className="story-tray no-scrollbar flex select-none items-center gap-3 overflow-x-auto"
+      onScroll={syncEdges}
+      onKeyDown={onTrayKey}
+      onPointerDown={onDragStart}
+      onPointerMove={onDragMove}
+      onPointerUp={onDragEnd}
+      onPointerLeave={onDragEnd}
+      onClickCapture={onTrayClickCapture}
+    >
+      {/* Instagram leads the tray with the viewer's own entry: their face inside a dashed circle
+          with a plus on the rim and "Your story" under it, so the first thing in the strip is the
+          thing the reader can do rather than somebody else's story. Once they have a live story of
+          their own the dashed circle becomes their own ring — always the seen style, because you
+          are not surprised by your own story — and the "+" badge stays on the rim. The tray's
+          numbers are the `--story-*` tokens: a 56px ring, the face at the 48px it leaves inside
+          it, a 16px plus on the rim, and a 12px caption 4px under it. */}
+      <button type="button" onClick={() => (ownHead ? openGroup({ userId: user.userId, stories: ownStories }) : setCreating(true))} aria-label={ownHead ? `${displayName(user)}, your story` : 'Add to your story'} className="story-tray-item flex w-[var(--story-item)] shrink-0 flex-col items-center gap-[var(--story-caption-gap)]">
+        <span className="relative flex shrink-0">
+          {ownHead
+            ? <StoryRing name={displayName(user)} avatarUrl={user.avatar} size={56} seen own marker={false} />
+            : <span className="flex size-[var(--story-ring)] items-center justify-center rounded-full border-2 border-dashed border-border bg-surface-2">
+                {user.avatar ? <img src={user.avatar} alt="" className="size-[var(--story-avatar)] rounded-full object-cover" /> : <span className="flex size-[var(--story-avatar)] items-center justify-center rounded-full bg-card text-lg font-semibold text-muted">{displayName(user).slice(0, 1).toUpperCase()}</span>}
+              </span>}
+          <span className="absolute -bottom-0.5 -right-0.5 flex size-[var(--story-badge)] items-center justify-center rounded-full border-2 border-bg bg-blue-600 text-white"><Plus className="size-[var(--story-badge-icon)]" /></span>
+        </span>
+        <span className="story-tray-label w-full truncate text-center text-[length:var(--story-caption-size)] text-text">Your story</span>
+      </button>
+      {ordered.map(group => <StoryTrayItem key={group.userId} group={group} forceUnseen={fadingSet.has(group.userId)} onView={() => openGroup(group)} />)}
+      <LoadMore compact className="h-[var(--story-ring)] w-16" label="Load more stories" endLabel={null} loading={stories.loadingMore} hasMore={stories.hasMore} onLoadMore={stories.loadMore} />
+    </div>
+    {edges.left && <button type="button" className="story-tray-nav" data-side="left" aria-label="Scroll stories left" onClick={() => nudge(-1)}><ChevronLeft aria-hidden="true" /></button>}
+    {edges.right && <button type="button" className="story-tray-nav" data-side="right" aria-label="Scroll stories right" onClick={() => nudge(1)}><ChevronRight aria-hidden="true" /></button>}
     {creating && <CreateStory close={() => setCreating(false)} saved={reload} />}
-    {viewing && <StoryViewer key={viewing.storyId} story={viewing} canDelete={viewing.userId === user.userId} close={() => setViewing(null)} onPrevious={showPreviousStory} onNext={showNextStory} hasPrevious={stories.items.findIndex(story => story.storyId === viewing.storyId) > 0} hasNext={stories.items.findIndex(story => story.storyId === viewing.storyId) < stories.items.length - 1 || stories.hasMore} deleting={deleting} onDelete={async () => { setDeleting(true); try { await request(`/stories/${viewing.storyId}`, 'DELETE'); setViewing(null); reload(); } catch (error) { toast.error(errorMessage(error)); } finally { setDeleting(false); } }} />}
   </section>;
 }
 
-// One entry in the stories tray: the author's face inside a ring, their handle under it, the way
-// Instagram draws the strip. A story the viewer has not opened wears the brand gradient and one
-// they have drops to the border colour, so "new" reads at a glance without a second palette to
-// maintain. `data-story-ring` carries that state — a gradient has no text to assert on — and
-// `data-story-id` names the item, which is what the browser suite clicks; the whole item is the
-// target so a tap anywhere on the circle or the label opens the story.
-function StoryTrayItem({ story, currentUserId, onView, onDelete }: { story: Story; currentUserId: string; onView: (story: Story) => void; onDelete: () => Promise<void> }) {
-  const [menuOpen, setMenuOpen] = useState(false);
-  const [deleting, setDeleting] = useState(false);
-  async function remove() {
-    setDeleting(true);
-    try { await onDelete(); toast.success('Story deleted'); } catch (error) { toast.error(errorMessage(error)); } finally { setDeleting(false); setMenuOpen(false); }
-  }
-  return <div data-story-id={story.storyId} onClick={() => onView(story)} className="group flex w-[var(--story-item)] shrink-0 cursor-pointer flex-col items-center gap-[var(--story-caption-gap)]">
-    <span data-story-ring={story.viewed ? 'seen' : 'unseen'} className={`flex size-[var(--story-ring)] items-center justify-center rounded-full p-[2px] transition active:scale-95 ${story.viewed ? 'story-ring-seen' : 'story-ring'}`}>
-      {/* A collar in the page colour keeps the ring off the face, so both stay readable over any
-          story's background. */}
-      <span className="flex size-full items-center justify-center rounded-full bg-bg p-[2px]">
-        {story.avatar ? <img src={story.avatar} alt="" className="size-[var(--story-avatar)] rounded-full object-cover" /> : <span className="flex size-[var(--story-avatar)] items-center justify-center rounded-full bg-surface-2 text-lg font-semibold text-muted">{story.nickname.slice(0, 1).toUpperCase()}</span>}
-      </span>
-    </span>
-    <span className="w-full truncate text-center text-[length:var(--story-caption-size)] text-text">{story.nickname}</span>
-    {story.userId === currentUserId && <div className="relative -mt-1" onClick={event => event.stopPropagation()}><button aria-label="Story options" onClick={() => setMenuOpen(value => !value)} className="text-muted transition hover:text-text"><MoreVertical size={16} /></button>{menuOpen && <button disabled={deleting} onClick={() => void remove()} className="absolute right-0 top-full z-20 mt-1 flex items-center gap-1 rounded bg-card px-3 py-2 text-xs text-red-600 shadow"><Trash2 size={14} />Delete</button>}</div>}
-  </div>;
+// One ring in the stories tray, drawn for an author: their newest story's face inside the shared
+// ring and their handle under it. A ring nobody has opened wears the gradient and its glow; once
+// every story behind it is seen it drops to the muted ring, and the label brightens for "new".
+// `data-story-id` names the newest story — what the browser suite clicks — and the whole item is
+// the target, so a tap on the circle or the label opens the viewer route.
+function StoryTrayItem({ group, forceUnseen, onView }: { group: StoryGroup<Story>; forceUnseen: boolean; onView: () => void }) {
+  const head = group.stories[group.stories.length - 1];
+  const unseen = forceUnseen || authorHasUnseen(group.stories);
+  return <button type="button" data-story-id={head.storyId} onClick={onView} aria-label={`${head.nickname}, ${unseen ? 'new story' : 'story viewed'}`} className="story-tray-item flex w-[var(--story-item)] shrink-0 flex-col items-center gap-[var(--story-caption-gap)]">
+    <StoryRing name={head.nickname} avatarUrl={head.avatar} size={56} seen={!unseen} />
+    <span className={`story-tray-label w-full truncate text-center text-[length:var(--story-caption-size)] ${unseen ? 'font-semibold text-text' : 'text-muted'}`}>{head.nickname}</span>
+  </button>;
 }
 
 // One story in the author's archive, where Instagram shows a grid of thumbnails rather than a
@@ -152,76 +219,18 @@ function StoryCard({ story, currentUserId, onView, onDelete }: { story: Story; c
     {story.mediaType === 'image' && <img {...mediaImageProps(story.mediaUrl, '180px')} alt="Story preview" className="absolute inset-0 h-full w-full object-cover opacity-75 transition duration-500 hover:scale-110" />}
     {story.mediaType === 'video' && <video src={story.mediaUrl} muted className="absolute inset-0 h-full w-full object-cover opacity-75" />}
     <div className="absolute inset-0 bg-black/15" />
-    {/* The author avatar wears the seen/unseen ring. `data-story-ring` carries the state
-        the ring is drawn from, which is also what the browser suite reads — the way it
-        reads `data-message-actions` — because a gradient has no text to assert on. The
-        ring keeps the avatar's old drop shadow, and the avatar a white collar, so both the
-        ring and the face stay readable over any story's background colour. */}
-    <span data-story-ring={story.viewed ? 'seen' : 'unseen'} className={`absolute left-3 top-3 z-10 flex rounded-full p-[2px] shadow ${story.viewed ? 'story-ring-seen' : 'story-ring'}`}>
-      {story.avatar ? <img src={story.avatar} alt="" className="size-8 rounded-full border-2 border-white object-cover" /> : <span className="flex size-8 items-center justify-center rounded-full bg-white/25 text-xs font-semibold">{story.nickname.slice(0, 1).toUpperCase()}</span>}
-    </span>
+    {/* The archive tile wears the same ring the tray does, so "new" reads identically here. */}
+    <span className="absolute left-3 top-3 z-10"><StoryRing name={story.nickname} avatarUrl={story.avatar} size={34} seen={story.viewed} /></span>
     {story.mediaType === 'text' && <p className="absolute left-3 right-3 top-16 z-10 line-clamp-4 text-sm text-white/80">{story.content}</p>}
     <span className="absolute inset-x-0 bottom-0 z-10 truncate bg-black/40 p-2 text-xs">{story.nickname}</span>
     {story.userId === currentUserId && <div className="absolute right-2 top-2 z-20" onClick={event => event.stopPropagation()}><button aria-label="Story options" onClick={() => setMenuOpen(value => !value)} className="text-white"><MoreVertical size={18} /></button>{menuOpen && <button disabled={deleting} onClick={() => void remove()} className="absolute right-0 mt-1 flex items-center gap-1 rounded bg-white px-3 py-2 text-xs text-red-600 shadow"><Trash2 size={14} />Delete</button>}</div>}
   </div>;
 }
 
-function StoryViewer({ story, canDelete, close, onPrevious, onNext, hasPrevious, hasNext, deleting, onDelete }: { story: Story; canDelete: boolean; close: () => void; onPrevious: () => void; onNext: () => void; hasPrevious: boolean; hasNext: boolean; deleting: boolean; onDelete: () => Promise<void> }) {
-  const [progress, setProgress] = useState(0);
-  // The viewer is a dialog too: Escape closes it and the tab cycle is its own.
-  const dialog = useDialogFocus<HTMLDivElement>(close);
-  // "Seen by" belongs to the author alone, so the list is fetched only for them — the endpoint
-  // enforces the same rule, and not asking is the cheaper half of it.
-  const { user } = useBackend();
-  const isAuthor = story.userId === user.userId;
-  const [showViewers, setShowViewers] = useState(false);
-  const viewers = useResource<StoryViewerEntry[]>(`/stories/${story.storyId}/viewers`, isAuthor);
-  // Replies belong to the author alone too, the same shape as "seen by": the list is fetched
-  // only for them, and the endpoint enforces the same rule. A reader is offered the reply box
-  // instead — the other half of the same surface.
-  const [showReplies, setShowReplies] = useState(false);
-  const replies = useResource<StoryReplyEntry[]>(`/stories/${story.storyId}/replies`, isAuthor);
-  const [reply, setReply] = useState('');
-  const [sending, setSending] = useState(false);
-  async function sendReply(event: React.FormEvent) {
-    event.preventDefault();
-    const content = reply.trim();
-    if (!content || sending) return;
-    setSending(true);
-    try { await request(`/stories/${story.storyId}/reply`, 'POST', { content }); setReply(''); toast.success('Reply sent'); }
-    catch (error) { toast.error(errorMessage(error)); }
-    finally { setSending(false); }
-  }
-  useEffect(() => {
-    if (story.mediaType === 'video') return;
-    const interval = window.setInterval(() => setProgress(value => Math.min(value + 1, 100)), 100);
-    const timeout = window.setTimeout(onNext, 10000);
-    return () => { window.clearInterval(interval); window.clearTimeout(timeout); };
-  }, [story, onNext]);
-  return <div ref={dialog} tabIndex={-1} className="fixed inset-0 z-50 flex items-center justify-center bg-black/90 p-4" role="dialog" aria-modal="true" aria-label="Story"><div className="absolute left-0 top-0 h-1 bg-white transition-all" style={{ width: `${progress}%` }} /><div className="absolute left-4 top-4 z-10 flex items-center gap-3 rounded bg-black/50 p-3 text-white"><span className="font-medium">{story.nickname}</span></div><button onClick={close} aria-label="Close story" className="absolute right-4 top-4 z-10 text-white"><X size={30} /></button><button onClick={onPrevious} disabled={!hasPrevious} aria-label="Previous story" className="absolute left-4 z-10 rounded-full bg-black/50 p-3 text-white transition hover:bg-black/70 disabled:cursor-not-allowed disabled:opacity-30"><ChevronLeft size={28} /></button><button onClick={onNext} disabled={!hasNext} aria-label="Next story" className="absolute right-4 z-10 rounded-full bg-black/50 p-3 text-white transition hover:bg-black/70 disabled:cursor-not-allowed disabled:opacity-30"><ChevronRight size={28} /></button><div className="flex h-[75vh] w-full max-w-2xl items-center justify-center overflow-hidden rounded-xl" style={{ backgroundColor: story.backgroundColor }}>{story.mediaType === 'image' ? <img src={story.mediaUrl} alt="Story" className="max-h-full max-w-full object-contain" /> : story.mediaType === 'video' ? <video src={story.mediaUrl} controls autoPlay playsInline onEnded={onNext} className="max-h-full max-w-full" /> : <p className="whitespace-pre-wrap break-words p-8 text-center text-2xl text-white">{story.content}</p>}</div>{isAuthor && <div className="absolute bottom-8 right-8 z-10 flex flex-col items-end gap-2">
-      {showReplies && <div className="max-h-64 w-72 overflow-y-auto rounded-lg bg-white p-2 text-slate-800 shadow-lg">
-        {replies.loading && <p className="p-2 text-sm text-slate-500">Loading…</p>}
-        {!replies.loading && !replies.data?.length && <p className="p-2 text-sm text-slate-500">No replies yet.</p>}
-        {(replies.data || []).map(entry => <div key={entry.replyId} className="flex items-start gap-2 rounded p-2 hover:bg-slate-50"><Avatar name={entry.nickname} avatarUrl={entry.avatar} size={28} /><div className="min-w-0"><p className="truncate text-xs text-slate-500">{entry.nickname}</p><p className="break-words text-sm">{entry.content}</p></div></div>)}
-      </div>}
-      {showViewers && <div className="max-h-64 w-64 overflow-y-auto rounded-lg bg-white p-2 text-slate-800 shadow-lg">
-        {viewers.loading && <p className="p-2 text-sm text-slate-500">Loading…</p>}
-        {!viewers.loading && !viewers.data?.length && <p className="p-2 text-sm text-slate-500">No views yet.</p>}
-        {(viewers.data || []).map(viewer => <div key={viewer.userId} className="flex items-center gap-2 rounded p-2 hover:bg-slate-50"><Avatar name={viewer.nickname} avatarUrl={viewer.avatar} size={28} /><span className="min-w-0 truncate text-sm">{viewer.nickname}</span></div>)}
-      </div>}
-      <div className="flex gap-2">
-        <button type="button" aria-expanded={showReplies} onClick={() => setShowReplies(value => !value)} className="flex items-center gap-2 rounded bg-black/50 px-4 py-2 text-sm text-white transition hover:bg-black/70"><MessageCircle size={16} aria-hidden="true" />Replies {replies.data?.length ?? 0}</button>
-        <button type="button" aria-expanded={showViewers} onClick={() => setShowViewers(value => !value)} className="flex items-center gap-2 rounded bg-black/50 px-4 py-2 text-sm text-white transition hover:bg-black/70"><Eye size={16} aria-hidden="true" />Seen by {viewers.data?.length ?? 0}</button>
-      </div>
-    </div>}{!isAuthor && <form onSubmit={sendReply} className="absolute bottom-8 left-1/2 z-10 flex w-[min(90%,28rem)] -translate-x-1/2 items-center gap-2 rounded-lg bg-black/50 p-1 pl-4">
-      <input value={reply} onChange={event => setReply(event.target.value)} maxLength={1000} placeholder="Reply to this story…" aria-label="Reply to story" className="min-w-0 flex-1 bg-transparent py-2 text-sm text-white placeholder:text-white/70 outline-none" />
-      <button type="submit" disabled={sending || !reply.trim()} aria-label="Send reply" className="rounded-full bg-white p-2 text-slate-900 disabled:opacity-40"><Send size={16} /></button>
-    </form>}{canDelete && <button disabled={deleting} onClick={() => void onDelete()} className="absolute bottom-8 flex items-center gap-2 rounded bg-white px-4 py-2 text-sm text-red-600"><Trash2 size={16} />{deleting ? 'Deleting...' : 'Delete story'}</button>}</div>;
-}
-
 // The author's own expired stories — the ones that have left the strip and would otherwise
 // disappear. It is the caller's own list by construction (the endpoint answers only the signed-in
-// account's stories), so there is nothing to filter or guard here.
+// account's stories), so there is nothing to filter or guard here. Opening one hands the whole
+// archive to the same viewer the strip uses, as a single author's carousel.
 export function StoryArchive({ close }: { close: () => void }) {
   const { user } = useBackend();
   const archived = usePagedList<Story, Story[]>({
@@ -231,27 +240,22 @@ export function StoryArchive({ close }: { close: () => void }) {
     normalize: raw => ({ items: raw }),
     keyOf: story => story.storyId,
   });
-  const [viewing, setViewing] = useState<Story | null>(null);
-  const [deleting, setDeleting] = useState(false);
+  const [selected, setSelected] = useState<number | null>(null);
   // One overlay at a time: while a story is open the viewer owns the keyboard, so this dialog's
   // trap is off and Escape closes the story rather than the archive behind it.
-  const dialog = useDialogFocus<HTMLDivElement>(close, { enabled: !viewing });
+  const dialog = useDialogFocus<HTMLDivElement>(close, { enabled: selected === null });
   const items = archived.items;
-  const index = viewing ? items.findIndex(story => story.storyId === viewing.storyId) : -1;
   async function remove(story: Story) {
-    setDeleting(true);
-    try {
-      await request(`/stories/${story.storyId}`, 'DELETE');
-      if (viewing?.storyId === story.storyId) setViewing(null);
-      archived.update(list => list.filter(item => item.storyId !== story.storyId));
-    } finally { setDeleting(false); }
+    await request(`/stories/${story.storyId}`, 'DELETE');
+    archived.update(list => list.filter(item => item.storyId !== story.storyId));
   }
-  if (viewing) return <StoryViewer key={viewing.storyId} story={viewing} canDelete close={() => setViewing(null)}
-    onPrevious={() => { if (index > 0) setViewing(items[index - 1]); }}
-    onNext={() => { if (index >= 0 && index < items.length - 1) setViewing(items[index + 1]); else void archived.loadMore(); }}
-    hasPrevious={index > 0} hasNext={index >= 0 && (index < items.length - 1 || archived.hasMore)}
-    deleting={deleting}
-    onDelete={async () => { try { await remove(viewing); } catch (error) { toast.error(errorMessage(error)); } }} />;
+  const groups: StoryGroup<Story>[] = items.length ? [{ userId: user.userId, stories: [...items].sort((a, b) => a.storyId - b.storyId) }] : [];
+  const start = (selected !== null ? findPosition(groups, selected) : null) ?? startPosition(groups);
+  if (selected !== null && start) return <StoryViewer
+    groups={groups}
+    start={start}
+    onClose={() => setSelected(null)}
+    onDelete={async storyId => { const story = items.find(item => item.storyId === storyId); if (story) await remove(story); setSelected(null); }} />;
   return <div ref={dialog} tabIndex={-1} role="dialog" aria-modal="true" aria-label="Story archive" className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/70 p-4">
     <div className="my-8 w-full max-w-3xl space-y-4 rounded-xl bg-white p-5">
       <div className="flex items-start justify-between gap-3">
@@ -265,7 +269,7 @@ export function StoryArchive({ close }: { close: () => void }) {
         ? <p role="status" className="py-8 text-center text-sm text-slate-500">Loading your archive…</p>
         : archived.items.length === 0
           ? <p className="py-8 text-center text-sm text-slate-500">No archived stories yet. A story arrives here once its 24 hours are up.</p>
-          : <div className="flex flex-wrap gap-4">{archived.items.map(story => <StoryCard key={story.storyId} story={story} currentUserId={user.userId} onView={setViewing} onDelete={() => remove(story)} />)}</div>}
+          : <div className="flex flex-wrap gap-4">{archived.items.map(story => <StoryCard key={story.storyId} story={story} currentUserId={user.userId} onView={item => setSelected(item.storyId)} onDelete={() => remove(story)} />)}</div>}
       {archived.items.length > 0 && <LoadMore loading={archived.loadingMore} hasMore={archived.hasMore} onLoadMore={archived.loadMore} label="Load more archived stories" />}
     </div>
   </div>;

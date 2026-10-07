@@ -7,6 +7,15 @@ import { useDialogFocus } from '../lib/useDialogFocus';
 import { useBackend } from './BackendProvider';
 import ImagePicker from './ImagePicker';
 
+/** The optional public contact fields, in the order the edit form draws them. Each is a
+ *  `[value key, public switch key, label, input type, maxLength, placeholder]` row, so the three
+ *  inputs and the "show on my profile" switch that governs each are one map. */
+const CONTACT_FIELDS = [
+  ['website', 'showWebsite', 'Website', 'url', 200, 'https://example.com'],
+  ['contactEmail', 'showContactEmail', 'Email', 'email', 254, 'you@example.com'],
+  ['phone', 'showPhone', 'Phone', 'tel', 30, '+1 555 000 0000'],
+] as const;
+
 export default function EditProfile({ profile, close, saved }: { profile: SocialUser; close: () => void; saved: () => void }) {
   const { refreshUser } = useBackend();
   // Same keyboard contract as the navigation drawer: focus lands on the first
@@ -24,6 +33,14 @@ export default function EditProfile({ profile, close, saved }: { profile: Social
   }
   return <div ref={dialog} tabIndex={-1} className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-black/50 p-4" role="dialog" aria-modal="true" aria-label="Edit profile"><form onSubmit={save} className="max-h-[90vh] w-full max-w-xl overflow-y-auto rounded-xl bg-white p-6 space-y-4"><h2 className="text-xl font-bold">Edit profile</h2>
     {(['firstName', 'lastName', 'nickname', 'location'] as const).map(field => <label key={field} className="block text-sm font-medium">{{ firstName: 'First name', lastName: 'Last name', nickname: 'Username', location: 'Location' }[field]}<input required={field !== 'location'} minLength={field === 'nickname' ? 2 : 1} maxLength={field === 'location' ? 50 : field === 'nickname' ? 33 : 50} pattern={field === 'nickname' ? '[a-zA-Z0-9_]{2,33}' : undefined} value={form[field]} onChange={event => setForm({ ...form, [field]: event.target.value })} className="mt-1 w-full rounded-lg border border-slate-200 p-2" /></label>)}
+    <div className="space-y-3 rounded-lg border border-slate-200 p-3">
+      <p className="text-sm font-semibold">Contact info <span className="font-normal text-slate-400">(optional)</span></p>
+      <p className="text-xs text-slate-400">Only what you switch on is shown to other people.</p>
+      {CONTACT_FIELDS.map(([field, shown, label, type, maxLength, placeholder]) => <div key={field}>
+        <label className="block text-sm">{label}<input type={type} maxLength={maxLength} placeholder={placeholder} value={form[field]} onChange={event => setForm({ ...form, [field]: event.target.value })} className="mt-1 w-full rounded-lg border border-slate-200 p-2" /></label>
+        <label className="mt-1 flex items-center gap-2 text-xs text-slate-500"><input type="checkbox" checked={!!form[field] && form[shown]} disabled={!form[field]} onChange={event => setForm({ ...form, [shown]: event.target.checked })} />Show on my profile</label>
+      </div>)}
+    </div>
     <label className="block text-sm font-medium">Bio<textarea maxLength={1000} rows={3} value={form.bio} onChange={event => setForm({ ...form, bio: event.target.value })} className="mt-1 w-full rounded-lg border border-slate-200 p-2" /></label>
     <div><span className="block text-sm font-medium">Profile photo</span><div className="mt-1"><ImagePicker files={avatar} onChange={setAvatar} max={1} disabled={busy} purpose="avatar" /></div></div>
     <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={form.isPublic} onChange={event => setForm({ ...form, isPublic: event.target.checked })} />Public profile</label>

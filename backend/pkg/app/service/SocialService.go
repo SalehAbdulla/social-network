@@ -1,6 +1,8 @@
 package service
 
 import (
+	"net/mail"
+	"net/url"
 	"regexp"
 	"strings"
 	"unicode/utf8"
@@ -14,6 +16,11 @@ type SocialService struct{ Repo *repositories.DB }
 
 var nicknamePattern = regexp.MustCompile(`^[a-z0-9_]{2,33}$`)
 var colorPattern = regexp.MustCompile(`^#[0-9a-fA-F]{6}$`)
+
+// phonePattern keeps a published phone number to the characters a `tel:` link can carry, with an
+// optional leading `+` for a country code. It is deliberately loose — formatting a number is the
+// user's choice, not this service's — and only rejects input that could not be dialled.
+var phonePattern = regexp.MustCompile(`^\+?[0-9 ().\-]{5,29}$`)
 
 func (s *SocialService) ValidateMedia(userID, url, kind string) error {
 	if url == "" {
@@ -40,11 +47,35 @@ func (s *SocialService) UpdateProfile(u models.SocialUser) (models.SocialUser, e
 	u.Location = strings.TrimSpace(u.Location)
 	u.Nickname = strings.ToLower(strings.TrimSpace(u.Nickname))
 	u.FirstName, u.LastName = strings.TrimSpace(u.FirstName), strings.TrimSpace(u.LastName)
-	if !nicknamePattern.MatchString(u.Nickname) || u.FirstName == "" || u.LastName == "" || utf8.RuneCountInString(u.FirstName) > 50 || utf8.RuneCountInString(u.LastName) > 50 || utf8.RuneCountInString(u.Bio) > 1000 || utf8.RuneCountInString(u.Location) > 50 {
+	// The three public contact fields are all optional, so empty simply means "not offered".
+	// A website typed without a scheme is completed to https so the profile can link it as it
+	// stands; a supplied email and phone have to be well-formed, or a viewer who clicks Contact
+	// would be handed a dead `mailto:`/`tel:` target.
+	u.Website = strings.TrimSpace(u.Website)
+	u.ContactEmail = strings.TrimSpace(u.ContactEmail)
+	u.Phone = strings.TrimSpace(u.Phone)
+	if u.Website != "" && !strings.HasPrefix(u.Website, "http://") && !strings.HasPrefix(u.Website, "https://") {
+		u.Website = "https://" + u.Website
+	}
+	if !nicknamePattern.MatchString(u.Nickname) || u.FirstName == "" || u.LastName == "" || utf8.RuneCountInString(u.FirstName) > 50 || utf8.RuneCountInString(u.LastName) > 50 || utf8.RuneCountInString(u.Bio) > 1000 || utf8.RuneCountInString(u.Location) > 50 || utf8.RuneCountInString(u.Website) > 200 || utf8.RuneCountInString(u.ContactEmail) > 254 || utf8.RuneCountInString(u.Phone) > 30 {
 		return u, backend.ErrBadRequest
 	}
-	for _, url := range []string{u.Avatar, u.CoverPhoto} {
-		if err := s.ValidateMedia(u.UserID, url, "image"); err != nil {
+	if u.Website != "" {
+		parsed, err := url.Parse(u.Website)
+		if err != nil || parsed.Host == "" || (parsed.Scheme != "http" && parsed.Scheme != "https") {
+			return u, backend.ErrBadRequest
+		}
+	}
+	if u.ContactEmail != "" {
+		if _, err := mail.ParseAddress(u.ContactEmail); err != nil {
+			return u, backend.ErrBadRequest
+		}
+	}
+	if u.Phone != "" && !phonePattern.MatchString(u.Phone) {
+		return u, backend.ErrBadRequest
+	}
+	for _, asset := range []string{u.Avatar, u.CoverPhoto} {
+		if err := s.ValidateMedia(u.UserID, asset, "image"); err != nil {
 			return u, err
 		}
 	}

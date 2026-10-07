@@ -1,0 +1,3 @@
+ALTER TABLE user DROP COLUMN phone;
+ALTER TABLE user DROP COLUMN contactEmail;
+ALTER TABLE user DROP COLUMN website;

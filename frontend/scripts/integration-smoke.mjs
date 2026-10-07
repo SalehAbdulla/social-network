@@ -1002,41 +1002,34 @@ try {
   await button(dummy, 'Share story');
   await until(dummy, `!document.querySelector('[role="dialog"]')`, 'the story composer closes');
   storyId = (await api(dummy, '/stories')).find(story => story.content === `Browser story ${stamp}`).storyId;
-  // The strip is a tray of rings, not cards with the caption on them, so the proof the story
-  // landed is its own item in the tray rather than its text appearing on the page.
+  // The strip is a tray of rings. A just-created story is the author's own, and an own ring is
+  // always the seen style, so the "unseen" proof is borrowed from a reader who has not opened it.
   await until(dummy, `!!document.querySelector('[data-story-id="${storyId}"]')`, 'the story joins the tray');
-  // Another account opens it, so the author's "seen by" list has someone to name.
-  await api(alex, `/stories/${storyId}/view`, 'POST');
-  // A story nobody has opened wears the unseen (gradient) ring...
-  assert.equal(await evaluate(dummy, `document.querySelector('[data-story-ring]')?.dataset.storyRing`), 'unseen', 'a fresh story wears the unseen ring');
-  // ...and opening it is what turns the ring and records the view for this reader alone.
-  await evaluate(dummy, `document.querySelector('[data-story-ring]').closest('div').click()`);
-  await until(dummy, `document.querySelector('[role="dialog"][aria-label="Story"]') !== null`, 'the story opens');
-  assert.equal(await evaluate(dummy, `document.querySelector('[data-story-ring]')?.dataset.storyRing`), 'seen', 'opening a story turns its ring');
-  // A story's author — and only the author — can see who opened it. Alex's API view above is
-  // what the count reports; a reader's own viewer would not be offered the list at all.
-  await until(dummy, `[...document.querySelectorAll('button')].some(button => button.textContent.trim() === 'Seen by 1')`, 'the author is offered the viewer count');
-  await button(dummy, 'Seen by 1');
-  await until(dummy, `document.querySelector('[role="dialog"][aria-label="Story"]').innerText.includes('@alexdemo')`, 'the seen-by list names the viewer');
-  console.log('PASS: a story shows its author who has seen it');
-  await evaluate(dummy, `document.querySelector('button[aria-label="Close story"]').click()`);
-  await until(dummy, `document.querySelector('[role="dialog"]') === null`, 'the story closes');
-  assert.equal((await api(dummy, '/stories')).find(story => story.storyId === storyId).viewed, true, 'the view is recorded for this reader');
-  // A reader replies through the story view, and its author — and only its author — reads it back
-  // in the story's own replies panel, the sibling of the seen-by one.
   await navigate(alex, '/');
-  await until(alex, `!!document.querySelector('[data-story-id="${storyId}"]')`, 'Alex sees the story in the tray');
+  await until(alex, `document.querySelector('[data-story-id="${storyId}"] [data-story-ring]')?.dataset.storyRing === 'unseen'`, 'a fresh story wears the unseen ring for a reader');
+  // Opening it is what turns the ring and records the view for this reader alone.
   await evaluate(alex, `document.querySelector('[data-story-id="${storyId}"]').click()`);
+  await until(alex, `document.querySelector('[role="dialog"][aria-label="Story"]') !== null`, 'the story opens');
   await until(alex, `!!document.querySelector('input[aria-label="Reply to story"]')`, 'a reader is offered the reply box');
   await fill(alex, 'input[aria-label="Reply to story"]', `Browser reply ${stamp}`);
   await evaluate(alex, `document.querySelector('button[aria-label="Send reply"]').click()`);
   await until(alex, `document.querySelector('input[aria-label="Reply to story"]').value === ''`, 'the reply is sent');
   await evaluate(alex, `document.querySelector('button[aria-label="Close story"]').click()`);
   await until(alex, `document.querySelector('[role="dialog"]') === null`, 'the reader closes the story');
+  assert.equal((await api(alex, '/stories')).find(story => story.storyId === storyId).viewed, true, 'the view is recorded for this reader');
+  // Closing returns to the feed, where the ring the reader turned is now grey.
+  await until(alex, `document.querySelector('[data-story-id="${storyId}"] [data-story-ring]')?.dataset.storyRing === 'seen'`, 'viewing the story turns its ring');
 
+  // The author — and only the author — can see who opened it, and read what they said.
   await navigate(dummy, '/');
   await until(dummy, `!!document.querySelector('[data-story-id="${storyId}"]')`, 'the author is back at the tray');
   await evaluate(dummy, `document.querySelector('[data-story-id="${storyId}"]').click()`);
+  await until(dummy, `document.querySelector('[role="dialog"][aria-label="Story"]') !== null`, 'the author opens their story');
+  await until(dummy, `[...document.querySelectorAll('button')].some(button => button.textContent.trim() === 'Seen by 1')`, 'the author is offered the viewer count');
+  await button(dummy, 'Seen by 1');
+  await until(dummy, `document.querySelector('[role="dialog"][aria-label="Story"]').innerText.includes('alexdemo')`, 'the seen-by list names the viewer');
+  console.log('PASS: a story shows its author who has seen it');
+  await evaluate(dummy, `document.querySelector('button[aria-label="Close viewers"]').click()`);
   await until(dummy, `[...document.querySelectorAll('button')].some(button => button.textContent.trim() === 'Replies 1')`, 'the author is offered the reply count');
   await button(dummy, 'Replies 1');
   await until(dummy, `document.querySelector('[role="dialog"][aria-label="Story"]').innerText.includes(${JSON.stringify(`Browser reply ${stamp}`)})`, 'the author reads the reply');

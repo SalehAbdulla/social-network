@@ -130,11 +130,28 @@ func (re *HandlerContext) writeProfile(w http.ResponseWriter, r *http.Request, i
 		}
 		if !visible {
 			u.FirstName, u.LastName, u.Bio, u.Avatar, u.CoverPhoto, u.Location = "", "", "", "", "", ""
+			// The public contact fields go with the rest of the profile: a viewer who may not
+			// see it may not reach the account through a website, an email or a phone either.
+			u.Website, u.ContactEmail, u.Phone = "", "", ""
 			u.Followers, u.Following = []string{}, []string{}
 			// The count is masked with the lists above rather than left to the fragment:
 			// a `selected` grant can keep a post readable to someone who may not read the
 			// profile at all, and a count that moved with it would leak that it exists.
 			u.PostCount = 0
+		} else {
+			// Each contact field is published only while its own switch is on, so a viewer who
+			// may see the profile still sees just the parts its owner chose to share. The blank
+			// is applied to the copy being answered with; the stored value is left alone, so the
+			// owner's edit form and a later flip of the switch still have it.
+			if !u.ShowWebsite {
+				u.Website = ""
+			}
+			if !u.ShowContactEmail {
+				u.ContactEmail = ""
+			}
+			if !u.ShowPhone {
+				u.Phone = ""
+			}
 		}
 	}
 	respond(w, http.StatusOK, u)

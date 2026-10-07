@@ -482,14 +482,8 @@
   .chat-menu { @apply block w-full rounded-lg px-3 py-2 text-left text-text hover:bg-surface-2 disabled:opacity-40; }
   .chat-background { background-color: var(--ui-chat-bg); background-image: radial-gradient(var(--ui-chat-dots) 0.7px, transparent 0.7px); background-size: 18px 18px; }
 
-  /* The ring around a story author's avatar in the stories strip. A story the viewer has
-     not opened wears the brand gradient — the one colour both themes already define through
-     --ui-brand-1/2 — and one they have opened drops to the border colour, so "new" is
-     legible at a glance without a second palette to maintain. The gradient is a background
-     behind a padded circle rather than a `border-image`, which cannot follow a rounded
-     shape. */
-  .story-ring { background-image: linear-gradient(135deg, var(--ui-brand-1), var(--ui-brand-2)); }
-  .story-ring-seen { background-color: var(--ui-border); }
+  /* The story ring is drawn by the shared `StoryRing` component (the `.story-ring` block at the
+     foot of this file) and used by the tray, the archive and the viewer's previews alike. */
 
   /* Frosted glass. Use `glass` over patterned backgrounds and `glass-strong`
      for controls and panels that need their content to stay legible. */
@@ -1653,6 +1647,9 @@ article[data-highlight='true'] { animation: grp-post-flash 1.6s ease-out; }
   /* The two action buttons fill the column, side by side, 16px under the bio (the column's gap). */
   .profile-actions-buttons { display: grid; grid-template-columns: 1fr 1fr; gap: var(--profile-action-gap); }
   .profile-btn { height: var(--profile-btn-height); border-radius: var(--profile-btn-radius); font-size: 14px; font-weight: 600; }
+  /* The Contact button is a lone row under the action pair, so its wrapper spans the grid. */
+  .profile-contact { grid-column: 1 / -1; }
+  .profile-btn-contact { width: 100%; }
 
   /* Row 2: the stats, one line, 16px. */
   .profile-stats { display: flex; align-items: center; gap: var(--profile-stats-gap); font-size: var(--profile-stats-size); }
@@ -1669,6 +1666,8 @@ article[data-highlight='true'] { animation: grp-post-flash 1.6s ease-out; }
   .profile-bio-toggle { color: var(--ui-muted); font-weight: 600; }
   .profile-bio-location { display: inline-flex; align-items: center; gap: 4px; color: var(--ui-muted); }
   .profile-bio-location svg { width: 14px; height: 14px; flex: none; }
+  .profile-bio-website { display: inline-flex; align-items: center; gap: 4px; font-weight: 600; }
+  .profile-bio-website svg { width: 14px; height: 14px; flex: none; }
   .profile-bio a { color: var(--dm-blue); }
 }
 
@@ -2172,3 +2171,195 @@ article[data-highlight='true'] { animation: grp-post-flash 1.6s ease-out; }
   .cp-progress-fill { transition-duration: 0.01ms; }
 }
 
+
+/* ---------------------------------------------------------------------------
+   The story viewer. A near-black full-screen overlay with one 9:16 card centred
+   over it and the neighbouring authors dimmed at its shoulders. Every state is
+   a class here; the components only arrange them. The card's height is one
+   custom property so its width (9:16) and the neighbours' size both follow it.
+--------------------------------------------------------------------------- */
+.story-boot { position: fixed; inset: 0; z-index: 60; display: flex; align-items: center; justify-content: center; background-color: #121212; }
+.story-overlay {
+  position: fixed; inset: 0; z-index: 60; overflow: hidden; background-color: #121212;
+  --story-card-h: min(calc(100vh - 48px), 880px);
+  --story-card-w: calc(var(--story-card-h) * 9 / 16);
+  --story-preview-h: calc(var(--story-card-h) * 0.4);
+  --story-preview-w: calc(var(--story-card-h) * 0.4 * 9 / 16);
+  --story-gap: 48px;
+}
+.story-topbar { position: absolute; inset-inline: 0; top: 0; z-index: 5; display: flex; align-items: center; justify-content: space-between; padding: 16px 20px; }
+.story-logo { height: 26px; width: auto; filter: brightness(0) invert(1); }
+.story-close { display: flex; padding: 6px; color: #fff; transition: opacity 150ms ease; }
+.story-close:hover { opacity: 0.7; }
+.story-close svg { width: 24px; height: 24px; }
+
+/* The card is pinned dead-centre and the neighbours are hung at fixed offsets from that centre, so
+   the card never drifts: the previous author's previews sit to its left and the next author's to
+   its right, whether or not either side exists. */
+.story-stage { position: relative; width: 100%; height: 100%; }
+
+/* ---- The card ---- */
+.story-card {
+  position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%);
+  width: var(--story-card-w); height: var(--story-card-h);
+  max-width: calc(100vw - 32px); aspect-ratio: 9 / 16;
+  overflow: hidden; border-radius: 8px; background-color: #000;
+}
+/* The two scrims keep the white chrome legible over any frame. */
+.story-card::before, .story-card::after { content: ''; position: absolute; inset-inline: 0; z-index: 2; pointer-events: none; }
+.story-card::before { top: 0; height: 120px; background: linear-gradient(to bottom, rgba(0, 0, 0, 0.55), transparent); }
+.story-card::after { bottom: 0; height: 150px; background: linear-gradient(to top, rgba(0, 0, 0, 0.6), transparent); }
+.story-card[data-holding='true'] .story-head-wrap,
+.story-card[data-holding='true'] .story-foot { opacity: 0; }
+
+/* ---- Media: a blurred, scaled copy behind, the real frame on top ---- */
+.story-media { position: absolute; inset: 0; touch-action: none; }
+.story-media-bg { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; filter: blur(30px) brightness(0.55); transform: scale(1.15); }
+.story-media-fg { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; }
+.story-media-video { object-fit: cover; }
+.story-text { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; padding: 32px; text-align: center; white-space: pre-wrap; overflow-wrap: anywhere; font-size: 22px; line-height: 1.35; color: #fff; }
+.story-spinner { position: absolute; inset: 0; z-index: 3; display: flex; align-items: center; justify-content: center; }
+.story-spinner span { display: block; width: 36px; height: 36px; border-radius: 9999px; border: 3px solid rgba(255, 255, 255, 0.3); border-top-color: #fff; animation: ui-spin 0.7s linear infinite; }
+.story-fail { position: absolute; inset: 0; z-index: 3; display: flex; align-items: center; justify-content: center; color: #fff; font-size: 14px; }
+
+/* ---- Header: progress bar + author row ---- */
+.story-head-wrap { position: absolute; inset-inline: 0; top: 0; z-index: 3; padding: 12px 12px 0; transition: opacity 200ms ease; }
+.story-progress { display: flex; gap: 2px; }
+.story-progress-track { position: relative; flex: 1 1 0%; height: 2px; overflow: hidden; border-radius: 9999px; background-color: rgba(255, 255, 255, 0.3); }
+.story-progress-fill { display: block; width: 100%; height: 100%; transform: scaleX(0); transform-origin: left center; background-color: #fff; will-change: transform; }
+.story-head { display: flex; align-items: center; gap: 8px; margin-top: 10px; }
+.story-head-ring { display: flex; flex: none; padding: 2px; border-radius: 9999px; background-image: linear-gradient(135deg, var(--ui-brand-1), var(--ui-brand-2)); }
+.story-head-handle { font-size: 14px; font-weight: 600; color: #fff; }
+.story-head-age { font-size: 14px; color: rgba(255, 255, 255, 0.7); }
+.story-head-controls { margin-inline-start: auto; display: flex; align-items: center; gap: 6px; color: #fff; }
+.story-head-controls button { display: flex; padding: 4px; color: #fff; transition: opacity 150ms ease; }
+.story-head-controls button:hover { opacity: 0.7; }
+.story-head-controls svg { width: 20px; height: 20px; }
+.story-menu .ui-menu-trigger { color: #fff; }
+.story-menu .ui-menu-trigger svg { width: 20px; height: 20px; }
+
+/* ---- Footer: reply pill, heart and send (or the author's own controls) ---- */
+.story-foot { position: absolute; inset-inline: 0; bottom: 0; z-index: 3; display: flex; align-items: center; gap: 10px; padding: 12px; transition: opacity 200ms ease; }
+.story-foot-own { justify-content: center; }
+.story-activity-btn { color: #fff; font-size: 14px; font-weight: 600; }
+.story-activity-btn:hover { opacity: 0.8; }
+.story-reply { min-width: 0; flex: 1 1 0%; height: 44px; padding-inline: 16px; border-radius: 9999px; border: 1px solid rgba(255, 255, 255, 0.6); background-color: transparent; font-size: 14px; color: #fff; outline: none; }
+.story-reply::placeholder { color: rgba(255, 255, 255, 0.7); }
+.story-sent { flex: none; font-size: 13px; font-weight: 600; color: #fff; }
+.story-heart, .story-send { display: flex; flex: none; align-items: center; justify-content: center; color: #fff; }
+.story-heart svg { width: 26px; height: 26px; }
+.story-send svg { width: 24px; height: 24px; }
+.story-send:disabled { opacity: 0.4; }
+.story-heart.is-liked { color: #ed4956; animation: story-pop 300ms ease; }
+.story-heart.is-liked svg { fill: #ed4956; }
+.story-heart-count { margin-inline-start: 2px; font-size: 12px; font-weight: 600; }
+@keyframes story-pop { 0% { transform: scale(1); } 50% { transform: scale(1.25); } 100% { transform: scale(1); } }
+
+/* ---- Neighbours and arrows ---- */
+/* Each neighbour is a 9:16 thumbnail at Instagram's 40% of the card, hung from the centre at a
+   fixed offset: the previous author's to the left of the card, the next author's to the right. */
+.story-neighbor { position: absolute; top: 50%; transform: translateY(-50%); }
+.story-neighbor[data-tier='2'] { opacity: 0.5; }
+.story-neighbor[data-side='right']:not([data-tier='2']) { left: calc(50% + var(--story-card-w) / 2 + var(--story-gap)); }
+.story-neighbor[data-side='right'][data-tier='2'] { left: calc(50% + var(--story-card-w) / 2 + var(--story-gap) * 2 + var(--story-preview-w)); }
+.story-neighbor[data-side='left']:not([data-tier='2']) { right: calc(50% + var(--story-card-w) / 2 + var(--story-gap)); }
+.story-neighbor[data-side='left'][data-tier='2'] { right: calc(50% + var(--story-card-w) / 2 + var(--story-gap) * 2 + var(--story-preview-w)); }
+.story-preview { position: relative; display: block; flex: none; opacity: 0.6; transition: opacity 250ms ease; }
+.story-preview:hover { opacity: 1; }
+.story-preview-thumb { position: relative; display: block; width: var(--story-preview-w); height: var(--story-preview-h); overflow: hidden; border-radius: 10px; background-size: cover; background-position: center; }
+.story-preview-thumb img, .story-preview-thumb video { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+.story-preview-scrim { position: absolute; inset: 0; background-color: rgba(0, 0, 0, 0.35); }
+.story-preview-body { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; padding: 10px; text-align: center; }
+.story-preview-name { font-size: 13px; font-weight: 600; color: #fff; }
+.story-preview-age { font-size: 12px; color: rgba(255, 255, 255, 0.65); }
+.story-arrow { position: absolute; top: 50%; z-index: 6; display: flex; align-items: center; justify-content: center; width: 40px; height: 40px; transform: translateY(-50%); border-radius: 9999px; background-color: rgba(0, 0, 0, 0.5); color: #fff; backdrop-filter: blur(4px); transition: background-color 150ms ease; }
+.story-arrow:hover { background-color: rgba(0, 0, 0, 0.72); }
+.story-arrow:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
+.story-arrow svg { width: 24px; height: 24px; }
+/* At the screen edges, floating over the dimmed neighbours, the way Instagram places them. */
+.story-arrow[data-side='left'] { left: 20px; }
+.story-arrow[data-side='right'] { right: 20px; }
+
+/* ---- Viewers / replies panel ---- */
+.story-viewers-scrim { position: fixed; inset: 0; z-index: 70; display: flex; align-items: center; justify-content: center; padding: 16px; background-color: rgba(0, 0, 0, 0.6); }
+.story-viewers { display: flex; width: 100%; max-width: 360px; max-height: 70vh; flex-direction: column; overflow: hidden; border-radius: 16px; background-color: var(--ui-card); color: var(--ui-text); }
+.story-viewers-head { display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid var(--ui-border); padding: 12px 16px; }
+.story-viewers-head h2 { font-weight: 700; }
+.story-viewers-body { overflow-y: auto; padding: 8px; }
+.story-viewers-empty { padding: 24px 8px; text-align: center; font-size: 14px; color: var(--ui-muted); }
+.story-viewer-row { display: flex; align-items: center; gap: 10px; padding: 8px; }
+.story-viewer-name { font-weight: 600; }
+.story-viewer-age { margin-inline-start: auto; font-size: 12px; color: var(--ui-muted); }
+.story-viewer-text { min-width: 0; font-size: 14px; color: var(--ui-muted); overflow-wrap: anywhere; }
+
+/* ---- The phone: full-bleed card, no neighbours or arrows ---- */
+@media (max-width: 767px) {
+  .story-card { left: 0; top: 0; transform: none; width: 100%; height: 100dvh; max-width: none; border-radius: 0; }
+  .story-topbar { padding: 12px 14px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .story-neighbor, .story-preview, .story-progress-fill, .story-heart, .story-ring-unseen, .story-ring-seen { transition: none !important; animation: none !important; }
+}
+
+/* ---------------------------------------------------------------------------
+   The shared story ring (.story-ring) — used by the tray, the archive and the
+   viewer's neighbour previews. An unseen author wears a three-pixel gradient
+   ring with a soft, gently pulsing blue glow; a seen author a thin muted ring.
+   The two are separate layers cross-faded over ~300ms, so a glow fades rather
+   than jumps when an author's last story is read. No state, no ticking: the
+   pulse is a CSS animation, so it can never re-render anything.
+--------------------------------------------------------------------------- */
+.story-ring { position: relative; display: inline-grid; flex: none; place-items: center; border-radius: 9999px; }
+.story-ring-unseen, .story-ring-seen { position: absolute; inset: 0; border-radius: 9999px; transition: opacity 300ms ease; }
+.story-ring-unseen {
+  background-image: linear-gradient(135deg, #3b82f6 0%, #6366f1 50%, #22d3ee 100%);
+  box-shadow: 0 0 0 1px rgba(59, 130, 246, 0.35), 0 0 14px rgba(59, 130, 246, 0.55), 0 0 28px rgba(59, 130, 246, 0.25);
+  animation: story-glow 2.4s ease-in-out infinite;
+}
+.story-ring-seen { border: 1.5px solid rgba(255, 255, 255, 0.25); background-color: transparent; }
+.story-ring[data-state='unseen'] .story-ring-seen { opacity: 0; }
+.story-ring[data-state='seen'] .story-ring-unseen { opacity: 0; animation: none; }
+/* The 2px gap between the ring and the face, so the avatar reads as inset. */
+.story-ring-cowl { position: absolute; inset: 3px; border-radius: 9999px; background-color: var(--story-ring-gap, #0b0b0b); }
+.story-ring-face { position: absolute; inset: 5px; display: grid; place-items: center; overflow: hidden; border-radius: 9999px; }
+@keyframes story-glow {
+  0%, 100% { box-shadow: 0 0 0 1px rgba(59, 130, 246, 0.35), 0 0 14px rgba(59, 130, 246, 0.55), 0 0 28px rgba(59, 130, 246, 0.25); }
+  50% { box-shadow: 0 0 0 1px rgba(59, 130, 246, 0.5), 0 0 20px rgba(59, 130, 246, 0.8), 0 0 40px rgba(59, 130, 246, 0.42); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .story-ring-unseen { animation: none; }
+}
+
+/* ---------------------------------------------------------------------------
+   The stories tray. A horizontal scroller that keeps the glow: each item lets
+   the ring's shadow spill (overflow visible), the scroller pads for it, and the
+   right edge fades under a mask so a ring leaving the strip reads as intentional
+   rather than clipped. The chevrons are desktop-only and float over the fade.
+--------------------------------------------------------------------------- */
+.story-tray {
+  padding: 18px 46px 18px 12px;
+  touch-action: pan-x;
+  mask-image: linear-gradient(to right, #000 10px, #000 calc(100% - 34px), transparent 100%);
+  -webkit-mask-image: linear-gradient(to right, #000 10px, #000 calc(100% - 34px), transparent 100%);
+}
+.story-tray:focus-visible { outline: 2px solid #3b82f6; outline-offset: 2px; border-radius: 8px; }
+.story-tray-item { overflow: visible; }
+.story-tray-item .story-ring { transition: transform 200ms ease; }
+.story-tray-item:hover .story-ring { transform: scale(1.04); }
+.story-tray-label { transition: color 200ms ease; }
+.story-tray-nav {
+  position: absolute; top: 50%; z-index: 2; display: none; align-items: center; justify-content: center;
+  width: 32px; height: 32px; transform: translateY(-50%); border-radius: 9999px;
+  background-color: var(--ui-card); color: var(--ui-text); box-shadow: 0 2px 10px rgba(0, 0, 0, 0.25);
+  transition: transform 150ms ease;
+}
+.story-tray-nav:hover { transform: translateY(-50%) scale(1.08); }
+.story-tray-nav:focus-visible { outline: 2px solid #3b82f6; outline-offset: 2px; }
+.story-tray-nav svg { width: 20px; height: 20px; }
+.story-tray-nav[data-side='left'] { left: 2px; }
+.story-tray-nav[data-side='right'] { right: 2px; }
+@media (min-width: 768px) { .story-tray-nav { display: flex; } }
+@media (prefers-reduced-motion: reduce) {
+  .story-tray-item .story-ring, .story-tray-label, .story-tray-nav { transition: none; }
+}

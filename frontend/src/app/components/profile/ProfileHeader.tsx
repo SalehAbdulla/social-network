@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
-import { ChevronDown, MapPin, Settings } from 'lucide-react';
+import { ChevronDown, Link2, Mail, MapPin, Phone, Settings } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { type SocialUser, displayName, errorMessage, request } from '../../api/social';
 import { linkify } from '../../lib/linkify';
@@ -11,7 +11,7 @@ import MessageAction from '../MessageAction';
 import Button from '../ui/Button';
 import Menu, { MenuItem } from '../ui/Menu';
 import ThemeToggle from '../ThemeToggle';
-import { MenuItem as PopoverItem, MenuPanel } from '../PopoverMenu';
+import { MenuItem as PopoverItem, MenuPanel, menuRowClass } from '../PopoverMenu';
 import ProfileStats from './ProfileStats';
 import type { FollowListTab } from '../FollowListModal';
 
@@ -60,7 +60,7 @@ export default function ProfileHeader({
 
       {name !== profile.nickname && <p className="profile-name" dir="auto">{name}</p>}
       <ProfileStats postCount={profile.postCount} followers={followers} following={following} canOpen onOpen={onOpenFollows} />
-      <Bio profile={profile} />
+      <Bio profile={profile} isOwner={isOwner} />
 
       <div className="profile-actions-buttons">
         {isOwner ? <>
@@ -70,6 +70,7 @@ export default function ProfileHeader({
           <FollowControl state={followState} busy={isFollowingBusy} onToggle={onToggleFollow} />
           <MessageAction userId={profile.userId} allowed={canMessage} className="ui-btn ui-btn-secondary profile-btn" />
         </>}
+        {(!!profile.contactEmail || !!profile.phone) && <ContactButton email={profile.contactEmail} phone={profile.phone} emailHidden={isOwner && !profile.showContactEmail} phoneHidden={isOwner && !profile.showPhone} />}
       </div>
     </div>
   </header>;
@@ -129,7 +130,7 @@ function SettingsMenu({ onChangePassword }: { onChangePassword: () => void }) {
 }
 
 /** The display name, the bio (clamped to four lines with a "more" toggle) and the location. */
-function Bio({ profile }: { profile: SocialUser }) {
+function Bio({ profile, isOwner }: { profile: SocialUser; isOwner: boolean }) {
   const [expanded, setExpanded] = useState(false);
   const [overflowing, setOverflowing] = useState(false);
   const text = useRef<HTMLParagraphElement>(null);
@@ -138,12 +139,68 @@ function Bio({ profile }: { profile: SocialUser }) {
     if (!node || expanded) return;
     setOverflowing(node.scrollHeight - node.clientHeight > 1);
   }, [profile.bio, expanded]);
-  if (!profile.bio && !profile.location) return null;
+  if (!profile.bio && !profile.location && !profile.website) return null;
   return <div className="profile-bio">
     {!!profile.bio && <>
       <p ref={text} className="profile-bio-text" data-clamped={!expanded} dir="auto">{linkify(profile.bio)}</p>
       {overflowing && <button type="button" className="profile-bio-toggle" onClick={() => setExpanded(value => !value)}>{expanded ? 'less' : 'more'}</button>}
     </>}
     {!!profile.location && <p className="profile-bio-location"><MapPin aria-hidden="true" /><span dir="auto">{profile.location}</span></p>}
+    {!!profile.website && <p className="profile-bio-website"><Link2 aria-hidden="true" /><a href={profile.website} target="_blank" rel="me noopener noreferrer nofollow" dir="auto">{websiteLabel(profile.website)}</a>{isOwner && !profile.showWebsite && <HiddenTag />}</p>}
   </div>;
+}
+
+/** The website's label on the profile: the URL without its scheme or a trailing slash, the way a
+ *  reader says it out loud. The link itself keeps the full, stored address. */
+function websiteLabel(url: string): string {
+  return url.replace(/^https?:\/\//, '').replace(/\/$/, '');
+}
+
+/**
+ * Instagram's Contact button: a secondary button under the profile's action pair that opens a
+ * small menu with the account's published email and phone, each a `mailto:`/`tel:` link. It is
+ * drawn only when at least one of them exists — `writeProfile` blanks a field whose own public
+ * switch is off, and both for a viewer who may not see the profile at all — so it never opens onto
+ * an empty menu. For the owner a blanked-but-set field keeps its row and gains a muted "Hidden"
+ * note, so the effect of a switch is legible from the profile the owner is looking at.
+ */
+function ContactButton({ email, phone, emailHidden, phoneHidden }: { email: string; phone: string; emailHidden: boolean; phoneHidden: boolean }) {
+  const [rect, setRect] = useState<DOMRect | null>(null);
+  const root = useRef<HTMLDivElement>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
+  // The pane owns its own open state, so it also owns Escape and the click-outside that close it.
+  useEffect(() => {
+    if (!rect) return;
+    const onDown = (event: PointerEvent) => {
+      const target = event.target as Node;
+      if (!root.current?.contains(target) && !menuRef.current?.contains(target)) setRect(null);
+    };
+    const onKey = (event: KeyboardEvent) => { if (event.key === 'Escape') setRect(null); };
+    document.addEventListener('pointerdown', onDown);
+    document.addEventListener('keydown', onKey);
+    return () => { document.removeEventListener('pointerdown', onDown); document.removeEventListener('keydown', onKey); };
+  }, [rect]);
+
+  return <div ref={root} className="profile-contact">
+    <Button
+      variant="secondary"
+      className="profile-btn profile-btn-contact"
+      aria-haspopup="menu"
+      aria-expanded={!!rect}
+      onClick={event => { const box = event.currentTarget.getBoundingClientRect(); setRect(current => current ? null : box); }}
+    >
+      Contact
+    </Button>
+    {rect && <MenuPanel menuRef={menuRef} rect={rect} width={220} placement="below" label="Contact">
+      {!!email && <a role="menuitem" href={`mailto:${email}`} className={menuRowClass} onClick={() => setRect(null)}><Mail size={20} aria-hidden="true" />Email{emailHidden && <HiddenTag className="ml-auto" />}</a>}
+      {!!phone && <a role="menuitem" href={`tel:${phone}`} className={menuRowClass} onClick={() => setRect(null)}><Phone size={20} aria-hidden="true" />Call{phoneHidden && <HiddenTag className="ml-auto" />}</a>}
+    </MenuPanel>}
+  </div>;
+}
+
+/** A muted "Hidden" note beside a set-but-private contact field. It is drawn only for the owner,
+ *  so the effect of a public switch is visible from the profile itself rather than only by
+ *  looking at the profile as someone else. */
+function HiddenTag({ className = '' }: { className?: string }) {
+  return <span className={`text-xs font-normal text-slate-400 ${className}`}>Hidden</span>;
 }

@@ -1,18 +1,33 @@
 package models
 
 type SocialUser struct {
-	UserID     string   `json:"userId"`
-	Nickname   string   `json:"nickname"`
-	FirstName  string   `json:"firstName"`
-	LastName   string   `json:"lastName"`
-	Bio        string   `json:"bio"`
-	Avatar     string   `json:"avatar"`
-	CoverPhoto string   `json:"coverPhoto"`
-	Location   string   `json:"location"`
-	IsPublic   bool     `json:"isPublic"`
-	CreatedAt  string   `json:"createdAt"`
-	Followers  []string `json:"followers"`
-	Following  []string `json:"following"`
+	UserID     string `json:"userId"`
+	Nickname   string `json:"nickname"`
+	FirstName  string `json:"firstName"`
+	LastName   string `json:"lastName"`
+	Bio        string `json:"bio"`
+	Avatar     string `json:"avatar"`
+	CoverPhoto string `json:"coverPhoto"`
+	Location   string `json:"location"`
+
+	// The three optional public contact fields a profile may publish. They sit behind the
+	// profile's Contact button (the website as a link), and like the bio they are cleared for
+	// a viewer who is not allowed to see the profile at all.
+	Website      string `json:"website"`
+	ContactEmail string `json:"contactEmail"`
+	Phone        string `json:"phone"`
+
+	// A switch per contact field above. A field is published only while its own switch is on:
+	// turning one off hides it from everyone but the owner without clearing what was typed, so
+	// a viewer who may see the profile still sees just the parts its owner chose to share.
+	ShowWebsite      bool `json:"showWebsite"`
+	ShowContactEmail bool `json:"showContactEmail"`
+	ShowPhone        bool `json:"showPhone"`
+
+	IsPublic  bool     `json:"isPublic"`
+	CreatedAt string   `json:"createdAt"`
+	Followers []string `json:"followers"`
+	Following []string `json:"following"`
 	// PostCount is viewer-relative, like the two lists it sits beside: it counts the
 	// posts this viewer may read, through the feed's own visibility fragment, so the
 	// number on the profile header is the number of posts the page below can show.
@@ -64,6 +79,12 @@ type Story struct {
 	// gradient ring around an author avatar when this is false and a muted one when it
 	// is true, so the flag is filled by the listing query rather than stored here.
 	Viewed bool `json:"viewed"`
+
+	// The heart. `Liked` is viewer-relative — a `reaction` row of this account's with score
+	// 1 — and `LikeCount` is the story's total, both folded in by the listing query so a
+	// reader sees the state they left behind without a second request.
+	Liked     bool `json:"liked"`
+	LikeCount int  `json:"likeCount"`
 }
 
 // StoryViewer is one account in a story's "seen by" list, which only the story's author is

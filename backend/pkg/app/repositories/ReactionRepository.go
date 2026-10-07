@@ -65,6 +65,14 @@ func (db *DB) reactionTarget(userId, entityType string, entityId int) error {
 			return realtimeforum.ErrNotFound
 		}
 		return nil
+	case "story":
+		// A live story is readable by any signed-in member, so reacting to one only needs it
+		// to exist and still be live — the same predicate the read side applies. An unknown
+		// or expired story is answered not found, so a like cannot confirm a dead story.
+		if _, err := db.LiveStoryOwner(entityId); err != nil {
+			return realtimeforum.ErrNotFound
+		}
+		return nil
 	default:
 		return realtimeforum.ErrBadRequest
 	}

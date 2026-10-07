@@ -11,7 +11,16 @@ export interface SocialUser {
   bio: string; 
   avatar: string; 
   coverPhoto: string; 
-  location: string; 
+  location: string;
+  website: string;
+  contactEmail: string;
+  phone: string;
+  // Per-field switches: a contact field reaches other people only while its own switch is on.
+  // The owner always reads the values back, so the edit form can change them or flip a switch
+  // without the stored value being lost.
+  showWebsite: boolean;
+  showContactEmail: boolean;
+  showPhone: boolean; 
   isPublic: boolean; 
   createdAt: string;
   followers: string[]; 
@@ -120,11 +129,23 @@ export interface Story {
   // Viewer-relative, like a post's `isSaved`: false until this account has opened the
   // story, which is what the ring in the strip is drawn from.
   viewed: boolean;
+  // The heart: `liked` is whether this viewer has liked the story and `likeCount` is its
+  // total, both folded into the listing so the viewer shows the state left behind.
+  liked: boolean; likeCount: number;
 }
 /** One account in a story's "seen by" list, which only the story's author is offered. */
 export interface StoryViewer { userId: string; nickname: string; avatar: string; viewedAt: string }
 /** One reply left on a story, read back to the story's author alone. */
 export interface StoryReply { replyId: number; storyId: number; userId: string; nickname: string; avatar: string; content: string; createdAt: string }
+
+/**
+ * Sets or clears this account's like on a story, reusing the app's one reaction endpoint:
+ * a score of 1 is the heart, 0 takes it back. The response carries the new total, but the
+ * viewer applies the change optimistically and never waits on it.
+ */
+export function reactToStory(storyId: number, liked: boolean) {
+  return request('/reactions', 'POST', { entityType: 'story', entityId: String(storyId), score: liked ? 1 : 0 });
+}
 export interface ChatUser { userId: string; nickname: string; firstName: string; lastName: string; avatar: string; isOnline: number; lastMessageTime: string }
 export interface ChatMessage {
   messageId: number; senderId: string; recipientId: string; textMessage: string; timeStamp: string;
@@ -341,4 +362,23 @@ export function relativeLabel(value: string, now: number = Date.now()) {
     remaining /= span;
   }
   return dayLabel(value);
+}
+
+/**
+ * The short, Instagram-style age the story viewer's header shows — `now`, `2m`, `19h`,
+ * `3d`, `1w`. It is deliberately terser than `relativeLabel`: a story lives 24 hours, and
+ * the header's line has an avatar and two controls to sit beside.
+ */
+export function shortAge(value: string, now: number = Date.now()): string {
+  const date = parseTimestamp(value);
+  if (!date) return '';
+  const seconds = Math.max(0, (now - date.getTime()) / 1000);
+  if (seconds < 60) return 'now';
+  const minutes = seconds / 60;
+  if (minutes < 60) return `${Math.floor(minutes)}m`;
+  const hours = minutes / 60;
+  if (hours < 24) return `${Math.floor(hours)}h`;
+  const days = hours / 24;
+  if (days < 7) return `${Math.floor(days)}d`;
+  return `${Math.floor(days / 7)}w`;
 }

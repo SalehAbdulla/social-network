@@ -28,8 +28,8 @@ func (db *DB) stringList(query string, args ...any) ([]string, error) {
 
 func (db *DB) SocialProfile(id string, viewers ...string) (models.SocialUser, error) {
 	u := models.SocialUser{}
-	err := db.Conn.QueryRow(`SELECT userId, nickName, firstName, lastName, COALESCE(aboutMe,''), COALESCE(avatar,''), coverPhoto, location, isPublic, createdAt FROM user WHERE userId = ?`, id).
-		Scan(&u.UserID, &u.Nickname, &u.FirstName, &u.LastName, &u.Bio, &u.Avatar, &u.CoverPhoto, &u.Location, &u.IsPublic, &u.CreatedAt)
+	err := db.Conn.QueryRow(`SELECT userId, nickName, firstName, lastName, COALESCE(aboutMe,''), COALESCE(avatar,''), coverPhoto, location, website, contactEmail, phone, showWebsite, showContactEmail, showPhone, isPublic, createdAt FROM user WHERE userId = ?`, id).
+		Scan(&u.UserID, &u.Nickname, &u.FirstName, &u.LastName, &u.Bio, &u.Avatar, &u.CoverPhoto, &u.Location, &u.Website, &u.ContactEmail, &u.Phone, &u.ShowWebsite, &u.ShowContactEmail, &u.ShowPhone, &u.IsPublic, &u.CreatedAt)
 	if errors.Is(err, sql.ErrNoRows) {
 		return u, backend.ErrNotFound
 	}
@@ -240,7 +240,7 @@ func (db *DB) UpdateSocialProfile(u models.SocialUser) error {
 	if !errors.Is(err, sql.ErrNoRows) {
 		return err
 	}
-	_, err = db.Conn.Exec(`UPDATE user SET nickName=?, firstName=?, lastName=?, aboutMe=?, avatar=?, coverPhoto=?, location=?, isPublic=?, updatedAt=datetime('now') WHERE userId=?`, u.Nickname, u.FirstName, u.LastName, u.Bio, u.Avatar, u.CoverPhoto, u.Location, u.IsPublic, u.UserID)
+	_, err = db.Conn.Exec(`UPDATE user SET nickName=?, firstName=?, lastName=?, aboutMe=?, avatar=?, coverPhoto=?, location=?, website=?, contactEmail=?, phone=?, showWebsite=?, showContactEmail=?, showPhone=?, isPublic=?, updatedAt=datetime('now') WHERE userId=?`, u.Nickname, u.FirstName, u.LastName, u.Bio, u.Avatar, u.CoverPhoto, u.Location, u.Website, u.ContactEmail, u.Phone, u.ShowWebsite, u.ShowContactEmail, u.ShowPhone, u.IsPublic, u.UserID)
 	return err
 }
 
@@ -479,7 +479,7 @@ func (db *DB) CreateStory(s models.Story) (int, error) {
 // per row, and the join is keyed on `(storyId, userId)` — the table's primary key — so it
 // costs one lookup per story and nothing when there are no views.
 func (db *DB) Stories(offset int, viewerID string) ([]models.Story, error) {
-	rows, err := db.Conn.Query(`SELECT s.storyId,s.userId,u.nickName,COALESCE(u.avatar,''),s.content,s.mediaUrl,s.mediaType,s.backgroundColor,s.createdAt,s.expiresAt,(v.userId IS NOT NULL) FROM story s JOIN user u ON u.userId=s.userId LEFT JOIN storyView v ON v.storyId=s.storyId AND v.userId=? WHERE s.expiresAt > datetime('now') ORDER BY s.createdAt DESC,s.storyId DESC LIMIT 30 OFFSET ?`, viewerID, offset)
+	rows, err := db.Conn.Query(`SELECT s.storyId,s.userId,u.nickName,COALESCE(u.avatar,''),s.content,s.mediaUrl,s.mediaType,s.backgroundColor,s.createdAt,s.expiresAt,(v.userId IS NOT NULL),EXISTS(SELECT 1 FROM reaction r WHERE r.entityType='story' AND r.entityId=s.storyId AND r.userId=? AND r.score>0),(SELECT COUNT(*) FROM reaction r2 WHERE r2.entityType='story' AND r2.entityId=s.storyId AND r2.score>0) FROM story s JOIN user u ON u.userId=s.userId LEFT JOIN storyView v ON v.storyId=s.storyId AND v.userId=? WHERE s.expiresAt > datetime('now') ORDER BY s.createdAt DESC,s.storyId DESC LIMIT 30 OFFSET ?`, viewerID, viewerID, offset)
 	if err != nil {
 		return nil, err
 	}
@@ -487,7 +487,7 @@ func (db *DB) Stories(offset int, viewerID string) ([]models.Story, error) {
 	stories := []models.Story{}
 	for rows.Next() {
 		var s models.Story
-		if err := rows.Scan(&s.StoryID, &s.UserID, &s.Nickname, &s.Avatar, &s.Content, &s.MediaURL, &s.MediaType, &s.BackgroundColor, &s.CreatedAt, &s.ExpiresAt, &s.Viewed); err != nil {
+		if err := rows.Scan(&s.StoryID, &s.UserID, &s.Nickname, &s.Avatar, &s.Content, &s.MediaURL, &s.MediaType, &s.BackgroundColor, &s.CreatedAt, &s.ExpiresAt, &s.Viewed, &s.Liked, &s.LikeCount); err != nil {
 			return nil, err
 		}
 		stories = append(stories, s)
@@ -501,7 +501,7 @@ func (db *DB) Stories(offset int, viewerID string) ([]models.Story, error) {
 // The viewer-relative `viewed` flag is folded in exactly as `Stories` folds it, so a row means
 // the same thing in both lists.
 func (db *DB) ArchivedStories(offset int, userID string) ([]models.Story, error) {
-	rows, err := db.Conn.Query(`SELECT s.storyId,s.userId,u.nickName,COALESCE(u.avatar,''),s.content,s.mediaUrl,s.mediaType,s.backgroundColor,s.createdAt,s.expiresAt,(v.userId IS NOT NULL) FROM story s JOIN user u ON u.userId=s.userId LEFT JOIN storyView v ON v.storyId=s.storyId AND v.userId=? WHERE s.userId=? AND s.expiresAt <= datetime('now') ORDER BY s.createdAt DESC,s.storyId DESC LIMIT 30 OFFSET ?`, userID, userID, offset)
+	rows, err := db.Conn.Query(`SELECT s.storyId,s.userId,u.nickName,COALESCE(u.avatar,''),s.content,s.mediaUrl,s.mediaType,s.backgroundColor,s.createdAt,s.expiresAt,(v.userId IS NOT NULL),EXISTS(SELECT 1 FROM reaction r WHERE r.entityType='story' AND r.entityId=s.storyId AND r.userId=? AND r.score>0),(SELECT COUNT(*) FROM reaction r2 WHERE r2.entityType='story' AND r2.entityId=s.storyId AND r2.score>0) FROM story s JOIN user u ON u.userId=s.userId LEFT JOIN storyView v ON v.storyId=s.storyId AND v.userId=? WHERE s.userId=? AND s.expiresAt <= datetime('now') ORDER BY s.createdAt DESC,s.storyId DESC LIMIT 30 OFFSET ?`, userID, userID, userID, offset)
 	if err != nil {
 		return nil, err
 	}
@@ -509,7 +509,7 @@ func (db *DB) ArchivedStories(offset int, userID string) ([]models.Story, error)
 	stories := []models.Story{}
 	for rows.Next() {
 		var s models.Story
-		if err := rows.Scan(&s.StoryID, &s.UserID, &s.Nickname, &s.Avatar, &s.Content, &s.MediaURL, &s.MediaType, &s.BackgroundColor, &s.CreatedAt, &s.ExpiresAt, &s.Viewed); err != nil {
+		if err := rows.Scan(&s.StoryID, &s.UserID, &s.Nickname, &s.Avatar, &s.Content, &s.MediaURL, &s.MediaType, &s.BackgroundColor, &s.CreatedAt, &s.ExpiresAt, &s.Viewed, &s.Liked, &s.LikeCount); err != nil {
 			return nil, err
 		}
 		stories = append(stories, s)
