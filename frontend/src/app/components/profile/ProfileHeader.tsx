@@ -1,0 +1,149 @@
+'use client';
+
+import { useEffect, useRef, useState } from 'react';
+import Link from 'next/link';
+import { ChevronDown, MapPin, Settings } from 'lucide-react';
+import toast from 'react-hot-toast';
+import { type SocialUser, displayName, errorMessage, request } from '../../api/social';
+import { linkify } from '../../lib/linkify';
+import Avatar from '../Avatar';
+import MessageAction from '../MessageAction';
+import Button from '../ui/Button';
+import Menu, { MenuItem } from '../ui/Menu';
+import ThemeToggle from '../ThemeToggle';
+import { MenuItem as PopoverItem, MenuPanel } from '../PopoverMenu';
+import ProfileStats from './ProfileStats';
+import type { FollowListTab } from '../FollowListModal';
+
+export type FollowState = 'none' | 'following' | 'requested';
+
+/**
+ * The Instagram profile header: a centred block with the 150px avatar on the left and, beside it,
+ * the handle row (the username and one settings/more button), the display name, the counts, the
+ * bio and the two action buttons. On the viewer's own profile the avatar is the "change photo"
+ * control and the gear opens the settings menu; on anyone else's the buttons are Follow (or
+ * Following with its unfollow menu) and Message.
+ */
+export default function ProfileHeader({
+  profile, followers, following, isOwner, avatarSize, followState, canMessage, isFollowingBusy,
+  onAvatarClick, onEdit, onArchive, onChangePassword, onOpenFollows, onToggleFollow,
+}: {
+  profile: SocialUser;
+  followers: number;
+  following: number;
+  isOwner: boolean;
+  avatarSize: number;
+  followState: FollowState;
+  canMessage: boolean;
+  isFollowingBusy: boolean;
+  onAvatarClick: () => void;
+  onEdit: () => void;
+  onArchive: () => void;
+  onChangePassword: () => void;
+  onOpenFollows: (tab: FollowListTab) => void;
+  onToggleFollow: () => void;
+}) {
+  const name = displayName(profile);
+  const avatar = <Avatar name={name} avatarUrl={profile.avatar} size={avatarSize} />;
+  return <header className="profile-header">
+    <div className="profile-avatar-col">
+      {isOwner
+        ? <button type="button" className="profile-avatar" data-clickable="true" aria-label="Change profile photo" onClick={onAvatarClick}>{avatar}</button>
+        : <span className="profile-avatar">{avatar}</span>}
+    </div>
+
+    <div className="profile-info">
+      <div className="profile-actions">
+        <h1 className="profile-username">{profile.nickname}</h1>
+        {isOwner && <SettingsMenu onChangePassword={onChangePassword} />}
+      </div>
+
+      {name !== profile.nickname && <p className="profile-name" dir="auto">{name}</p>}
+      <ProfileStats postCount={profile.postCount} followers={followers} following={following} canOpen onOpen={onOpenFollows} />
+      <Bio profile={profile} />
+
+      <div className="profile-actions-buttons">
+        {isOwner ? <>
+          <Button variant="secondary" className="profile-btn" onClick={onEdit}>Edit profile</Button>
+          <Button variant="secondary" className="profile-btn" onClick={onArchive}>View archive</Button>
+        </> : <>
+          <FollowControl state={followState} busy={isFollowingBusy} onToggle={onToggleFollow} />
+          <MessageAction userId={profile.userId} allowed={canMessage} className="ui-btn ui-btn-secondary profile-btn" />
+        </>}
+      </div>
+    </div>
+  </header>;
+}
+
+/** `Follow`, or `Following` with a chevron that opens the unfollow menu. */
+function FollowControl({ state, busy, onToggle }: { state: FollowState; busy: boolean; onToggle: () => void }) {
+  const [rect, setRect] = useState<DOMRect | null>(null);
+  const root = useRef<HTMLDivElement>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
+  // The popover owns its own open state, so it also owns Escape and the click-outside that close it.
+  useEffect(() => {
+    if (!rect) return;
+    const onDown = (event: PointerEvent) => { if (!root.current?.contains(event.target as Node)) setRect(null); };
+    const onKey = (event: KeyboardEvent) => { if (event.key === 'Escape') setRect(null); };
+    document.addEventListener('pointerdown', onDown);
+    document.addEventListener('keydown', onKey);
+    return () => { document.removeEventListener('pointerdown', onDown); document.removeEventListener('keydown', onKey); };
+  }, [rect]);
+
+  if (state === 'none') return <Button variant="primary" className="profile-btn" loading={busy} onClick={onToggle}>Follow</Button>;
+  return <div ref={root} className="relative">
+    <Button
+      variant="secondary"
+      className="profile-btn"
+      loading={busy}
+      aria-haspopup="menu"
+      aria-expanded={!!rect}
+      onClick={event => { const box = event.currentTarget.getBoundingClientRect(); setRect(current => current ? null : box); }}
+    >
+      {state === 'requested' ? 'Requested' : 'Following'}<ChevronDown size={16} aria-hidden="true" />
+    </Button>
+    {rect && <MenuPanel menuRef={menuRef} rect={rect} width={180} placement="below" label="Following options">
+      <PopoverItem onClick={() => { setRect(null); onToggle(); }}>{state === 'requested' ? 'Cancel request' : 'Unfollow'}</PopoverItem>
+    </MenuPanel>}
+  </div>;
+}
+
+/** The gear menu on the viewer's own profile: the account and theme actions Instagram keeps here. */
+function SettingsMenu({ onChangePassword }: { onChangePassword: () => void }) {
+  const [loggingOut, setLoggingOut] = useState(false);
+  async function logout() {
+    setLoggingOut(true);
+    try {
+      await request('/auth/logout', 'POST');
+      // A full reload drops the socket and every other piece of client state, as the rail does.
+      // eslint-disable-next-line @next/next/no-location-assign-relative-destination
+      window.location.href = '/login';
+    } catch (error) { toast.error(errorMessage(error)); setLoggingOut(false); }
+  }
+  return <Menu label="Options" triggerIcon={Settings} className="profile-gear" align="end">
+    <MenuItem onClick={onChangePassword}>Change password</MenuItem>
+    <Link href="/saved" role="menuitem" className="ui-menu-item">Saved</Link>
+    <div className="ui-menu-item justify-between"><span>Theme</span><ThemeToggle /></div>
+    <MenuItem onClick={() => void logout()} disabled={loggingOut}>{loggingOut ? 'Logging out…' : 'Log out'}</MenuItem>
+  </Menu>;
+}
+
+/** The display name, the bio (clamped to four lines with a "more" toggle) and the location. */
+function Bio({ profile }: { profile: SocialUser }) {
+  const [expanded, setExpanded] = useState(false);
+  const [overflowing, setOverflowing] = useState(false);
+  const text = useRef<HTMLParagraphElement>(null);
+  useEffect(() => {
+    const node = text.current;
+    if (!node || expanded) return;
+    setOverflowing(node.scrollHeight - node.clientHeight > 1);
+  }, [profile.bio, expanded]);
+  if (!profile.bio && !profile.location) return null;
+  return <div className="profile-bio">
+    {!!profile.bio && <>
+      <p ref={text} className="profile-bio-text" data-clamped={!expanded} dir="auto">{linkify(profile.bio)}</p>
+      {overflowing && <button type="button" className="profile-bio-toggle" onClick={() => setExpanded(value => !value)}>{expanded ? 'less' : 'more'}</button>}
+    </>}
+    {!!profile.location && <p className="profile-bio-location"><MapPin aria-hidden="true" /><span dir="auto">{profile.location}</span></p>}
+  </div>;
+}
