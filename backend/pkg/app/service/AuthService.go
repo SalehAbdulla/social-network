@@ -24,6 +24,12 @@ type AuthService interface {
 	NicknameAvailable(nickname string) (bool, error)
 	ChangePassword(userID, currentPassword, newPassword string) (string, error)
 	UserIDByEmail(email string) (string, error)
+	// SavedAccounts resolves the browser's saved-account tokens to the accounts
+	// they still stand for, for the switch-accounts view.
+	SavedAccounts(tokens []string) ([]SavedAccountSession, error)
+	// TokenForUser finds the saved token that still stands for one account, which
+	// is what performs a passwordless switch.
+	TokenForUser(tokens []string, userID string) (string, bool)
 }
 
 // RegisteredUser is the account a signup created, including the handle the
@@ -32,6 +38,16 @@ type RegisteredUser struct {
 	UserID   string
 	Nickname string
 	Token    string
+}
+
+// SavedAccountSession pairs an account a browser saved with the session token
+// that makes switching to it possible. The token is intentionally not part of
+// the account view: handlers keep it server-side and answer with the account
+// alone, so a saved browser never exposes another account's credential to the
+// page.
+type SavedAccountSession struct {
+	Token string
+	models.SavedAccount
 }
 
 // Longest generated handle, leaving room for the numeric suffix inside the
@@ -185,6 +201,58 @@ func (s AuthServiceImpl) Login(identifier, password string) (string, string, err
 func (s AuthServiceImpl) Logout(token string) error {
 	s.sessionManager.DeleteSession(token)
 	return nil
+}
+
+// SavedAccounts resolves saved tokens to the accounts they still stand for. A
+// token whose session was revoked or has expired is dropped, and an account
+// reached by more than one token — which happens when the same account is signed
+// into twice, since that revokes the older session — is kept once, at its newest
+// token, because callers prepend the latest login. The order is the caller's
+// list order.
+func (s AuthServiceImpl) SavedAccounts(tokens []string) ([]SavedAccountSession, error) {
+	order := make([]string, 0, len(tokens))
+	tokenByUser := make(map[string]string, len(tokens))
+	seen := make(map[string]bool, len(tokens))
+	for _, token := range tokens {
+		userID, ok := s.sessionManager.GetUserIdByToken(token)
+		if !ok || userID == "" || seen[userID] {
+			continue
+		}
+		seen[userID] = true
+		order = append(order, userID)
+		tokenByUser[userID] = token
+	}
+	if len(order) == 0 {
+		return nil, nil
+	}
+
+	summaries, err := s.db.AccountsForUsers(order)
+	if err != nil {
+		return nil, err
+	}
+
+	accounts := make([]SavedAccountSession, 0, len(order))
+	for _, userID := range order {
+		summary, ok := summaries[userID]
+		if !ok {
+			// The user row is gone; drop the token rather than draw an empty row.
+			continue
+		}
+		accounts = append(accounts, SavedAccountSession{Token: tokenByUser[userID], SavedAccount: summary})
+	}
+	return accounts, nil
+}
+
+// TokenForUser finds the saved token that still stands for one account. The
+// second result is false when the account is not among the saved tokens or its
+// session has expired, which the caller answers as "not found".
+func (s AuthServiceImpl) TokenForUser(tokens []string, userID string) (string, bool) {
+	for _, token := range tokens {
+		if resolved, ok := s.sessionManager.GetUserIdByToken(token); ok && resolved == userID {
+			return token, true
+		}
+	}
+	return "", false
 }
 
 // ChangePassword verifies the current credential, stores the replacement and
