@@ -13,9 +13,12 @@ import { errorMessage } from '../../api/social';
  * scrolls, Enter sends (Shift+Enter breaks), and the field keeps focus after a message so
  * the next one can be typed without reaching for the mouse.
  */
-export default function Composer({ onSend, onTyping, initialText = '', editing = false, onCancel, allowVideo = false, placeholder = 'Message...', replyTo, onCancelReply }: {
+export default function Composer({ onSend, onTyping, onDraft, initialText = '', editing = false, onCancel, allowVideo = false, placeholder = 'Message...', replyTo, onCancelReply }: {
   onSend: (text: string, file: File | null) => Promise<void>;
   onTyping?: (typing: boolean) => void;
+  /** Reports the draft as it is typed, so a surface that outlives the composer (the Messages
+   *  dock, which persists one draft across navigation) can keep it. */
+  onDraft?: (text: string) => void;
   initialText?: string;
   editing?: boolean;
   onCancel?: () => void;
@@ -62,6 +65,7 @@ export default function Composer({ onSend, onTyping, initialText = '', editing =
       setMedia([]);
       setAttachments(false);
       setEmojis(false);
+      onDraft?.('');
       onCancelReply?.();
       onTyping?.(false);
     } catch (error) {
@@ -110,6 +114,7 @@ export default function Composer({ onSend, onTyping, initialText = '', editing =
         placeholder={placeholder}
         onChange={event => {
           setText(event.target.value);
+          onDraft?.(event.target.value);
           if (!event.target.value || Date.now() - typingAt.current > 1500) {
             onTyping?.(!!event.target.value);
             typingAt.current = Date.now();
