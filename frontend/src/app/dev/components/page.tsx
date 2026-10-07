@@ -3,9 +3,7 @@
 import type { ReactNode } from 'react';
 import { notFound } from 'next/navigation';
 import { MessageSquare } from 'lucide-react';
-import { type SocialUser } from '../../api/social';
 import Avatar from '../../components/Avatar';
-import PostPreview from '../../components/PostPreview';
 import RequestState from '../../components/RequestState';
 import Loading from '../../components/Loading';
 import { PostListSkeleton, CardGridSkeleton, RowsSkeleton } from '../../components/Skeletons';
@@ -24,12 +22,6 @@ import ThemeToggle from '../../components/ThemeToggle';
  * route never reaches a visitor. `NODE_ENV` is inlined at build time, so the branch is decided
  * once and the deployed bundle carries a 404.
  */
-const SAMPLE_USER: SocialUser = {
-  userId: 'sample-user', nickname: 'sample', firstName: 'Sample', lastName: 'User',
-  bio: '', avatar: '', coverPhoto: '', location: '', isPublic: true, createdAt: '',
-  followers: [], following: [], postCount: 0, pendingIncoming: false, pendingOutgoing: false,
-};
-
 export default function ComponentGallery() {
   if (process.env.NODE_ENV === 'production') notFound();
   return <div className="mx-auto max-w-3xl space-y-10 p-4 py-8 sm:p-8">
@@ -37,10 +29,6 @@ export default function ComponentGallery() {
       <h1 className="text-2xl font-bold text-text">Component gallery</h1>
       <p className="text-sm text-muted">The Instagram-style pieces on their own. Development only — a production build answers 404 here.</p>
     </header>
-
-    <Section title="Post card" note="The composer's preview, with the audience banner it draws above the card.">
-      <PostPreview user={SAMPLE_USER} content="The draft renders exactly as the feed card does, linkified — try #travel or @sample." privacy="public" imageUrls={[]} />
-    </Section>
 
     <Section title="Avatars" note="Initials when there is no photo, the photo when there is, at the sizes the app uses.">
       <div className="flex flex-wrap items-center gap-4">
