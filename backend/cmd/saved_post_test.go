@@ -1,9 +1,9 @@
 package main
 
 import (
-	"strconv"
 	"testing"
 
+	"social-network/backend/pkg/app/repositories"
 	"social-network/backend/pkg/models"
 	"social-network/backend/pkg/payload/posts"
 )
@@ -14,8 +14,20 @@ func savedList(t *testing.T, client integrationClient, query string) posts.PostR
 	return decoded[posts.PostResponse](t, client.call("GET", "/api/v1/saved-posts"+query, nil, 200))
 }
 
-// hasPost reports whether a post id is present in a list response.
-func hasPost(list posts.PostResponse, postID int) bool {
+// postRowID resolves a post's public UUID to the post table's own key, for the few assertions
+// that read the database directly rather than through the API.
+func postRowID(t *testing.T, repo *repositories.DB, publicID string) int {
+	t.Helper()
+	id, err := repo.PostIDByPublicID(publicID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return id
+}
+
+// hasPost reports whether a post id is present in a list response. The id is the post's public
+// UUID, which is the only id the API answers with.
+func hasPost(list posts.PostResponse, postID string) bool {
 	for _, item := range list.Posts {
 		if item.PostId == postID {
 			return true
@@ -26,7 +38,7 @@ func hasPost(list posts.PostResponse, postID int) bool {
 
 // feedPost returns the entry for one post out of the first feed page, so a test
 // can read the viewer-relative `isSaved` flag the card draws.
-func feedPost(t *testing.T, client integrationClient, postID int) (posts.PostDTO, bool) {
+func feedPost(t *testing.T, client integrationClient, postID string) (posts.PostDTO, bool) {
 	t.Helper()
 	feed := decoded[posts.PostResponse](t, client.call("GET", "/api/v1/posts?page=1&size=20", nil, 200))
 	for _, item := range feed.Posts {
@@ -50,7 +62,7 @@ func TestSavedPostsIntegration(t *testing.T) {
 	post := decoded[posts.PostDTO](t, owner.call("POST", "/api/v1/posts", map[string]any{
 		"title": "Save me", "content": "A post the reader will bookmark.", "privacy": "public",
 	}, 201))
-	savePath := "/api/v1/posts/" + strconv.Itoa(post.PostId) + "/save"
+	savePath := "/api/v1/posts/" + post.PostId + "/save"
 
 	if list := savedList(t, reader, "?page=1&size=10"); len(list.Posts) != 0 {
 		t.Fatalf("a fresh account already has saved posts: %+v", list.Posts)
@@ -58,7 +70,7 @@ func TestSavedPostsIntegration(t *testing.T) {
 
 	// Save it. The answer names the resulting state, not a change.
 	saved := decoded[map[string]any](t, reader.call("POST", savePath, nil, 200))
-	if saved["saved"] != true || saved["postId"] != float64(post.PostId) {
+	if saved["saved"] != true || saved["postId"] != post.PostId {
 		t.Fatalf("unexpected save answer: %+v", saved)
 	}
 
@@ -78,7 +90,7 @@ func TestSavedPostsIntegration(t *testing.T) {
 	if item, ok := feedPost(t, owner, post.PostId); !ok || item.IsSaved {
 		t.Fatalf("the owner's feed marks a post saved that they never saved: %+v", item)
 	}
-	if single := decoded[posts.PostDTO](t, reader.call("GET", "/api/v1/post?id="+strconv.Itoa(post.PostId), nil, 200)); !single.IsSaved {
+	if single := decoded[posts.PostDTO](t, reader.call("GET", "/api/v1/post?id="+post.PostId, nil, 200)); !single.IsSaved {
 		t.Fatalf("the single-post view does not mark the post saved: %+v", single)
 	}
 
@@ -99,10 +111,12 @@ func TestSavedPostsIntegration(t *testing.T) {
 	}
 
 	// A deleted post takes its bookmark with it: the row cascades, which is why
-	// the list query carries no orphan filter of its own.
+	// the list query carries no orphan filter of its own. The row's own key is read
+	// before the delete, because after it there is nothing left to resolve.
+	rowID := postRowID(t, repo, post.PostId)
 	reader.call("POST", savePath, nil, 200)
-	owner.call("DELETE", "/api/v1/posts?id="+strconv.Itoa(post.PostId), nil, 200)
-	if remaining, err := repo.IsPostSaved("alex-id", post.PostId); err != nil || remaining {
+	owner.call("DELETE", "/api/v1/posts?id="+post.PostId, nil, 200)
+	if remaining, err := repo.IsPostSaved("alex-id", rowID); err != nil || remaining {
 		t.Fatalf("deleting a post left its bookmark behind (saved=%v, err=%v)", remaining, err)
 	}
 	if list := savedList(t, reader, "?page=1&size=10"); hasPost(list, post.PostId) {
@@ -124,14 +138,14 @@ func TestSavedPostsRespectPostVisibility(t *testing.T) {
 		"title": "For followers", "content": "Only followers of the author may read this.",
 		"privacy": "followers",
 	}, 201))
-	stranger.call("POST", "/api/v1/posts/"+strconv.Itoa(followersOnly.PostId)+"/save", nil, 404)
+	stranger.call("POST", "/api/v1/posts/"+followersOnly.PostId+"/save", nil, 404)
 
 	// A public post the stranger can save...
 	public := decoded[posts.PostDTO](t, owner.call("POST", "/api/v1/posts", map[string]any{
 		"title": "Public for now", "content": "Readable until the author turns private.",
 		"privacy": "public",
 	}, 201))
-	stranger.call("POST", "/api/v1/posts/"+strconv.Itoa(public.PostId)+"/save", nil, 200)
+	stranger.call("POST", "/api/v1/posts/"+public.PostId+"/save", nil, 200)
 	if list := savedList(t, stranger, "?page=1&size=10"); !hasPost(list, public.PostId) {
 		t.Fatalf("a saved public post is missing from the list: %+v", list.Posts)
 	}
@@ -148,6 +162,6 @@ func TestSavedPostsRespectPostVisibility(t *testing.T) {
 	// Bad ids are refused before any query; a post that does not exist is a 404
 	// rather than a bookmark pointing at nothing.
 	stranger.call("POST", "/api/v1/posts/0/save", nil, 400)
-	stranger.call("POST", "/api/v1/posts/999999/save", nil, 404)
+	stranger.call("POST", "/api/v1/posts/00000000-0000-4000-8000-000000000000/save", nil, 404)
 	stranger.call("DELETE", "/api/v1/posts/nonsense/save", nil, 400)
 }
