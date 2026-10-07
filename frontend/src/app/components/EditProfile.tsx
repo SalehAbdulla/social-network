@@ -14,12 +14,11 @@ export default function EditProfile({ profile, close, saved }: { profile: Social
   const dialog = useDialogFocus<HTMLDivElement>(close);
   const [form, setForm] = useState(profile);
   const [avatar, setAvatar] = useState<File[]>([]);
-  const [cover, setCover] = useState<File[]>([]);
   const [busy, setBusy] = useState(false);
   async function save(event: React.FormEvent) {
     event.preventDefault(); setBusy(true);
     try {
-      const updated = { ...form, avatar: avatar.length ? (await upload(avatar[0])).url : form.avatar, coverPhoto: cover.length ? (await upload(cover[0])).url : form.coverPhoto };
+      const updated = { ...form, avatar: avatar.length ? (await upload(avatar[0])).url : form.avatar };
       await request('/users/me', 'PUT', updated); await refreshUser(); saved(); close(); toast.success('Profile saved');
     } catch (error) { toast.error(errorMessage(error)); } finally { setBusy(false); }
   }
@@ -27,7 +26,6 @@ export default function EditProfile({ profile, close, saved }: { profile: Social
     {(['firstName', 'lastName', 'nickname', 'location'] as const).map(field => <label key={field} className="block text-sm font-medium">{{ firstName: 'First name', lastName: 'Last name', nickname: 'Username', location: 'Location' }[field]}<input required={field !== 'location'} minLength={field === 'nickname' ? 2 : 1} maxLength={field === 'location' ? 50 : field === 'nickname' ? 33 : 50} pattern={field === 'nickname' ? '[a-zA-Z0-9_]{2,33}' : undefined} value={form[field]} onChange={event => setForm({ ...form, [field]: event.target.value })} className="mt-1 w-full rounded-lg border border-slate-200 p-2" /></label>)}
     <label className="block text-sm font-medium">Bio<textarea maxLength={1000} rows={3} value={form.bio} onChange={event => setForm({ ...form, bio: event.target.value })} className="mt-1 w-full rounded-lg border border-slate-200 p-2" /></label>
     <div><span className="block text-sm font-medium">Profile photo</span><div className="mt-1"><ImagePicker files={avatar} onChange={setAvatar} max={1} disabled={busy} purpose="avatar" /></div></div>
-    <div><span className="block text-sm font-medium">Cover photo</span><div className="mt-1"><ImagePicker files={cover} onChange={setCover} max={1} disabled={busy} purpose="cover" /></div></div>
     <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={form.isPublic} onChange={event => setForm({ ...form, isPublic: event.target.checked })} />Public profile</label>
     <div className="flex justify-end gap-3"><button type="button" onClick={close} disabled={busy}>Cancel</button><button disabled={busy} className="rounded-lg bg-blue-600 px-4 py-2 text-white disabled:opacity-50">{busy ? 'Saving?' : 'Save changes'}</button></div>
   </form></div>;
