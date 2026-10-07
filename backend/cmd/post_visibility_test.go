@@ -74,7 +74,7 @@ func TestPostVisibilityReadPaths(t *testing.T) {
 
 	// A stranger reaches none of it, and reacts to none of it.
 	stranger.call("GET", postPath, nil, 404)
-	stranger.call("GET", imageURL, nil, 403)
+	stranger.call("GET", imageURL, nil, 404)
 	stranger.call("GET", commentsPath, nil, 404)
 	stranger.call("POST", "/api/v1/reactions", map[string]any{"entityType": "post", "entityId": post.PostId, "score": 1}, 404)
 	stranger.call("POST", "/api/v1/reactions", map[string]any{"entityType": "comment", "entityId": comment.CommentId, "score": 1}, 404)
@@ -99,7 +99,7 @@ func TestPostVisibilityReadPaths(t *testing.T) {
 	// Someone who follows later is not part of the audience the author chose.
 	stranger.call("PUT", "/api/v1/users/dummy-id/follow", nil, 200)
 	stranger.call("GET", postPath, nil, 404)
-	stranger.call("GET", imageURL, nil, 403)
+	stranger.call("GET", imageURL, nil, 404)
 	stranger.call("GET", commentsPath, nil, 404)
 	stranger.call("POST", "/api/v1/reactions", map[string]any{"entityType": "post", "entityId": post.PostId, "score": 1}, 404)
 	stranger.call("POST", "/api/v1/reactions", map[string]any{"entityType": "comment", "entityId": comment.CommentId, "score": 1}, 404)
@@ -141,7 +141,7 @@ func TestSelectedAudienceIsAGrantNotALiveRelation(t *testing.T) {
 	lateClient := newIntegrationClient(t, server)
 	late := decoded[map[string]string](t, lateClient.call("POST", "/api/v1/auth/register", registerValues("Late", "Grant", "late-grant@example.com"), 201))
 	lateClient.call("GET", postPath, nil, 404)
-	lateClient.call("GET", imageURL, nil, 403)
+	lateClient.call("GET", imageURL, nil, 404)
 	owner.call("POST", "/api/v1/posts", map[string]any{
 		"title": "Not yet", "content": "This audience member does not follow me.", "privacy": "selected",
 		"selectedFollowerIds": []string{late["userId"]},
