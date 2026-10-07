@@ -84,7 +84,7 @@ func TestOptionalPostTitleAndRejectedUploads(t *testing.T) {
 	if post.Title != "" {
 		t.Fatal("title should remain empty")
 	}
-	client.call("PUT", fmt.Sprintf("/api/v1/posts/%d", post.PostId), map[string]string{"title": "", "content": "Still without a title."}, 200)
+	client.call("PUT", fmt.Sprintf("/api/v1/posts/%s", post.PostId), map[string]string{"title": "", "content": "Still without a title."}, 200)
 	for _, fixture := range []struct {
 		name   string
 		data   []byte
