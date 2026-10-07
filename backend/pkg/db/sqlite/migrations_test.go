@@ -47,6 +47,7 @@ func TestMigrationsRoundTrip(t *testing.T) {
 		t.Fatalf("initial up: %v", err)
 	}
 	assertSessionColumns(t, database, true)
+	assertPostPublicIdColumn(t, database)
 	assertCommentColumns(t, database)
 	assertEventColumns(t, database)
 	assertResetColumns(t, database)
@@ -68,6 +69,7 @@ func TestMigrationsRoundTrip(t *testing.T) {
 		t.Fatalf("second up: %v", err)
 	}
 	assertSessionColumns(t, database, true)
+	assertPostPublicIdColumn(t, database)
 	assertCommentColumns(t, database)
 	assertEventColumns(t, database)
 	assertResetColumns(t, database)
@@ -78,8 +80,8 @@ func TestMigrationsRoundTrip(t *testing.T) {
 	version, dirty, err := migrations.Version()
 	// Pinned rather than derived from the directory: a new migration is meant to be noticed
 	// here and its round trip confirmed, so adding one is a deliberate edit to this line.
-	if err != nil || dirty || version != 19 {
-		t.Fatalf("expected clean version 19, got %d (dirty=%v, err=%v)", version, dirty, err)
+	if err != nil || dirty || version != 20 {
+		t.Fatalf("expected clean version 20, got %d (dirty=%v, err=%v)", version, dirty, err)
 	}
 }
 
@@ -212,6 +214,17 @@ func assertResetColumns(t *testing.T, database *sql.DB) {
 	}
 	if nullable, err := columnIsNullable(database, "passwordReset", "usedAt"); err == nil && !nullable {
 		t.Fatal("passwordReset.usedAt must be nullable, or every token reads as spent")
+	}
+}
+
+// assertPostPublicIdColumn guards the column 000020 adds: the public UUID a post is
+// addressed by. It is what keeps the table's incrementing rowid out of every URL and API
+// response, so a post cannot be found by guessing the next number.
+func assertPostPublicIdColumn(t *testing.T, database *sql.DB) {
+	t.Helper()
+	columns := tableColumns(t, database, "post")
+	if !columns["publicId"] {
+		t.Fatal("post is missing \"publicId\" after the migration")
 	}
 }
 
