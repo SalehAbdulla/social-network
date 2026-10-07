@@ -7,6 +7,7 @@ import toast from 'react-hot-toast';
 import { type SocialUser, displayName, errorMessage, request } from '../../api/social';
 import { linkify } from '../../lib/linkify';
 import Avatar from '../Avatar';
+import StoryRing from '../stories/StoryRing';
 import MessageAction from '../MessageAction';
 import Button from '../ui/Button';
 import Menu, { MenuItem } from '../ui/Menu';
@@ -20,13 +21,14 @@ export type FollowState = 'none' | 'following' | 'requested';
 /**
  * The Instagram profile header: a centred block with the 150px avatar on the left and, beside it,
  * the handle row (the username and one settings/more button), the display name, the counts, the
- * bio and the two action buttons. On the viewer's own profile the avatar is the "change photo"
- * control and the gear opens the settings menu; on anyone else's the buttons are Follow (or
- * Following with its unfollow menu) and Message.
+ * bio and the two action buttons. When the profile has a live story the avatar wears the story
+ * ring and opens it on a tap, owner and visitor alike; with no story the owner's avatar is the
+ * "change photo" control and the gear opens the settings menu, and on anyone else's the buttons
+ * are Follow (or Following with its unfollow menu) and Message.
  */
 export default function ProfileHeader({
   profile, followers, following, isOwner, avatarSize, followState, canMessage, isFollowingBusy,
-  onAvatarClick, onEdit, onArchive, onChangePassword, onOpenFollows, onToggleFollow,
+  hasStories, storyUnseen, onAvatarClick, onOpenStories, onEdit, onArchive, onChangePassword, onOpenFollows, onToggleFollow,
 }: {
   profile: SocialUser;
   followers: number;
@@ -36,7 +38,12 @@ export default function ProfileHeader({
   followState: FollowState;
   canMessage: boolean;
   isFollowingBusy: boolean;
+  /** Whether this profile has a live story, which the avatar opens on a tap. */
+  hasStories: boolean;
+  /** Whether the viewer still has an unseen story of this author's. */
+  storyUnseen: boolean;
   onAvatarClick: () => void;
+  onOpenStories: () => void;
   onEdit: () => void;
   onArchive: () => void;
   onChangePassword: () => void;
@@ -44,12 +51,25 @@ export default function ProfileHeader({
   onToggleFollow: () => void;
 }) {
   const name = displayName(profile);
-  const avatar = <Avatar name={name} avatarUrl={profile.avatar} size={avatarSize} />;
+  // With a live story the avatar wears the shared story ring — the same one the tray draws, sized
+  // to the profile photo so the face stays the same `avatarSize` inside it. Without one it is the
+  // plain photo. `marker` is off because this ring is not a tray item.
+  const face = hasStories
+    ? <StoryRing name={name} avatarUrl={profile.avatar} size={avatarSize} seen={isOwner || !storyUnseen} own={isOwner} marker={false} />
+    : <Avatar name={name} avatarUrl={profile.avatar} size={avatarSize} />;
+  // A profile with a live story opens it on a tap, the way Instagram does, for owner and visitor
+  // alike; the owner changes the photo from the Edit profile dialog instead. With no story the
+  // owner's tap still opens that dialog, and a visitor's avatar is not a control.
+  const avatarControl: { label: string; onClick: () => void } | null = hasStories
+    ? { label: isOwner ? 'View your story' : `View ${profile.nickname}'s story`, onClick: onOpenStories }
+    : isOwner
+      ? { label: 'Change profile photo', onClick: onAvatarClick }
+      : null;
   return <header className="profile-header">
     <div className="profile-avatar-col">
-      {isOwner
-        ? <button type="button" className="profile-avatar" data-clickable="true" aria-label="Change profile photo" onClick={onAvatarClick}>{avatar}</button>
-        : <span className="profile-avatar">{avatar}</span>}
+      {avatarControl
+        ? <button type="button" className="profile-avatar" data-clickable="true" aria-label={avatarControl.label} onClick={avatarControl.onClick}>{face}</button>
+        : <span className="profile-avatar">{face}</span>}
     </div>
 
     <div className="profile-info">

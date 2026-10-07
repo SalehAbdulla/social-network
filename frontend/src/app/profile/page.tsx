@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useParams, usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { Camera, Lock } from 'lucide-react';
 import toast from 'react-hot-toast';
@@ -11,6 +11,7 @@ import {
   type Post,
   type SocialUser,
   type SocketEvent,
+  type Story,
   errorMessage,
   request,
 } from '../api/social';
@@ -19,6 +20,7 @@ import { useBackend } from '../components/BackendProvider';
 import { usePagedList } from '../lib/usePagedList';
 import { useResource } from '../lib/useResource';
 import { useMediaQuery } from '../lib/useMediaQuery';
+import { authorHasUnseen, firstUnseenIndex } from '../lib/storySequence';
 
 import Button from '../components/ui/Button';
 import ChangePassword from '../components/ChangePassword';
@@ -74,6 +76,17 @@ export default function Profile() {
   const isWide = useMediaQuery('(min-width: 900px)');
   const isTablet = useMediaQuery('(min-width: 736px)');
   const avatarSize = isWide ? 150 : isTablet ? 110 : 77;
+
+  // This profile's live stories, so the avatar can open them the way a ring does on Instagram.
+  // `/stories` is the one listing a viewer may see, so filtering it by this author is exactly the
+  // set of their stories the viewer is allowed to watch — a private profile's stories are absent
+  // for a stranger, and the avatar then stays a plain photo.
+  const stories = useResource<Story[]>('/stories');
+  const profileStories = useMemo(
+    () => (stories.data ?? []).filter(story => story.userId === profileId).sort((a, b) => a.storyId - b.storyId),
+    [stories.data, profileId],
+  );
+  const hasStories = profileStories.length > 0;
 
   const posts = usePagedList<Post, Post[]>({
     key: `/users/${profileId}/posts?liked=${activeTab === 'likes'}`,
@@ -164,6 +177,13 @@ export default function Profile() {
     router.push(`${pathname}?tab=${tab}`, { scroll: false });
   }
 
+  // Open this author's stories from the profile avatar — the same route the tray pushes, starting
+  // at their first unseen story (or the first one when they are all seen).
+  function openStories() {
+    const story = profileStories[firstUnseenIndex(profileStories)];
+    if (story) router.push(`/stories/${story.nickname}/${story.storyId}`);
+  }
+
   function removePost(postId: string) {
     posts.update(items => items.filter(item => item.postId !== postId));
     saved.update(items => items.filter(item => item.postId !== postId));
@@ -202,7 +222,10 @@ export default function Profile() {
         followState={followState}
         canMessage={profile.data.canMessage === true}
         isFollowingBusy={isFollowingBusy}
+        hasStories={hasStories}
+        storyUnseen={authorHasUnseen(profileStories)}
         onAvatarClick={() => setIsEditing(true)}
+        onOpenStories={openStories}
         onEdit={() => setIsEditing(true)}
         onArchive={() => setArchiveOpen(true)}
         onChangePassword={() => setIsChangingPassword(true)}
