@@ -88,7 +88,7 @@ const Login = () => {
           </div>
         </div>
         <h1 className='text-3xl md:text-6xl md:pb-2 font-bold bg-linear-to-r from-brand-1 to-brand-2 bg-clip-text text-transparent'>More than just friends truly connect</h1>
-        <p className='text-4xl md:text-3xl text-brand-ink max-w-72 md:max-w-md'>connect with global community on pingup.</p>
+        <p className='text-4xl md:text-3xl text-brand-ink max-w-72 md:max-w-md'>connect with global community on social network.</p>
       </div>
       <span className='md:h-10'></span>
       </div>
