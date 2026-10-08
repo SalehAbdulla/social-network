@@ -26,7 +26,7 @@ export default function SwitchAccounts({ open, onClose, accounts, activeUserId, 
     try {
       await switchAccount(account.userId);
       // eslint-disable-next-line @next/next/no-location-assign-relative-destination
-      window.location.href = '/';
+      window.location.assign('/');
     } catch (error) {
       toast.error(errorMessage(error));
       setBusy('');
@@ -41,7 +41,7 @@ export default function SwitchAccounts({ open, onClose, accounts, activeUserId, 
       await removeSavedAccount(account.userId);
       if (account.userId === activeUserId) {
         // eslint-disable-next-line @next/next/no-location-assign-relative-destination
-        window.location.href = '/';
+        window.location.assign('/');
         return;
       }
       await refreshAccounts();
@@ -58,7 +58,7 @@ export default function SwitchAccounts({ open, onClose, accounts, activeUserId, 
     try {
       await request('/auth/logout', 'POST');
       // eslint-disable-next-line @next/next/no-location-assign-relative-destination
-      window.location.href = '/login';
+      window.location.assign('/login');
     } catch (error) {
       toast.error(errorMessage(error));
       setBusy('');
@@ -67,7 +67,7 @@ export default function SwitchAccounts({ open, onClose, accounts, activeUserId, 
 
   function addAccount() {
     // eslint-disable-next-line @next/next/no-location-assign-relative-destination
-    window.location.href = '/login';
+    window.location.assign('/login');
   }
 
   return (

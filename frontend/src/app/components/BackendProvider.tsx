@@ -44,7 +44,7 @@ function AuthenticatedBackend({ children }: { children: React.ReactNode }) {
   const [socket, setSocket] = useState<WebSocket | null>(null);
   const [reconnecting, setReconnecting] = useState(false);
   const [badges, setBadges] = useState<{ notifications: number; messages: number } | null>(null);
-  const [accounts, setAccounts] = useState<SavedAccount[]>([]);
+  const [savedAccountList, setAccounts] = useState<SavedAccount[]>([]);
   const [switcherOpen, setSwitcherOpen] = useState(false);
   const sessionRevision = useRef(0);
 
@@ -79,6 +79,7 @@ function AuthenticatedBackend({ children }: { children: React.ReactNode }) {
   }, [initialize, redirectToLogin]);
 
   const userId = user?.userId;
+  const accounts = userId ? savedAccountList : [];
   useEffect(() => {
     if (!userId || error) return;
     let stopped = false;
@@ -129,9 +130,11 @@ function AuthenticatedBackend({ children }: { children: React.ReactNode }) {
     } catch { /* the switcher just stays empty */ }
   }, []);
   useEffect(() => {
-    if (!userId) { setAccounts([]); return; }
-    void refreshAccounts();
-  }, [userId, refreshAccounts]);
+    if (!userId) return;
+    savedAccounts()
+      .then(saved => setAccounts(saved.accounts))
+      .catch(() => { /* the switcher just stays empty */ });
+  }, [userId]);
   useEffect(() => {
     const open = () => setSwitcherOpen(true);
     window.addEventListener('social:switch-accounts', open);
