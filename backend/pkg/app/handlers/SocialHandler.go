@@ -17,6 +17,14 @@ import (
 	pkgwebsocket "social-network/backend/pkg/websocket"
 )
 
+const (
+	// Discover pages on an offset, so the page size is a contract with the client:
+	// it is the LIMIT here and the step of the offset there. These two must stay
+	// in agreement, and the default keeps a client that asks for no size working.
+	discoverPageSize    = 30
+	maxDiscoverPageSize = 100
+)
+
 func respond(w http.ResponseWriter, status int, data any) {
 	w.Header().Set("Content-Type", "application/json")
 	w.Header().Set("Cache-Control", "no-store")
@@ -154,7 +162,16 @@ func (re *HandlerContext) Discover(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	users, err := re.SocialService.Repo.DiscoverUsers(currentUser(r), strings.TrimSpace(r.URL.Query().Get("q")), offset)
+	size := discoverPageSize
+	if raw := strings.TrimSpace(r.URL.Query().Get("size")); raw != "" {
+		n, err := strconv.Atoi(raw)
+		if err != nil || n < 1 || n > maxDiscoverPageSize {
+			re.HandleError(w, r, backend.ErrBadRequest)
+			return
+		}
+		size = n
+	}
+	users, err := re.SocialService.Repo.DiscoverUsers(currentUser(r), strings.TrimSpace(r.URL.Query().Get("q")), size, offset)
 	if err != nil {
 		re.HandleError(w, r, err)
 		return

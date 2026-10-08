@@ -12,7 +12,7 @@ import RequestState from '../components/RequestState';
 import { CardGridSkeleton } from '../components/Skeletons';
 import { useLiveRefresh } from '../lib/useLiveRefresh';
 
-const PEOPLE_PER_PAGE = 30;
+const PEOPLE_PER_PAGE = 12;
 
 export default function Discover() {
   const { user, refreshUser } = useBackend();
@@ -24,7 +24,7 @@ export default function Discover() {
     ? followed[person.userId]
     : user.following.includes(person.userId);
   const people = usePagedList<SocialUser, SocialUser[]>({
-    key: `/users?q=${encodeURIComponent(search)}`,
+    key: `/users?q=${encodeURIComponent(search)}&size=${PEOPLE_PER_PAGE}`,
     pageQuery: page => `&offset=${(page - 1) * PEOPLE_PER_PAGE}`,
     pageSize: PEOPLE_PER_PAGE,
     normalize: raw => ({ items: raw }),

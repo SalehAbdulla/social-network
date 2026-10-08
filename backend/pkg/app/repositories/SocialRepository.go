@@ -111,9 +111,9 @@ func (db *DB) CanViewPrivateProfile(viewerID, profileID string) (bool, error) {
 	return allowed, err
 }
 
-func (db *DB) DiscoverUsers(currentID, search string, offset int) ([]models.SocialUser, error) {
+func (db *DB) DiscoverUsers(currentID, search string, limit, offset int) ([]models.SocialUser, error) {
 	pattern := likePattern(search)
-	ids, err := db.stringList(`SELECT userId FROM user WHERE userId != ? AND (nickName LIKE ? ESCAPE '\' OR firstName || ' ' || lastName LIKE ? ESCAPE '\' OR aboutMe LIKE ? ESCAPE '\' OR location LIKE ? ESCAPE '\') ORDER BY nickName LIMIT 30 OFFSET ?`, currentID, pattern, pattern, pattern, pattern, offset)
+	ids, err := db.stringList(`SELECT userId FROM user WHERE userId != ? AND (nickName LIKE ? ESCAPE '\' OR firstName || ' ' || lastName LIKE ? ESCAPE '\' OR aboutMe LIKE ? ESCAPE '\' OR location LIKE ? ESCAPE '\') ORDER BY nickName LIMIT ? OFFSET ?`, currentID, pattern, pattern, pattern, pattern, limit, offset)
 	if err != nil {
 		return nil, err
 	}
