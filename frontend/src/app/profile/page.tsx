@@ -12,6 +12,7 @@ import {
   type SocialUser,
   type SocketEvent,
   type Story,
+  displayName,
   errorMessage,
   request,
 } from '../api/social';
@@ -20,6 +21,7 @@ import { useBackend } from '../components/BackendProvider';
 import { usePagedList } from '../lib/usePagedList';
 import { useResource } from '../lib/useResource';
 import { useMediaQuery } from '../lib/useMediaQuery';
+import { useDialogFocus } from '../lib/useDialogFocus';
 import { authorHasUnseen, firstUnseenIndex } from '../lib/storySequence';
 
 import Button from '../components/ui/Button';
@@ -108,6 +110,8 @@ export default function Profile() {
   const [archiveOpen, setArchiveOpen] = useState(false);
   const [followListTab, setFollowListTab] = useState<FollowListTab | null>(null);
   const [isFollowingBusy, setIsFollowingBusy] = useState(false);
+  const [confirmUnfollow, setConfirmUnfollow] = useState(false);
+  const unfollowDialog = useDialogFocus<HTMLDivElement>(() => setConfirmUnfollow(false), { enabled: confirmUnfollow });
 
   const closeFollowList = useCallback(() => setFollowListTab(null), []);
 
@@ -127,10 +131,11 @@ export default function Profile() {
     return () => window.removeEventListener('social:socket', handleSocketEvent);
   }, [profile.reload, posts.reload, media.reload, saved.reload, user.userId]);
 
-  async function handleToggleFollow() {
+  async function handleToggleFollow(confirmed = false) {
     if (isFollowingBusy) return;
-    setIsFollowingBusy(true);
     const cancels = followState === 'following' || followState === 'requested';
+    if (cancels && !confirmed) { setConfirmUnfollow(true); return; }
+    setIsFollowingBusy(true);
     const intent: FollowState = cancels
       ? 'none'
       : profile.data?.isPublic === false ? 'requested' : 'following';
@@ -141,9 +146,11 @@ export default function Profile() {
       await refreshUser();
       profile.reload();
       if (reloadsPosts) posts.reload();
+      if (cancels) toast.success('You unfollowed this account.');
     } catch (error) {
       toast.error(errorMessage(error));
     } finally {
+      setConfirmUnfollow(false);
       setFollowIntent(null);
       setIsFollowingBusy(false);
     }
@@ -221,6 +228,16 @@ export default function Profile() {
 
       {modal}
       {create.modal}
+
+      {confirmUnfollow && <div ref={unfollowDialog} role="dialog" aria-modal="true" aria-labelledby="unfollow-confirm" tabIndex={-1} className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={() => setConfirmUnfollow(false)}>
+        <div className="w-full max-w-sm space-y-4 rounded-xl bg-white p-5" onClick={event => event.stopPropagation()}>
+          <p id="unfollow-confirm" className="text-sm text-slate-700">Unfollow {displayName(profile.data)}? You will stop seeing their posts and will have to send a new request to follow again.</p>
+          <div className="flex justify-end gap-3">
+            <Button variant="secondary" onClick={() => setConfirmUnfollow(false)}>Cancel</Button>
+            <Button variant="danger" loading={isFollowingBusy} onClick={() => void handleToggleFollow(true)}>Unfollow</Button>
+          </div>
+        </div>
+      </div>}
 
       {isEditing && <EditProfile profile={profile.data} close={() => setIsEditing(false)} saved={profile.reload} />}
       {isChangingPassword && <ChangePassword close={() => setIsChangingPassword(false)} />}
