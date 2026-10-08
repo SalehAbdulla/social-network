@@ -7,7 +7,7 @@ BASE_URL ?= http://127.0.0.1:5174
 CHROME_PATH ?=
 
 .DEFAULT_GOAL := help
-.PHONY: help dev status seed seed-demo seed-showcase build lint types test test-race smoke check pin-check compose-config api-tour
+.PHONY: help dev status seed seed-demo seed-showcase build lint types test test-race smoke check pin-check compose-config images compose-up api-tour
 
 help: ## Show this list
 	@awk 'BEGIN {FS = ":.*?## "} /^[a-zA-Z_-]+:.*?## / {printf "  %-16s %s\n", $$1, $$2}' $(MAKEFILE_LIST)
@@ -61,6 +61,12 @@ pin-check: ## Report whether the base-image pins still match their tags
 
 compose-config: ## Validate compose.yaml (client-side; needs no daemon)
 	docker compose config
+
+images: ## Build both Docker images (needs a reachable daemon)
+	./scripts/build-images.sh
+
+compose-up: ## Build both Docker images and start the stack
+	./scripts/build-images.sh --up
 
 api-tour: ## Call the API end to end against a running backend
 	BASE_URL=$(BASE_URL) sh scripts/api-tour.sh
