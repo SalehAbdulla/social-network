@@ -944,15 +944,16 @@ Reference: `GroupHandler.go`, `GroupManagementHandler.go`, `GroupContentHandler.
   passed on the first run. `DEPLOYMENT.md` records the drill, the exact commands, the result and
   the Docker-on-a-volume equivalent — with the caveat that the Docker half is reviewed but was
   not executed, because the environment had no Docker daemon.
-- [ ] **P2** Verify `docker compose config` and a full `docker compose up --build` on a clean
+- [x] **P2** Verify `docker compose config` and a full `docker compose up --build` on a clean
   host; record the first-run steps and the expected log lines in `DEPLOYMENT.md`. Half closed
   2026-09-30: `docker compose config` **has now been run** and exits 0 against this file, rendering both
   services, the `service_healthy` gate, the loopback-only port binding and the named volume (a Compose
-  v5.1.4 client answers this without a daemon, which is why it was possible here). The other half is
-  untouched: `docker compose build` / `up --build` has never run anywhere, because the local engine
-  answers HTTP 500 on every API call — Docker Desktop is running but its VM is not serving — so the
-  healthchecks and the Dockerfiles remain reviewed rather than executed. `DEPLOYMENT.md` now separates
-  the two the same way.
+  v5.1.4 client answers this without a daemon, which is why it was possible here). **Closed
+  2026-10-08:** `docker compose build` / `up` ran end to end under colima on Apple Silicon — see the
+  session note at the end of this file. The earlier note that the local engine answered HTTP 500 on
+  every API call was a stale Docker Desktop VM; that install had since been removed, and colima
+  replaced it, so nothing in the Dockerfiles or the healthchecks needed changing to make the build
+  pass. `DEPLOYMENT.md` records the result.
 - [x] **P2** Add health/readiness endpoints and container healthchecks (`compose.yaml`
   currently relied only on `depends_on`). Closed 2026-09-28: `GET /api/v1/health` is liveness and
   never touches the database; `GET /api/v1/ready` pings SQLite with a two-second ceiling and answers
@@ -3137,6 +3138,46 @@ changes and reproducing the identical failure. Later sections are stale for the 
 the `Unfollow` label the profile now hides behind a "Following ▾" menu, `Publish Post`) and the
 suite needs its composer, profile-follow and rail-create sections rewritten against the current UI
 before it can be a usable gate again.
+
+## Session note — the Docker build finally ran (2026-10-08)
+
+The Docker section of the evaluation was the last unproven part of the project: both images had
+only ever been reviewed. They have now been built and run end to end on Apple Silicon, and the two
+checklist items it covers — `docker ps -a` showing two non-empty containers, and the application
+being usable in a browser through them — both hold.
+
+**Why colima and not Docker Desktop.** Docker Desktop had been uninstalled from this host (it left a
+dangling `/var/run/docker.sock` symlink behind, which is what `docker info` was reporting on), and
+installing it needs an administrator password that is not available here. colima runs a user-level
+VM and needs none, so it went in as prebuilt release binaries from GitHub — `lima` 2.2.1 and
+`colima` 0.10.3 into `/opt/homebrew/bin`, with lima's `share/lima` and `libexec/lima` beside it,
+because the Homebrew bottles could not be fetched (`ghcr.io` is blocked on this network). The VM
+started with `--cpu 4 --memory 6 --disk 60`.
+
+**Two environment problems, neither of them the project's.** First, the VM inherited the host's
+resolver and could not resolve Docker Hub, so the VM was restarted with `--dns 1.1.1.1
+--dns 8.8.8.8`. Second, and more stubborn, this network drops DNS for Docker Hub and
+`proxy.golang.org` intermittently — `proxy.golang.org` in particular resolved but refused
+connections for a stretch, and resolved normally 8/8 a few minutes later. The build therefore had
+to be retried rather than fixed: attempt 1 died in `npm ci`, attempt 2 got through `go mod download`
+and both images. Docker caches every finished layer, so a retry continues rather than restarts,
+which is what `scripts/build-images.sh` plus a loop around it provides.
+
+**Result.** `social-network-backend:latest` (181 MB) and `social-network-frontend:latest` (444 MB),
+both built from their pinned digests — every `FROM` pulled at the digest recorded in the Dockerfile,
+so the pins are now verified to build rather than merely to resolve. `docker ps -a` shows
+`social-network-backend-1` and `social-network-frontend-1`, both `Up … (healthy)`, both with
+non-zero sizes. The backend log opens with `Migrations applied successfully`, and the frontend's own
+healthcheck reaches the backend across the compose network (its `/api/v1/ready` calls arrive from
+`172.18.0.3`), which is the path that could not be exercised before. The browser suite then ran
+against `http://localhost:4000` and passed 9/9: the register form's eight fields, a full signup whose
+About Me, private choice and uploaded photo reach the profile, a mandatory-only signup, a refused
+duplicate email, a refused wrong password, the notifications entry on every page, an immediate
+follow of a public account, and both confirmation prompts.
+
+Nothing in the Dockerfiles, `compose.yaml` or the healthchecks needed changing to make this pass —
+the only fix on this path was `make compose-config`, which had been calling `docker compose config`
+directly and so failed on any host without the plugin wired into the `docker` CLI.
 
 ## Definition of done
 
