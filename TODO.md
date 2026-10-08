@@ -3179,6 +3179,37 @@ Nothing in the Dockerfiles, `compose.yaml` or the healthchecks needed changing t
 the only fix on this path was `make compose-config`, which had been calling `docker compose config`
 directly and so failed on any host without the plugin wired into the `docker` CLI.
 
+## Session note — discover loads a page at a time (2026-10-09)
+
+`/discover` fetched 30 people per request and rendered all 30 at once, so on a database of a
+few dozen accounts the page showed everyone immediately and read as "no paging at all". The feed
+fetches 10 at a time, so the two felt nothing alike. The page size is now **12**, which is close to
+the feed's cadence and still fills a 3-column grid evenly.
+
+**The size had to become a parameter, not just a smaller constant.** Discover pages on `offset`
+rather than `page`/`size`, and the server's `LIMIT` was the hardcoded 30 that the client's offset
+step had to match. Lowering only the client to 12 would have asked for rows 12–41 on the second
+page and silently skipped rows 30–41 — the two numbers were a contract with nothing enforcing it.
+So `DiscoverUsers` now takes the limit and the handler reads `size` (default 30, capped at 100,
+rejecting anything outside it with 400), which is the same shape the feed, saved posts, search and
+hashtags already use. The client sends the size it pages by, so the two can no longer drift.
+
+`backend/cmd/discover_pagination_test.go` walks the whole list with `size=3` and asserts that every
+account comes back exactly once — the failure the old coupling allowed — plus the bounds check and
+the unchanged default for a client that asks for no size.
+
+**A correction to the note above.** The 9/9 browser run recorded in the previous session note was
+not, in fact, talking to the containers. A host `next dev -p 4000` left over from an earlier
+verification run was still bound to `::` on port 4000, so `localhost:4000` resolved to IPv6 and hit
+that dev server — which proxied to a stale host backend — while the containers sat idle behind the
+IPv4 binding. Nothing about the container facts in that note changes: the images still build, the
+containers are still healthy with non-zero sizes, migrations still run at boot and the frontend's
+healthcheck still crosses the compose network. But the browser evidence was measuring the host
+stack. With the stray processes killed, the same nine checks were re-run against the containers and
+pass 9/9, with the backend container logging the requests. The shell that was supposed to stop those
+processes had failed to: it called `lsof` after an earlier command had overwritten `PATH`, so the
+kill matched nothing and exited quietly.
+
 ## Definition of done
 
 A task is complete when: the code builds (`go build ./...`, `npm run build`), tests pass
