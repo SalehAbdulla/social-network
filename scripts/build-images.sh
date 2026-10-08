@@ -38,11 +38,6 @@ if ! "${COMPOSE[@]}" version >/dev/null 2>&1; then
   exit 1
 fi
 
-if ! docker info >/dev/null 2>&1; then
-  printf 'No reachable Docker daemon. Start Docker Desktop (or colima) and try again.\n' >&2
-  exit 1
-fi
-
 cd "$ROOT_DIR"
 
 printf '== Validating %s\n' "$COMPOSE_FILE"
@@ -51,6 +46,11 @@ printf '  ok  compose.yaml renders\n'
 
 if [[ "$CHECK_ONLY" == 1 ]]; then
   exit 0
+fi
+
+if ! docker info >/dev/null 2>&1; then
+  printf 'No reachable Docker daemon. Start Docker Desktop (or colima) and try again.\n' >&2
+  exit 1
 fi
 
 printf '\n== Building social-network-backend and social-network-frontend\n'

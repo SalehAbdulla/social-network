@@ -60,7 +60,7 @@ pin-check: ## Report whether the base-image pins still match their tags
 	node scripts/pin-base-images.mjs
 
 compose-config: ## Validate compose.yaml (client-side; needs no daemon)
-	docker compose config
+	./scripts/build-images.sh --check
 
 images: ## Build both Docker images (needs a reachable daemon)
 	./scripts/build-images.sh
