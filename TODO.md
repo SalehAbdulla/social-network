@@ -3085,6 +3085,59 @@ the posts the rail's 288 px. No other page moves: `/profile`'s block is still at
 Checked at 320, 375, 768, 1024, 1280, 1440 and 1920 px with the rail open and collapsed: the document
 never scrolls horizontally, and the browser suite passes 52/52.
 
+## Session note — register-form regression, lint errors, and the two bonus prompts (2026-10-08)
+
+Four spec-relevant changes, all verified in a real browser against an isolated database.
+
+**The register form had lost two fields the spec requires.** Commit `48b3020` ("auth: drop about me
+and photo from signup") removed the About Me textarea and the profile-photo picker from
+`frontend/src/app/login/page.tsx` to stop the form outgrowing the viewport. The spec asks for
+Avatar/Image, Nickname and About Me to be *present in the form but skippable*, and this file's own
+P0-5 entry — plus the browser suite's register steps at `integration-smoke.mjs:1039`, which assert
+`textarea[name="aboutMe"]` and `input[aria-label="Add photos"]` — already required them, so both were
+restored. The layout fix from that commit (`md:h-screen md:overflow-hidden` with a scrolling form
+column) is kept, so the wallpaper still covers the page. The avatar cannot ride in the register
+request for the reason P0-5 records, so the form previews it locally and `attachAvatar` uploads it
+and attaches it with one `PUT /users/me` straight after `POST /auth/register`, warning rather than
+losing the account if that fails.
+
+**Two eslint errors were failing `npm run lint`.** `BackendProvider.tsx` wrote state synchronously
+from an effect (`setAccounts([])` when there is no user); the empty list is now derived
+(`userId ? savedAccountList : []`) and the fetch resolves into `.then`, which is the pattern the
+badges effect already used. `SwitchAccounts.tsx` assigned `window.location.href` four times, which
+`react-hooks/immutability` rejects; those are `window.location.assign(...)` calls now, which keep the
+full reload the account switch needs.
+
+**Two bonus prompts.** Unfollowing now opens a confirmation dialog on the profile
+(`profile/page.tsx`), and flipping the profile between public and private opens one in the edit
+dialog (`EditProfile.tsx`); both are dismissable with Cancel or Escape and only apply the change on
+confirm. The visibility prompt is rendered as a sibling of the edit dialog so its own Cancel button
+stays unambiguous.
+
+**A script to build the images.** `scripts/build-images.sh` validates `compose.yaml`, builds both
+images and, with `--up`, starts the stack and waits for the frontend to answer; it prefers
+`docker compose` and falls back to `docker-compose`. `make images` and `make compose-up` wrap it.
+It still needs a host with a reachable daemon to be exercised end to end.
+
+Verified: `go build ./...`, `go vet ./...`, `go test ./...`; `npm run lint` (0 errors),
+`npx tsc --noEmit`, `npm run build`; `scripts/api-tour.sh` against a live backend (110/110); and a
+headless-Chrome pass over the register form (all eight fields, the five required and the three
+optional), a full signup whose About Me, private choice and photo reach the profile, a
+mandatory-only signup that still generates a handle, a refused duplicate email, a refused wrong
+password, the notifications entry on every page, an immediate follow of a public account, and both
+new confirmation prompts — 9/9.
+
+**Known issue, not fixed here.** `frontend/scripts/integration-smoke.mjs` no longer runs to
+completion. It stops at line 293 with `Input not found`: the suite still drives the single-form
+composer that `5a85ed4` ("create-post: build the one three-step dialog every entry point opens")
+replaced with the select → crop → details wizard, so it looks for a `textarea` and a "Publish Post"
+button that `/create-post` no longer renders. Confirmed pre-existing by stashing this session's
+changes and reproducing the identical failure. Later sections are stale for the same reason
+(`main select`, `publish-blocked`, `draft-restored`, `[role="dialog"][aria-label="Create a post"]`,
+the `Unfollow` label the profile now hides behind a "Following ▾" menu, `Publish Post`) and the
+suite needs its composer, profile-follow and rail-create sections rewritten against the current UI
+before it can be a usable gate again.
+
 ## Definition of done
 
 A task is complete when: the code builds (`go build ./...`, `npm run build`), tests pass
