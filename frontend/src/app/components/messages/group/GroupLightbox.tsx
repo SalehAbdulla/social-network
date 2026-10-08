@@ -11,21 +11,11 @@ import Menu, { MenuItem } from '../../ui/Menu';
 import { isVideo, itemName, type GroupItem } from './groupContent';
 import { groupExactTime } from './groupTime';
 
-/**
- * The viewer a group attachment opens — from the Media grid and from a photo in the chat,
- * because they are the same picture and should not open onto two different viewers.
- *
- * It is the app's dialog contract (focus moves in, Tab cycles, Escape closes, focus returns to
- * whatever opened it) with the parts a chat bubble cannot show: who uploaded it, the caption,
- * and the delete. The arrows and the arrow keys step through the set, the picture is drawn
- * from the large derivative, and a click on the backdrop closes it.
- */
 export default function GroupLightbox({ items, index, meId, isOwner, avatarOf, onClose, onIndex, onDelete }: {
   items: GroupItem[];
   index: number;
   meId: string;
   isOwner: boolean;
-  /** Resolves the uploader's avatar from the roster the caller already holds. */
   avatarOf?: (userId: string) => string;
   onClose: () => void;
   onIndex: (next: number) => void;
@@ -34,8 +24,6 @@ export default function GroupLightbox({ items, index, meId, isOwner, avatarOf, o
   const item = items[index];
   const many = items.length > 1;
   const dialog = useDialogFocus<HTMLDivElement>(onClose);
-  // Which item's picture failed, rather than a boolean, so moving to the next one in the set
-  // resets the placeholder without an effect that would re-render on every step.
   const [failedId, setFailedId] = useState<number | null>(null);
   const failed = failedId === item?.id;
   useEffect(() => {

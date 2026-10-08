@@ -10,30 +10,13 @@ import (
 	"social-network/backend/pkg/media"
 )
 
-// MediaGrace is how long an upload may sit unreferenced before the collector
-// removes it. An upload is always followed by the request that attaches it, so
-// this only has to outlast a slow form; a day is generous and still keeps the
-// table and the upload directory bounded.
 const MediaGrace = 24 * time.Hour
 
-// MediaCleanupResult reports what one collector pass removed: database rows and
-// files. The two differ when a file had already been deleted, or when a file
-// outlived its row because an unlink failed.
 type MediaCleanupResult struct {
 	Rows  int
 	Files int
 }
 
-// PruneOrphanedMedia deletes the uploads that nothing references any more (see
-// repositories.DB.UnreferencedMedia), the files behind them, and UUID-named
-// files in the upload directory that have no row at all. It is the backstop for
-// the four delete paths the spec cares about — post, comment, story and message
-// — plus group content, avatars, cover photos and group images, none of which
-// unlink anything when they go away.
-//
-// It is safe to run while the server is serving: a file is only touched when its
-// row is already gone and it is older than grace, and a brand new upload is
-// younger than grace by construction.
 func (re *HandlerContext) PruneOrphanedMedia(grace time.Duration) (MediaCleanupResult, error) {
 	var result MediaCleanupResult
 	ids, err := re.SocialService.Repo.UnreferencedMedia(grace)
@@ -49,12 +32,6 @@ func (re *HandlerContext) PruneOrphanedMedia(grace time.Duration) (MediaCleanupR
 		if err := os.Remove(filepath.Join(re.App.UploadDir, id)); err == nil {
 			result.Files++
 		}
-		// A derivative is a file of its own, and its name is not a UUID, so without this the
-		// sweep below would treat it as something an operator put there and leave it forever.
-		// It goes with its original here rather than waiting for that sweep, which would also
-		// catch it on the next pass: a row that is already known to be unreferenced should not
-		// keep its files for another hour, and a file whose mtime was touched after the grace
-		// window would never be swept at all.
 		for _, variant := range media.Variants() {
 			if err := os.Remove(filepath.Join(re.App.UploadDir, media.FileName(id, variant))); err == nil {
 				result.Files++
@@ -69,12 +46,6 @@ func (re *HandlerContext) PruneOrphanedMedia(grace time.Duration) (MediaCleanupR
 	return result, nil
 }
 
-// removeStrayMediaFiles unlinks regular files that no media row points at, whether they are an
-// upload itself or one of its derivatives. A name is only a candidate when its base — the name
-// itself, or the upload's id in front of a `_thumb`/`_large` suffix — parses as a UUID, so
-// anything an operator drops into the upload directory (`notes.txt`, `notes_large`, a nested
-// directory) is left alone; and only files older than grace, so an upload whose row is still
-// being written is not a candidate.
 func (re *HandlerContext) removeStrayMediaFiles(grace time.Duration) (int, error) {
 	entries, err := os.ReadDir(re.App.UploadDir)
 	if err != nil {

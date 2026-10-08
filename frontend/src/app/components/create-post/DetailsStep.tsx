@@ -7,17 +7,14 @@ import Avatar from '../Avatar';
 import { geometry, imageStyle, boxStyle, MEDIA_SQUARE } from './useCropper';
 import { CAPTION_MAX, type CreateContext, type SelectedImage } from './types';
 
-/** The app's emoji set, the same eight the chat composer offers. */
 const EMOJI = ['😀', '❤️', '👍', '🎉', '😂', '🙏', '👋', '🔥'];
 
-/** The three audiences, worded with the icon that closes the feed card's header. */
 const PRIVACY = [
   { value: 'public' as const, label: 'Public', desc: 'Anyone on or off Social Network', Icon: Globe },
   { value: 'followers' as const, label: 'Followers', desc: 'Your followers only', Icon: Users },
   { value: 'selected' as const, label: 'Only me', desc: 'Only the followers you choose', Icon: Lock },
 ];
 
-/** One photo as the details step shows it: the framed result, with its letterbox bars. */
 function Preview({ image }: { image: SelectedImage }) {
   const view = geometry(image, MEDIA_SQUARE);
   return <div className="cp-crop-box" style={boxStyle(view)}>
@@ -25,14 +22,6 @@ function Preview({ image }: { image: SelectedImage }) {
   </div>;
 }
 
-/**
- * Step 3: the caption and the settings, in the panel beside the framed photos.
- *
- * The left column shows the crop the post will carry, with arrows and dots when there is more than
- * one photo. The right column is the author, the caption with its emoji and counter, and the rows
- * this app actually has: the audience, and — in text mode — a way back to the picker. Rows the
- * backend cannot store (alt text, location, collaborators) are deliberately absent.
- */
 export default function DetailsStep({ context, groupName, groupAvatar, images, index, onIndex, textMode, caption, onCaption, privacy, onPrivacy, followers, selectedFollowers, onToggleFollower, followersLoading, onAddPhotos, captionRef }: {
   context: CreateContext;
   groupName: string;

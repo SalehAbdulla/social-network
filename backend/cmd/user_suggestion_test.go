@@ -6,13 +6,6 @@ import (
 	"social-network/backend/pkg/models"
 )
 
-// TestUserSuggestionsIntegration covers the feed's "Suggested for you" endpoint: who it may
-// offer, who it must never offer, and the order it offers them in.
-//
-// The exclusions are the interesting half. A suggestion list is a read path over the whole
-// `user` table, so the three refusals — never the viewer, never someone already followed,
-// never someone with an outstanding follow request — are what keep it from suggesting an
-// action that cannot succeed (following again is a 409).
 func TestUserSuggestionsIntegration(t *testing.T) {
 	server, repo := integrationServer(t, true, false)
 	viewer := newIntegrationClient(t, server)
@@ -36,10 +29,6 @@ func TestUserSuggestionsIntegration(t *testing.T) {
 		}
 	}
 
-	// The viewer follows alex and carol (both must then be excluded); alex and carol both
-	// follow bob, so bob has two mutuals, while alex alone follows dave (one mutual).
-	// Following eve — a private profile — leaves a *pending* request, which must also be
-	// excluded: offering "Follow" for someone already asked would only produce a 409.
 	for _, edge := range [][2]string{
 		{"dummy-id", "alex-id"}, {"dummy-id", "carol-id"},
 		{"alex-id", "bob-id"}, {"carol-id", "bob-id"},
@@ -58,7 +47,6 @@ func TestUserSuggestionsIntegration(t *testing.T) {
 	position := map[string]int{}
 	for i, row := range rows {
 		position[row["userId"].(string)] = i
-		// The endpoint ships only the fields the row draws — never the account's email.
 		if _, ok := row["email"]; ok {
 			t.Fatalf("a suggestion leaked an email: %+v", row)
 		}
@@ -89,13 +77,10 @@ func TestUserSuggestionsIntegration(t *testing.T) {
 	if got := byID["bob-id"].Mutuals; len(got) != 2 {
 		t.Fatalf("bob's mutual names = %v, want two", got)
 	}
-	// The seeded alex is "Alex User"; the mutual name is the display name, not the handle.
 	if got := byID["dave-id"].Mutuals; len(got) != 1 || got[0] != "Alex User" {
 		t.Fatalf("dave's mutual names = %v, want [Alex User]", got)
 	}
 
-	// An unauthenticated call is refused before any query runs, and a malformed limit is a
-	// 400 rather than a silent default.
 	newIntegrationClient(t, server).call("GET", "/api/v1/users/suggestions", nil, 401)
 	viewer.call("GET", "/api/v1/users/suggestions?limit=0", nil, 400)
 }

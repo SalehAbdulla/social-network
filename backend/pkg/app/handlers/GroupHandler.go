@@ -76,7 +76,6 @@ func (re *HandlerContext) JoinGroup(w http.ResponseWriter, r *http.Request) {
 		re.HandleError(w, r, err)
 		return
 	} else if created {
-		// The owner is the only one who can act on it, so they get the row.
 		if group, err := re.GroupService.Repo.Group(id, currentUser(r)); err == nil {
 			re.notifyUser(group.OwnerID, currentUser(r), "group_request", id)
 		}
@@ -204,7 +203,6 @@ func (re *HandlerContext) DecideGroupRequest(w http.ResponseWriter, r *http.Requ
 		re.HandleError(w, r, err)
 		return
 	}
-	// Notify the applicant after the decision commits, including declined requests.
 	var applicant string
 	if err := re.GroupService.Repo.Conn.QueryRow("SELECT userId FROM socialGroupRequest WHERE groupId=? AND requestId=?", groupID, requestID).Scan(&applicant); err == nil {
 		re.groupChanged(groupID, "membership", applicant)

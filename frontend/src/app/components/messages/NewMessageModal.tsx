@@ -9,13 +9,6 @@ import { useDialogFocus } from '../../lib/useDialogFocus';
 import Avatar from '../Avatar';
 import Loading from '../Loading';
 
-/**
- * The new-message flow, restyled to Instagram's modal: a centred card, a "To:" search
- * that reads the same people list Discover uses, one person picked from a scrollable list,
- * and a full-width Chat button that stays disabled until there is someone to write to.
- * Escape, the close icon and the backdrop all dismiss it, and focus is trapped while it is
- * open, through the app's shared dialog contract.
- */
 export default function NewMessageModal({ onClose, meId, onPick }: { onClose: () => void; meId: string; onPick?: (userId: string) => void }) {
   const router = useRouter();
   const [search, setSearch] = useState('');
@@ -30,8 +23,6 @@ export default function NewMessageModal({ onClose, meId, onPick }: { onClose: ()
     if (!selected) return;
     const partner = selected;
     onClose();
-    // A surface that owns its own chat panel (the Messages dock) takes the pick instead of a
-    // route change; everything else navigates to the conversation, as it always did.
     if (onPick) onPick(partner);
     else router.push(`/messages/${partner}`);
   }

@@ -1,25 +1,6 @@
-# Sample reverse proxy for the Compose stack.
-#
-# Put this in front of the frontend container's port (4000, bound to loopback) so the
-# browser only ever talks HTTPS to one origin. Caddy is used for the sample because it
-# obtains and renews certificates itself and needs no special configuration for the
-# WebSocket upgrade, which is the part of this that is easiest to get wrong elsewhere.
-#
-# This file is reviewed, not executed: the environment it was written in has no caddy
-# binary, and the stack it fronts needs a Docker daemon. Run `caddy validate --config
-# deploy/Caddyfile.example` before trusting it, and read the notes in DEPLOYMENT.md.
-#
-# Host and Origin are passed through unchanged by reverse_proxy, which is what this app
-# needs: the API refuses a state-changing request whose Origin is not its own, and treats
-# a missing Host/Origin pair as suspicious.
-
 social.example.com {
 	encode zstd gzip
 
-	# The document-level headers belong here rather than in the app: the backend
-	# deliberately sends no HSTS and no document CSP, because a JSON API is not where a
-	# browser reads a policy. The value below is a starting point — Next.js injects
-	# inline bootstrap scripts and styles, so a nonce-based policy would be tighter.
 	header {
 		Strict-Transport-Security "max-age=31536000; includeSubDomains"
 		X-Content-Type-Options "nosniff"
@@ -28,25 +9,9 @@ social.example.com {
 		-Server
 	}
 
-	# One upstream: the frontend proxies /api/v1/* and /ws to the backend itself, so the
-	# backend never has to be reachable from outside the compose network. The Upgrade
-	# headers are forwarded as they arrive, which is all /ws needs here.
 	reverse_proxy 127.0.0.1:4000
 
 	log {
 		output file /var/log/caddy/social-network.log
 	}
 }
-
-# Per-client rate limiting is worth adding at this layer, because the app's own limits
-# are per direct peer and every request behind this proxy arrives from one address: see
-# the request-limit paragraph in DEPLOYMENT.md. Caddy needs a plugin for that
-# (caddy-ratelimit); with nginx it is `limit_req`, and the WebSocket upgrade there needs
-# the usual three lines:
-#
-#   proxy_http_version 1.1;
-#   proxy_set_header Upgrade $http_upgrade;
-#   proxy_set_header Connection "upgrade";
-#
-# plus `proxy_set_header Host $host;` if you want nginx to pass the original host on,
-# which this app's Origin check depends on.

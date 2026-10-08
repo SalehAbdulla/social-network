@@ -19,13 +19,6 @@ import LoadMore from '../../LoadMore';
 
 const MEMBER_PAGE = 30;
 
-/**
- * The details panel the Info icon toggles — what the "Group info" tab used to hold.
- *
- * It keeps every write the tab had (rename, invite, accept or decline a request, transfer
- * ownership, remove a member, leave or delete) and lays them out the way the one-to-one
- * panel is laid out: a profile block, the member list, then full-width action rows.
- */
 export default function GroupDetails({ group, meId, changed, onClose }: {
   group: Group;
   meId: string;

@@ -50,14 +50,8 @@ func (re *HandlerContext) GetChatMessages(w http.ResponseWriter, r *http.Request
 	})
 }
 
-// mediaPageSize is how many attachments a page of the chat's media tab carries. A grid of
-// tiles is denser than a column of messages, so it takes more rows per request than the
-// thread's ten.
 const mediaPageSize = 30
 
-// GetConversationMedia is the chat's media tab: the attachments in one direct conversation,
-// newest first. It reads `partnerId` and `offset` exactly as the thread does, so a page of
-// tiles is fetched the way a page of messages is.
 func (re *HandlerContext) GetConversationMedia(w http.ResponseWriter, r *http.Request) {
 	userID, ok := middleware.UserIDFromContext(r.Context())
 	if !ok || userID == "" {

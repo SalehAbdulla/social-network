@@ -1,12 +1,7 @@
 import { LARGE_WIDTH, isImageType } from './mediaLimits';
 
-/** JPEG at this quality, matching `downscale`'s choice for the capped upload. */
 const JPEG_QUALITY = 0.85;
 
-/**
- * The crop the picker offers, and the shape each one produces. `ratio` is width ÷ height;
- * `null` means "leave it alone", so the Original preset is the same file the reader chose.
- */
 export const CROP_PRESETS = [
   { id: 'square', label: '1:1', ratio: 1 },
   { id: 'portrait', label: '4:5', ratio: 4 / 5 },
@@ -14,21 +9,6 @@ export const CROP_PRESETS = [
   { id: 'original', label: 'Original', ratio: null },
 ] as const;
 
-/**
- * Crops a photo to `ratio` (width ÷ height), centred, in the browser.
- *
- * A centre crop rather than a draggable window: the rectangle is the largest of that shape
- * that fits inside the picture, so a square avatar keeps the middle of a landscape photo and
- * loses the sides — which is what a viewer already sees under `object-cover`. Nothing is ever
- * enlarged (a 400×300 file cropped to 16:9 is 400×225, not an upscaled lie), and the long edge
- * is capped at the server's `large` width for the same reason `downscale` caps it: a bigger
- * file is bytes nobody asks for.
- *
- * The failure contract is `downscale`'s, deliberately: an undecodable file, a canvas that will
- * not surrender a blob, a GIF (a still frame of an animation is a different picture), or
- * `ratio === null` all return the original, because a crop that cannot be done must not cost
- * the upload.
- */
 export async function cropToAspect(file: File, ratio?: number | null): Promise<File> {
   if (!ratio || !isImageType(file.type) || file.type === 'image/gif') return file;
   let bitmap: ImageBitmap;
@@ -36,7 +16,6 @@ export async function cropToAspect(file: File, ratio?: number | null): Promise<F
 
   try {
     const { width, height } = bitmap;
-    // The largest rectangle of this aspect that fits, centred in the source.
     let cropWidth = width;
     let cropHeight = Math.round(width / ratio);
     if (cropHeight > height) {

@@ -18,9 +18,6 @@ import (
 
 const mediaPrefix = "/api/v1/media/"
 
-// testRepo migrates a scratch database and seeds the three accounts the
-// visibility rules need. The subject here is SQL, so the fixture writes rows
-// directly rather than driving the services above it.
 func testRepo(t *testing.T) *DB {
 	t.Helper()
 	database, err := sql.Open("sqlite3", filepath.Join(t.TempDir(), "repo.db")+"?_foreign_keys=on&_busy_timeout=5000")
@@ -49,8 +46,6 @@ func testRepo(t *testing.T) *DB {
 	return db
 }
 
-// upload registers a media row and returns the URL other rows reference, which
-// is all they store: the id is never a foreign key.
 func upload(t *testing.T, db *DB, id, owner string) string {
 	t.Helper()
 	if err := db.AddMedia(id, owner, "image/png"); err != nil {
@@ -82,8 +77,6 @@ func insertComment(t *testing.T, db *DB, postID int, author, imageURLs string) {
 	}
 }
 
-// orphans is the collector's query seen as a set, which is how the tests below
-// compare one release against the next.
 func orphans(t *testing.T, db *DB, grace time.Duration) map[string]bool {
 	t.Helper()
 	ids, err := db.UnreferencedMedia(grace)
@@ -105,11 +98,6 @@ func keys(set map[string]bool) []string {
 	return ids
 }
 
-// TestUnreferencedMediaSpansEverySurface is the direct test for the query the
-// media collector runs: a row survives while any one of the eight surfaces still
-// points at it and becomes an orphan the moment the last reference goes. The
-// grace window is asserted from both sides, because it is what keeps an upload
-// that has not been attached yet safe.
 func TestUnreferencedMediaSpansEverySurface(t *testing.T) {
 	db := testRepo(t)
 	ids := map[string]string{
@@ -129,8 +117,6 @@ func TestUnreferencedMediaSpansEverySurface(t *testing.T) {
 	}
 
 	postID := insertPost(t, db, "owner-id", "public", jsonURL(urls["post"]))
-	// The comment gets its own post, so releasing the post below cannot be what
-	// orphans the comment photo.
 	insertComment(t, db, insertPost(t, db, "owner-id", "public", "[]"), "owner-id", jsonURL(urls["comment"]))
 	if _, err := db.Conn.Exec(`INSERT INTO story (userId, mediaUrl, mediaType, expiresAt)
 		VALUES ('owner-id', ?, 'image', datetime('now', '+24 hours'))`, urls["story"]); err != nil {
@@ -164,7 +150,6 @@ func TestUnreferencedMediaSpansEverySurface(t *testing.T) {
 		t.Fatalf("the grace window let a fresh upload through: %v", found)
 	}
 
-	// Releasing one reference at a time has to release exactly that upload.
 	for _, step := range []struct {
 		name   string
 		key    string
@@ -172,8 +157,6 @@ func TestUnreferencedMediaSpansEverySurface(t *testing.T) {
 	}{
 		{"post", "post", func() { db.Conn.Exec("DELETE FROM post WHERE postId = ?", postID) }},
 		{"comment", "comment", func() { db.Conn.Exec("DELETE FROM comment WHERE postId <> ?", postID) }},
-		// Deleting the story is what releases its upload: an expired story is
-		// still the author's archive, so expiry alone releases nothing.
 		{"story", "story", func() { db.Conn.Exec("DELETE FROM story") }},
 		{"message", "message", func() { db.Conn.Exec("DELETE FROM message") }},
 		{"group post", "groupPost", func() { db.Conn.Exec("DELETE FROM groupContent WHERE groupId = ?", groupID) }},
@@ -189,8 +172,6 @@ func TestUnreferencedMediaSpansEverySurface(t *testing.T) {
 		}
 	}
 
-	// With every reference gone the collector sees them all, and the delete
-	// reports the rows it actually removed.
 	released := orphans(t, db, 0)
 	removed, err := db.DeleteMedia(keys(released))
 	if err != nil {
@@ -204,10 +185,6 @@ func TestUnreferencedMediaSpansEverySurface(t *testing.T) {
 	}
 }
 
-// TestMediaVisibilityMirrorsItsReferenceAndAudience walks every branch of the
-// media access rule directly. It is the read side of the same query the
-// collector uses, and the two must stay in step: anything the collector calls an
-// orphan is also something a stranger cannot read.
 func TestMediaVisibilityMirrorsItsReferenceAndAudience(t *testing.T) {
 	db := testRepo(t)
 	urls := map[string]string{}
@@ -242,9 +219,6 @@ func TestMediaVisibilityMirrorsItsReferenceAndAudience(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// The uploader always reaches their own upload, even one nothing points at;
-	// a stranger reaches neither an unattached upload nor a photo on a
-	// followers-only post, but does reach a public post's photo.
 	for _, testCase := range []struct {
 		name   string
 		url    string
@@ -274,8 +248,6 @@ func TestMediaVisibilityMirrorsItsReferenceAndAudience(t *testing.T) {
 		})
 	}
 
-	// A follow opens the followers-only post, its comment photo and a cover
-	// photo on a profile that hides itself from strangers.
 	if _, err := db.FollowUser("viewer-id", "owner-id"); err != nil {
 		t.Fatal(err)
 	}
@@ -304,8 +276,6 @@ func TestMediaVisibilityMirrorsItsReferenceAndAudience(t *testing.T) {
 		})
 	}
 
-	// An expired story can never be served again, which is what lets the
-	// collector take its upload.
 	if _, err := db.Conn.Exec("UPDATE story SET expiresAt = datetime('now', '-1 minute')"); err != nil {
 		t.Fatal(err)
 	}
@@ -314,15 +284,9 @@ func TestMediaVisibilityMirrorsItsReferenceAndAudience(t *testing.T) {
 	}
 }
 
-// TestChatRuleAndSelectedAudience pins the two rules the chat and the "selected"
-// audience depend on: a private message needs a follow in either direction or a
-// public recipient, and a selected audience may only name people who follow the
-// author.
 func TestChatRuleAndSelectedAudience(t *testing.T) {
 	db := testRepo(t)
 
-	// A public profile is reachable by anyone, yourself is not a target at all,
-	// and a missing account is not found rather than forbidden.
 	if allowed, err := db.CanMessage("stranger-id", "owner-id"); err != nil || !allowed {
 		t.Fatalf("a public profile must be messageable (%v, %v)", allowed, err)
 	}
@@ -333,7 +297,6 @@ func TestChatRuleAndSelectedAudience(t *testing.T) {
 		t.Fatalf("expected a not-found target, got %v", err)
 	}
 
-	// Hide the profile: a follow is required now, in either direction.
 	if _, err := db.Conn.Exec("UPDATE user SET isPublic = 0 WHERE userId = 'owner-id'"); err != nil {
 		t.Fatal(err)
 	}
@@ -350,7 +313,6 @@ func TestChatRuleAndSelectedAudience(t *testing.T) {
 		t.Fatal("a profile owner could not view their own profile")
 	}
 
-	// A follow request that is still pending changes nothing.
 	if status, err := db.FollowUser("stranger-id", "owner-id"); err != nil || status != "pending" {
 		t.Fatalf("following a private profile should be pending (%q, %v)", status, err)
 	}
@@ -367,8 +329,6 @@ func TestChatRuleAndSelectedAudience(t *testing.T) {
 		t.Fatal("an accepted follow did not open the profile")
 	}
 
-	// A selected audience may only name followers of the author, and an empty
-	// one is valid.
 	if err := db.ValidateSelectedFollowers("owner-id", []string{"viewer-id"}); !errors.Is(err, backend.ErrBadRequest) {
 		t.Fatalf("a non-follower was accepted as a selected audience: %v", err)
 	}

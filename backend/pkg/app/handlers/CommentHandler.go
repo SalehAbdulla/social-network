@@ -83,12 +83,9 @@ func (re *HandlerContext) GetComments(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// A comment may carry a small gallery, matching the four-photo cap on posts.
 const maxCommentImages = 4
 
 type createCommentRequest struct {
-	// PostID is the post's public UUID (see migration 000020), resolved to the table's own
-	// key before anything is written.
 	PostID    string   `json:"postId"`
 	Content   string   `json:"content"`
 	ImageURLs []string `json:"imageUrls"`
@@ -163,10 +160,6 @@ func (re *HandlerContext) CreateComments(w http.ResponseWriter, r *http.Request)
 	})
 }
 
-// commentInput reads a comment from a JSON body, falling back to the legacy
-// form encoding so older clients keep working. Text length is counted in runes,
-// which is what lets an emoji comment pass; the old byte-counted ASCII gate is
-// gone because the spec allows an image or GIF on a comment.
 func (re *HandlerContext) commentInput(w http.ResponseWriter, r *http.Request, userID string) (createCommentRequest, bool) {
 	var req createCommentRequest
 	if !re.parseForm(w, r) {
@@ -189,7 +182,6 @@ func (re *HandlerContext) commentInput(w http.ResponseWriter, r *http.Request, u
 			return req, false
 		}
 		req.Content = r.FormValue("content")
-		// Repeated `imageUrls` fields carry the gallery in form mode.
 		req.ImageURLs = r.Form["imageUrls"]
 	}
 

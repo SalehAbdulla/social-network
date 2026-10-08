@@ -11,11 +11,6 @@ type ReactionRepository interface {
 	GetUserScore(userId string, entityType string, entityId int) (int, error)
 }
 
-// reactionTarget checks that the viewer may read what they are reacting to.
-// Existence alone is not enough: reacting to a post you cannot open would leak
-// its score and turn the endpoint into an existence oracle. An unreadable target
-// answers not found, exactly like PostRepository.GetPostByID, so the answer says
-// nothing about whether the row exists.
 func (db *DB) reactionTarget(userId, entityType string, entityId int) error {
 	switch entityType {
 	case "post":
@@ -37,8 +32,6 @@ func (db *DB) reactionTarget(userId, entityType string, entityId int) error {
 		}
 		return nil
 	case "message":
-		// A message is readable by exactly its two participants, so that is the whole
-		// rule: anyone else is answered not found, the same as an unreadable post.
 		sender, recipient, err := db.MessageParticipants(entityId)
 		if err != nil {
 			return realtimeforum.ErrNotFound
@@ -48,11 +41,6 @@ func (db *DB) reactionTarget(userId, entityType string, entityId int) error {
 		}
 		return nil
 	case "group_post", "group_comment":
-		// Group content is readable by exactly the members of the group that owns it, which
-		// is also the whole rule for reacting to it. The kind is read off the target type so
-		// a `group_post` cannot name a comment's id, and a row that is not the kind the
-		// caller named is answered not found rather than "wrong kind" — the answer says
-		// nothing about whether the row exists, exactly like the two cases above.
 		kind := "posts"
 		if entityType == "group_comment" {
 			kind = "comments"
@@ -66,9 +54,6 @@ func (db *DB) reactionTarget(userId, entityType string, entityId int) error {
 		}
 		return nil
 	case "story":
-		// A live story is readable by any signed-in member, so reacting to one only needs it
-		// to exist and still be live — the same predicate the read side applies. An unknown
-		// or expired story is answered not found, so a like cannot confirm a dead story.
 		if _, err := db.LiveStoryOwner(entityId); err != nil {
 			return realtimeforum.ErrNotFound
 		}
@@ -151,15 +136,10 @@ func (db *DB) UpsertReaction(userId string, entityType string, entityId int, sco
 			totalScore, entityId,
 		)
 	case "group_post", "group_comment":
-		// The group keeps its total on the content row itself, which is what lets a page of
-		// the Posts tab carry a like count without aggregating the reaction table per item.
 		_, err = db.Conn.Exec(
 			`UPDATE groupContent SET score = ? WHERE id = ?`,
 			totalScore, entityId,
 		)
-		// A message has no denormalised column to keep: the chat list reads the total
-		// from the reaction table through the (entityType, entityId) index, which is why
-		// nothing here matches "message" rather than that case being forgotten.
 	}
 	if err != nil {
 		return 0, realtimeforum.ErrInternal

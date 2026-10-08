@@ -1,24 +1,9 @@
 #!/usr/bin/env bash
-# Backup -> wipe -> restore drill for everything the `social-data` volume holds.
-#
-# It runs against a throwaway data directory, so it never touches a real
-# installation, and it proves that the two things the volume contains are enough
-# to bring the application back exactly as it was:
-#
-#   1. the SQLite database, copied with SQLite's own `.backup` while the server
-#      is still running (a plain `cp` of a live database is not safe);
-#   2. the upload directory, which is where media rows point.
-#
-# The drill keeps its session cookie across the wipe, so a successful
-# `GET /api/v1/users/me` afterwards proves the session table came back too.
-#
-# Usage: scripts/backup-restore-drill.sh
-#   DRILL_DIR   work directory (default backend/tmp/backup-drill)
 set -euo pipefail
 
 ROOT_DIR="$(cd -- "$(dirname -- "$0")/.." && pwd)"
 WORK_DIR="${DRILL_DIR:-$ROOT_DIR/backend/tmp/backup-drill}"
-DATA_DIR="$WORK_DIR/data"    # stands in for the social-data volume
+DATA_DIR="$WORK_DIR/data"
 BACKUP_DIR="$WORK_DIR/backup"
 DB="$DATA_DIR/socialnetwork.db"
 UPLOADS="$DATA_DIR/uploads"
@@ -37,7 +22,6 @@ step() { printf '\n== %s\n' "$1"; }
 fail() { printf 'DRILL FAILED: %s\n' "$1" >&2; exit 1; }
 check() { [[ "$2" == "$3" ]] || fail "$1: expected [$3], got [$2]"; printf '  ok  %s (%s)\n' "$1" "$2"; }
 
-# Values the run has to remember across the wipe.
 USER_ID="" POST_ID="" MEDIA_URL="" MEDIA_BYTES="" BEFORE_COUNTS="" BEFORE_FILES=""
 
 start_server() {
@@ -58,7 +42,6 @@ stop_server() {
   SERVER_PID=""
 }
 
-# Call the API with the drill's cookie jar: $1 method, $2 path, the rest is curl.
 api() {
   local method="$1" path="$2"; shift 2
   curl -sS -c "$JAR" -b "$JAR" -X "$method" "$BASE$path" -o "$WORK_DIR/response.json" -w '%{http_code}' "$@"

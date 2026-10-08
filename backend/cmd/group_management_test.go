@@ -93,8 +93,6 @@ func TestOptionalPostTitleAndRejectedUploads(t *testing.T) {
 		{"renamed.jpg", []byte("%PDF-1.7\nNot an image"), 400},
 		{"broken.png", []byte("\x89PNG\r\n\x1a\ninvalid"), 400},
 		{"empty.jpg", nil, 400},
-		// Past the image ceiling the request is well formed but too big, so it is
-		// answered 413 rather than 400.
 		{"oversized.gif", append([]byte("GIF89a"), make([]byte, 10<<20)...), 413},
 	} {
 		t.Run(fixture.name, func(t *testing.T) {

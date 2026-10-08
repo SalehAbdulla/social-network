@@ -5,19 +5,9 @@ import { ImagePlus, Smile, X } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { errorMessage } from '../../api/social';
 
-/**
- * The composer: one pill pinned to the bottom of the chat.
- *
- * The emoji and attachment icons live inside the pill, and once there is something to
- * send they give way to a plain blue "Send". The textarea grows to five lines and then
- * scrolls, Enter sends (Shift+Enter breaks), and the field keeps focus after a message so
- * the next one can be typed without reaching for the mouse.
- */
 export default function Composer({ onSend, onTyping, onDraft, initialText = '', editing = false, onCancel, allowVideo = false, placeholder = 'Message...', replyTo, onCancelReply }: {
   onSend: (text: string, file: File | null) => Promise<void>;
   onTyping?: (typing: boolean) => void;
-  /** Reports the draft as it is typed, so a surface that outlives the composer (the Messages
-   *  dock, which persists one draft across navigation) can keep it. */
   onDraft?: (text: string) => void;
   initialText?: string;
   editing?: boolean;
@@ -36,13 +26,10 @@ export default function Composer({ onSend, onTyping, onDraft, initialText = '', 
   const typingAt = useRef(0);
   const textarea = useRef<HTMLTextAreaElement>(null);
   const picker = useRef<HTMLInputElement>(null);
-  // The live object URLs, kept in a ref so the unmount cleanup can revoke them: an effect
-  // that revoked on every change would revoke a preview that is still on screen.
   const liveUrls = useRef<string[]>([]);
   useEffect(() => { liveUrls.current = media.map(item => item.url); }, [media]);
   useEffect(() => () => { liveUrls.current.forEach(url => URL.revokeObjectURL(url)); }, []);
 
-  // Five 20px lines plus the field's 12px padding, then the textarea scrolls instead.
   useEffect(() => {
     const element = textarea.current;
     if (!element) return;

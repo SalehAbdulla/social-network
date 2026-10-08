@@ -16,10 +16,6 @@ COPY --from=build --chown=node:node /app/.next/static ./.next/static
 COPY --from=build --chown=node:node /app/public ./public
 USER node
 EXPOSE 4000
-# The probe goes through this container's own rewrite to the backend's
-# readiness endpoint, so it only passes when the whole path a browser takes is
-# working: the frontend is serving, the proxy is reaching the backend, and the
-# backend can answer a database-backed request.
 HEALTHCHECK --interval=10s --timeout=3s --start-period=30s --retries=5 \
   CMD curl -fsS http://127.0.0.1:4000/api/v1/ready || exit 1
 CMD ["node", "server.js"]

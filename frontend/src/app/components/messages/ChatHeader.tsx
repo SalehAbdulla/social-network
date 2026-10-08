@@ -4,18 +4,6 @@ import Link from 'next/link';
 import { ChevronLeft, Info } from 'lucide-react';
 import Avatar from '../Avatar';
 
-/**
- * The chat's pinned header.
- *
- * The avatar carries the presence dot and links to the profile, the name sits over a
- * one-line status, and the only control is the Info toggle: the app has no calls, so
- * there are no dead phone or video buttons beside it. The 68px height and the icon size
- * are tokens, so the header lines up with the conversation rows at the same scale.
- *
- * `data-connected` is on the element rather than drawn as a dot: the app shell already
- * shows a reconnecting banner, so the chat only needs to expose the socket state, not
- * repeat it as chrome.
- */
 export default function ChatHeader({ name, handle, avatar, online, typing, profileHref, connected, detailsOpen, onToggleDetails, sub }: {
   name: string;
   handle: string;
@@ -26,7 +14,6 @@ export default function ChatHeader({ name, handle, avatar, online, typing, profi
   connected: boolean;
   detailsOpen: boolean;
   onToggleDetails: () => void;
-  /** Overrides the derived status line (groups pass a member count instead). */
   sub?: string;
 }) {
   const subtitle = sub ?? (typing ? 'Typing…' : online ? 'Active now' : handle || 'Offline');

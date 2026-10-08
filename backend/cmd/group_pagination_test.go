@@ -10,13 +10,8 @@ import (
 	"social-network/backend/pkg/models"
 )
 
-// A group list page is 30 rows plus one sentinel row that tells the client there
-// is more, so the boundary this test pins is 31.
 const groupPageRows = 31
 
-// seedPagerAccounts creates accounts straight in the database. Registering them
-// through the endpoint would cost a bcrypt hash each and would prove nothing
-// about paging.
 func seedPagerAccounts(t *testing.T, repo *repositories.DB, count int) []string {
 	t.Helper()
 	hash, err := bcrypt.GenerateFromPassword([]byte("DummyUser123!"), bcrypt.MinCost)
@@ -39,10 +34,6 @@ func seedPagerAccounts(t *testing.T, repo *repositories.DB, count int) []string 
 	return ids
 }
 
-// addGroupRows links the accounts to a group. Every row is given the same
-// timestamp on purpose: a page boundary over a sort that ties is exactly where
-// LIMIT and OFFSET start repeating and skipping rows, so the tiebreaker in the
-// ORDER BY is what this is checking.
 func addGroupRows(t *testing.T, repo *repositories.DB, statement string, groupID int, ids []string) {
 	t.Helper()
 	for _, id := range ids {
@@ -52,11 +43,6 @@ func addGroupRows(t *testing.T, repo *repositories.DB, statement string, groupID
 	}
 }
 
-// TestGroupMembersAndRequestsPaginate covers the two lists that used to be
-// fetched whole: the first page has to stop at the sentinel row, the second has
-// to continue without repeating anything, the two together have to cover
-// everybody exactly once, and paging must not become a way around the
-// authorization checks.
 func TestGroupMembersAndRequestsPaginate(t *testing.T) {
 	server, repo := integrationServer(t, true, false)
 	owner := newIntegrationClient(t, server)
@@ -70,12 +56,9 @@ func TestGroupMembersAndRequestsPaginate(t *testing.T) {
 	addGroupRows(t, repo, "INSERT INTO socialGroupMember (groupId,userId,joinedAt) VALUES (?,?,'2026-01-01 00:00:00')", group.GroupID, ids)
 	addGroupRows(t, repo, "INSERT INTO socialGroupRequest (groupId,userId,createdAt) VALUES (?,?,'2026-01-01 00:00:00')", group.GroupID, ids)
 
-	// Neither a member nor the owner, so the checks have something to refuse.
 	outsider := newIntegrationClient(t, server)
 	outsider.login("alex@example.com")
 
-	// 41 members over two pages: 31 rows, then the remaining 11 minus the one the
-	// sentinel overlapped.
 	firstPage := decoded[[]models.GroupMember](t, owner.call("GET", base+"/members?offset=0", nil, 200))
 	if len(firstPage) != groupPageRows {
 		t.Fatalf("first member page returned %d rows, want %d", len(firstPage), groupPageRows)
@@ -87,10 +70,6 @@ func TestGroupMembersAndRequestsPaginate(t *testing.T) {
 	if len(secondPage) == 0 || len(secondPage) >= groupPageRows {
 		t.Fatalf("second member page returned %d rows, want a short tail", len(secondPage))
 	}
-	// The two pages overlap on exactly the sentinel row — the last row of the
-	// first page is the first row of the second — which is what the client's
-	// de-duplication exists for. So the union is asserted, not the row count: a
-	// sort without a total order would repeat other rows or drop them.
 	members := map[string]bool{}
 	rows := 0
 	for _, member := range append(firstPage, secondPage...) {
@@ -112,8 +91,6 @@ func TestGroupMembersAndRequestsPaginate(t *testing.T) {
 		}
 	}
 
-	// Requests behave the same way, and the pages have to cover every pending
-	// request exactly once.
 	requestsFirst := decoded[[]models.GroupRequest](t, owner.call("GET", base+"/requests?offset=0", nil, 200))
 	if len(requestsFirst) != groupPageRows {
 		t.Fatalf("first request page returned %d rows, want %d", len(requestsFirst), groupPageRows)
@@ -135,8 +112,6 @@ func TestGroupMembersAndRequestsPaginate(t *testing.T) {
 		t.Fatalf("the two request pages cover %d requests, want 40", len(requests))
 	}
 
-	// Paging is not a way around the rules, and the offset is validated rather
-	// than handed to SQL.
 	outsider.call("GET", base+"/members?offset=30", nil, 404)
 	outsider.call("GET", base+"/requests?offset=30", nil, 403)
 	owner.call("GET", base+"/members?offset=-1", nil, 400)

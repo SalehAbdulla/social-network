@@ -9,9 +9,6 @@ import (
 	"time"
 )
 
-// smtpStub is a minimal SMTP server: enough of RFC 5321 for net/smtp's client to
-// walk a message through, and no more. It exists so the SMTP mailer is tested by
-// talking to something rather than by reading its own source back.
 type smtpStub struct {
 	listener   net.Listener
 	messages   chan string
@@ -57,8 +54,6 @@ func (s *smtpStub) serve() {
 	}
 }
 
-// handle speaks the sequence the client expects: greeting, EHLO with the extension
-// lines, then the envelope and the data.
 func (s *smtpStub) handle(connection net.Conn) {
 	defer connection.Close()
 	reader := bufio.NewReader(connection)
@@ -90,10 +85,6 @@ func (s *smtpStub) handle(connection net.Conn) {
 		}
 		switch {
 		case strings.HasPrefix(trimmed, "EHLO"), strings.HasPrefix(trimmed, "HELO"):
-			// AUTH is advertised because PlainAuth refuses to run otherwise.
-			// STARTTLS deliberately is not: that is the local-relay case, and it
-			// is also why this stub has to sit on a loopback address, since
-			// net/smtp will not send a password unencrypted to anywhere else.
 			reply("250-stub.invalid")
 			if s.offersAuth {
 				reply("250-AUTH PLAIN")
@@ -167,17 +158,12 @@ func TestSMTPMailerRefusesAServerThatCannotAuthenticate(t *testing.T) {
 	host, port := stub.hostPort()
 	mailer := SMTPMailer{Host: host, Port: port, Username: "postmaster", Password: "hunter2", From: "no-reply@example.com"}
 
-	// Refusing is the point: delivering the message unauthenticated would silently
-	// downgrade a deliberate configuration to none at all.
 	if err := mailer.Send("member@example.com", "Subject", "Body"); err == nil {
 		t.Fatal("a server without AUTH accepted credentials silently")
 	}
 }
 
 func TestSMTPMailerReportsAnUnreachableServer(t *testing.T) {
-	// Nothing listens on port 1, so the dial fails. The mailer has to report that
-	// rather than pretend a link went out: the reset flow deletes the token on this
-	// path, so a swallowed error would leave a live token nobody holds.
 	mailer := SMTPMailer{Host: "127.0.0.1", Port: "1", From: "no-reply@example.com"}
 	if err := mailer.Send("member@example.com", "Subject", "Body"); err == nil {
 		t.Fatal("an unreachable server was reported as a successful send")

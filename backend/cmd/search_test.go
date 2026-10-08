@@ -8,7 +8,6 @@ import (
 	"social-network/backend/pkg/payload/posts"
 )
 
-// searchPage runs one call to the post search and decodes the page.
 func searchPage(t *testing.T, client integrationClient, query string, page, size int) posts.PostResponse {
 	t.Helper()
 	path := "/api/v1/posts/search?q=" + url.QueryEscape(query) +
@@ -16,10 +15,6 @@ func searchPage(t *testing.T, client integrationClient, query string, page, size
 	return decoded[posts.PostResponse](t, client.call("GET", path, nil, 200))
 }
 
-// TestPostSearchIntegration covers the post half of the search page. The query has
-// two jobs that pull against each other: find the text wherever it is, and return
-// nothing the viewer could not have opened anyway — so most of what is asserted here
-// is a boundary rather than a match.
 func TestPostSearchIntegration(t *testing.T) {
 	server, _ := integrationServer(t, true, false)
 	owner, stranger := newIntegrationClient(t, server), newIntegrationClient(t, server)
@@ -33,8 +28,6 @@ func TestPostSearchIntegration(t *testing.T) {
 		"title": "Birdwatching", "content": "This body mentions a cormorant and nothing else.", "privacy": "public",
 	}, 201))
 
-	// The term is found in a title and in a body, and the match ignores case: the
-	// three spellings are one query as far as the reader is concerned.
 	for _, query := range []string{"cormorant", "Cormorant", "CORMORANT"} {
 		found := searchPage(t, stranger, query, 1, 10)
 		if !hasPost(found, inTitle.PostId) || !hasPost(found, inBody.PostId) {
@@ -42,7 +35,6 @@ func TestPostSearchIntegration(t *testing.T) {
 		}
 	}
 
-	// The page shape is the feed's, so the search page can page it the same way.
 	first := searchPage(t, stranger, "cormorant", 1, 1)
 	if first.TotalElements != 2 || first.TotalPages != 2 || first.LastPage || len(first.Posts) != 1 {
 		t.Fatalf("the first page of one is wrong: %+v", first)
@@ -51,13 +43,10 @@ func TestPostSearchIntegration(t *testing.T) {
 		t.Fatalf("the second page of one is wrong: %+v", second)
 	}
 
-	// A term nothing carries is an empty page rather than an error.
 	if none := searchPage(t, stranger, "pterodactyl", 1, 10); len(none.Posts) != 0 || none.TotalElements != 0 {
 		t.Fatalf("a term nothing matches returned rows: %+v", none)
 	}
 
-	// The visibility rule is the feed's, so a followers-only post is not findable by
-	// someone who does not follow the author — and is findable by the author.
 	hidden := decoded[posts.PostDTO](t, owner.call("POST", "/api/v1/posts", map[string]any{
 		"title": "Pelican", "content": "Only followers may read about this pelican.", "privacy": "followers",
 	}, 201))
@@ -68,9 +57,6 @@ func TestPostSearchIntegration(t *testing.T) {
 		t.Fatalf("the author's own search missed a visible post: %+v", found.Posts)
 	}
 
-	// `%` and `_` typed into the box are characters, not wildcards. The first finds
-	// the one post that contains one; the second, which as a wildcard would match
-	// every post in the database, finds nothing at all.
 	decoded[posts.PostDTO](t, owner.call("POST", "/api/v1/posts", map[string]any{
 		"title": "Sale", "content": "Everything is 100% off for a cormorant enthusiast.", "privacy": "public",
 	}, 201))
@@ -81,8 +67,6 @@ func TestPostSearchIntegration(t *testing.T) {
 		t.Fatalf("a _ in the box must be literal, got %d rows", underscore.TotalElements)
 	}
 
-	// A blank query is refused, because the empty pattern it would become (`%%`)
-	// matches everything; a bad page size is the same 400 the feed gives.
 	stranger.call("GET", "/api/v1/posts/search?q=", nil, 400)
 	stranger.call("GET", "/api/v1/posts/search?q=%20%20", nil, 400)
 	stranger.call("GET", "/api/v1/posts/search?q=cormorant&size=0", nil, 400)

@@ -29,7 +29,6 @@ const TAB_LABELS: Record<FollowListTab, string> = {
   following: 'Following',
 };
 
-/** A long list is the one that earns a search field; a handful of rows does not. */
 const SEARCH_THRESHOLD = 8;
 const AVATAR_SIZE = 44;
 
@@ -39,10 +38,6 @@ type FollowListModalProps = {
   close: () => void;
 };
 
-/**
- * Followers and following belong to the profile they are read from, so the
- * profile statistics open this dialog instead of navigating to a page.
- */
 export default function FollowListModal({
   userId,
   initialTab,
@@ -50,8 +45,6 @@ export default function FollowListModal({
 }: FollowListModalProps) {
   const { user, refreshUser } = useBackend();
 
-  // The drawer's keyboard contract for the other real overlay in the app: focus
-  // moves to the close button, Tab cycles inside, Escape closes it.
   const dialog = useDialogFocus<HTMLDivElement>(close);
 
   const [tab, setTab] = useState<FollowListTab>(initialTab);

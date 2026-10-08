@@ -2,15 +2,9 @@
 
 import { Bookmark, Heart, MessageCircle, Share2 } from 'lucide-react';
 
-/**
- * The post view's action bar: like, comment, share and save, with the like and comment counts.
- * The icons are one size and one stroke from the `--pv-*` tokens, so this bar and the feed card's
- * cannot drift apart.
- */
 export default function PostActions({ liked, saved, showSave = true, busy = false, onLike, onComment, onShare, onSave }: {
   liked: boolean;
   saved: boolean;
-  /** A group post is not in the saved list, so the bookmark is not drawn for it. */
   showSave?: boolean;
   busy?: boolean;
   onLike: () => void;

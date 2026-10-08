@@ -11,16 +11,9 @@ import ImagePicker from './ImagePicker';
 import { useResource } from '../lib/useResource';
 import { clearPostDraft, draftHasContent, readPostDraft, writePostDraft } from '../lib/postDraft';
 
-// The server is the authority on the length (ErrContentLength); it is repeated here so
-// the composer can refuse before the request and name the field instead of leaving a
-// dead button.
 const MIN_CONTENT = 10;
-// How long a keystroke waits before the draft reaches storage. Writing on every
-// character would hit the store thousands of times for one paragraph; this is short
-// enough that a refresh right after typing keeps the text.
 const DRAFT_SAVE_DELAY = 400;
 
-/** What stops a publish, in the reader's words, and the field they should look at. */
 type Blocker = { message: string; field: 'content' | 'followers' };
 
 export default function PostForm({ post }: { post?: Post }) {
@@ -33,10 +26,6 @@ export default function PostForm({ post }: { post?: Post }) {
   const [privacy, setPrivacy] = useState<'public' | 'followers' | 'selected'>(post?.privacy || 'public');
   const [selectedFollowers, setSelectedFollowers] = useState<string[]>(post?.selectedFollowerIds || []);
   const [busy, setBusy] = useState(false);
-  // The restore is a read after mount rather than during render, so the server and
-  // the browser render the same empty composer and hydration cannot mismatch.
-  // Saving waits for it, or the first render would write the empty state over the
-  // draft it is about to restore.
   const [hydrated, setHydrated] = useState(false);
   const [restoredDraft, setRestoredDraft] = useState(false);
   const [published, setPublished] = useState(false);
@@ -44,11 +33,6 @@ export default function PostForm({ post }: { post?: Post }) {
   const followersField = useRef<HTMLFieldSetElement>(null);
   const followers = useResource<FollowLists>('/users/me/follows', privacy === 'selected');
 
-  // Reading storage means touching the browser, so like ThemeProvider it is deferred
-  // to a task rather than done during render: the server and the first client render
-  // agree on an empty composer, and hydration cannot mismatch. Saving waits for
-  // `hydrated`, because a save that ran first would overwrite the draft with the
-  // empty state this effect is about to restore.
   useEffect(() => {
     if (!isNewPost) return;
     const timer = window.setTimeout(() => {
@@ -74,12 +58,6 @@ export default function PostForm({ post }: { post?: Post }) {
   const hasMedia = images.length > 0 || existingImages.length > 0;
   const audience = selectedFollowers.filter(id => followers.data?.followers.some(person => person.userId === id));
 
-  /**
-   * What stops this draft from being publishable, or null when nothing does.
-   *
-   * The order is the order the reader meets the fields in: the text first, then the
-   * audience, which lives further down the form.
-   */
   function blockedReason(): Blocker | null {
     const trimmedContent = content.trim();
     if (!trimmedContent && !hasMedia) {
@@ -103,8 +81,6 @@ export default function PostForm({ post }: { post?: Post }) {
   async function publish() {
     if (busy) return;
     if (blocker) {
-      // A disabled button says nothing; this says what is missing and puts the
-      // caret where the answer goes.
       toast.error(blocker.message);
       if (blocker.field === 'content') contentField.current?.focus();
       else followersField.current?.focus();
@@ -114,14 +90,9 @@ export default function PostForm({ post }: { post?: Post }) {
     try {
       const imageUrls = [...existingImages];
       for (const file of images) imageUrls.push((await upload(file)).url);
-      // A post is a description now, not a titled thing: the composer collects the text and
-      // the media, and the title the API still accepts is sent empty rather than collected.
       await request(post ? `/posts/${post.postId}` : '/posts', post ? 'PUT' : 'POST', { title: '', content, imageUrls, privacy, selectedFollowerIds: privacy === 'selected' ? audience : [] });
-      // The draft has become a post, so it must not come back on the next visit —
-      // and storage must not be written again by the effect on the way out.
       if (isNewPost) { clearPostDraft(); setPublished(true); }
       toast.success(post ? 'Post updated' : 'Post published');
-      // The same navigation the page has always done.
       router.push(post ? `/post/${post.postId}` : '/');
     } catch (error) { toast.error(errorMessage(error)); } finally { setBusy(false); }
   }
@@ -133,8 +104,6 @@ export default function PostForm({ post }: { post?: Post }) {
     contentField.current?.focus();
   }
 
-  // Ctrl/Cmd + Enter publishes from wherever the caret is, the textarea included,
-  // where a bare Enter stays a newline.
   function shortcut(event: React.KeyboardEvent<HTMLFormElement>) {
     if (event.key !== 'Enter' || !(event.metaKey || event.ctrlKey)) return;
     event.preventDefault();
@@ -142,9 +111,6 @@ export default function PostForm({ post }: { post?: Post }) {
   }
   return <div className="mx-auto max-w-6xl p-6 sm:p-8 space-y-6">
     <h1 className="text-3xl font-bold">Edit Post</h1>
-    {/* `noValidate` hands the checks to `publish()`, which explains itself; the
-        fields keep `required`/`minLength` as a description for assistive technology
-        rather than as the thing that decides. */}
     <div className="lg:grid lg:grid-cols-2 lg:gap-6 lg:items-start"><form onSubmit={event => { event.preventDefault(); void publish(); }} onKeyDown={shortcut} noValidate className="rounded-xl bg-white p-6 shadow-sm space-y-5"><div className="flex items-center gap-3"><Avatar name={displayName(user)} avatarUrl={user.avatar} /><div><p className="font-medium">{displayName(user)}</p><p className="text-sm text-slate-500">@{user.nickname}</p></div></div>
     {restoredDraft && <p role="status" id="draft-restored" className="flex flex-wrap items-center gap-3 rounded-lg border border-border bg-surface-2 px-3 py-2 text-sm text-muted">Draft restored. The text and the audience came back; photos did not.<button type="button" onClick={discardDraft} className="font-medium text-brand-1 underline">Discard draft</button></p>}
     <label className="block text-sm font-medium">Description<textarea ref={contentField} required={!hasMedia} minLength={hasMedia ? 0 : MIN_CONTENT} maxLength={500} rows={6} value={content} onChange={event => setContent(event.target.value)} aria-describedby={blocker ? 'publish-blocked' : undefined} className="mt-2 w-full rounded-lg border border-slate-200 p-3" placeholder="Write a description…" /></label>
@@ -167,8 +133,6 @@ export default function PostForm({ post }: { post?: Post }) {
       </div> : <p className="text-sm text-slate-500">You do not have any followers yet.</p>)}
     </fieldset>}
     <ImagePicker files={images} onChange={setImages} existing={existingImages} onRemoveExisting={url => setExistingImages(current => current.filter(image => image !== url))} disabled={busy} purpose="post" />
-    {/* Sticky, so the publish control stays reachable while a long post is written,
-        and the same button as before rather than a second copy of it. */}
     <div className="sticky bottom-0 z-10 space-y-2 rounded-xl border border-border bg-white/95 p-3 backdrop-blur">
       <div className="flex flex-wrap items-center gap-4">
         <button disabled={busy} title="Save with Ctrl/Cmd + Enter" className="rounded-lg bg-gradient-to-r from-blue-600 to-teal-700 px-6 py-3 text-white disabled:opacity-50">{busy ? 'Saving...' : 'Save changes'}</button>

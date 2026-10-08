@@ -15,15 +15,6 @@ import (
 	sqlitedb "social-network/backend/pkg/db/sqlite"
 )
 
-// The fixtures this file measures against. The counts are large enough that an index
-// changes the wall clock as well as the plan text, and small enough that seeding them
-// takes a fraction of a second inside one transaction.
-//
-// The plans themselves do not depend on size: this database never runs ANALYZE, and
-// neither does the app, so SQLite plans from its own default estimates rather than
-// from statistics. That is why a plan assertion here is stable, and why the timings
-// are printed for information rather than asserted on — a wall clock is not a
-// contract, and a test that fails on a noisy one teaches people to ignore it.
 const (
 	planViewer        = "user-000"
 	planUsers         = 900
@@ -35,9 +26,6 @@ const (
 	planMessages      = 2400
 )
 
-// planRepo migrates a scratch database and fills it with the shape the feed sees: one
-// viewer, a third of the accounts followed, posts from a few dozen authors in mixed
-// privacy, and enough dependent rows that the reads below have work to do.
 func planRepo(t *testing.T) *DB {
 	t.Helper()
 	database, err := sql.Open("sqlite3", filepath.Join(t.TempDir(), "plans.db")+"?_foreign_keys=on&_busy_timeout=5000")
@@ -70,8 +58,6 @@ func planRepo(t *testing.T) *DB {
 			account(index), account(index)+"@example.com", "hash", "First", "Last",
 			"nick"+account(index), 2000, "male", index%3, "2000-01-01")
 	}
-	// The viewer follows a third of the accounts and a third follow the viewer, so the
-	// visibility fragment has a follow to look up for every candidate post.
 	for index := 1; index <= planUsers/3; index++ {
 		exec(`INSERT INTO follow (followerId, followedId) VALUES (?,?)`, planViewer, account(index))
 		exec(`INSERT INTO follow (followerId, followedId) VALUES (?,?)`, account(index), planViewer)
@@ -95,16 +81,11 @@ func planRepo(t *testing.T) *DB {
 	}
 	for index := 0; index < planNotifications; index++ {
 		kind := []string{"comment", "follow_request", "message", "group_event"}[index%4]
-		// Spread across the accounts for the same reason as the connections below: with
-		// every row belonging to the viewer, a userId filter would remove nothing and the
-		// scan would look as fast as the index.
 		exec(`INSERT INTO notification (userId, actorId, entityType, entityId, message, isRead, createdAt) VALUES (?,?,?,?,?,?,?)`,
 			account(index%planUsers), account(1+index%40), kind, 1+index%planPosts, "A notification", index%2,
 			fmt.Sprintf("2026-09-%02d 12:00:00", 1+index%28))
 	}
 	for index := 0; index < planConnections; index++ {
-		// The requests are spread across accounts so the recipientId filter is selective,
-		// which is the property the follow-request index exists for.
 		exec(`INSERT INTO connection (requesterId, recipientId, status, createdAt) VALUES (?,?,?,?)`,
 			account(100+index), account(index%planUsers), []string{"pending", "accepted"}[index%2],
 			fmt.Sprintf("2026-09-%02d 09:00:00", 1+index%28))
@@ -124,7 +105,6 @@ func planRepo(t *testing.T) *DB {
 	return db
 }
 
-// explain returns SQLite's plan for one query, joined into the lines a reader sees.
 func explain(t *testing.T, db *DB, query string, args ...any) string {
 	t.Helper()
 	rows, err := db.Conn.Query("EXPLAIN QUERY PLAN "+query, args...)
@@ -147,8 +127,6 @@ func explain(t *testing.T, db *DB, query string, args ...any) string {
 	return strings.Join(plan, "\n")
 }
 
-// timeQuery warms the page cache with one run and reports the median of five, which
-// is the number worth quoting when comparing an index against a scan.
 func timeQuery(t *testing.T, db *DB, query string, args ...any) time.Duration {
 	t.Helper()
 	run := func() time.Duration {
@@ -178,16 +156,6 @@ func timeQuery(t *testing.T, db *DB, query string, args ...any) time.Duration {
 	return times[len(times)/2]
 }
 
-// planCases is every read path this review covers, with the arguments the app passes and
-// the index that path is expected to use. The queries are the app's own text: the
-// visibility fragment, the feed's projection and the follow-request query are the
-// constants the repositories use, so a plan asserted here cannot describe a query the app
-// no longer runs.
-//
-// An empty `index` means no index is claimed for that query. The feed count and the chat
-// list are the two: a count of every visible post has to visit every post, and the chat
-// list already uses `message_conversation` through SQLite's multi-index OR, which was
-// measured rather than assumed.
 func planCases() []struct {
 	name  string
 	query string
@@ -204,18 +172,12 @@ func planCases() []struct {
 		index string
 	}{
 		{
-			// The search adds a LIKE the planner cannot use an index for: the pattern
-			// starts with `%`, so this scans and evaluates the visibility fragment per
-			// row. The empty index is the claim, not an omission.
 			"post search",
 			postFeedSelect + postVisibility + postSearchFilter + "\n\t\tORDER BY p.createdAt DESC, p.postId DESC\n\t\tLIMIT 10 OFFSET 0",
 			withTail(visible, likePattern("plan"), likePattern("plan"), 10, 0),
 			"",
 		},
 		{
-			// The hashtag page matches `#tag` with boundaries, which is a GLOB over a
-			// lowercased body — no index can serve a pattern that starts with `*`, so it
-			// scans for the same reason the search does. The empty index is the claim.
 			"hashtag page",
 			postFeedSelect + postVisibility + hashtagFilter + "\n\t\tORDER BY p.createdAt DESC, p.postId DESC\n\t\tLIMIT 10 OFFSET 0",
 			withTail(visible, hashtagGlob("plan"), 10, 0),
@@ -241,8 +203,6 @@ func planCases() []struct {
 			"post_userId_createdAt",
 		},
 		{
-			// The profile header's post count is the posts list's own fragment, so it
-			// rides the same (userId, createdAt, postId) index that list rides.
 			"profile post count",
 			"SELECT COUNT(*) FROM post p WHERE p.userId = ? AND " + postVisibility,
 			withTail([]any{viewer}, visible...),
@@ -301,15 +261,10 @@ func planCases() []struct {
 	}
 }
 
-// oneLine is how a plan is quoted in a log line or in the session notes.
 func oneLine(plan string) string {
 	return strings.Join(strings.Fields(strings.ReplaceAll(plan, "\n", " | ")), " ")
 }
 
-// migrationIndexes reads the CREATE INDEX statements out of migration 000013, so the
-// counterfactual below restores an index with the same text that created it: the migration
-// stays the one source for both, and an index renamed there fails here by name instead of
-// quietly measuring nothing.
 func migrationIndexes(t *testing.T) map[string]string {
 	t.Helper()
 	path := filepath.Join("..", "..", "..", "pkg", "db", "migrations", "sqlite", "000013_query_indexes.up.sql")
@@ -331,14 +286,6 @@ func migrationIndexes(t *testing.T) map[string]string {
 	return statements
 }
 
-// TestQueryPlansUseTheirIndex is the evidence for migration 000013, and it is two claims
-// rather than one: the plan must use the index the migration creates, and dropping that
-// index must change the plan — otherwise the index is not what the query leans on and the
-// migration is decoration.
-//
-// The wall clock is logged rather than asserted, because it is not a contract, but it is
-// the reason each index is there, and it is measured with and without the index in the
-// same run so the two numbers can be compared.
 func TestQueryPlansUseTheirIndex(t *testing.T) {
 	if testing.Short() {
 		t.Skip("seeds thousands of rows and drops indexes")
@@ -357,16 +304,9 @@ func TestQueryPlansUseTheirIndex(t *testing.T) {
 			withTime := timeQuery(t, db, testCase.query, testCase.args...)
 			statement, ours := migration[testCase.index]
 			if !ours {
-				// An index an earlier migration created — the chat list's — is asserted above
-				// but not dropped here: this test only owns what 000013 created.
 				t.Logf("plan uses %s: %s (median of five runs)", testCase.index, withTime)
 				return
 			}
-			// The "without" number for `post_userId_createdAt` is the interesting one: by the
-			// time this case runs, `post_createdAt` has been restored, so it measures the trap
-			// the migration's comment describes — the feed's index in place, the author's
-			// missing — rather than the plain scan it would be on its own. The cases run in
-			// the order planCases lists them, and the plan assertion holds either way.
 			if _, err := db.Conn.Exec("DROP INDEX " + testCase.index); err != nil {
 				t.Fatal(err)
 			}
@@ -387,11 +327,6 @@ func TestQueryPlansUseTheirIndex(t *testing.T) {
 	}
 }
 
-// TestPrintQueryPlans is the measurement this migration is decided by: it prints the
-// plan and the wall clock for every read path under review, on the schema as it
-// stands. It is a named test rather than a one-off so the before-and-after quoted in
-// `TODO.md` can be reproduced with one command, and it asserts nothing — the
-// assertions belong to the index test that follows.
 func TestPrintQueryPlans(t *testing.T) {
 	if testing.Short() {
 		t.Skip("seeds thousands of rows")

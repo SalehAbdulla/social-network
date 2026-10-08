@@ -23,10 +23,6 @@ import GroupDetails from './messages/group/GroupDetails';
 import GroupContentSheet from './messages/group/GroupContentSheet';
 import { memberCount, type GroupItem } from './messages/group/groupContent';
 
-/**
- * The group's four folders. Each carries the one action that belongs to it: the Chat
- * folder has none, because there is nothing to create in a conversation.
- */
 const TABS = [
   { value: 'timeline', label: 'Chat', action: null },
   { value: 'posts', label: 'Posts', action: 'New post' },
@@ -36,7 +32,6 @@ const TABS = [
 type TabValue = typeof TABS[number]['value'];
 const TAB_VALUES: string[] = TABS.map(entry => entry.value);
 
-/** The first paint of the whole shell: header, tab row and body, in the real geometry. */
 function ShellSkeleton() {
   return <section className="dm-panel" aria-busy="true" aria-label="Loading group">
     <div className="dm-header">
@@ -58,38 +53,21 @@ function ShellSkeleton() {
   </section>;
 }
 
-/**
- * A group conversation.
- *
- * It uses the direct-message shell: the chat panel is the thread, the composer and the
- * details column, the header is the same 68px header, and only the content under the tab
- * bar scrolls. The tab bar is left-aligned and content-width with one ghost action on the
- * right; on a phone that action becomes a floating button. `?tab=info`, which a join
- * request's notification links to, opens the details panel instead of a tab.
- */
 export default function GroupConversation({ groupId }: { groupId: string }) {
   const searchParams = useSearchParams();
   const pathname = usePathname();
   const router = useRouter();
   const { user } = useBackend();
   const requested = searchParams.get('tab') ?? 'timeline';
-  // A share link names one post: `/messages/groups/{id}?tab=posts&post={id}`. The id is read
-  // once here and handed to the Posts tab, which scrolls to the card and flashes it; the flash
-  // is cleared a moment later, so the card settles back rather than staying lit.
   const sharedPost = Number.parseInt(searchParams.get('post') ?? '', 10);
   const sharedPostId = Number.isFinite(sharedPost) && sharedPost > 0 ? sharedPost : null;
   const [tab, setTab] = useState<TabValue>(() => {
     if (requested === 'info') return 'timeline';
-    // A link that names a post is a link to the Posts tab, whichever tab the URL happens to
-    // name — that is what makes the deep link work even when it is copied without `tab`.
     if (sharedPostId) return 'posts';
     return TAB_VALUES.includes(requested) ? requested as TabValue : 'timeline';
   });
   const [details, setDetails] = useState(requested === 'info');
   const [lastRequested, setLastRequested] = useState(requested);
-  // The flash is a moment, not a state: the id stays live until its own timer has run, and
-  // that timer is what turns it off. Deriving it this way means a second share link arriving
-  // while the view is mounted re-arms the flash without a state write during render.
   const [flashedId, setFlashedId] = useState<number | null>(null);
   const flashId = sharedPostId !== null && sharedPostId !== flashedId ? sharedPostId : null;
   const [creating, setCreating] = useState<'posts' | 'events' | null>(null);
@@ -100,9 +78,6 @@ export default function GroupConversation({ groupId }: { groupId: string }) {
     const timer = setTimeout(() => setFlashedId(sharedPostId), 1800);
     return () => clearTimeout(timer);
   }, [sharedPostId]);
-  // Each tab remembers where it was scrolled to, so switching away and back does not throw
-  // the reader to the top. The scroll container is the tab's own `.grp-body` (or the chat's
-  // thread), found through the panel the tab renders into.
   const panels = useRef<Record<string, HTMLDivElement | null>>({});
   const scrollPositions = useRef<Record<string, number>>({});
   function scrollerOf(value: string) {
@@ -114,21 +89,14 @@ export default function GroupConversation({ groupId }: { groupId: string }) {
     const current = scrollerOf(tab);
     if (current) scrollPositions.current[tab] = current.scrollTop;
     setTab(next);
-    // The tab is in the URL, so a refresh and the browser's back/forward buttons land where
-    // the reader left off rather than resetting to the chat.
     const params = new URLSearchParams(searchParams.toString());
     params.set('tab', next);
     router.push(`${pathname}?${params.toString()}`, { scroll: false });
   }
   const group = useResource<Group>(`/groups/${groupId}`);
-  // An invitee who opens the group straight from a notification never sees the invitation
-  // card in the sidebar, so the gate has to know about it too.
   const invitations = useResource<GroupInvitation[]>('/groups/invitations');
   useLiveRefresh(group.reload, groupId);
   useLiveRefresh(invitations.reload);
-  // The group's own Create-post entry — the top bar's action and the Posts/Media empty states. It
-  // is the same dialog as the feed's, told it is writing a group post, so it names the group where
-  // the audience picker would be, and refetches the Posts tab once one is shared.
   const createPost = useCreatePost({
     context: 'group',
     groupId,
@@ -136,15 +104,11 @@ export default function GroupConversation({ groupId }: { groupId: string }) {
     groupAvatar: group.data?.imageUrl ?? '',
     onShared: () => group.reload(),
   });
-  // A notification that points at a tab is the entry point; a second one arriving while
-  // this view is still mounted resets which surface is open, which React documents as the
-  // way to adjust state when an input changes.
   if (requested !== lastRequested) {
     setLastRequested(requested);
     if (requested === 'info') setDetails(true);
     else if (TAB_VALUES.includes(requested)) setTab(requested as TabValue);
   }
-  // Restore the tab's place once it has rendered.
   useEffect(() => {
     const element = scrollerOf(tab);
     if (element) element.scrollTop = scrollPositions.current[tab] ?? 0;
@@ -165,7 +129,6 @@ export default function GroupConversation({ groupId }: { groupId: string }) {
   const data = group.data;
   const invitation = invitations.data?.find(entry => String(entry.groupId) === groupId) ?? null;
   const active = TABS.find(entry => entry.value === tab) ?? TABS[0];
-  // Posts and Media open the shared Create-post dialog; an Event is its own sheet.
   function startCreate() {
     if (active.value === 'events') setCreating('events');
     else createPost.open();
@@ -208,8 +171,6 @@ export default function GroupConversation({ groupId }: { groupId: string }) {
             </button>
           </div>}
         </div>
-        {/* `display: contents` keeps the shell's one flex column while still giving each tab a
-            panel a screen reader can point at from its `aria-controls`. */}
         {tab === 'timeline' && <div id="panel-timeline" role="tabpanel" aria-labelledby="tab-timeline" className="contents" ref={element => { panels.current.timeline = element; }}>
           <GroupChat groupId={groupId} meId={user.userId} isOwner={data.isOwner} onOpenEvents={() => selectTab('events')} onEdit={setEditing} />
         </div>}

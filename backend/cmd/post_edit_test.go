@@ -19,8 +19,6 @@ func TestPostEditingIntegration(t *testing.T) {
 	original := decoded[posts.PostDTO](t, owner.call("POST", "/api/v1/posts", map[string]any{
 		"title": "Original post", "content": "This is the original content.", "privacy": "public",
 	}, 201))
-	// The create response must carry the author's name the way every read does, or a card headed
-	// with it renders "undefined undefined" until the list is refetched.
 	if original.FirstName != "Dummy" || original.LastName != "User" {
 		t.Fatalf("a created post must carry its author's name, got %q %q", original.FirstName, original.LastName)
 	}
@@ -45,7 +43,7 @@ func TestPostEditingIntegration(t *testing.T) {
 	}
 	input["privacy"] = "selected"
 	input["selectedFollowerIds"] = []string{"alex-id"}
-	owner.call("PUT", editURL, input, 400) // Audience must be a current follower.
+	owner.call("PUT", editURL, input, 400)
 	follower.call("PUT", "/api/v1/users/dummy-id/follow", nil, 200)
 	mediaID := "123e4567-e89b-12d3-a456-426614174111"
 	if err := repo.AddMedia(mediaID, "dummy-id", "image/png"); err != nil {
@@ -61,7 +59,6 @@ func TestPostEditingIntegration(t *testing.T) {
 	}
 	follower.call("GET", readURL, nil, 200)
 	follower.call("GET", "/api/v1/media/"+mediaID, nil, 200)
-	// Invalid updates must leave the saved content and audience intact.
 	for name, value := range map[string]any{"title": "x", "content": strings.Repeat("x", 501), "privacy": "unknown", "selectedFollowerIds": []string{}, "imageUrls": []string{"https://example.com/not-owned.png"}} {
 		bad := map[string]any{}
 		for key, current := range input {
@@ -74,7 +71,6 @@ func TestPostEditingIntegration(t *testing.T) {
 	if stored.Title != selected.Title || stored.Content != selected.Content || len(stored.SelectedUsers) != 1 || len(stored.ImageURLs) != 1 {
 		t.Fatalf("invalid update mutated post: %+v", stored)
 	}
-	// A failure while saving the audience must roll back the post update too.
 	if _, err := repo.Conn.Exec("CREATE TRIGGER reject_test_audience BEFORE INSERT ON post_selected_follower BEGIN SELECT RAISE(ABORT, 'test audience failure'); END"); err != nil {
 		t.Fatal(err)
 	}

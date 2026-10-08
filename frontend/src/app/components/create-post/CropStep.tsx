@@ -5,7 +5,6 @@ import { Check, ImagePlus, Layers, Maximize2, X, ZoomIn } from 'lucide-react';
 import { originalAspect, originalClamped, type CropRatio, type CropState, type SelectedImage } from './types';
 import { boxStyle, geometry, imageStyle, MEDIA_SQUARE, ratioName, useCropper } from './useCropper';
 
-/** The four shapes the menu offers, with `original` resolved to the photo's clamped aspect. */
 function aspectOptions(image: SelectedImage): { ratio: CropRatio; label: string }[] {
   return [
     { ratio: 'original', label: originalClamped(image) ? ratioName(originalAspect(image)) : 'Original' },
@@ -15,20 +14,11 @@ function aspectOptions(image: SelectedImage): { ratio: CropRatio; label: string 
   ];
 }
 
-/**
- * Step 2: frame each photo.
- *
- * The square shows the photo, draggable and zoomable, inside the chosen shape's frame. The bottom
- * left holds the aspect and zoom controls; the bottom right opens the strip of thumbnails, where
- * photos reorder by drag and drop and one can be removed. Next renders the framing through a canvas
- * and uploads that; a GIF is left alone.
- */
 export default function CropStep({ images, index, onIndex, onCrop, onRatio, onReorder, onRemove, onAdd, max, focusRef }: {
   images: SelectedImage[];
   index: number;
   onIndex: (index: number) => void;
   onCrop: (id: string, crop: CropState) => void;
-  /** Applies a shape to every photo, the way Instagram keeps one ratio per post. */
   onRatio: (ratio: CropRatio) => void;
   onReorder: (from: number, to: number) => void;
   onRemove: (id: string) => void;
@@ -46,15 +36,11 @@ export default function CropStep({ images, index, onIndex, onCrop, onRatio, onRe
   const view = useMemo(() => geometry(active, MEDIA_SQUARE), [active]);
   const options = useMemo(() => aspectOptions(active), [active]);
 
-  // Opening the menu puts focus on the row that is already chosen, so the arrow keys start there.
   useEffect(() => {
     if (!menuOpen) return;
     menuRef.current?.querySelector<HTMLElement>('[aria-checked="true"]')?.focus();
   }, [menuOpen]);
 
-  // Arrow keys move between the aspect rows, the contract a menu of radio rows owes a keyboard.
-  // Escape closes only the menu — stopping propagation keeps the dialog's own Escape (which would
-  // discard-check) from also firing, so the innermost layer is the one that closes.
   function menuKey(event: React.KeyboardEvent) {
     if (event.key === 'Escape') { event.preventDefault(); event.stopPropagation(); setMenuOpen(false); return; }
     if (!['ArrowDown', 'ArrowUp'].includes(event.key)) return;
@@ -82,8 +68,6 @@ export default function CropStep({ images, index, onIndex, onCrop, onRatio, onRe
       onTouchEnd={cropper.onTouchEnd}
       onKeyDown={cropper.onKeyDown}
     >
-      {/* The crop frame, centred, and the photo inside it. The bars around the frame are the dialog
-          surface, so a wide crop reads as the picture rather than a black gap. */}
       <div className="cp-crop-box" style={boxStyle(view)}>
         <img className="cp-crop-img" style={imageStyle(view)} src={active.url} alt="" draggable={false} />
       </div>

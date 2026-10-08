@@ -3,7 +3,6 @@ set -euo pipefail
 
 ROOT_DIR="$(cd -- "$(dirname -- "$0")/.." && pwd)"
 
-# All working copies share the same ports, so they must share the same lock.
 ACTION="${1:-start}"
 if [[ $# -gt 1 || ! "$ACTION" =~ ^(start|status|stop)$ ]]; then
 	printf 'Usage: ./run.sh [start|status|stop]\n' >&2
@@ -19,7 +18,6 @@ umask 077
 RUN_DIR="$HOME/.cache/social-network"
 STATE_FILE="$RUN_DIR/launcher.state"
 mkdir -p "$RUN_DIR"
-# Serialize start/status/stop, while the running launcher holds a separate lock.
 exec 8>"$RUN_DIR/control.lock"
 flock 8
 exec 9>"$RUN_DIR/launcher.lock"
@@ -41,7 +39,6 @@ read_instance() {
 		IFS= read -r running_root
 	} < "$STATE_FILE" || return 1
 	[[ "$running_pid" =~ ^[0-9]+$ && "$recorded_start" =~ ^[0-9]+$ ]] || return 1
-	# Reject stale state if Linux has reused the PID for a different process.
 	[[ "$(process_start_time "$running_pid")" == "$recorded_start" ]]
 }
 
@@ -89,7 +86,6 @@ umask "$original_umask"
 flock -u 8
 exec 8>&-
 
-# Non-interactive WSL shells do not normally load nvm from .bashrc.
 if ! command -v node >/dev/null 2>&1 && [[ -s "${NVM_DIR:-$HOME/.nvm}/nvm.sh" ]]; then
 	source "${NVM_DIR:-$HOME/.nvm}/nvm.sh"
 fi
@@ -156,5 +152,4 @@ service_pids+=("$!")
 ) 9>&- &
 service_pids+=("$!")
 
-# Exit and clean up both process groups if either service stops or fails.
 wait -n "${service_pids[@]}"

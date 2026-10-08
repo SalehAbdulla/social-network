@@ -1,4 +1,3 @@
-// Command seed creates a local development user without starting the server.
 package main
 
 import (
@@ -50,15 +49,10 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	// Both richer modes need the second fixture account: the demo for two-party flows, the showcase
-	// because it posts as Alex and addresses Alex by handle.
 	if *demo || *showcase {
 		if _, _, err := seedUser(repo, "alex@example.com", "alexdemo", "Alex", "Demo"); err != nil {
 			log.Fatal(err)
 		}
-		// A story that has already expired, so the author's archive has something in it: a fresh
-		// database can never pass a story's own 24-hour life inside a run, and the archive is a
-		// surface that shows nothing without one.
 		if err := seedArchivedStory(repo, userID); err != nil {
 			log.Fatal(err)
 		}
@@ -89,14 +83,8 @@ func seedDummyUser(database *repositories.DB) (string, bool, error) {
 	return seedUser(database, dummyEmail, dummyNickname, "Dummy", "User")
 }
 
-// The content of the demo's expired story. The browser suite reads the archive back by this
-// string, the way it reads the seeded handles, so it is written down here rather than buried in
-// the INSERT that uses it.
 const archivedStoryContent = "From yesterday, kept in the archive"
 
-// seedArchivedStory leaves one expired story for the demo user, so the story archive is not empty
-// on a fresh database — nothing can pass a story's real 24-hour expiry inside a test run. It is
-// idempotent: a second run finds the story already there and leaves it.
 func seedArchivedStory(database *repositories.DB, userID string) error {
 	var existing int
 	if err := database.Conn.QueryRow("SELECT COUNT(*) FROM story WHERE userId=? AND expiresAt <= datetime('now')", userID).Scan(&existing); err != nil {

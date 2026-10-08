@@ -14,11 +14,6 @@ import (
 	"social-network/backend/pkg/payload/posts"
 )
 
-// TestCommentMediaIntegration covers the spec line "while creating a post or a
-// comment, the user can include an image or GIF": a comment carries a gallery,
-// only the commenter's own uploads are accepted, emoji are allowed, the photo is
-// readable by exactly the audience of its post, and deleting the comment takes
-// the photo away again.
 func TestCommentMediaIntegration(t *testing.T) {
 	server, repo := integrationServer(t, true, false)
 	dummy, alex := newIntegrationClient(t, server), newIntegrationClient(t, server)
@@ -48,7 +43,6 @@ func TestCommentMediaIntegration(t *testing.T) {
 	commentsPath := "/api/v1/posts/comments?postId=" + post.PostId
 	commenterImage := commenterImages[0]
 
-	// Authorization and validation.
 	newIntegrationClient(t, server).call("POST", "/api/v1/posts/comments", map[string]any{"postId": post.PostId, "content": "Anonymous comment"}, 401)
 	alex.call("POST", "/api/v1/posts/comments", map[string]any{
 		"postId": post.PostId, "content": "Photo owned by someone else", "imageUrls": []string{"/api/v1/media/123e4567-e89b-12d3-a456-426614174203"},
@@ -66,8 +60,6 @@ func TestCommentMediaIntegration(t *testing.T) {
 		})
 	}
 
-	// A post the commenter cannot read stays 404 even with media attached. The
-	// guest's followers-only post is invisible to Alex, who follows nobody.
 	hidden := decoded[posts.PostDTO](t, guest.call("POST", "/api/v1/posts", map[string]any{
 		"title": "Hidden post", "content": "Only the author's followers may comment.", "privacy": "followers",
 	}, 201))
@@ -75,8 +67,6 @@ func TestCommentMediaIntegration(t *testing.T) {
 		"postId": hidden.PostId, "content": "Peeking at a hidden post", "imageUrls": []string{commenterImage},
 	}, 404)
 
-	// Alex follows the author so the followers-only post is readable; the guest
-	// stays a stranger for the negative checks.
 	alex.call("PUT", "/api/v1/users/dummy-id/follow", nil, 200)
 
 	created := decoded[comment.CommentDTO](t, alex.call("POST", "/api/v1/posts/comments", map[string]any{
@@ -88,9 +78,6 @@ func TestCommentMediaIntegration(t *testing.T) {
 	if created.UserId != "alex-id" {
 		t.Fatalf("comment lost its author: %+v", created)
 	}
-	// The client splices the comment this endpoint returns straight into the thread,
-	// so the author's handle has to travel with it, not only on the next list read:
-	// without it the row a reader just posted renders as an anonymous "Member".
 	if created.Nickname != "alexdemo" {
 		t.Fatalf("comment lost its author's nickname: %+v", created)
 	}
@@ -103,7 +90,6 @@ func TestCommentMediaIntegration(t *testing.T) {
 		t.Fatalf("comment row does not hold a JSON gallery: %q (%v)", stored, err)
 	}
 
-	// The gallery comes back on the list endpoint.
 	listed := decoded[comment.CommentResponse](t, alex.call("GET", commentsPath, nil, 200))
 	found := false
 	for _, item := range listed.Comments {
@@ -118,7 +104,6 @@ func TestCommentMediaIntegration(t *testing.T) {
 		t.Fatalf("created comment missing from the list: %+v", listed.Comments)
 	}
 
-	// Editing the text keeps the gallery and the emoji.
 	alex.call("PUT", "/api/v1/posts/comments/"+strconv.Itoa(created.CommentId), map[string]string{"content": "Edited emoji 🎉🏝"}, 200)
 	listed = decoded[comment.CommentResponse](t, alex.call("GET", commentsPath, nil, 200))
 	for _, item := range listed.Comments {
@@ -127,21 +112,17 @@ func TestCommentMediaIntegration(t *testing.T) {
 		}
 	}
 
-	// The photo is readable exactly where the post is: its uploader and a
-	// follower of the post's author can open it, a stranger cannot.
 	alex.call("GET", commenterImage, nil, 200)
 	dummy.call("GET", commenterImage, nil, 200)
 	guest.call("GET", "/api/v1/post?id="+post.PostId, nil, 404)
 	guest.call("GET", commenterImage, nil, 404)
 	guest.call("GET", "/api/v1/users/alex-id/media", nil, 200)
 
-	// The profile media tab merges post and comment photos.
 	media := decoded[[]models.MediaItem](t, alex.call("GET", "/api/v1/users/alex-id/media", nil, 200))
 	if len(media) != 2 || media[0].Url != commenterImage || media[0].PostId != post.PostId {
 		t.Fatalf("profile media does not list the comment photo: %+v", media)
 	}
 
-	// A private profile hides the whole tab from a stranger.
 	alexProfile := decoded[models.SocialUser](t, alex.call("GET", "/api/v1/users/me", nil, 200))
 	alexProfile.IsPublic = false
 	alex.call("PUT", "/api/v1/users/me", alexProfile, 200)
@@ -149,12 +130,10 @@ func TestCommentMediaIntegration(t *testing.T) {
 	alexProfile.IsPublic = true
 	alex.call("PUT", "/api/v1/users/me", alexProfile, 200)
 
-	// Deleting the comment revokes the photo for everyone but its uploader.
 	alex.call("DELETE", "/api/v1/posts/comments?id="+strconv.Itoa(created.CommentId), nil, 200)
 	dummy.call("GET", commenterImage, nil, 404)
 	alex.call("GET", commenterImage, nil, 200)
 
-	// The legacy form encoding still creates a text comment.
 	legacy := decoded[comment.CommentDTO](t, alex.call("POST", "/api/v1/posts/comments", url.Values{
 		"postId": {post.PostId}, "content": {"A form encoded comment"},
 	}, 201))
@@ -163,8 +142,6 @@ func TestCommentMediaIntegration(t *testing.T) {
 	}
 }
 
-// registerMediaGuest signs up a third account that follows nobody, so the
-// privacy checks above run against a genuine stranger.
 func registerMediaGuest(t *testing.T, guest integrationClient) {
 	t.Helper()
 	guest.call("POST", "/api/v1/auth/register", url.Values{

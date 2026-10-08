@@ -2,10 +2,6 @@
 
 import { Send } from 'lucide-react';
 
-/**
- * The chat panel with no conversation open: Instagram's paper-plane circle, its two lines
- * of copy and the button that opens the new-message modal.
- */
 export default function EmptyChat({ onNew }: { onNew: () => void }) {
   return <div className="dm-empty">
     <div className="dm-empty-icon" aria-hidden="true"><Send /></div>

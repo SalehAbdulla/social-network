@@ -23,7 +23,6 @@ func TestConversationListsOnlyIncludeHistoryAndMembership(t *testing.T) {
 	}
 	assertChats(owner, 0)
 	assertChats(member, 0)
-	// Merely opening a profile or an empty chat must not create a conversation.
 	owner.call("GET", "/api/v1/messages?partnerId=alex-id", nil, 200)
 	assertChats(owner, 0)
 	sent := decoded[message.MessageDTO](t, owner.call("POST", "/api/v1/messages", map[string]string{"recipientId": "alex-id", "text": "First message"}, 201))
@@ -40,7 +39,6 @@ func TestConversationListsOnlyIncludeHistoryAndMembership(t *testing.T) {
 		t.Fatal(err)
 	}
 	base := fmt.Sprintf("/api/v1/groups/%d", group.GroupID)
-	// Fill more than a page with unrelated groups: filtering must precede pagination.
 	for i := 0; i < 35; i++ {
 		if _, err := repo.CreateGroup("alex-id", fmt.Sprintf("Other group %d", i), "Find me by description"); err != nil {
 			t.Fatal(err)

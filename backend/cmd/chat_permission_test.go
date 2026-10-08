@@ -20,8 +20,6 @@ func privateMessage(t *testing.T, client integrationClient, recipient, text stri
 	client.call("POST", "/api/v1/messages", map[string]any{"recipientId": recipient, "text": text}, status)
 }
 
-// TestPrivateMessageSocketRespectsTheChatRule proves the WebSocket door obeys
-// the same rule: a rejected frame is not stored and not delivered.
 func TestPrivateMessageSocketRespectsTheChatRule(t *testing.T) {
 	server, repo := integrationServer(t, true, false)
 	owner, stranger := newIntegrationClient(t, server), newIntegrationClient(t, server)
@@ -59,7 +57,6 @@ func TestPrivateMessageSocketRespectsTheChatRule(t *testing.T) {
 		t.Fatalf("the socket stored a message that the rule forbids (%d -> %d)", before, after)
 	}
 
-	// The same socket still works once a follow exists.
 	owner.call("PUT", "/api/v1/users/alex-id/follow", nil, 200)
 	if err := socket.WriteMessage(websocket.TextMessage, frame); err != nil {
 		t.Fatal(err)
@@ -73,16 +70,11 @@ func TestPrivateMessageSocketRespectsTheChatRule(t *testing.T) {
 	}
 }
 
-// socketFrame is the envelope every push shares, so a test can wait for a type
-// and then read only that frame's payload.
 type socketFrame struct {
 	Type    string          `json:"type"`
 	Payload json.RawMessage `json:"payload"`
 }
 
-// waitForFrame reads frames until one of wantType arrives or the deadline runs
-// out. Anything else on the wire is skipped rather than treated as a failure,
-// because the hub also fans presence updates out to everyone.
 func waitForFrame(t *testing.T, socket *websocket.Conn, wantType string, within time.Duration) socketFrame {
 	t.Helper()
 	deadline := time.Now().Add(within)
@@ -108,9 +100,6 @@ func waitForFrame(t *testing.T, socket *websocket.Conn, wantType string, within 
 	return socketFrame{}
 }
 
-// TestPrivateMessageSocketDelivery covers the half the rule test cannot see: the
-// recipient's own socket receives the stored message, the sender's second tab
-// stays in step, and a chat that is already open raises no badge.
 func TestPrivateMessageSocketDelivery(t *testing.T) {
 	server, repo := integrationServer(t, true, false)
 	senderClient, recipientClient := newIntegrationClient(t, server), newIntegrationClient(t, server)
@@ -156,8 +145,6 @@ func TestPrivateMessageSocketDelivery(t *testing.T) {
 		}
 	}
 
-	// The recipient's socket receives the message that was persisted, carrying
-	// the stored id, the sender's handle and a timestamp — not just a type.
 	before := countMessages()
 	send(sender, "alex-id", "straight to the socket")
 	incoming := waitForFrame(t, recipient, "incoming_msg", 5*time.Second)
@@ -182,7 +169,6 @@ func TestPrivateMessageSocketDelivery(t *testing.T) {
 		t.Fatalf("expected exactly one stored message, %d -> %d", before, after)
 	}
 
-	// The sender hears the same frame, so a second tab of theirs is in step.
 	echo := waitForFrame(t, sender, "incoming_msg", 5*time.Second)
 	var echoed struct {
 		MessageId int `json:"messageId"`
@@ -194,7 +180,6 @@ func TestPrivateMessageSocketDelivery(t *testing.T) {
 		t.Fatalf("the sender's echo is a different message: %d vs %d", echoed.MessageId, delivered.MessageId)
 	}
 
-	// The recipient is not looking at the conversation, so a badge is raised.
 	if got := unread(); got != 1 {
 		t.Fatalf("expected one unread message notification, found %d", got)
 	}
@@ -211,8 +196,6 @@ func TestPrivateMessageSocketDelivery(t *testing.T) {
 		t.Fatalf("the pushed notification does not point at the message: %+v", notice)
 	}
 
-	// Opening the chat marks that notification read, which is also proof that
-	// the frame has been handled. Poll for it rather than sleeping a fixed time.
 	openChat, err := json.Marshal(map[string]any{"type": "open_chat", "payload": map[string]string{"partnerId": "dummy-id"}})
 	if err != nil {
 		t.Fatal(err)
@@ -228,8 +211,6 @@ func TestPrivateMessageSocketDelivery(t *testing.T) {
 		t.Fatalf("open_chat did not mark the chat read, %d still unread", got)
 	}
 
-	// With the chat open the message is still delivered, but no new badge is
-	// raised and nothing else is pushed to that socket.
 	send(sender, "alex-id", "while the chat is open")
 	second := waitForFrame(t, recipient, "incoming_msg", 5*time.Second)
 	if !bytes.Contains(second.Payload, []byte("while the chat is open")) {
@@ -243,9 +224,6 @@ func TestPrivateMessageSocketDelivery(t *testing.T) {
 		t.Fatalf("an open chat still raised a notification, %d unread", got)
 	}
 
-	// The rejection half: a stranger's socket frame is neither stored nor
-	// delivered. Fresh sockets, because a read deadline above leaves a
-	// connection unusable.
 	profile := decoded[models.SocialUser](t, senderClient.call("GET", "/api/v1/users/me", nil, 200))
 	profile.IsPublic = false
 	senderClient.call("PUT", "/api/v1/users/me", profile, 200)
@@ -285,21 +263,16 @@ func dialSocket(t *testing.T, client integrationClient, serverURL *url.URL) *web
 	return socket
 }
 
-// TestChatPermissionRule covers the spec line that private messages are only
-// possible between users where at least one follows the other, unless the
-// recipient has a public profile.
 func TestChatPermissionRule(t *testing.T) {
 	server, repo := integrationServer(t, true, false)
 	dummy, alex := newIntegrationClient(t, server), newIntegrationClient(t, server)
 	dummy.login("dummy@example.com")
 	alex.login("alex@example.com")
 
-	// A private recipient is the interesting case; Alex stays public.
 	profile := decoded[models.SocialUser](t, dummy.call("GET", "/api/v1/users/me", nil, 200))
 	profile.IsPublic = false
 	dummy.call("PUT", "/api/v1/users/me", profile, 200)
 
-	// Stranger -> private profile: no send, no read, no inbox entry, no flag.
 	privateMessage(t, alex, "dummy-id", "hello stranger", 403)
 	alex.call("GET", "/api/v1/messages?partnerId=dummy-id", nil, 403)
 	alex.call("POST", "/api/v1/messages/read", map[string]any{"partnerId": "dummy-id"}, 403)
@@ -309,21 +282,16 @@ func TestChatPermissionRule(t *testing.T) {
 	if seen := decoded[models.SocialUser](t, alex.call("GET", "/api/v1/users/dummy-id", nil, 200)); seen.CanMessage {
 		t.Fatal("a private profile claimed the viewer can message it")
 	}
-	// The discover list carries the same viewer-relative flag, because that is
-	// the screen the UI uses to decide whether to offer the action at all.
 	if listed := decoded[[]models.SocialUser](t, alex.call("GET", "/api/v1/users?q=dummy", nil, 200)); len(listed) != 1 || listed[0].CanMessage {
 		t.Fatalf("discover offered a blocked chat: %+v", listed)
 	}
 
-	// Stranger -> public profile is allowed in both directions.
 	privateMessage(t, dummy, "alex-id", "hello public profile", 201)
 	if seen := decoded[models.SocialUser](t, dummy.call("GET", "/api/v1/users/alex-id", nil, 200)); !seen.CanMessage {
 		t.Fatal("a public profile must be messageable")
 	}
 	alex.call("GET", "/api/v1/messages?partnerId=dummy-id", nil, 403)
 
-	// One-way follow (Dummy follows Alex) unlocks the private profile too,
-	// because a follow in either direction is enough.
 	dummy.call("PUT", "/api/v1/users/alex-id/follow", nil, 200)
 	privateMessage(t, alex, "dummy-id", "one-way reply", 201)
 	if listed := decoded[[]models.SocialUser](t, alex.call("GET", "/api/v1/users?q=dummy", nil, 200)); len(listed) != 1 || !listed[0].CanMessage {
@@ -335,7 +303,6 @@ func TestChatPermissionRule(t *testing.T) {
 		t.Fatalf("the unlocked thread is missing from the inbox: %+v", inbox)
 	}
 
-	// Mutual follow keeps working, and unfollowing both ways closes it again.
 	alex.call("PUT", "/api/v1/users/dummy-id/follow", nil, 200)
 	dummy.call("PUT", "/api/v1/follow-requests/alex-id", nil, 200)
 	privateMessage(t, alex, "dummy-id", "mutual reply", 201)
@@ -344,7 +311,6 @@ func TestChatPermissionRule(t *testing.T) {
 	privateMessage(t, alex, "dummy-id", "after unfollow", 403)
 	alex.call("GET", "/api/v1/messages?partnerId=dummy-id", nil, 403)
 
-	// Hiding a thread must never delete the rows behind it.
 	var rows int
 	if err := repo.Conn.QueryRow(`SELECT COUNT(*) FROM message
 		WHERE (senderId='dummy-id' AND recipientId='alex-id') OR (senderId='alex-id' AND recipientId='dummy-id')`).Scan(&rows); err != nil {

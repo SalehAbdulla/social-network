@@ -13,12 +13,6 @@ import (
 	"strings"
 )
 
-// notificationTypes resolves `?types=` and `?exclude=` into the entity types a
-// request may see. Values are the entity type names, e.g. `?types=message` or
-// `?exclude=message`, so one badge can count everything except private messages
-// while the other counts only those. An unknown name is rejected instead of
-// ignored: a silently dropped filter would render the wrong badge. `exclude`
-// wins over `types`, and neither parameter means "every type".
 func notificationTypes(r *http.Request) ([]string, error) {
 	include := strings.TrimSpace(r.URL.Query().Get("types"))
 	exclude := strings.TrimSpace(r.URL.Query().Get("exclude"))
@@ -145,10 +139,6 @@ func (re *HandlerContext) GetUnreadCount(w http.ResponseWriter, r *http.Request)
 	})
 }
 
-// GetUnreadCounts answers both sidebar badges in one request: the bell counts the
-// unread rows that are not private messages, the Messages entry counts only those.
-// It is the pair `?exclude=message` and `?types=message` used to describe, fetched
-// together so the sidebar does not spend two round trips on one pair of numbers.
 func (re *HandlerContext) GetUnreadCounts(w http.ResponseWriter, r *http.Request) {
 	userID, ok := middleware.UserIDFromContext(r.Context())
 	if !ok || userID == "" {
@@ -229,11 +219,6 @@ func (re *HandlerContext) MarkAllAsRead(w http.ResponseWriter, r *http.Request) 
 	})
 }
 
-// notifyUser creates a notification through the service and pushes the created
-// row over the hub, so the badge and the list update from the same payload the
-// comment, message, follow and group paths all send. A failure is logged rather
-// than returned: the action that triggered it has already committed, and the
-// notification is only the signal that something happened.
 func (re *HandlerContext) notifyUser(recipientID, actorID, entityType string, entityID int) {
 	if recipientID == "" || recipientID == actorID {
 		return
@@ -250,7 +235,6 @@ func (re *HandlerContext) notifyUser(recipientID, actorID, entityType string, en
 	re.pushNotification(recipientID, created)
 }
 
-// pushNotification hands one created notification to its recipient, when connected.
 func (re *HandlerContext) pushNotification(recipientID string, created notification.NotificationDTO) {
 	if re.Hub == nil {
 		return
@@ -262,7 +246,6 @@ func (re *HandlerContext) pushNotification(recipientID string, created notificat
 	re.Hub.SendToUser(recipientID, data)
 }
 
-// Send only after the notification change commits so clients can fetch the new count.
 func (re *HandlerContext) notificationsChanged(userID string) {
 	if re.Hub == nil {
 		return

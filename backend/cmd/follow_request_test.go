@@ -54,7 +54,6 @@ func TestFollowRequestConcurrentAndRollback(t *testing.T) {
 		t.Fatal(err)
 	}
 	owner.call("PUT", "/api/v1/follow-requests/alex-id", nil, 200)
-	// The accepted connection row must be removed so the other direction can request.
 	status, err := repo.FollowUser("dummy-id", "alex-id")
 	if err != nil || status != "pending" {
 		t.Fatalf("reverse request after acceptance: %q %v", status, err)
@@ -171,7 +170,6 @@ func TestFollowRequests(t *testing.T) {
 			t.Fatal(action + " left stale notification")
 		}
 	}
-	// Changing to public does not silently accept existing requests.
 	requester.call("PUT", path, nil, 200)
 	profile.IsPublic = true
 	owner.call("PUT", "/api/v1/users/me", profile, 200)

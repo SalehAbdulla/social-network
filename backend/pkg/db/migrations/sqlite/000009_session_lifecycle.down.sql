@@ -1,4 +1,3 @@
--- Restore the original three-column session table from 000001.
 CREATE TABLE IF NOT EXISTS session_replacement (
     token TEXT PRIMARY KEY,
     userId TEXT NOT NULL,

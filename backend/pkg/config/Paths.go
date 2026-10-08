@@ -6,9 +6,6 @@ import (
 	"path/filepath"
 )
 
-// BackendDir locates the nearest backend tree, including when a command is
-// started from cmd or cmd/seed. Prefer the nearest tree so isolated test
-// databases never resolve to the development database in a parent directory.
 func BackendDir() (string, error) {
 	start, err := os.Getwd()
 	if err != nil {

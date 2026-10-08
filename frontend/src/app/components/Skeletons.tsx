@@ -1,10 +1,3 @@
-/**
- * Shimmer placeholders for the paged lists.
- *
- * They mirror the geometry of the real cards so the first paint of a list has
- * the same rhythm as the loaded state instead of collapsing to a spinner and
- * then jumping.
- */
 function Bar({ className = '' }: { className?: string }) {
   return <div className={`animate-pulse rounded-md bg-slate-200/70 ${className}`} />;
 }
@@ -81,12 +74,6 @@ export function RowsSkeleton({ count = 3 }: { count?: number }) {
   );
 }
 
-/**
- * The group surfaces' skeletons. They are drawn from the `grp-skel-*` classes rather than
- * Tailwind's own grey, so the shimmer is the same token the rest of the conversation uses and
- * it follows the theme. Each one mirrors the geometry of the real row, post, event or cell, so
- * a list's first paint has the loaded state's rhythm instead of collapsing and then jumping.
- */
 export function GroupRowsSkeleton({ count = 3 }: { count?: number }) {
   return (
     <div aria-hidden="true">

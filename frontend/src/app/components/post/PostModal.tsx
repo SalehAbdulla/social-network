@@ -6,16 +6,10 @@ import { type Post } from '../../api/social';
 import { useDialogFocus } from '../../lib/useDialogFocus';
 import PostView from './PostView';
 
-/**
- * The post dialog: the backdrop, the close X in the viewport's own corner, the prev/next arrows
- * and the `PostView` in the middle. It is a thin shell — everything inside the panel is
- * `PostView`, so the modal and the standalone page are the same component.
- */
 export default function PostModal({ post, onClose, onRemoved, onPrev, onNext, group = false, avatarOf, canManage, sharePath, thread, onEdit, onDelete }: {
   post: Post;
   onClose: () => void;
   onRemoved?: (postId: string) => void;
-  /** Present only when the opener held a list: the grid, saved, a hashtag, search. */
   onPrev?: () => void;
   onNext?: () => void;
   group?: boolean;
@@ -26,13 +20,8 @@ export default function PostModal({ post, onClose, onRemoved, onPrev, onNext, gr
   onEdit?: () => void;
   onDelete?: () => void;
 }) {
-  // Escape and Tab belong to the innermost dialog: while a photo viewer or the post's own "…" menu
-  // is open the trap stands down, so one Escape closes the innermost thing rather than the post.
   const [nested, setNested] = useState(false);
   const dialog = useDialogFocus<HTMLDivElement>(onClose, { enabled: !nested });
-  // The arrows sit just outside the dialog when there is room and fall back to the viewport edge
-  // when there is not, so the previous arrow can never land on the rail. Measured from the dialog
-  // rather than guessed, because its width follows the media's aspect ratio.
   const [edges, setEdges] = useState<{ prev: number; next: number } | null>(null);
   useEffect(() => {
     const box = dialog.current?.querySelector('.pv-dialog')?.getBoundingClientRect();

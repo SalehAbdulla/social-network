@@ -4,12 +4,6 @@ import { Check } from 'lucide-react';
 import Button from '../../ui/Button';
 import { type GroupItem } from './groupContent';
 
-/**
- * The two answers to an event, drawn once so the Events tab and the event's card in the chat
- * stream cannot drift apart. Both are the shared button — 32px, an 8px radius, 14px/600 — and
- * the chosen one is the filled blue with a check on it, the way the group has always answered.
- * While a write is in flight both are disabled, which is what stops a double answer.
- */
 export default function GroupRsvp({ item, busy, onRsvp }: {
   item: GroupItem;
   busy: boolean;

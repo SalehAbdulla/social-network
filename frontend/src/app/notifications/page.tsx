@@ -16,8 +16,6 @@ const NOTIFICATIONS_PER_PAGE = 20;
 
 function notificationPath(item: Notification) {
   if (item.entityType === 'group_invitation') return '/messages/groups';
-  // A join request is answered on the group's info tab and an event lives on its
-  // events tab, so both land where the reader has to act.
   if (item.entityType === 'group_request') return `/messages/groups/${item.entityId}?tab=info`;
   if (item.entityType === 'group_event') return `/messages/groups/${item.entityId}?tab=events`;
   if (item.entityType.startsWith('group_')) return `/messages/groups/${item.entityId}`;
@@ -37,13 +35,6 @@ function notificationText(item: Notification) {
   return 'updated a connection request.';
 }
 
-/**
- * A private message is not a notification, so the two no longer look alike:
- * message rows carry their own accent, a caption and a chat call to action,
- * while every other type keeps the notification styling. The API keeps them
- * apart too — the sidebar bell asks for `?exclude=message`, the Messages entry
- * for `?types=message`.
- */
 function NotificationCard({ item, busy, mark }: {
   item: Notification;
   busy: boolean;
@@ -76,21 +67,17 @@ export default function Notifications() {
   const [unread, setUnread] = useState(false);
   const [busy, setBusy] = useState(false);
   const notifications = usePagedList<Notification, { notifications: Notification[]; totalElements: number }>({
-    // `unread` is part of the identity, so flipping the filter restarts at offset 0.
     key: `/notifications?limit=${NOTIFICATIONS_PER_PAGE}&unread=${unread}`,
     pageQuery: page => `&offset=${(page - 1) * NOTIFICATIONS_PER_PAGE}`,
     pageSize: NOTIFICATIONS_PER_PAGE,
     normalize: (raw, { page, pageSize }) => ({ items: raw.notifications, hasMore: page * pageSize < raw.totalElements }),
     keyOf: item => item.notificationId,
   });
-  // Socket bursts and the poll re-read the newest page only, so anything already
-  // scrolled into view stays where it is.
   const reload = notifications.refresh;
   useEffect(() => { window.addEventListener('social:socket', reload); const timer = setInterval(reload, 30000); return () => { window.removeEventListener('social:socket', reload); clearInterval(timer); }; }, [reload]);
   async function mark(path: string) {
     setBusy(true); try {
       await request(path, 'PATCH');
-      // Under "Unread only" a merge could not drop the rows that were just read.
       if (unread) notifications.reload(); else reload();
       window.dispatchEvent(new Event('social:notifications'));
     } catch (error) { toast.error(errorMessage(error)); } finally { setBusy(false); }
@@ -101,7 +88,6 @@ export default function Notifications() {
     try {
       await request(`/follow-requests/${userId}`, accept ? 'PUT' : 'DELETE');
       await refreshUser();
-      // The row is settled either way, so drop it locally instead of paging backwards.
       pending.update(items => items.filter(person => person.userId !== userId));
       pending.refresh();
       reload();

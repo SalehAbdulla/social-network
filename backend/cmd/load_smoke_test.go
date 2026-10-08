@@ -14,15 +14,6 @@ import (
 	"social-network/backend/pkg/models"
 )
 
-// TestWebSocketFanOutToFiftyMembers is the load smoke for the realtime path: fifty
-// signed-in members connected at once, and one group message that every one of
-// them has to receive.
-//
-// The members are inserted and given sessions directly rather than registered,
-// because fifty registrations would cost fifty bcrypt hashes and prove nothing
-// about the hub — and because this app keeps one session per account, handing each
-// account a session through the manager is the only way to have fifty signed-in
-// clients at the same time.
 func TestWebSocketFanOutToFiftyMembers(t *testing.T) {
 	manager := isolatedSessionManager(t)
 	server, repo := integrationServer(t, true, false)
@@ -50,16 +41,11 @@ func TestWebSocketFanOutToFiftyMembers(t *testing.T) {
 		sockets = append(sockets, socket)
 	}
 
-	// The broadcast is sent inside the request handler, so by the time this returns
-	// every frame is already in its socket's queue.
 	owner.call("POST", fmt.Sprintf("/api/v1/groups/%d/content/messages", group.GroupID),
 		map[string]string{"content": "Everyone should see this"}, 201)
 
 	start := time.Now()
 	for index, socket := range sockets {
-		// A member never sees the frame as a *new* event, so the only frame that can
-		// arrive is the broadcast; the deadline is what makes a missing one fail
-		// rather than hang.
 		frame := waitForFrame(t, socket, "group_changed", 15*time.Second)
 		if len(frame.Payload) == 0 {
 			t.Fatalf("member %d received a group_changed frame with no payload", index)
@@ -68,10 +54,6 @@ func TestWebSocketFanOutToFiftyMembers(t *testing.T) {
 	t.Logf("50 group broadcasts delivered in %s", time.Since(start).Round(time.Millisecond))
 }
 
-// TestSustainedRequestThroughput keeps a steady load on the API while the sockets
-// above are the interesting case: every request has to be answered, and the rate
-// reached is reported rather than asserted, because a threshold on wall-clock time
-// in CI fails for reasons that have nothing to do with the code.
 func TestSustainedRequestThroughput(t *testing.T) {
 	server, _ := integrationServer(t, true, false)
 	client := newIntegrationClient(t, server)
@@ -112,11 +94,6 @@ func TestSustainedRequestThroughput(t *testing.T) {
 
 const rateLimitPerMinute = 1200
 
-// TestRateLimitBoundaryThroughTheMiddleware pins where the per-peer limit actually
-// sits, which is one of those things that is easy to state and easy to get wrong:
-// the twelve-hundredth request inside a window is answered and the one after it is
-// not. It needs its own server, because the bucket is per peer and every request in
-// this harness arrives from the same one.
 func TestRateLimitBoundaryThroughTheMiddleware(t *testing.T) {
 	server, _ := integrationServer(t, true, false)
 	client := newIntegrationClient(t, server)
@@ -148,11 +125,6 @@ func TestRateLimitBoundaryThroughTheMiddleware(t *testing.T) {
 	}
 }
 
-// The ceiling is configurable because the browser harness is a machine driving a whole
-// test suite from one direct peer, and it legitimately needs more headroom in a minute
-// than a person does. The default stays exactly what the boundary test above pins, so
-// what this covers is the knob: the resolution rule, and that a configured value really
-// does move the middleware's boundary instead of being read and ignored.
 func TestConfiguredRateLimitMovesTheBoundary(t *testing.T) {
 	previous := app.RateLimitPerMinute
 	t.Cleanup(func() { app.RateLimitPerMinute = previous })
@@ -160,8 +132,6 @@ func TestConfiguredRateLimitMovesTheBoundary(t *testing.T) {
 	server, _ := integrationServer(t, true, false)
 	client := newIntegrationClient(t, server)
 
-	// A value that cannot be honoured falls back to the tested default rather than to no
-	// limit at all: a zero budget must never be read as "unlimited".
 	app.RateLimitPerMinute = 0
 	if resolved := effectiveRateLimitPerMinute(); resolved != rateLimitPerMinute {
 		t.Fatalf("an unset limit resolved to %d, want the default %d", resolved, rateLimitPerMinute)
@@ -171,8 +141,6 @@ func TestConfiguredRateLimitMovesTheBoundary(t *testing.T) {
 		t.Fatalf("a negative limit resolved to %d, want the default %d", resolved, rateLimitPerMinute)
 	}
 
-	// Its own server above, and the bucket is built inside Security, so this is a fresh
-	// peer budget even though the go test process shares one address.
 	const configured = 5
 	app.RateLimitPerMinute = configured
 	for request := 1; request <= configured; request++ {

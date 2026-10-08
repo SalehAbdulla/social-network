@@ -42,13 +42,8 @@ func TestSessionManagerCreateSessionEvictsPreviousToken(t *testing.T) {
 	}
 }
 
-// TestCreateSessionEvictsTokensRecachedFromTheStore pins the case a restart
-// creates. A token that reached the cache through a database lookup is not in
-// UIDToToken, so evicting only the newest token per user would leave it working
-// after its row was deleted.
 func TestCreateSessionEvictsTokensRecachedFromTheStore(t *testing.T) {
 	sm := NewSessionManager()
-	// What GetUserIdByToken's database fallback leaves behind.
 	sm.TokenToUID["recovered-from-store"] = "user"
 	sm.Expires["recovered-from-store"] = time.Now().Add(time.Hour)
 
@@ -63,8 +58,6 @@ func TestCreateSessionEvictsTokensRecachedFromTheStore(t *testing.T) {
 	}
 }
 
-// TestSessionExpiryHonoursTheIdleWindowAndTheAbsoluteCap pins the sliding
-// expiry math: activity moves the deadline forward, never past the cap.
 func TestSessionExpiryHonoursTheIdleWindowAndTheAbsoluteCap(t *testing.T) {
 	createdAt := time.Date(2026, 1, 1, 12, 0, 0, 0, time.UTC)
 
@@ -73,7 +66,6 @@ func TestSessionExpiryHonoursTheIdleWindowAndTheAbsoluteCap(t *testing.T) {
 		t.Fatalf("fresh session expires at %s, want the idle window %s", fresh, want)
 	}
 
-	// A user active every day still loses the session at the absolute cap.
 	active := sessionExpiry(createdAt, createdAt.Add(SessionAbsoluteTTL-time.Hour))
 	if want := createdAt.Add(SessionAbsoluteTTL); !active.Equal(want) {
 		t.Fatalf("active session expires at %s, want the cap %s", active, want)

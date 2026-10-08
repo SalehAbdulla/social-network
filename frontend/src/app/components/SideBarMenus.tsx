@@ -7,17 +7,8 @@ import toast from 'react-hot-toast';
 import ThemeToggle from './ThemeToggle';
 import { MenuItem, menuRowClass } from './PopoverMenu';
 
-/** The shared row class: a full-width 44px row on an 8px radius, both read from the `--rail-row-*`
- *  tokens in globals.css so the rail's geometry is tuned in that block rather than here. The icon
- *  the row holds is sized by the rail's own `.app-rail svg` rule and the label it holds by
- *  `.app-rail-label`, so the row carries no measurement of its own. */
 export const rowClass = 'group relative flex h-[var(--rail-row-height)] items-center gap-4 rounded-[var(--rail-row-radius)] px-3 text-text transition-colors hover:bg-rail-hover active:bg-rail-hover-strong';
 
-/** The icon + label + badge that every row shares. `children` is the icon (or the profile
- *  avatar); the label is clipped away until the rail expands, then fades in beside the icon.
- *  Nothing here sizes the icon and no wrapper transforms it: the rail's `.app-rail svg` rule and
- *  `RAIL_AVATAR_SIZE` are the only two places a rail icon's size is written, which is why the
- *  drawn size is the token rather than a per-row prop. */
 export function RowBody({ label, active, badge = 0, children }: {
   label: string; active: boolean; badge?: number; children: ReactNode;
 }) {
@@ -30,9 +21,6 @@ export function RowBody({ label, active, badge = 0, children }: {
   </>;
 }
 
-/** The More menu, with its "Switch appearance" sub-view that hosts the theme toggle. Its
- *  "Settings" row opens the change-password dialog the rail hosts, rather than linking to a
- *  route the app does not have. */
 export function MoreMenuContent({ onClose, onLogout, onSettings, onSwitchAccounts, loggingOut }: {
   onClose: () => void; onLogout: () => void; onSettings: () => void; onSwitchAccounts: () => void; loggingOut: boolean;
 }) {

@@ -1,11 +1,3 @@
-/**
- * Inline placeholder for non-error states, e.g. a request that succeeded with
- * no data. Request failures are reported with toasts instead — see ../lib/notify.tsx.
- *
- * `variant` picks a small illustration for the four surfaces that used to be plain
- * text (feed, notifications, messages, groups); `children` lets a caller hang a
- * call-to-action link under the message.
- */
 import type { ReactNode } from 'react';
 import { Bell, Inbox, MessageCircle, Users } from 'lucide-react';
 

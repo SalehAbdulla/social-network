@@ -8,21 +8,14 @@ import AudienceIcon from '../AudienceIcon';
 import Avatar from '../Avatar';
 import Menu, { MenuItem } from '../ui/Menu';
 
-/**
- * The post view's header: the author's 32px avatar, their name, and a muted second line carrying
- * the audience mark — and, on the right, the shared "…" menu (Edit, Delete, Copy link, Go to post,
- * Share). The close control is not here: the X lives in the viewport's own corner.
- */
 export default function PostHeader({ post, group, isOwner, avatarUrl, onEdit, onDelete, onCopyLink, onGoToPost, onShare }: {
   post: Post;
   group: boolean;
   isOwner: boolean;
-  /** The group roster's avatar for the author, when the surface holds one. */
   avatarUrl?: string;
   onEdit?: () => void;
   onDelete: () => void;
   onCopyLink: () => void;
-  /** Absent for a group post, which has no `/post/{id}` row of its own. */
   onGoToPost?: () => void;
   onShare: () => void;
 }) {

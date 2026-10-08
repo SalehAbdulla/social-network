@@ -6,16 +6,6 @@ import { ChevronLeft, Maximize2, X } from 'lucide-react';
 import Avatar from '../Avatar';
 import IconButton from '../ui/IconButton';
 
-/**
- * The dock chat's header.
- *
- * It is Instagram's: a back chevron to the list, the face and name (the name links to the
- * profile, the status line says whether they are around), and the two controls that leave the
- * conversation — Expand, which opens the full `/messages` view, and Close, which folds the
- * panel back to its pill. It mirrors `ChatHeader` in shape and the `--dock-*` tokens in
- * geometry, so the dock reads as the same surface at a smaller scale rather than a second
- * design.
- */
 export default function DockHeader({ name, handle, avatar, online, profileHref, onBack, onExpand, onClose, sub, action }: {
   name: string;
   handle: string;
@@ -25,9 +15,7 @@ export default function DockHeader({ name, handle, avatar, online, profileHref, 
   onBack: () => void;
   onExpand: () => void;
   onClose: () => void;
-  /** Overrides the derived status line — a group passes its member count, or "Open group". */
   sub?: string;
-  /** A slot between the identity and the two controls — a group puts its "Open group" link here. */
   action?: ReactNode;
 }) {
   const subtitle = sub ?? (online ? 'Active now' : handle || 'Offline');

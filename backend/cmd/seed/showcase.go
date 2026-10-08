@@ -1,11 +1,3 @@
-// The showcase seed: a lived-in dataset a person can sign into to see what the app does, and that
-// the tests can rely on. It is deliberately separate from the two accounts the normal seed writes
-// (`make seed`, `make seed -demo`), so adding a crowd here cannot move the ground under the browser
-// suite, which builds and runs `seed -demo` against an isolated database.
-//
-// It is idempotent. Every row is written with a stable id and `ON CONFLICT DO UPDATE`/`DO NOTHING`,
-// so running it a second time refreshes the timestamps to "now" and touches nothing else — which is
-// also what lets the test in showcase_test.go run it twice and assert the counts do not move.
 package main
 
 import (
@@ -22,12 +14,8 @@ import (
 )
 
 const (
-	// showcasePassword is the shared credential for every generated member, so the whole crowd can
-	// be signed into with one password while the two older fixtures keep theirs.
 	showcasePassword = "Password123!"
 
-	// The integer primary keys of the generated rows start well above anything the running server
-	// hands out, so a seeded post and a post written while the app is in use can never collide.
 	postIDBase    = 1000
 	commentIDBase = 2000
 	storyIDBase   = 3000
@@ -37,8 +25,6 @@ const (
 	contentIDBase = 7000
 )
 
-// seedShowcase writes the whole dataset in one transaction. `uploadsDir` is where the generated
-// pictures land, and must be the same directory the running server serves `/api/v1/media` from.
 func seedShowcase(database *repositories.DB, uploadsDir string) error {
 	rng := rand.New(rand.NewSource(20260101))
 	now := time.Now().UTC()
@@ -54,7 +40,6 @@ func seedShowcase(database *repositories.DB, uploadsDir string) error {
 	if err != nil {
 		return fmt.Errorf("seed members: %w", err)
 	}
-	// The two accounts the plain seed owns, so the showcase can post as them and address them.
 	for _, base := range []struct{ handle, email string }{{"dummyuser", "dummy@example.com"}, {"alexdemo", "alex@example.com"}} {
 		var id string
 		if err := tx.QueryRow("SELECT userId FROM user WHERE email = ?", base.email).Scan(&id); err != nil {
@@ -94,11 +79,8 @@ func seedShowcase(database *repositories.DB, uploadsDir string) error {
 	return tx.Commit()
 }
 
-// formatTime renders a moment in the format SQLite writes, which is the format every read path
-// parses: UTC, space-separated, no zone.
 func formatTime(t time.Time) string { return t.UTC().Format("2006-01-02 15:04:05") }
 
-// jsonURLs renders a list of media URLs as the JSON array the `imageUrls` columns hold.
 func jsonURLs(urls []string) string {
 	if len(urls) == 0 {
 		return "[]"
@@ -110,7 +92,6 @@ func jsonURLs(urls []string) string {
 	return string(encoded)
 }
 
-// initialsFor is what the generated avatar and group badges draw: two letters from a name.
 func initialsFor(first, last string) string {
 	first = strings.TrimSpace(first)
 	last = strings.TrimSpace(last)
@@ -126,8 +107,6 @@ func initialsFor(first, last string) string {
 	}
 }
 
-// execFunc is the shape of `*sql.Tx.Exec`, passed around so the helpers below can run inside the
-// seed's single transaction without each one opening its own.
 type execFunc func(query string, args ...any) (sql.Result, error)
 
 func boolInt(value bool) int {
@@ -137,7 +116,6 @@ func boolInt(value bool) int {
 	return 0
 }
 
-// memberHandles is every handle in the dataset, the two base accounts first.
 func memberHandles() []string {
 	handles := []string{"dummyuser", "alexdemo"}
 	for _, m := range showcaseMembers {
@@ -146,9 +124,6 @@ func memberHandles() []string {
 	return handles
 }
 
-// insertShowcaseMembers writes the crowd (not the two base accounts, which the plain seed owns).
-// One bcrypt hash is shared by every member: hashing twenty-four of them at the default cost would
-// add a second to every run for no benefit, since they all sign in with the same password.
 func insertShowcaseMembers(exec execFunc) (map[string]string, error) {
 	hash, err := bcrypt.GenerateFromPassword([]byte(showcasePassword), bcrypt.DefaultCost)
 	if err != nil {
@@ -173,9 +148,6 @@ func insertShowcaseMembers(exec execFunc) (map[string]string, error) {
 	return ids, nil
 }
 
-// attachProfilePictures generates and attaches each member's avatar and cover. The pictures are made
-// after the accounts exist because a `media` row points at its uploader, and the account is set on
-// the `user` row only once its picture has a URL.
 func attachProfilePictures(exec execFunc, media *mediaSeeder, ids map[string]string, rng *rand.Rand) error {
 	set := func(column, url, owner string) error {
 		_, err := exec("UPDATE user SET "+column+"=? WHERE userId=?", url, owner)
@@ -202,7 +174,6 @@ func attachProfilePictures(exec execFunc, media *mediaSeeder, ids map[string]str
 			}
 		}
 	}
-	// The two base accounts get a picture too, so their profiles are not the only bare ones.
 	for _, base := range []struct{ handle, first, last string }{{"dummyuser", "Dummy", "User"}, {"alexdemo", "Alex", "Demo"}} {
 		owner := ids[base.handle]
 		url, err := media.save("avatar:"+base.handle, owner, avatarImage(rng, initialsFor(base.first, base.last)))
@@ -223,10 +194,6 @@ func attachProfilePictures(exec execFunc, media *mediaSeeder, ids map[string]str
 	return nil
 }
 
-// insertFollows writes the written-down graph, then a little more at random so the network looks
-// organically connected. The two base accounts are left out of the random pass on purpose: their
-// edges are exactly the ones `showcaseFollows` records, which is what keeps the suggestion rail
-// full of people `dummyuser` does not follow yet.
 func insertFollows(exec execFunc, ids map[string]string, rng *rand.Rand) error {
 	insert := func(follower, followed string) error {
 		if follower == followed {
@@ -264,8 +231,6 @@ func insertFollows(exec execFunc, ids map[string]string, rng *rand.Rand) error {
 	return nil
 }
 
-// photoSize picks one of a few believable photo shapes, so a feed of generated pictures is not all
-// perfect squares.
 func photoSize(rng *rand.Rand) (int, int) {
 	switch rng.Intn(4) {
 	case 0:
@@ -279,8 +244,6 @@ func photoSize(rng *rand.Rand) (int, int) {
 	}
 }
 
-// setReaction writes one reaction with a fixed score, used both for the spread and for the handful
-// of likes the demo account is given on purpose.
 func setReaction(exec execFunc, ids map[string]string, handle, entityType string, entityID, score int, when time.Time) error {
 	_, err := exec(`INSERT INTO reaction (userId, entityType, entityId, score, createdAt) VALUES (?, ?, ?, ?, ?)
 		ON CONFLICT(userId, entityType, entityId) DO UPDATE SET score=excluded.score, createdAt=excluded.createdAt`,
@@ -288,9 +251,6 @@ func setReaction(exec execFunc, ids map[string]string, handle, entityType string
 	return err
 }
 
-// spreadReactions gives an entity a believable number of reactions by walking the membership. The
-// occasional negative score keeps a downvote in the mix, and `exclude` keeps an author from liking
-// their own post or comment.
 func spreadReactions(exec execFunc, ids map[string]string, entityType string, entityID int, from, to time.Time, chance float64, exclude string, rng *rand.Rand) error {
 	span := int64(to.Sub(from))
 	if span <= 0 {
@@ -311,8 +271,6 @@ func spreadReactions(exec execFunc, ids map[string]string, entityType string, en
 	return nil
 }
 
-// insertPosts writes the feed, each post's comments, and the reactions on both. Comments carry the
-// comment ids that the notification pass and the "liked" demo state point back at.
 func insertPosts(exec execFunc, media *mediaSeeder, ids map[string]string, now time.Time, rng *rand.Rand) error {
 	commentID := commentIDBase
 	for i, post := range showcasePosts {
@@ -333,8 +291,6 @@ func insertPosts(exec execFunc, media *mediaSeeder, ids map[string]string, now t
 		if privacy == "" {
 			privacy = "public"
 		}
-		// A deterministic public UUID, so re-running the seed keeps the same share links the
-		// way it keeps the same rows (see migration 000020 for the column).
 		publicID := seedUUID(fmt.Sprintf("post:%d", postID))
 		if _, err := exec(`INSERT INTO post (postId, publicId, userId, title, content, privacy, score, commentsCounter, createdAt, updatedAt, imageUrls)
 			VALUES (?, ?, ?, '', ?, ?, 0, 0, ?, ?, ?)
@@ -383,8 +339,6 @@ func insertPosts(exec execFunc, media *mediaSeeder, ids map[string]string, now t
 		}
 	}
 
-	// A little deliberate activity for the demo account, so signing in as dummy shows posts it has
-	// liked, a filled likes tab and a both-directions feed rather than a pristine account.
 	for _, idx := range []int{2, 3, 4, 7, 10, 14} {
 		if idx < len(showcasePosts) {
 			if err := setReaction(exec, ids, "dummyuser", "post", postIDBase+idx, 1, now.Add(-time.Duration(idx)*time.Hour)); err != nil {
@@ -395,11 +349,8 @@ func insertPosts(exec execFunc, media *mediaSeeder, ids map[string]string, now t
 	return nil
 }
 
-// storyColors are the text-story backgrounds, the same kind of solid the app's own composer offers.
 var storyColors = []string{"#4f46e5", "#db2777", "#0d9488", "#ea580c", "#7c3aed", "#0ea5e9"}
 
-// insertStories writes the live stories, records who has seen them, leaves the reply the author
-// reads back, and places the already-expired ones so a member's archive is not empty.
 func insertStories(exec execFunc, media *mediaSeeder, ids map[string]string, now time.Time, rng *rand.Rand) error {
 	firstLive := map[string]int{}
 	for i, s := range showcaseStories {
@@ -452,8 +403,6 @@ func insertStories(exec execFunc, media *mediaSeeder, ids map[string]string, now
 	return nil
 }
 
-// spreadGroupReactions likes a group post by the group's own members, which is who the reaction
-// endpoint would allow to see it in the first place.
 func spreadGroupReactions(exec execFunc, ids map[string]string, members []string, entityType string, entityID int, from, to time.Time, rng *rand.Rand) error {
 	span := int64(to.Sub(from))
 	if span <= 0 {
@@ -470,8 +419,6 @@ func spreadGroupReactions(exec execFunc, ids map[string]string, members []string
 	return nil
 }
 
-// insertGroups writes each group with its members, its wall of posts and their replies, its events
-// and RSVPs, its chat, and any pending join request or invitation.
 func insertGroups(exec execFunc, media *mediaSeeder, ids map[string]string, now time.Time, rng *rand.Rand) error {
 	contentID := contentIDBase
 	for i, g := range showcaseGroups {
@@ -596,7 +543,6 @@ func insertGroups(exec execFunc, media *mediaSeeder, ids map[string]string, now 
 	return nil
 }
 
-// distinctAuthors is the two participants of a written-down conversation, in first-seen order.
 func distinctAuthors(lines []showcaseLine) []string {
 	seen := map[string]bool{}
 	var authors []string
@@ -609,8 +555,6 @@ func distinctAuthors(lines []showcaseLine) []string {
 	return authors
 }
 
-// insertMessages writes the direct conversations. The one line addressed to the demo account that
-// never gets a reply is left unread, so its message badge is not the same zero as an empty inbox.
 func insertMessages(exec execFunc, media *mediaSeeder, ids map[string]string, now time.Time, rng *rand.Rand) error {
 	messageID := messageIDBase
 	for _, dm := range showcaseDMs {
@@ -649,9 +593,6 @@ func insertMessages(exec execFunc, media *mediaSeeder, ids map[string]string, no
 	return nil
 }
 
-// recomputeCounters rebuilds the denormalised totals the feed and the tabs read — a post's score
-// and comment count, a comment's score, a group post's likes — from the tables those totals stand
-// in for, so a re-run always agrees with itself however the reactions landed.
 func recomputeCounters(exec execFunc) error {
 	if _, err := exec(`UPDATE post SET
 			score = (SELECT COALESCE(SUM(r.score), 0) FROM reaction r WHERE r.entityType = 'post' AND r.entityId = post.postId),
@@ -672,8 +613,6 @@ func recomputeCounters(exec execFunc) error {
 	return nil
 }
 
-// insertSavedPosts bookmarks a few posts for the demo account, so the saved page has something in
-// it. The rows are keyed by position in the written-down feed, which is a stable id.
 func insertSavedPosts(exec execFunc, ids map[string]string) error {
 	for _, idx := range []int{6, 12, 15} {
 		if idx >= len(showcasePosts) {
@@ -687,10 +626,6 @@ func insertSavedPosts(exec execFunc, ids map[string]string) error {
 	return nil
 }
 
-// insertNotifications gives the demo account an inbox: a comment on each of its own posts, a
-// follow, a private message and a group invitation. It reads back the ids of the rows it points at
-// rather than remembering them, which keeps it honest about what the comment and message passes
-// actually wrote.
 func insertNotifications(tx *sql.Tx, ids map[string]string, now time.Time) error {
 	notifID := notifIDBase
 	insert := func(userID, actorID, entityType string, entityID, isRead int, createdAt string) error {
@@ -726,7 +661,6 @@ func insertNotifications(tx *sql.Tx, ids map[string]string, now time.Time) error
 		return err
 	}
 	for i, n := range comments {
-		// The earliest is left read, so the list shows both an unread and a read state.
 		isRead := 0
 		if i == 0 {
 			isRead = 1

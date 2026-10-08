@@ -23,7 +23,6 @@ func (re *HandlerContext) ManageGroup(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if r.Method == http.MethodDelete {
-		// Notify existing members before cascading the group and its content.
 		re.groupChanged(id, "deleted")
 		_, err = re.GroupService.Repo.Conn.Exec("DELETE FROM socialGroup WHERE groupId=? AND ownerId=?", id, userID)
 		if err != nil {
@@ -103,7 +102,6 @@ func (re *HandlerContext) ManageGroupMember(w http.ResponseWriter, r *http.Reque
 		}
 		err = re.GroupService.Repo.TransferGroup(id, userID, target)
 	} else {
-		// This reaches the departing member too, so an open conversation closes promptly.
 		re.groupChanged(id, "members")
 		result, e := re.GroupService.Repo.Conn.Exec("DELETE FROM socialGroupMember WHERE groupId=? AND userId=? AND role<>'owner'", id, target)
 		err = e

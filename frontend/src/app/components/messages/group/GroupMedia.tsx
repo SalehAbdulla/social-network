@@ -14,14 +14,6 @@ import LoadMore from '../../LoadMore';
 import { GROUP_PAGE_SIZE, isVideo, type GroupItem } from './groupContent';
 import GroupLightbox from './GroupLightbox';
 
-/**
- * The Media tab: the Instagram-profile grid, and the viewer a tile opens.
- *
- * Every attachment in the group — a chat photo, a post's image, anything with a URL — arrives
- * from the same media kind, so the grid is one flat set of 3:4 crops in a 935px column. The
- * viewer is the shared `GroupLightbox`, so a tile here and a photo in the chat open the same
- * thing: Escape, the arrow keys, a focus trap and focus returned to the tile that was clicked.
- */
 export default function GroupMedia({ groupId, meId, isOwner, onCreate }: {
   groupId: string;
   meId: string;
@@ -36,12 +28,10 @@ export default function GroupMedia({ groupId, meId, isOwner, onCreate }: {
     normalize: raw => ({ items: raw }),
     keyOf: item => item.id,
   });
-  // The uploader's avatar is not on a content row, so the roster is read alongside the grid.
   const members = useResource<GroupMember[]>(`/groups/${groupId}/members`);
   const roster = useMemo(() => new Map((members.data ?? []).map(member => [member.userId, member.avatar])), [members.data]);
   useLiveRefresh(resource.refresh, groupId);
   useLiveRefresh(members.reload, groupId);
-  // Removing a tile is optimistic: it disappears at once and comes back if the write fails.
   async function remove(item: GroupItem) {
     const previous = resource.items;
     resource.update(items => items.filter(entry => entry.id !== item.id));

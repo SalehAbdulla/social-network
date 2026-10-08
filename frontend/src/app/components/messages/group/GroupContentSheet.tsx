@@ -9,17 +9,8 @@ import ImagePicker from '../../ImagePicker';
 import Button from '../../ui/Button';
 import { type GroupItem } from './groupContent';
 
-/**
- * The create/edit sheet for a post or an event.
- *
- * It keeps the endpoint and the field names the group surfaces have always used — the
- * sheet is a restyle of the old inline form, not a new write path — and the same
- * keyboard contract every dialog in the app has: focus moves in, Tab cycles, Escape
- * closes and focus returns to whatever opened it.
- */
 export default function GroupContentSheet({ groupId, kind, item, onClose, onSaved }: {
   groupId: string;
-  /** `posts` for a post or a photo, `events` for an event. */
   kind: 'posts' | 'events';
   item?: GroupItem;
   onClose: () => void;
@@ -31,8 +22,6 @@ export default function GroupContentSheet({ groupId, kind, item, onClose, onSave
   const [existing, setExisting] = useState(item?.mediaUrl || '');
   const closeButton = useRef<HTMLButtonElement>(null);
   const dialog = useDialogFocus<HTMLFormElement>(onClose, { initialFocus: closeButton });
-  // `<input type="datetime-local">` wants a local wall-clock string, while the server
-  // stores and returns RFC3339, so the value is shifted by the reader's offset to edit it.
   const localStart = item?.startsAt
     ? (() => { const date = new Date(item.startsAt); return new Date(date.getTime() - date.getTimezoneOffset() * 60000).toISOString().slice(0, 16); })()
     : '';

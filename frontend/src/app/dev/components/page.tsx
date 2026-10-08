@@ -9,19 +9,6 @@ import Loading from '../../components/Loading';
 import { PostListSkeleton, CardGridSkeleton, RowsSkeleton } from '../../components/Skeletons';
 import ThemeToggle from '../../components/ThemeToggle';
 
-/**
- * A gallery of the Instagram-style pieces, on one page and outside any flow, so the redesign
- * can be reviewed without clicking through whole features — which is what the item that asked
- * for this route wanted, and the reason it lives here rather than in an interactive tour.
- *
- * Everything shown is presentational: it takes props and fetches nothing, so the page is honest
- * about what each piece looks like without a session, a socket or an API behind it. The one
- * interactive control is the theme switch, because it is wired to the same provider the app is.
- *
- * It is a **development** tool, not a feature: a production build answers `notFound()`, so the
- * route never reaches a visitor. `NODE_ENV` is inlined at build time, so the branch is decided
- * once and the deployed bundle carries a 404.
- */
 export default function ComponentGallery() {
   if (process.env.NODE_ENV === 'production') notFound();
   return <div className="mx-auto max-w-3xl space-y-10 p-4 py-8 sm:p-8">
@@ -71,7 +58,6 @@ export default function ComponentGallery() {
   </div>;
 }
 
-/** One titled block of the gallery, so every section reads the same way. */
 function Section({ title, note, children }: { title: string; note: string; children: ReactNode }) {
   return <section className="space-y-3">
     <div>

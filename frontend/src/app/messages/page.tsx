@@ -23,22 +23,10 @@ import { useBackend } from '../components/BackendProvider';
 import { DM_AVATAR_SIZE } from '../lib/sizing';
 
 const GROUPS_PER_PAGE = 30;
-// A conversation's preview is read from its own thread (the list endpoint reports only when
-// it last moved, not what it said), so previews are fetched once per conversation and capped.
 const PREVIEW_LIMIT = 25;
 
-/** What a row's second line needs from a conversation's newest message. */
 interface Preview { text: string; mine: boolean; media: boolean; unread: boolean }
 
-/**
- * The direct-message page: `/messages`, `/messages/[userId]` and the group routes all
- * render it.
- *
- * It is the two-column shell — the conversation column and the chat panel — and it owns
- * the list's data: the people the viewer can message, the groups under the second folder,
- * and a small per-conversation preview cache. The panel itself is one of three things: a
- * direct conversation, a group, or the empty state.
- */
 export default function MessagesInboxPage() {
   const params = useParams<{ userId?: string; groupId?: string }>();
   const pathname = usePathname();
@@ -57,12 +45,9 @@ export default function MessagesInboxPage() {
   const [busy, setBusy] = useState(false);
   const [files, setFiles] = useState<File[]>([]);
   const [previews, setPreviews] = useState<Record<string, Preview>>({});
-  // The create-group prompt is an overlay, so it takes the app's dialog contract: focus moves
-  // inside, Tab cycles, Escape closes, and the page behind is frozen.
   const createDialog = useDialogFocus<HTMLFormElement>(() => { if (!busy) setCreating(false); }, { enabled: creating });
   const users = useResource<ChatUser[]>('/messages/users');
   const groups = usePagedList<Group, Group[]>({
-    // Scope and query are the identity, so a new search starts at offset 0.
     key: `/groups?scope=${browsingGroups ? 'all' : 'joined'}&q=${encodeURIComponent(query)}`,
     pageQuery: page => `&offset=${(page - 1) * GROUPS_PER_PAGE}`,
     pageSize: GROUPS_PER_PAGE,
@@ -84,16 +69,12 @@ export default function MessagesInboxPage() {
     return () => window.removeEventListener('social:group-requested', requested);
   }, [updateGroups, reloadGroups]);
   useEffect(() => { const timer = setTimeout(() => setQuery(search.trim()), 300); return () => clearTimeout(timer); }, [search]);
-  // While a conversation is open the phone's tab bar steps aside, so the composer can sit at
-  // the very bottom; the flag is read by `.dm-shell` in globals.css.
   useEffect(() => {
     if (active) document.body.dataset.dmChat = 'open';
     else delete document.body.dataset.dmChat;
     return () => { delete document.body.dataset.dmChat; };
   }, [active]);
 
-  // The newest message's shape, per conversation: what it said, whether the viewer wrote it,
-  // whether it was a photo, and whether it is still unread.
   useEffect(() => {
     const people = users.data?.slice(0, PREVIEW_LIMIT);
     if (!people?.length) return;
@@ -142,7 +123,6 @@ export default function MessagesInboxPage() {
       preview: previewOf(person.userId),
       stamp: person.lastMessageTime ? previewTime(person.lastMessageTime) : '',
       unread: !!previews[person.userId]?.unread,
-    // `previews` is a dependency on purpose: a preview that arrives relabels its row.
     // eslint-disable-next-line react-hooks/exhaustive-deps
     })), [users.data, search, previews]);
 
@@ -190,8 +170,6 @@ export default function MessagesInboxPage() {
         activeKey={groupTab ? groupId : partner}
         extra={groupTab ? <div className="space-y-3 pb-1">
           <div className="dm-list-block"><GroupInvitations changed={groups.reload} /></div>
-          {/* The action sits in a container carrying the same `--dm-list-head-x` inset the search
-              pill is inset by, so the two line up; the button itself fills that container. */}
           <div className="dm-list-block"><button type="button" className="dm-secondary dm-list-action" onClick={() => { setBrowsingGroups(!browsingGroups); setSearch(''); setQuery(''); }}>{browsingGroups ? 'Back to your groups' : 'Find groups to join'}</button></div>
         </div> : undefined}
       />

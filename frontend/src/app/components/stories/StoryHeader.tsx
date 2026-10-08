@@ -6,12 +6,6 @@ import { isoTimestamp, shortAge } from '../../api/social';
 import Avatar from '../Avatar';
 import StoryProgressBar from './StoryProgressBar';
 
-/**
- * The story card's top block: the segmented progress bar and, under it, the author's avatar,
- * handle, age and the playback controls. The "..." menu is passed in as `menu` rather than
- * built here, because the actions it offers (delete for your own story, mute the author)
- * depend on the viewer, not on the header.
- */
 export default function StoryHeader({ story, count, current, fillRef, paused, muted, onTogglePause, onToggleMute, menu }: {
   story: { nickname: string; avatar: string; createdAt: string; mediaType: string };
   count: number;

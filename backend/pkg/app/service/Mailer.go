@@ -9,20 +9,11 @@ import (
 	"net/smtp"
 )
 
-// Mailer delivers one plain-text message. It is an interface for two reasons: the
-// reset flow has to be testable without a mail server, and the provider is a
-// deployment decision rather than a code one.
 type Mailer interface {
 	Send(to, subject, body string) error
-	// Describe names the delivery path for a log line, so "reset requested" can
-	// say where the link went — or that it went nowhere.
 	Describe() string
 }
 
-// LogMailer writes the message to the application log instead of sending it. It
-// is what development uses, and it must never be what production uses: a reset
-// link in a log file is a working credential in a log file. main.go refuses to
-// build it when APP_ENV=production, and the endpoint answers 503 instead.
 type LogMailer struct {
 	Logger *slog.Logger
 }
@@ -37,12 +28,6 @@ func (m LogMailer) Send(to, subject, body string) error {
 	return nil
 }
 
-// SMTPMailer talks to an SMTP server through net/smtp, which is standard library,
-// so the provider costs no dependency. STARTTLS is used whenever the server
-// advertises it and authentication only when credentials are configured, which is
-// what makes a local relay without auth and a hosted provider with auth both
-// workable. Note that net/smtp's PlainAuth refuses to send a password over an
-// unencrypted connection unless the host is a loopback address.
 type SMTPMailer struct {
 	Host     string
 	Port     string
@@ -83,9 +68,6 @@ func (m SMTPMailer) Send(to, subject, body string) error {
 	if err != nil {
 		return err
 	}
-	// The body is plain ASCII by construction (a URL and English sentences), so
-	// no transfer encoding is needed; the header says so rather than leaving the
-	// reader to guess.
 	message := fmt.Sprintf(
 		"From: %s\r\nTo: %s\r\nSubject: %s\r\nMIME-Version: 1.0\r\nContent-Type: text/plain; charset=UTF-8\r\n\r\n%s\r\n",
 		m.From, to, subject, body,

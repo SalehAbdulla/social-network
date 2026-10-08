@@ -16,20 +16,17 @@ import { GROUP_PAGE_SIZE, itemName, rsvpTally, type GroupItem } from './groupCon
 import { eventDay, eventMonth, eventWhen, groupExactTime } from './groupTime';
 import GroupRsvp from './GroupRsvp';
 
-/** A past event's answer, in words, in place of the two buttons it can no longer offer. */
 function responseLabel(status: string): string {
   if (status === 'going') return 'You went';
   if (status === 'not_going') return "You didn't go";
   return 'No response';
 }
 
-/** The instant an event starts, or `0` for a row whose date cannot be read. */
 function startOf(item: GroupItem): number {
   const time = new Date(item.startsAt).getTime();
   return Number.isNaN(time) ? 0 : time;
 }
 
-/** One event: a date tile, the details, and the going/not-going choice. */
 function GroupEventCard({ item, meId, isOwner, busy, avatarOf, onEdit, onDelete, onRsvp }: {
   item: GroupItem;
   meId: string;
@@ -41,9 +38,6 @@ function GroupEventCard({ item, meId, isOwner, busy, avatarOf, onEdit, onDelete,
   onRsvp: (item: GroupItem, status: string) => void;
 }) {
   const past = !item.upcoming;
-  // The payload carries the tallies but not the attendee rows, so the stack shows the one
-  // attendee the client can be sure of — the viewer, when their own answer is "going" — rather
-  // than inventing faces the server never sent.
   const attendees = item.rsvp === 'going' ? [meId] : [];
   return <article className="grp-event" data-past={past}>
     <div className="grp-event-body">
@@ -73,8 +67,6 @@ function GroupEventCard({ item, meId, isOwner, busy, avatarOf, onEdit, onDelete,
         </span>}
         <span>{rsvpTally(item)}</span>
       </span>
-      {/* An upcoming event asks; a past one only reports, in a muted line rather than two
-          controls that are greyed out to the point of being invisible. */}
       {past
         ? <span className="grp-event-response">{responseLabel(item.rsvp)}</span>
         : <GroupRsvp item={item} busy={busy} onRsvp={onRsvp} />}
@@ -83,14 +75,6 @@ function GroupEventCard({ item, meId, isOwner, busy, avatarOf, onEdit, onDelete,
 }
 
 
-/**
- * The Events tab.
- *
- * The server decides which events are still to come, so the split into the two sections follows
- * its own flag rather than the reader's clock; the order inside each is fixed here — soonest
- * first for the ones ahead, latest first for the ones behind. An answer is written optimistically
- * and rolled back if the request fails, and both buttons are disabled while it is in flight.
- */
 export default function GroupEvents({ groupId, meId, isOwner, onCreate, onEdit }: {
   groupId: string;
   meId: string;
@@ -106,14 +90,11 @@ export default function GroupEvents({ groupId, meId, isOwner, onCreate, onEdit }
     normalize: raw => ({ items: raw }),
     keyOf: item => item.id,
   });
-  // The attendee stack is drawn from the roster, so the members are read alongside the events.
   const members = useResource<GroupMember[]>(`/groups/${groupId}/members`);
   const roster = useMemo(() => new Map((members.data ?? []).map(member => [member.userId, member.avatar])), [members.data]);
   useLiveRefresh(resource.refresh, groupId);
   useLiveRefresh(members.reload, groupId);
 
-  // The answer is optimistic: the tally and the pressed state move at once, and both come back
-  // if the write fails. The list is refreshed behind them so the counts stay the server's.
   async function answer(item: GroupItem, status: string) {
     if (busy) return;
     const previous = { rsvp: item.rsvp, going: item.going, notGoing: item.notGoing };

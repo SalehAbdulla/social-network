@@ -1,6 +1,3 @@
--- Sessions move from process memory to the database so a backend restart no
--- longer signs every user out. The table is rebuilt rather than altered because
--- SQLite cannot add a column with a CURRENT_TIMESTAMP default.
 CREATE TABLE IF NOT EXISTS session_replacement (
     token TEXT PRIMARY KEY,
     userId TEXT NOT NULL,

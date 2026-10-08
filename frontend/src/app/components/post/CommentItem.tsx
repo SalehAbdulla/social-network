@@ -6,12 +6,6 @@ import { linkify } from '../../lib/linkify';
 import Avatar from '../Avatar';
 import Menu, { MenuItem } from '../ui/Menu';
 
-/**
- * One comment: the author's 32px avatar, the name and the text on one inline line, a muted time
- * line under it ("2w · Like · N likes"), and — on the right edge, at the top — the small like
- * heart. There are no replies in this backend, so no "Reply" or "View replies" is ever drawn and
- * no button is left standing for one. A comment photo sits under the text and opens the lightbox.
- */
 export default function CommentItem({ comment, canManage, avatarUrl, busy, onLike, onDelete, onOpenPhoto }: {
   comment: Comment;
   canManage: boolean;

@@ -18,14 +18,6 @@ import type { FollowListTab } from '../FollowListModal';
 
 export type FollowState = 'none' | 'following' | 'requested';
 
-/**
- * The Instagram profile header: a centred block with the 150px avatar on the left and, beside it,
- * the handle row (the username and one settings/more button), the display name, the counts, the
- * bio and the two action buttons. When the profile has a live story the avatar wears the story
- * ring and opens it on a tap, owner and visitor alike; with no story the owner's avatar is the
- * "change photo" control and the gear opens the settings menu, and on anyone else's the buttons
- * are Follow (or Following with its unfollow menu) and Message.
- */
 export default function ProfileHeader({
   profile, followers, following, isOwner, avatarSize, followState, canMessage, isFollowingBusy,
   hasStories, storyUnseen, onAvatarClick, onOpenStories, onEdit, onArchive, onChangePassword, onOpenFollows, onToggleFollow,
@@ -38,9 +30,7 @@ export default function ProfileHeader({
   followState: FollowState;
   canMessage: boolean;
   isFollowingBusy: boolean;
-  /** Whether this profile has a live story, which the avatar opens on a tap. */
   hasStories: boolean;
-  /** Whether the viewer still has an unseen story of this author's. */
   storyUnseen: boolean;
   onAvatarClick: () => void;
   onOpenStories: () => void;
@@ -51,15 +41,9 @@ export default function ProfileHeader({
   onToggleFollow: () => void;
 }) {
   const name = displayName(profile);
-  // With a live story the avatar wears the shared story ring — the same one the tray draws, sized
-  // to the profile photo so the face stays the same `avatarSize` inside it. Without one it is the
-  // plain photo. `marker` is off because this ring is not a tray item.
   const face = hasStories
     ? <StoryRing name={name} avatarUrl={profile.avatar} size={avatarSize} seen={isOwner || !storyUnseen} own={isOwner} marker={false} />
     : <Avatar name={name} avatarUrl={profile.avatar} size={avatarSize} />;
-  // A profile with a live story opens it on a tap, the way Instagram does, for owner and visitor
-  // alike; the owner changes the photo from the Edit profile dialog instead. With no story the
-  // owner's tap still opens that dialog, and a visitor's avatar is not a control.
   const avatarControl: { label: string; onClick: () => void } | null = hasStories
     ? { label: isOwner ? 'View your story' : `View ${profile.nickname}'s story`, onClick: onOpenStories }
     : isOwner
@@ -96,12 +80,10 @@ export default function ProfileHeader({
   </header>;
 }
 
-/** `Follow`, or `Following` with a chevron that opens the unfollow menu. */
 function FollowControl({ state, busy, onToggle }: { state: FollowState; busy: boolean; onToggle: () => void }) {
   const [rect, setRect] = useState<DOMRect | null>(null);
   const root = useRef<HTMLDivElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
-  // The popover owns its own open state, so it also owns Escape and the click-outside that close it.
   useEffect(() => {
     if (!rect) return;
     const onDown = (event: PointerEvent) => { if (!root.current?.contains(event.target as Node)) setRect(null); };
@@ -129,14 +111,12 @@ function FollowControl({ state, busy, onToggle }: { state: FollowState; busy: bo
   </div>;
 }
 
-/** The gear menu on the viewer's own profile: the account and theme actions Instagram keeps here. */
 function SettingsMenu({ onChangePassword }: { onChangePassword: () => void }) {
   const [loggingOut, setLoggingOut] = useState(false);
   async function logout() {
     setLoggingOut(true);
     try {
       await request('/auth/logout', 'POST');
-      // A full reload drops the socket and every other piece of client state, as the rail does.
       // eslint-disable-next-line @next/next/no-location-assign-relative-destination
       window.location.href = '/login';
     } catch (error) { toast.error(errorMessage(error)); setLoggingOut(false); }
@@ -150,7 +130,6 @@ function SettingsMenu({ onChangePassword }: { onChangePassword: () => void }) {
   </Menu>;
 }
 
-/** The display name, the bio (clamped to four lines with a "more" toggle) and the location. */
 function Bio({ profile, isOwner }: { profile: SocialUser; isOwner: boolean }) {
   const [expanded, setExpanded] = useState(false);
   const [overflowing, setOverflowing] = useState(false);
@@ -171,25 +150,15 @@ function Bio({ profile, isOwner }: { profile: SocialUser; isOwner: boolean }) {
   </div>;
 }
 
-/** The website's label on the profile: the URL without its scheme or a trailing slash, the way a
- *  reader says it out loud. The link itself keeps the full, stored address. */
+// the scheme and a trailing slash are noise next to the handle
 function websiteLabel(url: string): string {
   return url.replace(/^https?:\/\//, '').replace(/\/$/, '');
 }
 
-/**
- * Instagram's Contact button: a secondary button under the profile's action pair that opens a
- * small menu with the account's published email and phone, each a `mailto:`/`tel:` link. It is
- * drawn only when at least one of them exists — `writeProfile` blanks a field whose own public
- * switch is off, and both for a viewer who may not see the profile at all — so it never opens onto
- * an empty menu. For the owner a blanked-but-set field keeps its row and gains a muted "Hidden"
- * note, so the effect of a switch is legible from the profile the owner is looking at.
- */
 function ContactButton({ email, phone, emailHidden, phoneHidden }: { email: string; phone: string; emailHidden: boolean; phoneHidden: boolean }) {
   const [rect, setRect] = useState<DOMRect | null>(null);
   const root = useRef<HTMLDivElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
-  // The pane owns its own open state, so it also owns Escape and the click-outside that close it.
   useEffect(() => {
     if (!rect) return;
     const onDown = (event: PointerEvent) => {
@@ -219,9 +188,6 @@ function ContactButton({ email, phone, emailHidden, phoneHidden }: { email: stri
   </div>;
 }
 
-/** A muted "Hidden" note beside a set-but-private contact field. It is drawn only for the owner,
- *  so the effect of a public switch is visible from the profile itself rather than only by
- *  looking at the profile as someone else. */
 function HiddenTag({ className = '' }: { className?: string }) {
   return <span className={`text-xs font-normal text-slate-400 ${className}`}>Hidden</span>;
 }

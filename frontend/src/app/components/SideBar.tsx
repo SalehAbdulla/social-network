@@ -18,26 +18,9 @@ import { useCreatePost } from '../lib/useCreatePost';
 
 type NavItem = { key: string; label: string; icon: LucideIcon; href?: string; panel?: PanelKind; create?: boolean };
 
-/**
- * Instagram's desktop left rail.
- *
- * There is no manual toggle and no wide by default: the rail is icon-only (`app-rail` in
- * globals.css) and grows over the content while the pointer is over it, and only a slide-out panel
- * forces the narrow state. Routes stay real links, Search and Notifications are buttons that open a
- * panel, and More opens an anchored popover. Create opens the Create-post dialog directly — there is
- * only one kind of post, so there is nothing to choose first.
- *
- * No icon size or stroke is passed down from here: every icon in this rail is drawn at the
- * `--rail-icon` and `--rail-stroke*` tokens by the rail's own `.app-rail svg` rule, and the
- * profile avatar's size is the one number `lib/railMetrics.ts` hands over, since `Avatar` sizes
- * itself with an inline style. The row geometry comes from the `--rail-row-*` tokens through
- * `rowClass`. That leaves this component holding behaviour only.
- */
 export default function Sidebar() {
   const { user, badges } = useBackend();
   const pathname = usePathname();
-  // The Create row opens the one Create-post dialog directly — there is only one kind of post, so
-  // there is no popover to choose one — and stays active while it is open.
   const create = useCreatePost();
   const [panelKind, setPanelKind] = useState<PanelKind | null>(null);
   const [panelOpen, setPanelOpen] = useState(false);
@@ -49,7 +32,6 @@ export default function Sidebar() {
   const panelRef = useRef<HTMLDivElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
 
-  // The panel stays mounted for its 250ms exit, so its kind is cleared only after the slide out.
   const closePanel = useCallback(() => {
     setPanelOpen(false);
     closeTimer.current = window.setTimeout(() => { setPanelKind(null); closeTimer.current = null; }, 250);
@@ -59,11 +41,9 @@ export default function Sidebar() {
     setPanelKind(kind);
     setPanelOpen(true);
   }, []);
-  // Clicking the same trigger closes; a different one swaps the content without re-sliding.
   const togglePanel = (kind: PanelKind) => { if (panelKind === kind && panelOpen) closePanel(); else openPanel(kind); };
   const closeOverlays = () => { if (panelKind) closePanel(); setMoreRect(null); };
 
-  // A panel, a menu, or both can be open; a press outside the rail, the panel and the menu dismisses them.
   useEffect(() => {
     if (!panelKind && !moreRect) return;
     const onDown = (event: MouseEvent) => {
@@ -75,7 +55,6 @@ export default function Sidebar() {
     return () => document.removeEventListener('mousedown', onDown);
   }, [panelKind, moreRect, closePanel]);
 
-  // Escape closes the topmost thing, the way every other overlay in the app behaves.
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
       if (event.key !== 'Escape') return;
@@ -86,7 +65,6 @@ export default function Sidebar() {
     return () => document.removeEventListener('keydown', onKey);
   }, [moreRect, panelKind, closePanel]);
 
-  // A popover is anchored to a fixed rail, so a resize would leave it detached: close it instead.
   useEffect(() => {
     const onResize = () => setMoreRect(null);
     window.addEventListener('resize', onResize);
@@ -97,7 +75,6 @@ export default function Sidebar() {
     setLoggingOut(true);
     try {
       await request('/auth/logout', 'POST');
-      // A full reload is deliberate: it drops the WebSocket and every other piece of client state.
       // eslint-disable-next-line @next/next/no-location-assign-relative-destination
       window.location.href = '/login';
     } catch (error) {

@@ -19,25 +19,11 @@ import { previewTime } from './messages/time';
 import { memberCount } from './messages/group/groupContent';
 import { DOCK_AVATAR_SIZE } from '../lib/sizing';
 
-/** How many conversations get a preview/unread probe: the list shows every row, but each
- *  newest message is one request, so this caps that the way the inbox itself does. */
 const PREVIEW_LIMIT = 8;
-/** The pill shows this many faces, overlapping. */
 const PILL_AVATARS = 3;
 
 interface Preview { text: string; mine: boolean; media: boolean; unread: boolean }
 
-/**
- * Instagram's floating Messages dock: a bottom-right pill that opens into a 340px panel — the
- * conversation list, then a chat, all in one window — and rides over every page.
- *
- * It is mounted once, in the app shell, and hides itself on `/messages` (where the full inbox
- * already is) and while a post modal is open. It owns no chat of its own: the list reuses the
- * messages page's `ConversationRow`, a one-to-one chat is `DirectConversation` in its `dock`
- * skin, and a group is the group page's `GroupChat`. What it adds is the shell — the pill, the
- * panel, its focus and Escape behaviour — and the state, which lives in `messagesDock` so the
- * open panel, the conversation and the draft survive a route change.
- */
 export default function MessagesDock() {
   const pathname = usePathname();
   const router = useRouter();
@@ -56,7 +42,6 @@ export default function MessagesDock() {
   useLiveRefresh(users.reload);
   useLiveRefresh(groups.reload);
 
-  // Newest activity first. The endpoint does not promise an order, so the sort is done here.
   const conversations = useMemo(
     () => [...(users.data ?? [])].sort((a, b) => (b.lastMessageTime || '').localeCompare(a.lastMessageTime || '')),
     [users.data],
@@ -66,8 +51,6 @@ export default function MessagesDock() {
     [groups.data],
   );
 
-  // The newest message of each of the busiest conversations, once, for the rows' previews and
-  // the unread dots — the same probe the inbox makes. Capped, and refreshed on the socket.
   useEffect(() => {
     const people = conversations.slice(0, PREVIEW_LIMIT);
     if (!people.length) return;
@@ -97,8 +80,6 @@ export default function MessagesDock() {
     return () => { cancelled = true; abort.abort(); };
   }, [conversations, user.userId]);
 
-  // Focus moves into the panel when it opens and back to the pill when it closes; the panel is
-  // non-modal, so there is no trap — Escape closes it only when the focus is inside it.
   useEffect(() => {
     if (state.open) panelRef.current?.focus();
     else pillRef.current?.focus();
@@ -112,7 +93,6 @@ export default function MessagesDock() {
     return () => document.removeEventListener('keydown', onKey);
   }, [state.open]);
 
-  // A message arriving while the panel is closed is worth a nudge, not a sound: one pulse.
   useSocketEvent('incoming_msg', () => {
     if (state.open) return;
     setPulse(true);

@@ -8,16 +8,6 @@ import DockHeader from './DockHeader';
 import GroupChat from './group/GroupChat';
 import { memberCount } from './group/groupContent';
 
-/**
- * A group opened in the dock — the chat folder only.
- *
- * It is the group's own `GroupChat` (the same thread and composer the group page's Chat tab
- * draws), wrapped in the dock header. The group's other folders — posts, events, media — and
- * its management live on the full page, so the header carries an "Open group" link for them and
- * the row's edit action hands off to that page. Deleting a message is the one write the dock
- * makes itself, through the same `GroupChat` the group page draws, so it disappears here too.
- * A viewer who is not a member sees the gate instead of a panel the server would 404.
- */
 export default function DockGroupChat({ groupId, onBack, onExpand, onClose, onOpenGroup }: {
   groupId: string;
   onBack: () => void;

@@ -40,6 +40,7 @@ func RunMigrations(db *sql.DB) error {
 		return fmt.Errorf("failed to create migration instance: %w", err)
 	}
 
+	// ErrNoChange just means the schema is already current
 	if err := m.Up(); err != nil && err != migrate.ErrNoChange {
 		return fmt.Errorf("failed to run migrations: %w", err)
 	}

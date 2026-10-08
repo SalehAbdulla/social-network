@@ -3,7 +3,6 @@ set -euo pipefail
 
 ROOT_DIR="$(cd -- "$(dirname -- "$0")" && pwd)"
 
-# WSL's dependency checks and process management need Linux-specific utilities.
 if [[ "$(uname -s)" == Linux ]] && grep -qi microsoft /proc/sys/kernel/osrelease 2>/dev/null; then
 	exec bash "$ROOT_DIR/scripts/run-wsl.sh" "$@"
 fi
@@ -11,8 +10,6 @@ fi
 frontend_port=4000
 backend_port="${PORT:-5174}"
 
-# `go run` and `next dev` keep the listening socket in a child process, so killing
-# only the shell that started them leaves that child behind, still holding the port.
 kill_tree() {
 	local pid="$1"
 	local child
@@ -33,7 +30,6 @@ cleanup() {
 	wait "$backend_pid" "$frontend_pid" 2>/dev/null || true
 }
 
-# Fail fast with an actionable message instead of a raw EADDRINUSE stack trace.
 for port in "$frontend_port" "$backend_port"; do
 	listener="$(lsof -nP -iTCP:"$port" -sTCP:LISTEN -t 2>/dev/null | head -n 1 || true)"
 	if [[ -n "$listener" ]]; then
@@ -62,7 +58,6 @@ frontend_pid=$!
 
 printf 'Starting Social Network at http://localhost:%s (Ctrl+C stops both services).\n' "$frontend_port"
 
-# Shut the surviving service down as soon as either one stops or fails.
 while is_running "$backend_pid" && is_running "$frontend_pid"; do
 	sleep 1
 done

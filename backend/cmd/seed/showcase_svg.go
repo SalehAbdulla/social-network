@@ -1,11 +1,3 @@
-// Inline vector attachments for the seeded comments.
-//
-// The media store serves raster uploads only — its allow-list is JPEG, PNG, GIF, WebP, MP4 and
-// WebM, deliberately, so an SVG can never be rendered same-origin. A seeded comment can still carry
-// a vector picture, though, because the frontend draws a comment's `imageUrls` with a plain
-// `<img src>`, and a `data:image/svg+xml;base64,…` URI is one it renders exactly like any other
-// picture. That is what these "svg comments" are: a tiny self-contained card, no file on disk, no
-// `media` row, nothing the orphan collector has an opinion about.
 package main
 
 import (
@@ -34,8 +26,6 @@ var svgCommentPalettes = [][2]string{
 	{"#14b8a6", "#0f766e"},
 }
 
-// svgComment renders a small quote card as a base64 data URI. The author picks the palette and the
-// wording deterministically, so the same comment always draws the same card.
 func svgComment(author string) string {
 	hash := 0
 	for _, r := range author {

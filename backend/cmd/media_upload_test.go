@@ -22,13 +22,8 @@ import (
 	"social-network/backend/pkg/payload/posts"
 )
 
-// A real one-pixel PNG. Every upload test drives the file *contents*, because
-// the filename is never trusted.
 const onePixelPNG = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aD1sAAAAASUVORK5CYII="
 
-// postMediaFixture posts one multipart file straight at the media endpoint,
-// bypassing the client-side checks, and reports the status, the error message
-// and the URL of a successful upload.
 func postMediaFixture(t *testing.T, server *httptest.Server, client integrationClient, name string, data []byte) (int, string, string) {
 	t.Helper()
 	var body bytes.Buffer
@@ -66,11 +61,6 @@ func postMediaFixture(t *testing.T, server *httptest.Server, client integrationC
 	return response.StatusCode, envelope.Error, envelope.Data.URL
 }
 
-// TestUploadEdgeCases covers the size and type corners of POST /api/v1/media:
-// an empty file, a file past the 50 MB ceiling, an image past the 10 MB image
-// ceiling, and a filename whose extension disagrees with the bytes. The last one
-// is a contract, not a rejection: the type is sniffed from the content and served
-// as such, so `photo.gif` holding PNG bytes is a PNG everywhere afterwards.
 func TestUploadEdgeCases(t *testing.T) {
 	server, _ := integrationServer(t, true, false)
 	client := newIntegrationClient(t, server)
@@ -89,9 +79,6 @@ func TestUploadEdgeCases(t *testing.T) {
 	})
 
 	t.Run("over the 50 MB ceiling", func(t *testing.T) {
-		// The size gate runs before the bytes are inspected, so the content does
-		// not matter here; 50 MB + 7 bytes is past the file ceiling while the
-		// multipart body still fits the request ceiling.
 		oversized := append([]byte("GIF89a"), make([]byte, (50<<20)+1)...)
 		status, message, _ := postMediaFixture(t, server, client, "huge.gif", oversized)
 		if status != http.StatusRequestEntityTooLarge || !strings.Contains(message, "50 MB") {
@@ -100,9 +87,6 @@ func TestUploadEdgeCases(t *testing.T) {
 	})
 
 	t.Run("image over the 10 MB image ceiling", func(t *testing.T) {
-		// 12 MB rather than 10 MB + 1: the message rounds to one decimal place, so a
-		// file one byte over the ceiling reads as the ceiling itself. What the case
-		// pins is that the refusal names the file that was refused, not only the rule.
 		oversized := append([]byte("GIF89a"), make([]byte, 12<<20)...)
 		status, message, _ := postMediaFixture(t, server, client, "big.gif", oversized)
 		if status != http.StatusRequestEntityTooLarge || !strings.Contains(message, "12 MB") || !strings.Contains(message, "limit is 10 MB") {
@@ -115,7 +99,6 @@ func TestUploadEdgeCases(t *testing.T) {
 		if status != http.StatusCreated {
 			t.Fatalf("a PNG named .gif should be accepted, got %d %q", status, message)
 		}
-		// The stored name is a fresh UUID, never the client's filename.
 		if strings.HasSuffix(url, "photo.gif") {
 			t.Fatalf("the client filename reached the storage path: %q", url)
 		}
@@ -153,19 +136,15 @@ func TestUploadEdgeCases(t *testing.T) {
 	}
 }
 
-// buildWebP writes a lossless WebP header for the given canvas and nothing else:
-// enough for the content sniffer and for image.DecodeConfig to read the size,
-// which is exactly the shape of a decompression bomb — a handful of bytes
-// declaring a canvas that would take hundreds of megabytes to decode.
 func buildWebP(width, height int) []byte {
-	packed := uint32(width-1) | uint32(height-1)<<14 // 14 bits each; alpha and version left off
-	payload := []byte{0x2F, 0, 0, 0, 0}              // 0x2F is the VP8L signature byte
+	packed := uint32(width-1) | uint32(height-1)<<14
+	payload := []byte{0x2F, 0, 0, 0, 0}
 	binary.LittleEndian.PutUint32(payload[1:], packed)
 	chunk := append([]byte("VP8L"), 0, 0, 0, 0)
 	binary.LittleEndian.PutUint32(chunk[4:], uint32(len(payload)))
 	chunk = append(chunk, payload...)
 	if len(payload)%2 == 1 {
-		chunk = append(chunk, 0) // RIFF pads an odd-sized chunk
+		chunk = append(chunk, 0)
 	}
 	file := append([]byte("RIFF"), 0, 0, 0, 0)
 	binary.LittleEndian.PutUint32(file[4:], uint32(4+len(chunk)))
@@ -173,16 +152,11 @@ func buildWebP(width, height int) []byte {
 	return append(file, chunk...)
 }
 
-// TestUploadHardening covers the corners that are about what a file *claims*
-// rather than how many bytes it is: a canvas that would explode on decode, a type
-// that must never be stored as itself, and a media row that somehow holds one.
 func TestUploadHardening(t *testing.T) {
 	server, repo := integrationServer(t, true, false)
 	client := newIntegrationClient(t, server)
 	client.login("dummy@example.com")
 
-	// SVG is the classic stored-XSS payload and it is not on the allow-list. The
-	// type comes from the bytes, so calling it picture.png changes nothing.
 	t.Run("an SVG is refused whatever it is called", func(t *testing.T) {
 		svg := []byte(`<?xml version="1.0"?><svg xmlns="http://www.w3.org/2000/svg" onload="alert(1)"></svg>`)
 		status, message, _ := postMediaFixture(t, server, client, "picture.png", svg)
@@ -191,11 +165,6 @@ func TestUploadHardening(t *testing.T) {
 		}
 	})
 
-	// A WebP declaring the largest canvas the format can express — 16384×16384,
-	// because VP8L stores each dimension in 14 bits — is a few dozen bytes on the
-	// wire and 268 megapixels to decode. It used to be accepted because the
-	// standard library had no WebP decoder and the dimension check was skipped for
-	// that one format.
 	t.Run("a WebP canvas over the cap is refused", func(t *testing.T) {
 		status, message, _ := postMediaFixture(t, server, client, "bomb.webp", buildWebP(16384, 16384))
 		if status != http.StatusBadRequest {
@@ -203,8 +172,6 @@ func TestUploadHardening(t *testing.T) {
 		}
 	})
 
-	// The same format inside the cap is accepted and served as itself, which is
-	// what shows the check reads the header rather than refusing WebP outright.
 	t.Run("a WebP canvas within the cap is accepted and served inline", func(t *testing.T) {
 		status, message, url := postMediaFixture(t, server, client, "small.webp", buildWebP(64, 64))
 		if status != http.StatusCreated {
@@ -224,9 +191,6 @@ func TestUploadHardening(t *testing.T) {
 		}
 	})
 
-	// The read path holds the stored type to the same list the upload used, so a
-	// row holding a page is handed over as a download instead of being rendered —
-	// the door the allow-list exists to keep shut, checked at both ends.
 	t.Run("a media row holding a page is downloaded, not rendered", func(t *testing.T) {
 		const id = "123e4567-e89b-12d3-a456-4266141740aa"
 		page := []byte("<!DOCTYPE html><script>alert(1)</script>")
@@ -260,10 +224,6 @@ func TestUploadHardening(t *testing.T) {
 	})
 }
 
-// TestArchivedStoryMediaSurvives pins the story half of the media rule: a story's upload belongs
-// to the row, so an expired story — which the author keeps in their archive rather than losing —
-// holds on to it, and only deleting the story releases it to the collector. It is the same rule a
-// post's photo lives under: the row's life, not a clock, decides.
 func TestArchivedStoryMediaSurvives(t *testing.T) {
 	server, repo := integrationServer(t, true, false)
 	owner := newIntegrationClient(t, server)
@@ -283,14 +243,12 @@ func TestArchivedStoryMediaSurvives(t *testing.T) {
 	if result := pruneMedia(t, 0); result.Rows != 0 || result.Files != 0 {
 		t.Fatalf("a live story's media was collected: %+v", result)
 	}
-	// Expiry moves the story to the archive rather than ending it, so the upload stays.
 	if _, err := repo.Conn.Exec("UPDATE story SET expiresAt = datetime('now', '-1 minute') WHERE storyId = ?", storyID); err != nil {
 		t.Fatal(err)
 	}
 	if result := pruneMedia(t, 0); result.Rows != 0 || result.Files != 0 {
 		t.Fatalf("an archived story's media was collected: %+v", result)
 	}
-	// Deleting the story is what releases the upload, the way deleting a post releases its photo.
 	if _, err := repo.Conn.Exec("DELETE FROM story WHERE storyId = ?", storyID); err != nil {
 		t.Fatal(err)
 	}
@@ -299,8 +257,6 @@ func TestArchivedStoryMediaSurvives(t *testing.T) {
 	}
 }
 
-// pruneMedia runs one collector pass. The app wires the same call at boot and
-// then hourly (cmd/main.go), so this is the scheduler's real entry point.
 func pruneMedia(t *testing.T, grace time.Duration) handlers.MediaCleanupResult {
 	t.Helper()
 	result, err := handlers.HandlerCtx.PruneOrphanedMedia(grace)
@@ -310,10 +266,6 @@ func pruneMedia(t *testing.T, grace time.Duration) handlers.MediaCleanupResult {
 	return result
 }
 
-// TestOrphanedMediaIsCollected covers the storage half of the media edge cases:
-// deleting the post, the comment, the story or the message that pointed at an
-// upload has to take the media row and the file with it, an upload that was
-// never attached has to expire, and a live reference has to survive a sweep.
 func TestOrphanedMediaIsCollected(t *testing.T) {
 	server, repo := integrationServer(t, true, false)
 	owner, alex := newIntegrationClient(t, server), newIntegrationClient(t, server)
@@ -358,8 +310,6 @@ func TestOrphanedMediaIsCollected(t *testing.T) {
 		"title": "Media post", "content": "A post with a photo attached to it.", "privacy": "public",
 		"imageUrls": []string{urls["post"]},
 	}, 201))
-	// The comment lives on its own post so the four steps below stay independent:
-	// deleting the post above must not be what removes the comment's photo.
 	commentHost := decoded[posts.PostDTO](t, owner.call("POST", "/api/v1/posts", map[string]any{
 		"title": "Comment host", "content": "A second post to hang the comment on.", "privacy": "public",
 	}, 201))
@@ -373,8 +323,6 @@ func TestOrphanedMediaIsCollected(t *testing.T) {
 		"recipientId": "alex-id", "text": "", "mediaUrl": urls["message"], "mediaType": "image",
 	}, 201)).MessageId
 
-	// With a realistic grace window nothing is collected: the four live rows hold
-	// their uploads, and the unattached one is still too young to judge.
 	if result := pruneMedia(t, time.Hour); result.Rows != 0 || result.Files != 0 {
 		t.Fatalf("a grace window collected live media: %+v", result)
 	}
@@ -384,7 +332,6 @@ func TestOrphanedMediaIsCollected(t *testing.T) {
 		}
 	}
 
-	// Past the window, an upload nothing points at goes away — row and file.
 	result := pruneMedia(t, 0)
 	if result.Rows != 1 || result.Files != 1 {
 		t.Fatalf("expected only the unattached upload to be collected, got %+v", result)

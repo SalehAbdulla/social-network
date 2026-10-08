@@ -5,15 +5,7 @@ import toast from 'react-hot-toast';
 import { changePassword, errorMessage } from '../api/social';
 import { useDialogFocus } from '../lib/useDialogFocus';
 
-/**
- * The account's password dialog, opened from the own profile. The rules it
- * states are the ones the server enforces: at least twelve characters with a
- * letter, a number and a symbol, and the confirmation has to match — which the
- * server checks again rather than trusting this form.
- */
 export default function ChangePassword({ close }: { close: () => void }) {
-  // Same keyboard contract as the profile dialog: focus lands on the first
-  // field, Escape closes, and the tab cycle stays inside.
   const dialog = useDialogFocus<HTMLDivElement>(close);
   const [current, setCurrent] = useState('');
   const [next, setNext] = useState('');
@@ -26,8 +18,6 @@ export default function ChangePassword({ close }: { close: () => void }) {
     setBusy(true);
     try {
       await changePassword(current, next, confirm);
-      // The session cookie this tab holds was rotated by the response, so there
-      // is no client state to update — only the dialog to close.
       toast.success('Password changed');
       close();
     } catch (error) {

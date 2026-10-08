@@ -3,14 +3,7 @@
 import { useRef } from 'react';
 import { ImagePlus } from 'lucide-react';
 
-/**
- * The post view's comment composer: one auto-growing line, a blue "Post" that appears only once
- * there is something to post, and a photo button. The "Add a comment" heading, the large textarea
- * and the "Add photos" dropzone are gone; the field's rules are unchanged and the dropzone's
- * helper text is now the photo button's tooltip.
- */
 export default function CommentComposer({ postId, value, onChange, onSubmit, busy, canAddPhoto, onPickFiles }: {
-  /** The post this thread belongs to: its public UUID for a feed post, a group row's id for a group. */
   postId: string;
   value: string;
   onChange: (value: string) => void;

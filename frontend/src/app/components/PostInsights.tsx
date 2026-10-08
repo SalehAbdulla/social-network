@@ -5,23 +5,12 @@ import { type Post, type PostInsights as Insights } from '../api/social';
 import { useResource } from '../lib/useResource';
 import { useBackend } from './BackendProvider';
 
-/** Who the audience rule admits, in words. Mirrors the server's `postVisibility` clause. */
 const AUDIENCE_LABEL: Record<Insights['reach']['audience'], string> = {
   everyone: 'everyone',
   followers: 'your followers',
   selected: 'the followers you chose',
 };
 
-/**
- * The author's own numbers for one post: how far it reaches, what it has drawn, and how the
- * reactions fall across the days they arrived.
- *
- * It is the author's in both directions. Nothing is offered to anyone else, and nothing is
- * requested for them either: the endpoint answers 403 to a reader who did not write the post,
- * so asking on their behalf would be a request whose answer is already known to be a refusal.
- * That is why `useResource` is given `enabled = isAuthor` rather than the panel being hidden
- * after a fetch that was bound to fail.
- */
 export default function PostInsights({ post }: { post: Post }) {
   const { user } = useBackend();
   const isAuthor = post.userId === user.userId;

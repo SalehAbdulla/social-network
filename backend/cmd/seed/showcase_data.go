@@ -1,14 +1,5 @@
-// The literal content of the showcase seed: who the members are, what they wrote, and the shape of
-// the groups and conversations around them. It is kept apart from the code that inserts it so the
-// dataset can be read — and edited — as a dataset rather than as a wall of SQL.
-//
-// Nothing here is random: the handles, names and sentences are fixed so the showcase looks the
-// same on every machine, and the small amount of chance the seed does use (who liked what) is
-// driven from one fixed RNG in showcase.go.
 package main
 
-// showcaseMember is one account the seed creates. `Avatar` and `Cover` decide whether a generated
-// picture is attached, so a few profiles are text-only and the feed is not a wall of images.
 type showcaseMember struct {
 	Handle    string
 	First     string
@@ -22,8 +13,6 @@ type showcaseMember struct {
 	Cover     bool
 }
 
-// showcaseMembers are the people behind the seed, deliberately varied in field, city and voice so
-// the feed, the discover page and the suggestion rail all have something believable to show.
 var showcaseMembers = []showcaseMember{
 	{"avachen", "Ava", "Chen", "Product designer. I make confusing things feel obvious. Tea over coffee, always.", "San Francisco, CA", "female", 1993, true, true, true},
 	{"marcusb", "Marcus", "Bennett", "Photographer chasing light, mostly at unhelpful hours. Prints and film on request.", "London, UK", "male", 1988, true, true, true},
@@ -51,9 +40,6 @@ var showcaseMembers = []showcaseMember{
 	{"kwamem", "Kwame", "Mensah", "Documentary journalist. Listening is the job.", "Accra, Ghana", "male", 1990, true, true, true},
 }
 
-// showcaseComment is one reply under a post. `Photo` attaches a generated picture, `SVG` attaches a
-// small inline vector image instead (the "svg comments" the seed is asked for) — the two are
-// separate fields so a comment can be text-only, illustrated, or both.
 type showcaseComment struct {
 	Author   string
 	Text     string
@@ -62,9 +48,6 @@ type showcaseComment struct {
 	SVG      bool
 }
 
-// showcasePost is one feed post. An empty `Privacy` means public; `followers` and `selected` are
-// the two narrower audiences the app supports. `AgeHours` backdates the post so the feed has a
-// believable spread of "2h" and "5d" rather than everything arriving at once.
 type showcasePost struct {
 	Author   string
 	Content  string
@@ -75,8 +58,6 @@ type showcasePost struct {
 	Comments []showcaseComment
 }
 
-// showcasePosts is the feed itself: about twenty posts across the membership, each with a handful
-// of replies, so a signed-in member scrolling the feed sees a living page rather than two rows.
 var showcasePosts = []showcasePost{
 	{"avachen", "Shipped a small redesign of our onboarding flow today. The trick was cutting it in half — turns out nobody reads the third slide. #design #ux", "", nil, 2, 3, []showcaseComment{
 		{"marcusb", "The cut is always the hardest part. This looks so much calmer.", 2, false, false},
@@ -168,8 +149,6 @@ var showcasePosts = []showcasePost{
 	}},
 }
 
-// showcaseLine is a single line of group or direct-chat text. `Photo` attaches a generated image,
-// which is what the group media tab and the chat media tab read from.
 type showcaseLine struct {
 	Author   string
 	Text     string
@@ -177,7 +156,6 @@ type showcaseLine struct {
 	Photo    bool
 }
 
-// showcaseGroupPost is one post inside a group, with its own reply thread underneath it.
 type showcaseGroupPost struct {
 	Author   string
 	Text     string
@@ -186,7 +164,6 @@ type showcaseGroupPost struct {
 	Comments []showcaseLine
 }
 
-// showcaseGroupEvent is a group event with a starting time relative to now and its RSVP split.
 type showcaseGroupEvent struct {
 	Author        string
 	Title         string
@@ -196,8 +173,6 @@ type showcaseGroupEvent struct {
 	NotGoing      []string
 }
 
-// showcaseGroup is a group with its members, its wall, an event, a chat and any pending join
-// request, which is everything the group screens show.
 type showcaseGroup struct {
 	Owner       string
 	Title       string
@@ -300,8 +275,6 @@ var showcaseGroups = []showcaseGroup{
 	},
 }
 
-// showcaseDM is one direct conversation. `Author` on each line decides who is speaking, and the
-// lines are ordered oldest to newest, which is the reverse of the order the chat reads them back.
 type showcaseDM struct {
 	Lines []showcaseLine
 }
@@ -335,10 +308,6 @@ var showcaseDMs = []showcaseDM{
 	}},
 }
 
-// showcaseFollows is the follow graph the seed always writes, chosen so the feed's suggestion rail
-// has something real to rank. The first block mirrors who `dummyuser` and `alexdemo` follow; the
-// rest gives several *unfollowed* members followers among those, which is what turns into
-// "Followed by X + N more". The seed adds a little more at random on top (see showcase.go).
 var showcaseFollows = [][2]string{
 	{"dummyuser", "avachen"}, {"dummyuser", "marcusb"}, {"dummyuser", "sofiar"},
 	{"dummyuser", "liamoc"}, {"dummyuser", "zarah"}, {"dummyuser", "noahkim"},
@@ -370,8 +339,6 @@ var showcaseFollows = [][2]string{
 	{"nadiap", "isabellas"}, {"nadiap", "noahkim"},
 }
 
-// showcasePending are the follow requests that stay pending, because the target is a private
-// profile. They are what puts a "Requested" button on a profile and a request in the owner's list.
 var showcasePending = [][2]string{
 	{"dummyuser", "gracem"},
 	{"isabellas", "gracem"},
@@ -379,8 +346,6 @@ var showcasePending = [][2]string{
 	{"alexdemo", "nadiap"},
 }
 
-// showcaseStory is one story. A text story carries `Text` and no photo; an image story the
-// opposite. `Archive` places it already expired, so a member's archive is never empty.
 type showcaseStory struct {
 	Author   string
 	Text     string
@@ -401,8 +366,6 @@ var showcaseStories = []showcaseStory{
 	{"marcusb", "A roll that did not make the feed. Still love frame six.", 44, true, true},
 }
 
-// showcaseStoryViews records who opened whose stories, so the stories strip shows what is new to
-// the viewer rather than the same ring for everyone.
 var showcaseStoryViews = [][2]string{
 	{"dummyuser", "avachen"},
 	{"dummyuser", "marcusb"},
@@ -412,7 +375,6 @@ var showcaseStoryViews = [][2]string{
 	{"zarah", "aishar"},
 }
 
-// showcaseStoryReply is a reply left on someone's story, read back by the story's author alone.
 type showcaseStoryReply struct {
 	Author   string
 	Target   string
@@ -425,8 +387,6 @@ var showcaseStoryReplies = []showcaseStoryReply{
 	{"sofiar", "marcusb", "Frame two is the one.", 2},
 }
 
-// showcaseGroupInvitations are the pending group invitations a couple of members carry, so the
-// invitations surface is not empty.
 var showcaseGroupInvitations = []struct{ Inviter, Invitee, Group string }{
 	{"diegof", "dummyuser", "Home Cooks"},
 }

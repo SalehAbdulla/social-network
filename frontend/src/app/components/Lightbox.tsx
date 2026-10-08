@@ -4,36 +4,17 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { ChevronLeft, ChevronRight, X } from 'lucide-react';
 import { mediaVariant } from '../lib/mediaVariants';
 
-/**
- * A full-screen viewer for one post's or comment's photos.
- *
- * It replaces opening the raw file in a new tab. The picture is drawn from the
- * large derivative on purpose — `mediaVariant` names this as the caller that wants
- * one particular size rather than a choice, so the viewer is where the whole thing
- * belongs — and the browser falls back to the original for an upload with no such
- * file, exactly as the grid does.
- *
- * The arrows and the arrow keys move through the set and wrap around, Escape and a
- * click on the backdrop close it, and a horizontal swipe does the same on touch.
- * It is a dialog rather than a div: it names itself, takes focus while it is open,
- * traps Tab, locks the page behind it, and hands focus back to the control that
- * opened it, which is the part a viewer usually forgets.
- */
 export default function Lightbox({ images, startIndex, label, onClose }: {
   images: string[];
   startIndex: number;
-  /** Names the set for assistive technology, e.g. "Post photos". */
   label: string;
   onClose: () => void;
 }) {
   const [index, setIndex] = useState(startIndex);
   const dialog = useRef<HTMLDivElement>(null);
-  // The element that had focus before this opened; focus goes back to it on close.
   const opener = useRef<Element | null>(null);
   const touchStart = useRef<number | null>(null);
   const total = images.length;
-  // A single picture has nowhere to move to, so the controls and the counter stay
-  // away rather than being drawn disabled.
   const many = total > 1;
 
   const step = useCallback((delta: number) => {
@@ -57,7 +38,6 @@ export default function Lightbox({ images, startIndex, label, onClose }: {
       if (event.key === 'ArrowLeft') { event.preventDefault(); step(-1); return; }
       if (event.key === 'ArrowRight') { event.preventDefault(); step(1); return; }
       if (event.key !== 'Tab') return;
-      // Tab is kept inside the dialog, so the page behind it stays unreachable.
       const controls = [...(dialog.current?.querySelectorAll<HTMLElement>('button:not(:disabled)') || [])];
       const first = controls[0], last = controls[controls.length - 1];
       if (!first || !last) return;

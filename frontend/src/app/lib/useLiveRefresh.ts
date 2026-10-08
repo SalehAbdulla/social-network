@@ -2,7 +2,6 @@
 import { useEffect } from 'react';
 import { type SocketEvent } from '../api/social';
 
-// Coalesce socket bursts, and use polling to recover after a dropped connection.
 export function useLiveRefresh(reload: () => void, groupId?: string) {
   useEffect(() => {
     let scheduled: ReturnType<typeof setTimeout> | undefined;

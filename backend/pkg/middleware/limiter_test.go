@@ -5,8 +5,6 @@ import (
 	"time"
 )
 
-// TestAttemptLimiterLocksOneKeyOnly is the property that matters: an account
-// being guessed at is slowed down while everybody else keeps signing in.
 func TestAttemptLimiterLocksOneKeyOnly(t *testing.T) {
 	limiter := NewAttemptLimiter(3, time.Minute)
 	limiter.Fail("victim@example.com")
@@ -24,7 +22,6 @@ func TestAttemptLimiterLocksOneKeyOnly(t *testing.T) {
 	}
 }
 
-// TestAttemptLimiterWindowExpiryAndReset covers the two ways a lock ends.
 func TestAttemptLimiterWindowExpiryAndReset(t *testing.T) {
 	short := NewAttemptLimiter(1, 50*time.Millisecond)
 	short.Fail("late@example.com")
@@ -47,8 +44,6 @@ func TestAttemptLimiterWindowExpiryAndReset(t *testing.T) {
 	}
 }
 
-// TestAttemptLimiterPrunesExpiredKeys keeps made-up identifiers from growing the
-// map without bound.
 func TestAttemptLimiterPrunesExpiredKeys(t *testing.T) {
 	limiter := NewAttemptLimiter(1, 20*time.Millisecond)
 	for i := 0; i <= maxTrackedKeys; i++ {

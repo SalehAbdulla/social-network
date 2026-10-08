@@ -7,12 +7,6 @@ import { clearRecentSearches, readRecentSearches, rememberSearch } from '../lib/
 
 export type PanelKind = 'search';
 
-/**
- * The slide-out panel on the rail's right edge — Instagram's Search drawer. The bell no longer
- * opens a panel; it links to /notifications, so this drawer now holds only the search field and
- * its recent terms. It slides with a transform (`app-panel`), and only the `open` prop toggles
- * it, which lets the sidebar keep it mounted through the exit animation.
- */
 export default function SidePanels({ kind, open, onClose, panelRef }: {
   kind: PanelKind;
   open: boolean;
@@ -28,12 +22,10 @@ function PanelTitle({ children }: { children: React.ReactNode }) {
   return <h2 className="px-4 pb-5 pt-6 text-base font-bold text-text">{children}</h2>;
 }
 
-/** Title, a rounded search field with a clear button, a divider, then the recent terms. */
 function SearchPanel({ onClose }: { onClose: () => void }) {
   const router = useRouter();
   const [term, setTerm] = useState('');
   const [recent, setRecent] = useState<string[]>([]);
-  // Storage is read after mount so the server and the first client render agree on an empty list.
   useEffect(() => {
     const timer = window.setTimeout(() => setRecent(readRecentSearches()), 0);
     return () => window.clearTimeout(timer);

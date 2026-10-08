@@ -38,7 +38,6 @@ const Login = () => {
     const values = Object.fromEntries(new FormData(event.currentTarget).entries());
     try {
       if (registering) {
-        // A blank nickname is fine: the backend generates a handle for it.
         if (normalizedNickname && nicknameState !== 'available') throw new Error(nicknameState === 'taken' ? 'This nickname is already reserved.' : 'Enter an available nickname.');
         if (password !== confirmPassword) throw new Error('Passwords do not match.');
         await authRequest('/auth/register', Object.fromEntries(Object.entries(values).map(([key, value]) => [key, String(value)])));
@@ -60,10 +59,8 @@ const Login = () => {
 
   return (
     <div className='relative min-h-screen flex flex-col md:flex-row md:h-screen md:overflow-hidden'>
-      {/*BackGround Image*/}
       <img src={assets.bgImage.src} alt="" className='absolute top-0 left-0 -z-1 w-full h-full object-cover dark:opacity-30'/>
       <div className='fixed right-4 top-4 z-20'><ThemeToggle /></div>
-      {/* left side : Branding  */}
       <div className='flex-1 flex flex-col items-start justify-between p-6 md:p-10 lg:pl-40'>
       <img src={assets.logo.src} alt="" className='h-16 object-contain' />
       <div>
@@ -81,7 +78,6 @@ const Login = () => {
       </div>
       <span className='md:h-10'></span>
       </div>
-      {/* Right side: authentication form */}
       <div className='flex-1 flex items-center justify-center p-6 sm:p-10 md:min-h-0 md:overflow-y-auto'>
         <form onSubmit={submit} className="glass-strong my-auto w-full max-w-md space-y-5 rounded-2xl bg-white/90 p-6 sm:p-8 dark:bg-card/80">
           <div><h2 className="text-2xl font-bold text-brand-deep">{registering ? 'Create your account' : 'Welcome back'}</h2><p className="mt-1 text-sm text-slate-500">{registering ? 'Join the community and start connecting.' : 'Sign in to continue to your network.'}</p></div>

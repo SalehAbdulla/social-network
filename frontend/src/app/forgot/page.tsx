@@ -5,12 +5,6 @@ import Link from 'next/link';
 import toast from 'react-hot-toast';
 import { errorMessage, requestPasswordReset } from '../api/social';
 
-/*
- * The page asks for a link and then displays whatever the server said. That
- * sentence is deliberately the same whether or not the address has an account, so
- * this page must not add its own wording — "we sent it to you" would undo the one
- * property the endpoint was built to have.
- */
 const Forgot = () => {
   const [busy, setBusy] = useState(false);
   const [status, setStatus] = useState('');

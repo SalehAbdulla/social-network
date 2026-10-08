@@ -10,29 +10,17 @@ import MediaImage from '../ui/MediaImage';
 import DmMessageMenu from './DmMessageMenu';
 import { exactTime } from './time';
 
-/**
- * One message: the bubble, its grouping corners, the received sender's avatar (beside the
- * last bubble of a run only), the reaction pill, the hover row and — under the newest sent
- * message — the Sent/Seen line.
- *
- * The hover controls are absolutely placed by CSS on the side facing the thread's center,
- * so they never widen a bubble, and they stay in the DOM at zero opacity, so a keyboard
- * can reach them and the automation suite can click them.
- */
 export default function MessageBubble({ message, meId, first, last, rich, lastSent, isGroup, senderName, senderAvatar, embed = null, allowReact = true, onReact, onDelete, onEdit, onReply, onOpenMedia }: {
   message: ChatMessage;
   meId: string;
   first: boolean;
   last: boolean;
-  /** A card or an image: its neighbours sit 4px away rather than 2px. */
   rich: boolean;
   lastSent: boolean;
   isGroup: boolean;
   senderName: string;
   senderAvatar: string;
-  /** Replaces the text/media body — a group's event or post that landed in the stream. */
   embed?: ReactNode;
-  /** Off in a group, whose messages have no reaction of their own to record. */
   allowReact?: boolean;
   onReact: (message: ChatMessage) => void;
   onDelete: (messageId: number, scope: string) => void;

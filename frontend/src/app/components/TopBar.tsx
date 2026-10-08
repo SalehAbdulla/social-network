@@ -5,15 +5,6 @@ import { MessageSquare } from 'lucide-react';
 import { useBackend } from './BackendProvider';
 import ThemeToggle from './ThemeToggle';
 
-/**
- * The phone's top strip: the wordmark on the left and the account controls on the right.
- *
- * It is `lg:hidden`, because from `lg` up the sidebar is the whole navigation — it carries the
- * wordmark, every destination and the badges — and a second bar repeating them is exactly the
- * duplication Instagram's single left rail avoids. Below `lg` this bar and the bottom tab bar
- * (`BottomNav`) split the surface between them: messages, notifications and the theme live up
- * here, and the tabs stay Home, Search, Create and Profile, so no destination is offered twice.
- */
 export default function TopBar() {
   const { badges } = useBackend();
 

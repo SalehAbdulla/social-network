@@ -3,17 +3,6 @@
 import { Moon, Sun } from 'lucide-react';
 import { useTheme } from './ThemeProvider';
 
-/**
- * Glass switch for the dark-mode preference (`ThemeProvider`).
- *
- * Everything visible — knob position, icon cross-fade, tints — comes from
- * `dark:` variants, so the switch is already drawn in the right state before
- * React hydrates and can never flash. `aria-checked` is the only
- * theme-dependent attribute it renders, and it settles a tick later.
- *
- * `compact` swaps the sliding pill for a square tile that fits the collapsed
- * sidebar; `label` shows the current theme next to the pill.
- */
 export default function ThemeToggle({ compact = false, label = false, className = '' }: {
   compact?: boolean;
   label?: boolean;
@@ -43,7 +32,6 @@ export default function ThemeToggle({ compact = false, label = false, className 
   </div>;
 }
 
-/** Sun for the light theme, moon for the dark one. CSS swaps which one shows. */
 function IconStack({ size }: { size: number }) {
   return <span aria-hidden="true" className="relative block size-5">
     <Sun size={size} className="absolute inset-0 m-auto rotate-0 scale-100 text-amber-500 opacity-100 transition duration-300 dark:-rotate-90 dark:scale-50 dark:opacity-0" />

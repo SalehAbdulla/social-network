@@ -10,8 +10,6 @@ type MessageDTO struct {
 	TextMessage string `json:"textMessage"`
 	TimeStamp   string `json:"timeStamp"`
 	IsRead      int    `json:"isRead"`
-	// Score is the message's reaction total and UserScore is the reader's own, so the
-	// control on the bubble starts in the right state for this viewer.
-	Score     int `json:"score"`
-	UserScore int `json:"userScore"`
+	Score       int    `json:"score"`
+	UserScore   int    `json:"userScore"`
 }

@@ -11,8 +11,6 @@ import (
 	"testing"
 )
 
-// photo builds a JPEG of the given size with enough variation that re-encoding it is a real
-// encode rather than a run of identical pixels.
 func photo(t *testing.T, width, height int) []byte {
 	t.Helper()
 	canvas := image.NewRGBA(image.Rect(0, 0, width, height))
@@ -28,8 +26,6 @@ func photo(t *testing.T, width, height int) []byte {
 	return encoded.Bytes()
 }
 
-// transparentPNG builds a PNG whose left half is see-through, which is what the format choice in
-// OutputType exists to protect.
 func transparentPNG(t *testing.T, width, height int) []byte {
 	t.Helper()
 	canvas := image.NewRGBA(image.Rect(0, 0, width, height))
@@ -49,9 +45,6 @@ func transparentPNG(t *testing.T, width, height int) []byte {
 	return encoded.Bytes()
 }
 
-// TestPlanSkipsWhatCannotBeDerived pins four decisions together, because each of them is a choice
-// rather than a limitation of the code: a derivative of an animation is a still, a video cannot be
-// decoded without a tool this repository does not ship, and upscaling spends bytes to look worse.
 func TestPlanSkipsWhatCannotBeDerived(t *testing.T) {
 	for _, testCase := range []struct {
 		name        string
@@ -86,10 +79,6 @@ func TestPlanSkipsWhatCannotBeDerived(t *testing.T) {
 	}
 }
 
-// TestEncodeShrinksAndKeepsTheFormat is the measurement the item is about: a derivative of a real
-// photo is a fraction of the original's bytes, decoded at the cap's width. The fixture is a 12
-// megapixel photo — 3200x2400 — because that is the phone picture the item is about, and it is
-// wider than both caps, so both derivatives exist to be measured.
 func TestEncodeShrinksAndKeepsTheFormat(t *testing.T) {
 	const sourceWidth, sourceHeight = 3200, 2400
 	source := photo(t, sourceWidth, sourceHeight)
@@ -131,8 +120,6 @@ func TestEncodeShrinksAndKeepsTheFormat(t *testing.T) {
 	}
 }
 
-// TestEncodeRefusesToUpscale is the boundary the whole "caps are caps" story rests on, and it
-// covers the edge a cap of exactly the image's width lands on: no derivative, not a copy.
 func TestEncodeRefusesToUpscale(t *testing.T) {
 	thumbnail, _ := Lookup("thumb")
 	for _, width := range []int{400, ThumbWidth} {
@@ -142,8 +129,6 @@ func TestEncodeRefusesToUpscale(t *testing.T) {
 	}
 }
 
-// TestEncodeKeepsTransparency covers the reason PNG sources become PNG derivatives: a JPEG
-// derivative of a see-through image would flatten it.
 func TestEncodeKeepsTransparency(t *testing.T) {
 	source := transparentPNG(t, 1000, 600)
 	thumbnail, _ := Lookup("thumb")
@@ -163,8 +148,6 @@ func TestEncodeKeepsTransparency(t *testing.T) {
 	}
 }
 
-// TestEncodeReportsWhatItCannotDecode covers the realistic failure mode: an animated WebP has no
-// decoder here, and the upload keeps it whole rather than failing or writing a broken derivative.
 func TestEncodeReportsWhatItCannotDecode(t *testing.T) {
 	thumbnail, _ := Lookup("thumb")
 	_, _, err := Encode([]byte("RIFF____WEBPVP8X not really a webp payload"), "image/webp", thumbnail)
@@ -176,8 +159,6 @@ func TestEncodeReportsWhatItCannotDecode(t *testing.T) {
 	}
 }
 
-// TestGIFDecodesButIsNotDerived keeps two rules apart: GIF has a decoder in this toolchain, and
-// the reason it gets no derivative is the animation, not the code.
 func TestGIFDecodesButIsNotDerived(t *testing.T) {
 	canvas := image.NewPaletted(image.Rect(0, 0, 800, 600), []color.Color{color.Black, color.White})
 	var encoded bytes.Buffer
@@ -192,7 +173,6 @@ func TestGIFDecodesButIsNotDerived(t *testing.T) {
 	}
 }
 
-// TestParseSizeRefusesATypo is the "a typo is not a full-size download" rule.
 func TestParseSizeRefusesATypo(t *testing.T) {
 	for _, testCase := range []struct {
 		value      string
@@ -218,13 +198,6 @@ func TestParseSizeRefusesATypo(t *testing.T) {
 	}
 }
 
-// TestFileNamesRoundTripAndCannotEscape is the naming contract the upload path and the collector
-// share: what one writes, the other reads, and a name that is not derivative-shaped is refused.
-//
-// It also pins the division of labour that the stray sweep depends on. This helper is about
-// *shape* only, so `id_thumb_thumb` parses as a derivative of the base `id_thumb` and
-// `notes_large` as one of `notes`; the caller is what insists the base is a UUID, which is how
-// the collector keeps its promise never to touch a file an operator put in the directory.
 func TestFileNamesRoundTripAndCannotEscape(t *testing.T) {
 	const id = "8f14e45f-ceea-467a-9c1c-1a1a1a1a1a1a"
 	for _, variant := range Variants() {

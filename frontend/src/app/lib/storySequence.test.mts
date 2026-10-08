@@ -13,12 +13,11 @@ import {
   storyAt,
 } from './storySequence.ts';
 
-/** A tiny story factory so the tests read as prose, not as object literals. */
 const story = (storyId: number, userId: string, viewed = false) => ({ storyId, userId, viewed });
 
 test('groupStories keeps first-appearance order and plays each author oldest first', () => {
   const groups = groupStories([
-    story(5, 'a'), story(3, 'a'), // newest first, as the server lists them
+    story(5, 'a'), story(3, 'a'),
     story(9, 'b'),
     story(1, 'a'),
   ]);
@@ -41,9 +40,7 @@ test('firstUnseenIndex picks the earliest unseen, falls back to the first, handl
 test('nextPosition walks within an author, then across authors, then ends', () => {
   const groups = groupStories([story(1, 'a'), story(2, 'a'), story(3, 'b')]);
   assert.deepEqual(nextPosition(groups, { user: 0, story: 0 }), { user: 0, story: 1 });
-  // last story of author a → first of author b
   assert.deepEqual(nextPosition(groups, { user: 0, story: 1 }), { user: 1, story: 0 });
-  // last story overall → null (close)
   assert.equal(nextPosition(groups, { user: 1, story: 0 }), null);
 });
 
@@ -51,7 +48,6 @@ test('prevPosition steps back and restarts at the very first story', () => {
   const groups = groupStories([story(1, 'a'), story(2, 'a'), story(3, 'b')]);
   assert.deepEqual(prevPosition(groups, { user: 1, story: 0 }), { user: 0, story: 1 });
   assert.deepEqual(prevPosition(groups, { user: 0, story: 1 }), { user: 0, story: 0 });
-  // first story of the first author: nowhere to go, so it stays (the caller restarts it)
   assert.deepEqual(prevPosition(groups, { user: 0, story: 0 }), { user: 0, story: 0 });
 });
 
@@ -65,7 +61,6 @@ test('findPosition locates a story by id, and null when it is absent', () => {
 test('positionForUser opens at the requested story, else the author first unseen', () => {
   const groups = groupStories([story(1, 'a', true), story(2, 'a', false), story(3, 'b')]);
   assert.deepEqual(positionForUser(groups, 'a', 1), { user: 0, story: 1 });
-  // unknown story id for a known author → first unseen
   assert.deepEqual(positionForUser(groups, 'a', 42), { user: 0, story: 0 });
   assert.deepEqual(positionForUser(groups, 'b'), { user: 1, story: 0 });
   assert.equal(positionForUser(groups, 'zzz'), null);
@@ -94,7 +89,6 @@ test('a full walk forwards visits every story exactly once and ends', () => {
   assert.deepEqual(visited, [1, 2, 3, 4]);
 });
 
-/** A fixed "now" and two factories: a story still live at it, and one already expired. */
 const NOW = Date.parse('2026-10-07T12:00:00Z');
 const live = (storyId: number, userId: string, viewed = false) => ({ storyId, userId, viewed, expiresAt: '2026-10-07 18:00:00' });
 const expired = (storyId: number, userId: string, viewed = false) => ({ storyId, userId, viewed, expiresAt: '2026-10-06 00:00:00' });

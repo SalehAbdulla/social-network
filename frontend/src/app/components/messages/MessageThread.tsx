@@ -9,7 +9,6 @@ import Button from '../ui/Button';
 import MessageBubble from './MessageBubble';
 import { exactTime, needsSeparator, separatorLabel } from './time';
 
-/** The thread's first paint: alternating bubbles on both sides, mirroring the real rhythm. */
 function ThreadSkeleton() {
   const rows = [
     { mine: false, width: 'w-40' },
@@ -26,29 +25,16 @@ function ThreadSkeleton() {
   </div>;
 }
 
-/** One run of same-sender messages between two separators, with the stamps the row needs. */
 interface Cluster {
-  /** Whether a time/day separator belongs above this run. */
   separator: boolean;
   at: string;
   rows: { message: ChatMessage; first: boolean; last: boolean; rich: boolean }[];
 }
 
-/** The default "rich" test for a one-to-one chat: any bubble holding a photo or a clip. */
 function justMedia(message: ChatMessage) {
   return !!message.mediaUrl;
 }
 
-/**
- * The message thread.
- *
- * It groups consecutive messages from one sender into a run (a 2px gap inside, 8px
- * between), stamps a separator where the day changes or an hour passes, hangs the sender
- * avatar beside the last bubble of a received run, and keeps the reader's place when an
- * older page is folded in at the top. The reader's own reaction reuses the app's message
- * reaction endpoint through `onReact`; the hover row's "more" opens the same menu the rest
- * of the chat surfaces use.
- */
 export default function MessageThread({ items, meId, partnerId, partnerName, partnerHandle, partnerAvatar, loading, error, onRetry, hasMore, loadingMore, onLoadMore, typing, isGroup = false, showIntro = true, allowReact = true, senderOf, richOf, embedOf, onReact, onDelete, onEdit, onReply, onOpenMedia }: {
   items: ChatMessage[];
   meId: string;
@@ -64,15 +50,10 @@ export default function MessageThread({ items, meId, partnerId, partnerName, par
   onLoadMore: () => void;
   typing: boolean;
   isGroup?: boolean;
-  /** Off for a group, whose thread opens with messages rather than a profile block. */
   showIntro?: boolean;
-  /** Off for a group, whose messages have no reaction of their own to record. */
   allowReact?: boolean;
-  /** Names and avatars for a group's other senders; a one-to-one chat falls back to the partner. */
   senderOf?: (userId: string) => { name: string; avatar: string };
-  /** Whether a message is a "rich" bubble — a card or an image — so its neighbours breathe wider. */
   richOf?: (message: ChatMessage) => boolean;
-  /** Replaces a message's body — a group's event card in the stream. */
   embedOf?: (message: ChatMessage) => ReactNode;
   onReact: (message: ChatMessage) => void;
   onDelete: (messageId: number, scope: string) => void;
@@ -84,10 +65,8 @@ export default function MessageThread({ items, meId, partnerId, partnerName, par
   const nearBottom = useRef(true);
   const pendingPrepend = useRef<number | null>(null);
   const [showPill, setShowPill] = useState(false);
-  // A "rich" bubble is a card or an image; its neighbours sit 4px away rather than 2px.
   const richOfMessage = richOf ?? justMedia;
 
-  // Newest first from the paged list; the thread reads oldest to newest.
   const ordered = useMemo(() => [...items].reverse(), [items]);
   const lastSentId = useMemo(() => {
     for (let index = ordered.length - 1; index >= 0; index -= 1) {
@@ -126,18 +105,14 @@ export default function MessageThread({ items, meId, partnerId, partnerName, par
   useEffect(() => {
     const element = scroller.current;
     if (!element) return;
-    // A new message of the reader's own always wins: sending should follow the bubble down.
     const newest = ordered[ordered.length - 1];
     if (nearBottom.current || newest?.senderId === meId) scrollToBottom();
-    // `ordered` is a fresh array whenever the rows change, which is the signal to re-anchor.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ordered]);
 
   useLayoutEffect(() => {
     const element = scroller.current;
     if (!element || pendingPrepend.current === null) return;
-    // An older page is prepended visually, so the content above the view grew: push the
-    // scroll down by exactly that much and the reading position does not move.
     element.scrollTop += element.scrollHeight - pendingPrepend.current;
     pendingPrepend.current = null;
   }, [items.length]);
@@ -175,9 +150,6 @@ export default function MessageThread({ items, meId, partnerId, partnerName, par
     </div></div>}
     {loadingMore && <p className="dm-sep">Loading…</p>}
     {clusters.map(cluster => <Fragment key={cluster.rows[0].message.messageId}>
-      {/* The stamp the spec asks for: a centered, muted 12px line when the gap passes an hour
-          or the day changes. The exact instant stays in the `title` and the machine-readable
-          `dateTime`. */}
       {cluster.separator && <time className="dm-sep" dateTime={isoTimestamp(cluster.at)} title={exactTime(cluster.at)}>{separatorLabel(cluster.at)}</time>}
       <div className="dm-cluster">
         {cluster.rows.map(({ message, first, last, rich }) => {

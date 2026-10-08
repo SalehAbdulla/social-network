@@ -6,10 +6,6 @@ import (
 	"time"
 )
 
-// The hub mutates its registry in its own goroutine, so a send on Register or
-// Unregister only queues the work: these helpers wait for the effect instead of
-// assuming it already happened.
-
 func newTestHub(t *testing.T) *Hub {
 	t.Helper()
 	hub := NewHub()
@@ -79,8 +75,6 @@ type statusFrame struct {
 	Payload UserStatusPayload `json:"payload"`
 }
 
-// TestHubDeliversOnlyToTheAddressedUser covers fan-out: a message reaches every
-// socket of the named user, nobody else, and an unknown user reports no delivery.
 func TestHubDeliversOnlyToTheAddressedUser(t *testing.T) {
 	hub := newTestHub(t)
 	alex, sam := testClient(hub, "alex"), testClient(hub, "sam")
@@ -88,9 +82,6 @@ func TestHubDeliversOnlyToTheAddressedUser(t *testing.T) {
 	hub.Register <- alex
 	hub.Register <- alexSecond
 	hub.Register <- sam
-	// Sam registering announces him to every socket already connected, so each of
-	// Alex's sockets holds that frame; drain both so the assertions below are
-	// about delivery and nothing else.
 	for name, client := range map[string]*Client{"first": alex, "second": alexSecond} {
 		if status := decodeStatus(t, receive(t, client)); status.Payload.UserId != "sam" || status.Payload.IsOnline != 1 {
 			t.Fatalf("unexpected presence frame on the %s socket: %+v", name, status)
@@ -112,9 +103,6 @@ func TestHubDeliversOnlyToTheAddressedUser(t *testing.T) {
 	}
 }
 
-// TestHubPresenceTracksTheFirstAndLastClient covers the online dot: a second
-// socket for the same user must not announce anything, and only the last one
-// leaving takes the user offline.
 func TestHubPresenceTracksTheFirstAndLastClient(t *testing.T) {
 	hub := newTestHub(t)
 	first, second := testClient(hub, "alex"), testClient(hub, "alex")
@@ -137,8 +125,6 @@ func TestHubPresenceTracksTheFirstAndLastClient(t *testing.T) {
 	waitFor(t, "the user to go offline", func() bool { return !hub.IsUserOnline("alex") && len(hub.GetOnlineUsers()) == 0 })
 }
 
-// TestHubAnnouncesPresenceAndClosesEveryoneOnStop covers the two broadcasts the
-// chat UI depends on and the shutdown path that releases every writer.
 func TestHubAnnouncesPresenceAndClosesEveryoneOnStop(t *testing.T) {
 	hub := newTestHub(t)
 	watcher, leaving := testClient(hub, "sam"), testClient(hub, "alex")
@@ -165,16 +151,12 @@ func TestHubAnnouncesPresenceAndClosesEveryoneOnStop(t *testing.T) {
 	}
 }
 
-// TestHubBroadcastExceptSkipsTheNamedUser pins the rule the feed's new-posts notice
-// relies on: every connected account hears the broadcast, and the one that caused it
-// does not.
 func TestHubBroadcastExceptSkipsTheNamedUser(t *testing.T) {
 	hub := newTestHub(t)
 	watcher, author := testClient(hub, "sam"), testClient(hub, "alex")
 	hub.Register <- watcher
 	waitFor(t, "the watcher", func() bool { return hub.IsUserOnline("sam") })
 	hub.Register <- author
-	// The author registering announces them to the watcher, so drain that frame first.
 	if status := decodeStatus(t, receive(t, watcher)); status.Payload.UserId != "alex" {
 		t.Fatalf("unexpected presence frame: %+v", status)
 	}

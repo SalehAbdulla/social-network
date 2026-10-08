@@ -15,8 +15,6 @@ import (
 	"social-network/backend/pkg/config"
 )
 
-// TestMigrationsRoundTrip runs every migration up, all the way down and up
-// again on a scratch database, so a broken down file cannot reach a release.
 func TestMigrationsRoundTrip(t *testing.T) {
 	backendDir, err := config.BackendDir()
 	if err != nil {
@@ -82,15 +80,11 @@ func TestMigrationsRoundTrip(t *testing.T) {
 	assertProfileContactColumns(t, database)
 	assertProfileContactVisibilityColumns(t, database)
 	version, dirty, err := migrations.Version()
-	// Pinned rather than derived from the directory: a new migration is meant to be noticed
-	// here and its round trip confirmed, so adding one is a deliberate edit to this line.
 	if err != nil || dirty || version != 22 {
 		t.Fatalf("expected clean version 22, got %d (dirty=%v, err=%v)", version, dirty, err)
 	}
 }
 
-// TestSessionLifecycleKeepsExistingRows checks that the session rebuild in
-// 000009 carries existing tokens over instead of dropping them.
 func TestSessionLifecycleKeepsExistingRows(t *testing.T) {
 	backendDir, err := config.BackendDir()
 	if err != nil {
@@ -103,8 +97,6 @@ func TestSessionLifecycleKeepsExistingRows(t *testing.T) {
 	defer database.Close()
 	database.SetMaxOpenConns(1)
 
-	// Only the first eight migrations, so the session table is still the
-	// original three-column shape.
 	source, err := iofs.New(os.DirFS(filepath.Join(backendDir, "pkg", "db", "migrations", "sqlite")), ".")
 	if err != nil {
 		t.Fatal(err)
@@ -138,7 +130,6 @@ func TestSessionLifecycleKeepsExistingRows(t *testing.T) {
 	if userID != "u1" {
 		t.Fatalf("legacy session row lost its owner: %q", userID)
 	}
-	// The cascade still applies to the rebuilt table.
 	if _, err := database.Exec("DELETE FROM user WHERE userId='u1'"); err != nil {
 		t.Fatal(err)
 	}
@@ -166,7 +157,6 @@ func assertSessionColumns(t *testing.T, database *sql.DB, wantLifecycle bool) {
 	}
 }
 
-// assertCommentColumns guards the media column added by 000010.
 func assertCommentColumns(t *testing.T, database *sql.DB) {
 	t.Helper()
 	columns := tableColumns(t, database, "comment")
@@ -177,9 +167,6 @@ func assertCommentColumns(t *testing.T, database *sql.DB) {
 	}
 }
 
-// assertEventColumns guards the reminder column added by 000011. It has to
-// survive the down and the second up, because the sweep depends on the stamp
-// still being there rather than on it being recreated.
 func assertEventColumns(t *testing.T, database *sql.DB) {
 	t.Helper()
 	columns := tableColumns(t, database, "groupContent")
@@ -188,9 +175,6 @@ func assertEventColumns(t *testing.T, database *sql.DB) {
 	}
 }
 
-// assertGroupLikeColumn guards 000019: the denormalised total a page of group posts or
-// comments reads its like count from, and the default that keeps every existing row at zero
-// likes rather than NULL.
 func assertGroupLikeColumn(t *testing.T, database *sql.DB) {
 	t.Helper()
 	if !tableColumns(t, database, "groupContent")["score"] {
@@ -205,8 +189,6 @@ func assertGroupLikeColumn(t *testing.T, database *sql.DB) {
 	}
 }
 
-// assertProfileContactColumns guards the columns 000021 adds: the optional public contact
-// fields a profile may publish — a website link, a contact email and a phone number.
 func assertProfileContactColumns(t *testing.T, database *sql.DB) {
 	t.Helper()
 	columns := tableColumns(t, database, "user")
@@ -217,9 +199,6 @@ func assertProfileContactColumns(t *testing.T, database *sql.DB) {
 	}
 }
 
-// assertProfileContactVisibilityColumns guards the three per-field public switches 000022 adds.
-// Each has to exist on `user` and be NOT NULL with a default, so a contact field a member had
-// already published is not left in an unknown state by the migration that introduced them.
 func assertProfileContactVisibilityColumns(t *testing.T, database *sql.DB) {
 	t.Helper()
 	columns := tableColumns(t, database, "user")
@@ -237,9 +216,6 @@ func assertProfileContactVisibilityColumns(t *testing.T, database *sql.DB) {
 	}
 }
 
-// assertResetColumns guards the table 000012 adds. `usedAt` has to be nullable —
-// a NOT NULL default would make every token look already spent — and the hash is
-// the only place the token is kept, so the column must exist under that name.
 func assertResetColumns(t *testing.T, database *sql.DB) {
 	t.Helper()
 	columns := tableColumns(t, database, "passwordReset")
@@ -253,9 +229,6 @@ func assertResetColumns(t *testing.T, database *sql.DB) {
 	}
 }
 
-// assertPostPublicIdColumn guards the column 000020 adds: the public UUID a post is
-// addressed by. It is what keeps the table's incrementing rowid out of every URL and API
-// response, so a post cannot be found by guessing the next number.
 func assertPostPublicIdColumn(t *testing.T, database *sql.DB) {
 	t.Helper()
 	columns := tableColumns(t, database, "post")
@@ -264,9 +237,6 @@ func assertPostPublicIdColumn(t *testing.T, database *sql.DB) {
 	}
 }
 
-// assertSavedPostColumns guards the table 000014 adds. The pair is the primary
-// key — that is what makes a second save one row rather than two — and createdAt
-// has to be there, because the saved list is ordered by when a post was saved.
 func assertSavedPostColumns(t *testing.T, database *sql.DB) {
 	t.Helper()
 	columns := tableColumns(t, database, "savedPost")
@@ -277,10 +247,6 @@ func assertSavedPostColumns(t *testing.T, database *sql.DB) {
 	}
 }
 
-// assertStoryViewColumns guards the table 000016 adds. The pair is the primary key —
-// that is what makes a second view of the same story one row rather than two — and it has
-// to point at both the story and the account, or deleting either would leave the row
-// behind for the listing query to filter out by hand.
 func assertStoryViewColumns(t *testing.T, database *sql.DB) {
 	t.Helper()
 	columns := tableColumns(t, database, "storyView")
@@ -291,9 +257,6 @@ func assertStoryViewColumns(t *testing.T, database *sql.DB) {
 	}
 }
 
-// assertStoryReplyColumns guards the table 000017 adds. It has to point at both the story and the
-// account, or deleting either would leave the reply behind for the read to filter out by hand,
-// and it carries its own `content` and `createdAt`, because that is what the author reads back.
 func assertStoryReplyColumns(t *testing.T, database *sql.DB) {
 	t.Helper()
 	columns := tableColumns(t, database, "storyReply")
@@ -328,9 +291,6 @@ func tableColumns(t *testing.T, database *sql.DB, table string) map[string]bool 
 	return columns
 }
 
-// columnIsNullable reads the notnull flag out of PRAGMA table_info for one column,
-// because "the column exists" and "the column accepts NULL" are different facts
-// and only the second one makes a token spendable.
 func columnIsNullable(database *sql.DB, table, column string) (bool, error) {
 	rows, err := database.Query("PRAGMA table_info(" + table + ")")
 	if err != nil {

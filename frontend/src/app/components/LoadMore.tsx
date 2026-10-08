@@ -4,29 +4,16 @@ import { useEffect, useRef } from 'react';
 import { CheckCircle2, ChevronRight, Loader2 } from 'lucide-react';
 
 type LoadMoreProps = {
-  /** A follow-up page is in flight. */
   loading: boolean;
-  /** The list has more rows to reveal. */
   hasMore: boolean;
   onLoadMore: () => void;
-  /** Auto-load when the sentinel scrolls into view. Off for lists that opt into a click. */
   auto?: boolean;
   label?: string;
-  /** End-of-list cap. Pass `null` for lists that should end silently. */
   endLabel?: string | null;
-  /** Render as a tile for a horizontal strip instead of a centred button. */
   compact?: boolean;
   className?: string;
 };
 
-/**
- * End-of-list affordance for the paged lists.
- *
- * A real button stays in the DOM for keyboard and screen-reader users, while an
- * `IntersectionObserver` presses it for everyone else once the last row is
- * close to the viewport. The observer re-arms after every page, so a list that
- * still does not fill the viewport keeps filling itself instead of stalling.
- */
 export default function LoadMore({
   loading,
   hasMore,
@@ -59,8 +46,6 @@ export default function LoadMore({
     ) : null;
   }
 
-  // Compact mode turns the control into a tile that fits a horizontal strip
-  // (stories), where a full-width button would break the row.
   if (compact) {
     return (
       <div ref={sentinel} className={`flex shrink-0 items-center justify-center ${className}`}>

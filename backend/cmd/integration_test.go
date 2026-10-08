@@ -238,7 +238,6 @@ func TestSocialIntegration(t *testing.T) {
 		t.Fatal("incorrect authenticated account")
 	}
 	alex.login("alex@example.com")
-	// Repeat bootstrap keeps the same valid session and account identity.
 	dummy.login("dummy@example.com")
 	dummy.call("GET", "/api/v1/auth/me", nil, 200)
 	dummy.call("GET", "/api/v1/posts", nil, 200)
@@ -356,7 +355,6 @@ func TestSocialIntegration(t *testing.T) {
 		if follows["followers"][0].FirstName != "Alex" {
 			t.Fatal("follower list must contain profile details")
 		}
-		// A private list entry keeps its public identity only, like the profile page.
 		privateProfile.IsPublic = false
 		dummy.call("PUT", "/api/v1/users/me", privateProfile, 200)
 		alex.call("DELETE", "/api/v1/users/dummy-id/follow", nil, 200)
@@ -556,7 +554,6 @@ func TestSocialIntegration(t *testing.T) {
 	})
 	dummy.call("DELETE", "/api/v1/posts?id="+post.PostId, nil, 200)
 	dummy.call("GET", postPath, nil, 404)
-	// Original auth endpoints still accept their original form/cookie contract.
 	dummy.call("POST", "/api/v1/auth/logout", nil, 200)
 	dummy.call("GET", "/api/v1/auth/me", nil, 401)
 	dummy.call("POST", "/api/v1/auth/login", url.Values{"identifier": {"dummy@example.com"}, "password": {"DummyUser123!"}}, 200)
@@ -628,9 +625,6 @@ func TestLiveConnectionUpdates(t *testing.T) {
 	alex.call("PUT", "/api/v1/users/dummy-id/follow", nil, 200)
 	readUpdate(dummySocket, "alex-id")
 
-	// The group flows push the created notification itself, the same shape the
-	// comment, message and follow paths send, so a client no longer has to refetch
-	// to learn what happened.
 	readNotification := func(socket *websocket.Conn) notification.NotificationDTO {
 		t.Helper()
 		socket.SetReadDeadline(time.Now().Add(3 * time.Second))
@@ -657,7 +651,6 @@ func TestLiveConnectionUpdates(t *testing.T) {
 			}
 		}
 	}
-	// Marking everything read still announces a change without a row.
 	readNotificationChange := func(socket *websocket.Conn) {
 		t.Helper()
 		socket.SetReadDeadline(time.Now().Add(3 * time.Second))

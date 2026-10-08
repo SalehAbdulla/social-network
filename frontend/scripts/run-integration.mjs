@@ -48,7 +48,7 @@ async function ready(child, url, expectedStatus) {
   while (Date.now() < deadline) {
     if (child.startError) throw child.startError;
     if (child.exitCode !== null) throw new Error(`Service exited. See logs in ${taskDir}`);
-    try { if ((await fetch(url, { signal: AbortSignal.timeout(5000) })).status === expectedStatus) return; } catch { /* Starting. */ }
+    try { if ((await fetch(url, { signal: AbortSignal.timeout(5000) })).status === expectedStatus) return; } catch {  }
     await new Promise(resolve => setTimeout(resolve, 500));
   }
   throw new Error(`Timed out starting ${url}. See logs in ${taskDir}`);
@@ -68,16 +68,11 @@ try {
   const api = start('backend', executable, [], {
     cwd: taskDir, env: { ...env, PORT: String(backendPort), APP_ENV: 'development', FRONTEND_ORIGIN: base, UPLOAD_DIR: path.join(taskDir, 'uploads'), RATE_LIMIT_PER_MINUTE: '6000' },
   });
-  // Readiness is the endpoint the backend exposes for exactly this question, and
-  // it fails while the database is unreachable — a stronger signal than waiting
-  // for a 401 out of an authenticated route.
   await ready(api, `${backendURL}/api/v1/ready`, 200);
   console.log('Starting the frontend against the isolated backend...');
   const web = start('frontend', process.execPath, [path.join(frontend, 'node_modules/next/dist/bin/next'), 'dev', '-p', String(frontendPort)], {
     cwd: frontend, env: { ...env, NODE_ENV: 'development', BACKEND_URL: backendURL, NEXT_DIST_DIR: '.next-smoke', NEXT_TELEMETRY_DISABLED: '1' },
   });
-  // Through the frontend's own rewrite, so a wrong BACKEND_URL fails here rather
-  // than in the middle of the suite.
   await ready(web, base + '/api/v1/ready', 200);
   await run(process.execPath, ['scripts/integration-smoke.mjs'], { cwd: frontend, env: { ...env, BASE_URL: base, TEST_ARTIFACT_DIR: taskDir } });
 } finally {

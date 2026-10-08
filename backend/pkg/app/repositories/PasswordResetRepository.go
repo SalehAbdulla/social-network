@@ -8,8 +8,6 @@ import (
 	realtimeforum "social-network/backend"
 )
 
-// PasswordReset is one issued reset token. Only the hash is stored, so the value
-// in hand is the only copy of the token that exists.
 type PasswordReset struct {
 	ResetID   string
 	UserID    string
@@ -17,10 +15,6 @@ type PasswordReset struct {
 	UsedAt    sql.NullTime
 }
 
-// SavePasswordReset issues one token per account: the account's older rows are
-// deleted in the same transaction, so an email that arrived yesterday cannot be
-// used after a newer one was requested. Keeping one live token is what makes the
-// "ignore every reset mail but the last" advice true in this application.
 func (db *DB) SavePasswordReset(resetID, userID, tokenHash string, expiresAt, createdAt time.Time) error {
 	tx, err := db.Conn.Begin()
 	if err != nil {
@@ -39,9 +33,6 @@ func (db *DB) SavePasswordReset(resetID, userID, tokenHash string, expiresAt, cr
 	return tx.Commit()
 }
 
-// PasswordResetByHash returns the row for a token hash, spent or not, so the
-// caller can tell "unknown" from "already used" instead of treating both as a
-// missing row.
 func (db *DB) PasswordResetByHash(tokenHash string) (PasswordReset, error) {
 	reset := PasswordReset{}
 	var expiresAt string
@@ -68,10 +59,6 @@ func (db *DB) PasswordResetByHash(tokenHash string) (PasswordReset, error) {
 	return reset, nil
 }
 
-// ConsumePasswordReset claims a token exactly once. The UPDATE carries the whole
-// condition — unspent and unexpired — so two confirms racing on one token cannot
-// both apply a password, whichever order they reach the database in. Reporting
-// `false` is a normal outcome, not an error: it means someone else won.
 func (db *DB) ConsumePasswordReset(tokenHash string, now time.Time) (bool, error) {
 	result, err := db.Conn.Exec(
 		"UPDATE passwordReset SET usedAt = ? WHERE tokenHash = ? AND usedAt IS NULL AND expiresAt > ?",
@@ -87,15 +74,11 @@ func (db *DB) ConsumePasswordReset(tokenHash string, now time.Time) (bool, error
 	return affected == 1, nil
 }
 
-// DeletePasswordResetsForUser drops every row of one account, so a spent token
-// leaves nothing behind to look up.
 func (db *DB) DeletePasswordResetsForUser(userID string) error {
 	_, err := db.Conn.Exec("DELETE FROM passwordReset WHERE userId = ?", userID)
 	return err
 }
 
-// DeleteExpiredPasswordResets prunes rows that can no longer be claimed, spent or
-// not. It runs with the session and media sweeps at startup and hourly.
 func (db *DB) DeleteExpiredPasswordResets(now time.Time) (int64, error) {
 	result, err := db.Conn.Exec("DELETE FROM passwordReset WHERE expiresAt <= ?", formatSQLiteTime(now))
 	if err != nil {

@@ -14,7 +14,6 @@ import { eventWhen } from './groupTime';
 import GroupLightbox from './GroupLightbox';
 import GroupRsvp from './GroupRsvp';
 
-/** A group row read as a chat message, so the thread draws it without knowing it is not one. */
 function toMessage(item: GroupItem): ChatMessage {
   return {
     messageId: item.id,
@@ -31,21 +30,10 @@ function toMessage(item: GroupItem): ChatMessage {
   };
 }
 
-/**
- * The Chat tab.
- *
- * It is the one-to-one thread and composer, drawn from the group's own stream: the timeline kind
- * returns messages and events together, an event renders as a compact card inside the bubble
- * instead of a body of text, and the sender's name sits above the first bubble of each run, with
- * their avatar beside the last. Reactions stay off — a group message has no score of its own to
- * record, and the reaction endpoint knows only direct messages. The member list is read once so
- * those names, avatars and the event card's stack are real.
- */
 export default function GroupChat({ groupId, meId, isOwner, onOpenEvents, onEdit }: {
   groupId: string;
   meId: string;
   isOwner: boolean;
-  /** Opens the Events tab — the event card in the stream is a control, not a dead panel. */
   onOpenEvents: () => void;
   onEdit: (item: GroupItem) => void;
 }) {
@@ -56,7 +44,6 @@ export default function GroupChat({ groupId, meId, isOwner, onOpenEvents, onEdit
     normalize: raw => ({ items: raw }),
     keyOf: item => item.id,
   });
-  // The sender's avatar is not on a content row, so the roster is read alongside it.
   const members = useResource<GroupMember[]>(`/groups/${groupId}/members`);
   const [replyTo, setReplyTo] = useState<GroupItem | null>(null);
   const [viewer, setViewer] = useState<GroupItem | null>(null);
@@ -66,11 +53,8 @@ export default function GroupChat({ groupId, meId, isOwner, onOpenEvents, onEdit
   const byId = useMemo(() => new Map(resource.items.map(item => [item.id, item])), [resource.items]);
   const roster = useMemo(() => new Map((members.data ?? []).map(member => [member.userId, member])), [members.data]);
   const items = useMemo(() => resource.items.map(toMessage), [resource.items]);
-  // A bubble is "rich" when it holds an image or is an event card, so its neighbours breathe wider.
   const richOf = useCallback((message: ChatMessage) => !!message.mediaUrl || byId.get(message.messageId)?.kind === 'events', [byId]);
 
-  // The same RSVP write the Events tab makes. An event lands in the stream when it is created,
-  // so the stream is where most answers are given; the two surfaces share one control.
   async function answer(item: GroupItem, status: string) {
     if (answering) return;
     setAnswering(true);
@@ -78,10 +62,6 @@ export default function GroupChat({ groupId, meId, isOwner, onOpenEvents, onEdit
     catch (error) { toast.error(errorMessage(error)); } finally { setAnswering(false); }
   }
 
-  // A deleted row leaves the stream at once, and is put back only if the write fails — the same
-  // optimistic removal the posts and comments tabs make. The live refresh merges the newest page
-  // and dedupes, so it can add rows but can never drop one that is simply gone; without this the
-  // deleting reader keeps looking at the row the server already removed.
   async function remove(item: GroupItem) {
     const previous = resource.items;
     resource.update(items => items.filter(entry => entry.id !== item.id));
@@ -93,9 +73,6 @@ export default function GroupChat({ groupId, meId, isOwner, onOpenEvents, onEdit
     }
   }
 
-  // The event card. Its own copy is the control that opens the Events tab — the whole card cannot
-  // be one, because the RSVP row inside it holds two buttons and a button may not contain another.
-  // The card is capped at its own width so a short event does not stretch the bubble.
   function embed(message: ChatMessage) {
     const item = byId.get(message.messageId);
     if (!item || item.kind !== 'events') return null;

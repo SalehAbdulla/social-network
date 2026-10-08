@@ -6,8 +6,6 @@ import (
 	"testing"
 )
 
-// TestSecurityHeadersOnAPIResponses pins the hardening the middleware promises,
-// so a refactor cannot quietly drop it.
 func TestSecurityHeadersOnAPIResponses(t *testing.T) {
 	handler := Security(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(200) }))
 	response := httptest.NewRecorder()

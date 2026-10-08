@@ -46,7 +46,6 @@ CREATE INDEX story_expiry ON story(expiresAt);
 CREATE INDEX message_conversation ON message(senderId, recipientId, createdAt);
 CREATE INDEX follow_target ON follow(followedId);
 
--- Keep dependent records consistent even for existing SQLite connections.
 CREATE TRIGGER post_cleanup AFTER DELETE ON post BEGIN
     DELETE FROM reaction WHERE entityType = 'comment' AND entityId IN (SELECT commentId FROM comment WHERE postId = OLD.postId);
     DELETE FROM notification WHERE entityType = 'comment' AND entityId IN (SELECT commentId FROM comment WHERE postId = OLD.postId);

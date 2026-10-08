@@ -3,15 +3,6 @@
 import { forwardRef, type ButtonHTMLAttributes, type ReactNode } from 'react';
 import { Loader2 } from 'lucide-react';
 
-/**
- * The app's one button.
- *
- * Every conversation surface draws its actions from here, so a primary is the same blue, a
- * ghost the same weight and a destructive row the same red wherever it appears. The geometry —
- * the 32px height, the 8px radius, the 14px/600 label — is the `--btn-*` tokens; nothing in a
- * caller sets a height or a colour of its own. `loading` disables the button and swaps the
- * leading slot for a spinner, which is also what stops a double submit.
- */
 type Variant = 'primary' | 'secondary' | 'ghost' | 'danger' | 'text';
 
 const VARIANT: Record<Variant, string> = {

@@ -12,8 +12,6 @@ import (
 	sqlitedb "social-network/backend/pkg/db/sqlite"
 )
 
-// seedTestShowcase builds a fresh in-memory database with the two fixture accounts and the showcase
-// on top of it, and returns the repository and the upload directory the pictures went to.
 func seedTestShowcase(t *testing.T) (*repositories.DB, string) {
 	t.Helper()
 	database, err := sql.Open("sqlite3", ":memory:")
@@ -48,8 +46,6 @@ func rowCount(t *testing.T, repo *repositories.DB, query string, args ...any) in
 	return n
 }
 
-// snapshot is every table's row count in one string, so a re-run can be compared against the run
-// before it without listing the tables twice.
 func snapshot(t *testing.T, repo *repositories.DB) string {
 	t.Helper()
 	tables := []string{
@@ -64,9 +60,6 @@ func snapshot(t *testing.T, repo *repositories.DB) string {
 	return b.String()
 }
 
-// TestShowcaseSeed pins the shape of the showcase dataset: the crowd, the feed, the groups, the
-// media files on disk, a suggestion rail for the demo account that actually has mutuals, and — the
-// property everything else leans on — that a second run changes no counts.
 func TestShowcaseSeed(t *testing.T) {
 	repo, uploads := seedTestShowcase(t)
 
@@ -76,7 +69,6 @@ func TestShowcaseSeed(t *testing.T) {
 	if got, want := rowCount(t, repo, "SELECT COUNT(*) FROM post"), len(showcasePosts); got != want {
 		t.Fatalf("posts = %d, want %d", got, want)
 	}
-	// Every post is addressed by a public UUID, and no two share one (see migration 000020).
 	if got := rowCount(t, repo, "SELECT COUNT(*) FROM post WHERE publicId = ''"); got != 0 {
 		t.Fatalf("%d seeded posts have no public id", got)
 	}
@@ -109,8 +101,6 @@ func TestShowcaseSeed(t *testing.T) {
 		t.Fatal("the demo account has no notifications")
 	}
 
-	// Every media row a picture was written for has a file behind it, which is what the media route
-	// serves. A row with no file is a broken image the seed itself introduced.
 	rows, err := repo.Conn.Query("SELECT mediaId FROM media")
 	if err != nil {
 		t.Fatal(err)
@@ -136,7 +126,6 @@ func TestShowcaseSeed(t *testing.T) {
 		}
 	}
 
-	// The demo account is offered people with mutuals, which is the rail's whole reason to exist.
 	dummyID, _, err := repo.GetUserCredentials("dummy@example.com")
 	if err != nil {
 		t.Fatal(err)
@@ -152,7 +141,6 @@ func TestShowcaseSeed(t *testing.T) {
 		t.Fatalf("the top suggestion has no mutuals: %+v", suggestions[0])
 	}
 
-	// Idempotency: a second run changes no table's row count.
 	before := snapshot(t, repo)
 	if err := seedShowcase(repo, uploads); err != nil {
 		t.Fatalf("second run: %v", err)

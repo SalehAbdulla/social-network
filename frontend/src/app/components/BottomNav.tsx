@@ -6,12 +6,6 @@ import { Bell, Compass, House, Search as SearchIcon, SquarePlus, UserRound } fro
 import { useBackend } from './BackendProvider';
 import { useCreatePost } from '../lib/useCreatePost';
 
-/**
- * The phone's navigation, which is where the rail goes below `md`: a fixed icon-only tab bar with
- * a 1px top border, the shape Instagram uses. Notifications lives here (the rail carries it in a
- * panel); Messages stays in the top strip, so no destination is offered twice. Every tab is a real
- * link or button and carries an `aria-label`, since the labels are gone.
- */
 export default function BottomNav() {
   const pathname = usePathname();
   const { badges } = useBackend();

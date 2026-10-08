@@ -31,8 +31,6 @@ func (s *GroupService) RequireMember(groupID int, userID string) error {
 	return nil
 }
 
-// RequestJoin records a join request and reports whether it is a new one that
-// the owner should hear about.
 func (s *GroupService) RequestJoin(groupID int, userID string) (bool, error) {
 	group, err := s.Repo.Group(groupID, userID)
 	if err != nil {
@@ -58,8 +56,6 @@ func (s *GroupService) Decide(groupID, requestID int, ownerID, status string) er
 	return s.Repo.GroupRequestDecision(groupID, requestID, status)
 }
 
-// Invite records an invitation and reports whether it is a new one that the
-// invitee should hear about.
 func (s *GroupService) Invite(groupID int, inviterID, inviteeID string) (bool, error) {
 	if inviteeID == "" {
 		return false, backend.ErrBadRequest

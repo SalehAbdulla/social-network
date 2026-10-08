@@ -24,8 +24,6 @@ func NewCommentService(database db.CommentRepository) CommentService {
 	}
 }
 
-// mapCommentToDTO decodes the stored JSON array back into the response shape,
-// mirroring PostService.mapPostToDTO.
 func mapCommentToDTO(com models.Comment) comment.CommentDTO {
 	images := []string{}
 	_ = json.Unmarshal([]byte(com.ImageURLs), &images)

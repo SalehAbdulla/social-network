@@ -7,9 +7,6 @@ import { useDialogFocus } from '../lib/useDialogFocus';
 import { useBackend } from './BackendProvider';
 import ImagePicker from './ImagePicker';
 
-/** The optional public contact fields, in the order the edit form draws them. Each is a
- *  `[value key, public switch key, label, input type, maxLength, placeholder]` row, so the three
- *  inputs and the "show on my profile" switch that governs each are one map. */
 const CONTACT_FIELDS = [
   ['website', 'showWebsite', 'Website', 'url', 200, 'https://example.com'],
   ['contactEmail', 'showContactEmail', 'Email', 'email', 254, 'you@example.com'],
@@ -18,8 +15,6 @@ const CONTACT_FIELDS = [
 
 export default function EditProfile({ profile, close, saved }: { profile: SocialUser; close: () => void; saved: () => void }) {
   const { refreshUser } = useBackend();
-  // Same keyboard contract as the navigation drawer: focus lands on the first
-  // field, Escape closes, and the dialog keeps the tab cycle to itself.
   const dialog = useDialogFocus<HTMLDivElement>(close);
   const [form, setForm] = useState(profile);
   const [avatar, setAvatar] = useState<File[]>([]);

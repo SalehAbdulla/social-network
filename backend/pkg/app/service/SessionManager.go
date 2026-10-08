@@ -8,20 +8,11 @@ import (
 )
 
 const (
-	// SessionIdleTTL is how long a session survives without any activity.
-	SessionIdleTTL = 14 * 24 * time.Hour
-	// SessionAbsoluteTTL caps a session's total lifetime no matter how active
-	// it is; it matches the `rememberMe` cookie max-age.
-	SessionAbsoluteTTL = 30 * 24 * time.Hour
-	// sessionTouchInterval throttles the activity write so a busy client does
-	// not issue a database write on every request.
+	SessionIdleTTL       = 14 * 24 * time.Hour
+	SessionAbsoluteTTL   = 30 * 24 * time.Hour
 	sessionTouchInterval = time.Minute
 )
 
-// SessionManager resolves session tokens. Sessions live in the `session` table,
-// so a restart no longer signs everyone out; the maps below are only a cache in
-// front of that table. Without a store (see UseStore) the manager is
-// memory-only, which is what the unit tests rely on.
 type SessionManager struct {
 	mu    sync.RWMutex
 	store *repositories.DB
@@ -31,9 +22,7 @@ type SessionManager struct {
 	Expires    map[string]time.Time
 	Created    map[string]time.Time
 	LastSeen   map[string]time.Time
-	// Presence is deliberately process-local: the chat "online" dot reflects a
-	// live WebSocket connection, never session validity.
-	Presence map[string]time.Time
+	Presence   map[string]time.Time
 }
 
 var DefaultSessionManager = NewSessionManager()
@@ -49,15 +38,13 @@ func NewSessionManager() *SessionManager {
 	}
 }
 
-// UseStore attaches the database that persists sessions. Passing nil returns the
-// manager to memory-only behaviour.
 func (m *SessionManager) UseStore(store *repositories.DB) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	m.store = store
 }
 
-// sessionExpiry returns the earlier of the idle window and the absolute cap.
+// idle timeout, but never past the absolute one
 func sessionExpiry(createdAt, now time.Time) time.Time {
 	idle := now.Add(SessionIdleTTL)
 	if capped := createdAt.Add(SessionAbsoluteTTL); capped.Before(idle) {
@@ -66,7 +53,6 @@ func sessionExpiry(createdAt, now time.Time) time.Time {
 	return idle
 }
 
-// evictLocked drops every in-memory trace of a token. The caller holds m.mu.
 func (m *SessionManager) evictLocked(token string) {
 	userID, ok := m.TokenToUID[token]
 	if !ok {
@@ -88,7 +74,6 @@ func (m *SessionManager) forget(token string) {
 	m.evictLocked(token)
 }
 
-// CreateSession records a new token and revokes the user's previous one.
 func (m *SessionManager) CreateSession(userID, token string) error {
 	m.mu.RLock()
 	store := m.store
@@ -104,11 +89,6 @@ func (m *SessionManager) CreateSession(userID, token string) error {
 
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	// Every cached token of this user goes, not only the newest one. A token that
-	// reached the cache through the database lookup above — which is what a
-	// restart leaves behind — is not in UIDToToken, and SaveSession has just
-	// deleted its row, so leaving it in memory would keep a revoked session
-	// usable until its cached expiry passed.
 	for cached, owner := range m.TokenToUID {
 		if owner == userID && cached != token {
 			m.evictLocked(cached)
@@ -126,13 +106,6 @@ func (m *SessionManager) CreateSession(userID, token string) error {
 	return nil
 }
 
-// RevokeAllForUser drops every session of one account, rows and cache both. A
-// password reset needs this rather than CreateSession's rotation: there is no
-// browser to hand a replacement token to, so nothing is kept signed in. A token
-// cached from the database — which is what a restart leaves behind — has to go
-// too, otherwise a revoked session stays usable until its cached expiry, the same
-// gap CreateSession was fixed for. Presence is deliberately untouched: it means
-// "a live WebSocket", and a reset does not close one.
 func (m *SessionManager) RevokeAllForUser(userID string) (int64, error) {
 	m.mu.RLock()
 	store := m.store
@@ -157,8 +130,6 @@ func (m *SessionManager) RevokeAllForUser(userID string) (int64, error) {
 	return removed, nil
 }
 
-// GetUserIdByToken resolves a token from the cache first and falls back to the
-// database, which is what keeps sessions valid across restarts.
 func (m *SessionManager) GetUserIdByToken(token string) (string, bool) {
 	if token == "" {
 		return "", false
@@ -202,7 +173,6 @@ func (m *SessionManager) GetUserIdByToken(token string) (string, bool) {
 	}
 	session, err := store.SessionByToken(token)
 	if err != nil {
-		// An unknown token and an unreachable database both mean "no session".
 		return "", false
 	}
 	if !now.Before(session.ExpiresAt) {
@@ -219,7 +189,6 @@ func (m *SessionManager) GetUserIdByToken(token string) (string, bool) {
 	return session.UserID, true
 }
 
-// DeleteSession revokes a token in the cache and in the database.
 func (m *SessionManager) DeleteSession(token string) {
 	m.mu.RLock()
 	store := m.store
@@ -231,9 +200,6 @@ func (m *SessionManager) DeleteSession(token string) {
 	}
 }
 
-// CleanupExpired removes rows that are expired, past the absolute cap or idle
-// beyond the idle window, then prunes the matching cache entries. It is called
-// periodically by the server.
 func (m *SessionManager) CleanupExpired() (int64, error) {
 	m.mu.RLock()
 	store := m.store

@@ -12,12 +12,6 @@ import { PostListSkeleton } from '../../components/Skeletons';
 
 const POSTS_PER_PAGE = 10;
 
-/*
- * One tag's posts. The tag is the whole identity of the list, so a different one restarts
- * from page 1 — and the results are the feed's own visibility rule, applied by the
- * endpoint, which is why a post the reader may not open is simply absent rather than
- * hidden here. The tag is lowercased to match what the linkifier produces.
- */
 function HashtagScreen() {
   const tag = String(useParams<{ tag?: string }>().tag ?? '').toLowerCase();
   const posts = usePagedList<Post, Page<Post>>({

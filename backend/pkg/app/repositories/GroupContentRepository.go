@@ -16,13 +16,6 @@ func (db *DB) GroupContentExists(groupID, id int, kind string) error {
 	return err
 }
 
-// CanViewGroupContent reports whether one account may read — and therefore react to — one
-// row of group content. Membership of the owning group is the whole rule, exactly as it is
-// for reading the tab: a non-member, a row that does not exist and a row of the wrong kind
-// all get `false`, so the answer cannot be used to probe for rows the caller cannot see.
-//
-// `kind` is the content's own kind ('posts' or 'comments'), not the reaction's target type;
-// the caller decides which one it means.
 func (db *DB) CanViewGroupContent(contentID int, userID, kind string) (bool, error) {
 	var allowed bool
 	err := db.Conn.QueryRow(`SELECT EXISTS(
@@ -36,15 +29,6 @@ func (db *DB) CanViewGroupContent(contentID int, userID, kind string) (bool, err
 }
 
 func (db *DB) ListGroupContent(groupID int, userID, kind string, parentID, offset int) ([]models.GroupContent, error) {
-	// Events are ordered by when they happen rather than when they were created:
-	// upcoming first, soonest first, then the past most recent first, which is the
-	// order the events tab splits into two sections. The comparison goes through
-	// SQLite's datetime() because startsAt is stored as RFC3339
-	// ("2026-09-29T18:00:00Z") and comparing that to datetime('now') as a raw
-	// string would misjudge any event later the same day — 'T' sorts after ' '.
-	// Every other kind stays newest-first, and the id is always the last key so
-	// paging has a total order. The clause is chosen here from constants and never
-	// built from the request.
 	order := "c.id DESC"
 	if kind == "events" {
 		order = "datetime(c.startsAt) >= datetime('now') DESC, CASE WHEN datetime(c.startsAt) >= datetime('now') THEN datetime(c.startsAt) END ASC, datetime(c.startsAt) DESC, c.id DESC"
@@ -66,8 +50,6 @@ func (db *DB) ListGroupContent(groupID int, userID, kind string, parentID, offse
 	items := []models.GroupContent{}
 	for rows.Next() {
 		var c models.GroupContent
-		// The boolean expressions come back as 0 or 1, which is read as an int so
-		// the driver's conversion rules are not part of the contract.
 		var upcoming, likedByMe int
 		if err = rows.Scan(&c.ID, &c.GroupID, &c.UserID, &c.Nickname, &c.FirstName, &c.LastName, &c.Kind, &c.ParentID, &c.Title, &c.Content, &c.MediaURL, &c.StartsAt, &c.CreatedAt, &c.LikeCount, &c.RSVP, &c.Going, &c.NotGoing, &upcoming, &likedByMe); err != nil {
 			return nil, err
@@ -93,8 +75,6 @@ func (db *DB) AddGroupContent(c models.GroupContent) (int, error) {
 	if err != nil {
 		return 0, err
 	}
-	// A new event is announced by the handler, which knows the members and can
-	// push each notification as it creates it.
 	return int(id), tx.Commit()
 }
 
@@ -103,19 +83,12 @@ func (db *DB) SetGroupRSVP(eventID int, userID, status string) error {
 	return err
 }
 
-// GroupEvent is the little an event reminder needs: which row to stamp, which
-// group the notification should point at, and who is speaking for it.
 type GroupEvent struct {
 	ID       int
 	GroupID  int
 	AuthorID string
 }
 
-// EventsStartingWithin finds the events that begin inside the window and have
-// not been reminded about yet. Both comparisons go through datetime() for the
-// reason ListGroupContent explains: startsAt is RFC3339, and SQLite's datetime()
-// is what makes it comparable with datetime('now') and with the timestamps this
-// package writes.
 func (db *DB) EventsStartingWithin(from, until time.Time) ([]GroupEvent, error) {
 	rows, err := db.Conn.Query(`SELECT id,groupId,userId FROM groupContent
 		WHERE kind='events' AND reminderSentAt='' AND datetime(startsAt) >= datetime(?) AND datetime(startsAt) <= datetime(?)
@@ -135,9 +108,6 @@ func (db *DB) EventsStartingWithin(from, until time.Time) ([]GroupEvent, error) 
 	return events, rows.Err()
 }
 
-// EventAttendees lists the members who said they are going. The author is not
-// filtered out here: the caller decides, so "who is coming" stays a plain
-// question about the RSVP rows.
 func (db *DB) EventAttendees(eventID int) ([]string, error) {
 	rows, err := db.Conn.Query("SELECT userId FROM groupRSVP WHERE eventId=? AND status='going'", eventID)
 	if err != nil {
@@ -155,9 +125,6 @@ func (db *DB) EventAttendees(eventID int) ([]string, error) {
 	return attendees, rows.Err()
 }
 
-// MarkEventReminded stamps the event so a later sweep does not remind twice. It
-// only stamps a row that is still unstamped, so two sweeps racing each other
-// cannot both claim the same event.
 func (db *DB) MarkEventReminded(eventID int) (bool, error) {
 	result, err := db.Conn.Exec("UPDATE groupContent SET reminderSentAt=datetime('now') WHERE id=? AND reminderSentAt=''", eventID)
 	if err != nil {

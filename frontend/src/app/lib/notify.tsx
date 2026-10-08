@@ -2,14 +2,6 @@
 
 import toast from 'react-hot-toast';
 
-/**
- * Surface a request error as a toast instead of an inline error block.
- *
- * When `retry` is provided the toast renders a "Try again" action so a failed
- * request can be re-issued without keeping error UI on the page. Identical
- * messages reuse the same toast id, so repeated failures (polling, reloads,
- * several resources failing together) update one toast instead of stacking up.
- */
 export function notifyError(message: string, retry?: () => void) {
   if (!message) return;
   toast.error(

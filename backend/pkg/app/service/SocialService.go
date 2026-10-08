@@ -17,9 +17,6 @@ type SocialService struct{ Repo *repositories.DB }
 var nicknamePattern = regexp.MustCompile(`^[a-z0-9_]{2,33}$`)
 var colorPattern = regexp.MustCompile(`^#[0-9a-fA-F]{6}$`)
 
-// phonePattern keeps a published phone number to the characters a `tel:` link can carry, with an
-// optional leading `+` for a country code. It is deliberately loose — formatting a number is the
-// user's choice, not this service's — and only rejects input that could not be dialled.
 var phonePattern = regexp.MustCompile(`^\+?[0-9 ().\-]{5,29}$`)
 
 func (s *SocialService) ValidateMedia(userID, url, kind string) error {
@@ -47,10 +44,6 @@ func (s *SocialService) UpdateProfile(u models.SocialUser) (models.SocialUser, e
 	u.Location = strings.TrimSpace(u.Location)
 	u.Nickname = strings.ToLower(strings.TrimSpace(u.Nickname))
 	u.FirstName, u.LastName = strings.TrimSpace(u.FirstName), strings.TrimSpace(u.LastName)
-	// The three public contact fields are all optional, so empty simply means "not offered".
-	// A website typed without a scheme is completed to https so the profile can link it as it
-	// stands; a supplied email and phone have to be well-formed, or a viewer who clicks Contact
-	// would be handed a dead `mailto:`/`tel:` target.
 	u.Website = strings.TrimSpace(u.Website)
 	u.ContactEmail = strings.TrimSpace(u.ContactEmail)
 	u.Phone = strings.TrimSpace(u.Phone)
@@ -85,10 +78,6 @@ func (s *SocialService) UpdateProfile(u models.SocialUser) (models.SocialUser, e
 	return s.Repo.SocialProfile(u.UserID)
 }
 
-// Suggestions offers a small ranked list of accounts the viewer does not follow yet. The
-// only rule this owns is the shape of the arguments — the ranking and the exclusions are the
-// repository's query — so the limit is clamped here rather than trusted: a caller asking for
-// a hundred suggestions gets the thirty a column could ever show.
 func (s *SocialService) Suggestions(viewer string, limit int) ([]models.UserSuggestion, error) {
 	if viewer == "" {
 		return nil, backend.ErrUnauthorized
@@ -109,9 +98,6 @@ func (s *SocialService) ValidateTarget(actor, target string) error {
 	return s.Repo.DoesUserExists(target)
 }
 
-// CanMessage enforces the chat rule from the spec: private messages are only
-// possible between two users where at least one follows the other, or when the
-// recipient has a public profile.
 func (s *SocialService) CanMessage(actor, target string) error {
 	if err := s.ValidateTarget(actor, target); err != nil {
 		return err
@@ -182,10 +168,6 @@ func (s *SocialService) AddStory(story models.Story) (int, error) {
 	return s.Repo.CreateStory(story)
 }
 
-// ViewStory records that a viewer opened a story, which the stories strip turns into a
-// "seen" ring. There is no audience to check — a live story is readable by any signed-in
-// member (see `CanViewMedia`) — so the rule this owns is the one the repository enforces:
-// only a live story can be marked, and the write is idempotent.
 func (s *SocialService) ViewStory(storyID int, viewerID string) error {
 	if storyID < 1 || viewerID == "" {
 		return backend.ErrBadRequest
@@ -193,9 +175,6 @@ func (s *SocialService) ViewStory(storyID int, viewerID string) error {
 	return s.Repo.MarkStoryViewed(storyID, viewerID)
 }
 
-// StoryViewers answers a story's "seen by" list. The rule this owns is the repository's — it
-// answers only for the story's own author, and an unknown story and someone else's are the same
-// 404 — so the service only guards the shape of the arguments.
 func (s *SocialService) StoryViewers(storyID int, requesterID string) ([]models.StoryViewer, error) {
 	if storyID < 1 || requesterID == "" {
 		return nil, backend.ErrBadRequest
@@ -203,12 +182,6 @@ func (s *SocialService) StoryViewers(storyID int, requesterID string) ([]models.
 	return s.Repo.StoryViewers(storyID, requesterID)
 }
 
-// ReplyToStory records a reply to a live story from someone other than its author. A reply is
-// private text addressed to the author alone, so the rule this owns is twofold: the story has to
-// be live — an unknown or expired story is the same 404 a read gives — and the chat rule has to
-// let the replier address the author (see CanMessage), so a reply cannot become a way around the
-// follow rule that gates private messages. The author's own story is a 400: a reply is read by
-// the author, and an author answering themselves is not a reader of it.
 func (s *SocialService) ReplyToStory(storyID int, replierID, content string) (int, error) {
 	content = strings.TrimSpace(content)
 	if storyID < 1 || replierID == "" || content == "" || utf8.RuneCountInString(content) > 1000 {
@@ -227,9 +200,6 @@ func (s *SocialService) ReplyToStory(storyID int, replierID, content string) (in
 	return s.Repo.AddStoryReply(storyID, replierID, content)
 }
 
-// StoryReplies answers a story's replies. The rule this owns is the repository's — it answers
-// only for the story's own author, and an unknown story and someone else's are the same 404 — so
-// the service only guards the shape of the arguments.
 func (s *SocialService) StoryReplies(storyID int, requesterID string) ([]models.StoryReply, error) {
 	if storyID < 1 || requesterID == "" {
 		return nil, backend.ErrBadRequest
@@ -237,9 +207,6 @@ func (s *SocialService) StoryReplies(storyID int, requesterID string) ([]models.
 	return s.Repo.StoryReplies(storyID, requesterID)
 }
 
-// ArchivedStories lists the caller's own expired stories. The rule this owns is the repository's
-// — the list is the caller's own by construction, so there is no one else's to leak — so the
-// service only guards the shape of the arguments, the way the stories listing does.
 func (s *SocialService) ArchivedStories(offset int, userID string) ([]models.Story, error) {
 	if offset < 0 || userID == "" {
 		return nil, backend.ErrBadRequest

@@ -188,12 +188,6 @@ func (re *HandlerContext) CreatePost(w http.ResponseWriter, r *http.Request) {
 	re.notifyPostPublished(userID)
 }
 
-// notifyPostPublished tells connected readers the feed moved on, so a client can offer a
-// reload instead of replacing what the reader is looking at. The frame is deliberately
-// empty and addressed to everyone but the author: carrying an identity or a post id would
-// hand every connected account a fact the feed's own `postVisibility` rule may withhold —
-// a private profile's post, or one restricted to chosen followers — and the author is
-// skipped because their own publish just navigated them to a feed that already shows it.
 func (re *HandlerContext) notifyPostPublished(authorID string) {
 	if re.Hub == nil {
 		return
@@ -276,10 +270,6 @@ func (re *HandlerContext) UpdatePost(w http.ResponseWriter, r *http.Request) {
 	respond(w, http.StatusOK, post)
 }
 
-// SearchPosts is the post half of the search page: `/api/v1/posts/search?q=`. A
-// blank query is refused rather than answered, because the empty pattern it would
-// become (`%%`) matches every post — so an accidental submit would read the whole
-// feed back rather than nothing.
 func (re *HandlerContext) SearchPosts(w http.ResponseWriter, r *http.Request) {
 	search := strings.TrimSpace(r.URL.Query().Get("q"))
 	if search == "" {
@@ -303,15 +293,9 @@ func (re *HandlerContext) SearchPosts(w http.ResponseWriter, r *http.Request) {
 	respond(w, http.StatusOK, response)
 }
 
-// hashtagTag is everything a hashtag may be made of. Restricting the tag here is what
-// keeps it out of the GLOB pattern the repository builds — that pattern's own syntax is
-// `[`, `]` and `*` — and it is the same set the browser's linkifier accepts, so a link
-// and a query agree about where a tag ends.
+// only this shape may reach the GLOB pattern the repository builds from it
 var hashtagTag = regexp.MustCompile(`^[a-z0-9_]+$`)
 
-// HashtagPosts is one tag's results page: `/api/v1/hashtags/{tag}`. The linkifier sends
-// the tag lowercased, and a typed URL is lowercased here too, because the comparison is
-// made against a lowercased body — so the same page answers either way.
 func (re *HandlerContext) HashtagPosts(w http.ResponseWriter, r *http.Request) {
 	tag := strings.ToLower(strings.TrimSpace(r.PathValue("tag")))
 	if !hashtagTag.MatchString(tag) {

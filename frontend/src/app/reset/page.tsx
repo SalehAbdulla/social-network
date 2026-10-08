@@ -6,8 +6,6 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import toast from 'react-hot-toast';
 import { errorMessage, resetPassword } from '../api/social';
 
-// The token arrives in the query string of the link. useSearchParams needs a
-// Suspense boundary around it, which is what the default export below provides.
 function ResetForm() {
   const router = useRouter();
   const token = useSearchParams().get('token') ?? '';
@@ -24,8 +22,6 @@ function ResetForm() {
     setBusy(true);
     try {
       toast.success(await resetPassword(token, password, confirmPassword));
-      // No session is created by a reset, and every session the account had is
-      // revoked, so signing in again is the next step by construction.
       router.replace('/login');
     } catch (error) {
       toast.error(errorMessage(error));

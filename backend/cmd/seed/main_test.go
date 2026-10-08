@@ -12,7 +12,6 @@ import (
 )
 
 func TestSeedDummyUser(t *testing.T) {
-	// Real migrations must also work when launched from cmd/seed.
 	database, err := sql.Open("sqlite3", ":memory:")
 	if err != nil {
 		t.Fatal(err)

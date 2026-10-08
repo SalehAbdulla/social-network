@@ -9,9 +9,6 @@ import (
 	"social-network/backend/pkg/app/service"
 )
 
-// isolatedSessionManager swaps in a manager with a cold cache before the server
-// is built, so the services capture it. Combined with UseStore on the same
-// database it stands in for a backend restart.
 func isolatedSessionManager(t *testing.T) *service.SessionManager {
 	t.Helper()
 	original := service.DefaultSessionManager
@@ -50,7 +47,6 @@ func TestSessionsSurviveBackendRestart(t *testing.T) {
 		t.Fatalf("login did not persist the session row: count=%d err=%v", stored, err)
 	}
 
-	// Restart: a new process with an empty cache over the same database.
 	service.DefaultSessionManager = service.NewSessionManager()
 	service.DefaultSessionManager.UseStore(repo)
 	if len(service.DefaultSessionManager.TokenToUID) != 0 {
@@ -76,7 +72,6 @@ func TestExpiredSessionRowIsRejectedAndRemoved(t *testing.T) {
 	if _, err := repo.Conn.Exec("UPDATE session SET expiresAt = datetime('now', '-1 hour') WHERE token = ?", token); err != nil {
 		t.Fatal(err)
 	}
-	// A cold cache forces the lookup through the database.
 	service.DefaultSessionManager = service.NewSessionManager()
 	service.DefaultSessionManager.UseStore(repo)
 

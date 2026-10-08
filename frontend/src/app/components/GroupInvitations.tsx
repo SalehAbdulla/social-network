@@ -6,11 +6,6 @@ import Button from './ui/Button';
 import { useResource } from '../lib/useResource';
 import { useLiveRefresh } from '../lib/useLiveRefresh';
 
-/**
- * Pending invitations, sitting under the group list. Each one is a compact card — the
- * group, why it is here, and the two answers — sized for the narrow conversation column
- * rather than the full-width row it used to be.
- */
 export default function GroupInvitations({ changed }: { changed: () => void }) {
  const invitations = useResource<GroupInvitation[]>('/groups/invitations');
  useLiveRefresh(invitations.reload);

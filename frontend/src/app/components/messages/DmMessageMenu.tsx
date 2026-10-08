@@ -3,12 +3,6 @@
 import { useEffect, useRef, type ReactNode } from 'react';
 import { MoreHorizontal } from 'lucide-react';
 
-/**
- * The "more" control of a bubble's hover row: the same `<details>` contract the group
- * items and the old chat used — one menu open at a time, closed by an outside click or
- * Escape, with focus returned to the trigger — drawn as a `…` icon and hosted inside the
- * message so the popover can hang under the bubble.
- */
 export default function DmMessageMenu({ children }: { children: ReactNode }) {
   const menu = useRef<HTMLDetailsElement>(null);
   useEffect(() => {

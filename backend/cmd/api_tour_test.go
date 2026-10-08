@@ -7,15 +7,8 @@ import (
 	"testing"
 )
 
-// The API tour (`scripts/api-tour.sh`) calls every route in router.go, and this test is what keeps
-// the two together: it reads the router the way the compiler does — including the two loops whose
-// patterns are built from a variable — and fails by name in both directions. A renamed route
-// lands here instead of becoming a 404 in the tour, and a new route cannot be added in silence.
 const tourPath = "../../scripts/api-tour.sh"
 
-// untoured is deliberately empty: every pattern in the router can be called from a shell today.
-// A route that cannot be — one that needs a third party to act mid-request, say — belongs here
-// with its reason, so the exception is written down rather than the test being weakened.
 var untoured = map[string]string{}
 
 var (
@@ -26,10 +19,6 @@ var (
 	tourAnnotation = regexp.MustCompile(`(?m)^# route: (GET|POST|PUT|DELETE|PATCH) (\S+)$`)
 )
 
-// routedPatterns reads router.go the way it is written: literal patterns wherever they appear,
-// and the loops that build one from `method`, each against its own verb list. Reading the two
-// loops as if they shared a list produces patterns the router does not have — which is how this
-// parser was wrong before it was written down.
 func routedPatterns(t *testing.T) map[string]bool {
 	t.Helper()
 	source, err := os.ReadFile("router.go")
@@ -62,9 +51,6 @@ func routedPatterns(t *testing.T) map[string]bool {
 	return patterns
 }
 
-// tourPatterns is the set of routes the tour says it exercises. It may be larger than the number
-// of requests said out loud — the tour registers an account twice on purpose — so only the sets
-// are compared.
 func tourPatterns(t *testing.T) map[string]bool {
 	t.Helper()
 	source, err := os.ReadFile(tourPath)

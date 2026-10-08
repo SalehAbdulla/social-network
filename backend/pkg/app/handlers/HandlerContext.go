@@ -11,9 +11,6 @@ import (
 	"time"
 )
 
-// Login attempts are counted per account, not per peer: behind the frontend
-// proxy every request arrives from the same address, so a peer-keyed bucket
-// cannot tell one member from a thousand (see DEPLOYMENT.md).
 const (
 	loginMaxFailures   = 10
 	loginFailureWindow = 15 * time.Minute
@@ -22,25 +19,18 @@ const (
 var HandlerCtx *HandlerContext
 
 type HandlerContext struct {
-	App                 *config.AppConfig
-	SocialService       *service.SocialService
-	AuthService         service.AuthService
-	PostService         service.PostService
-	CommentService      service.CommentService
-	ReactService        service.ReactionService
-	MessageService      service.MessageService
-	NotificationService service.NotificationService
-	GroupService        *service.GroupService
-	Hub                 *pkgwebsocket.Hub
-	// LoginLimiter locks an account after repeated failed sign-ins. Tests swap it
-	// for a short window; a nil limiter simply disables the check.
-	LoginLimiter *middleware.AttemptLimiter
-	// ResetLimiter counts reset requests per address, for the same reason: the
-	// endpoint must not become a registration oracle by answering faster, or
-	// differently, for an address that has no account.
-	ResetLimiter *middleware.AttemptLimiter
-	// PasswordResetService is set where the mailer is chosen (cmd/main.go); nil
-	// means this build has no way to deliver a link, and the handlers answer 503.
+	App                  *config.AppConfig
+	SocialService        *service.SocialService
+	AuthService          service.AuthService
+	PostService          service.PostService
+	CommentService       service.CommentService
+	ReactService         service.ReactionService
+	MessageService       service.MessageService
+	NotificationService  service.NotificationService
+	GroupService         *service.GroupService
+	Hub                  *pkgwebsocket.Hub
+	LoginLimiter         *middleware.AttemptLimiter
+	ResetLimiter         *middleware.AttemptLimiter
 	PasswordResetService *service.PasswordResetService
 }
 
@@ -68,7 +58,6 @@ func SetHandlerContext(hc *HandlerContext) {
 	HandlerCtx = hc
 }
 
-// NotFound handles requests to unknown API/WebSocket endpoints with a JSON 404 response.
 func (m *HandlerContext) NotFound(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusNotFound)

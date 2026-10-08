@@ -19,32 +19,21 @@ export default function Discover() {
   const [input, setInput] = useState('');
   const [search, setSearch] = useState('');
   const [busy, setBusy] = useState('');
-  // Optimistic follow flag per card: the button reads this until the refreshed
-  // user (the real source) arrives, then it is cleared. `pendingOutgoing` lives in
-  // the row instead, because a request has to keep showing as "Requested".
   const [followed, setFollowed] = useState<Record<string, boolean>>({});
   const isFollowingPerson = (person: SocialUser) => person.userId in followed
     ? followed[person.userId]
     : user.following.includes(person.userId);
   const people = usePagedList<SocialUser, SocialUser[]>({
-    // The query is the identity of the list, so a new search starts at offset 0.
     key: `/users?q=${encodeURIComponent(search)}`,
     pageQuery: page => `&offset=${(page - 1) * PEOPLE_PER_PAGE}`,
     pageSize: PEOPLE_PER_PAGE,
     normalize: raw => ({ items: raw }),
     keyOf: person => person.userId,
   });
-  // Background polling folds the newest page in, keeping any pages already opened.
   useLiveRefresh(people.refresh);
   async function change(person: SocialUser, path: string, method: string) {
     if (busy) return;
     setBusy(person.userId);
-    // Optimistic: the card flips now rather than after the round trip. Whether the
-    // viewer follows is global state (`user.following`), so the intent is held here
-    // until the refreshed user replaces it; a follow *request* is row state, so it
-    // is written into the row and stays there. What is gone is the list refetch:
-    // the row already carries everything the card shows, and the background poll
-    // folds later pages in on its own.
     const isRequest = method === 'PUT' && !person.isPublic;
     if (method !== 'DELETE') setFollowed(state => ({ ...state, [person.userId]: person.isPublic }));
     else setFollowed(state => ({ ...state, [person.userId]: false }));
@@ -52,7 +41,6 @@ export default function Discover() {
     try {
       await request(path, method);
       await refreshUser();
-      // The refreshed user is the source of truth again; only the flag is cleared.
       setFollowed(state => { const next = { ...state }; delete next[person.userId]; return next; });
       if (method === 'DELETE') people.update(items => items.map(item => item.userId === person.userId ? { ...item, pendingOutgoing: false } : item));
     } catch (error) {

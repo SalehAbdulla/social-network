@@ -57,8 +57,6 @@ func (re *HandlerContext) Register(w http.ResponseWriter, r *http.Request) {
 		SameSite: http.SameSiteLaxMode,
 	})
 
-	// The new account joins the browser's saved list, so it is reachable from the
-	// switcher without signing in again.
 	re.setSavedAccounts(w, rememberAccountToken(savedAccountTokens(r), registered.Token))
 
 	re.App.Logger.Info("user registered and logged in successfully",
@@ -88,8 +86,6 @@ func (re *HandlerContext) Login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// The account is throttled, not the address: behind the proxy every request
-	// looks like it comes from the same peer.
 	if re.LoginLimiter != nil {
 		if wait := re.LoginLimiter.RetryAfter(identifier); wait > 0 {
 			w.Header().Set("Retry-After", strconv.Itoa(int(wait.Seconds())+1))
@@ -125,9 +121,6 @@ func (re *HandlerContext) Login(w http.ResponseWriter, r *http.Request) {
 
 	http.SetCookie(w, cookie)
 
-	// Remember the account for passwordless switching. The list is independent of
-	// `rememberMe`, which governs only the active session cookie: a saved list that
-	// exists for one browser session would not outlive a page refresh.
 	re.setSavedAccounts(w, rememberAccountToken(savedAccountTokens(r), token))
 
 	re.App.Logger.Info("login successful",
@@ -152,9 +145,6 @@ func (re *HandlerContext) Logout(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Logging out signs out of every account this browser saved, not just the
-	// active one, so no token is left behind for a later switch to pick up. The
-	// active cookie is included in case it is not already in the list.
 	revoked := make(map[string]bool)
 	for _, token := range append(savedAccountTokens(r), tokenCookie.Value) {
 		if token == "" || revoked[token] {
@@ -167,8 +157,6 @@ func (re *HandlerContext) Logout(w http.ResponseWriter, r *http.Request) {
 		revoked[token] = true
 	}
 
-	// Drop the user's websocket registration so other users see them go
-	// offline instantly, even if the client failed to notify us itself.
 	if userID, ok := middleware.UserIDFromContext(r.Context()); ok && userID != "" && re.Hub != nil {
 		if client := re.Hub.GetClientByUserID(userID); client != nil {
 			re.Hub.Unregister <- client
@@ -188,10 +176,6 @@ func (re *HandlerContext) Logout(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// ChangePassword replaces the signed-in account's password. It answers 401 for
-// a missing session (the middleware never reaches the handler in that case), 400
-// for a malformed or weak payload and for a wrong current password, and 200 with
-// a freshly rotated session cookie otherwise.
 func (re *HandlerContext) ChangePassword(w http.ResponseWriter, r *http.Request) {
 	userID, ok := middleware.UserIDFromContext(r.Context())
 	if !ok || userID == "" {
@@ -214,11 +198,6 @@ func (re *HandlerContext) ChangePassword(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	// The replacement token goes to the browser that changed the password; every
-	// other session of this account was revoked inside the rotation. This cookie
-	// is deliberately not persistent: ending a "remember me" grant when the
-	// credential changes is the conservative direction, and signing in again
-	// restores it.
 	http.SetCookie(w, &http.Cookie{
 		Name:     "session_token",
 		Value:    token,

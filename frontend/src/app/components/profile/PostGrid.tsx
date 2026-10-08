@@ -10,7 +10,6 @@ import PostTile, { isVideo } from './PostTile';
 
 const TILE_COUNT = 12;
 
-/** The pulsing placeholder the first paint of any grid shows, in the tiles' own aspect ratio. */
 export function GridSkeleton({ count = TILE_COUNT }: { count?: number }) {
   return <div className="profile-grid" aria-hidden="true">
     {Array.from({ length: count }, (_, index) => <span key={index} className="profile-tile-skeleton" />)}
@@ -21,11 +20,6 @@ function GridError({ error, onRetry }: { error: string; onRetry: () => void }) {
   return <div className="profile-error" role="alert"><span>{error}</span><Button variant="secondary" onClick={onRetry}>Retry</Button></div>;
 }
 
-/**
- * The Posts, Likes and Saved grid: three columns of tiles that open the post's overlay. Loading,
- * an inline failure with a retry, the tab's empty state and the end-of-list sentinel are all drawn
- * here so every tab reads the same.
- */
 export default function PostGrid({ posts, loading, error, settled, hasMore, loadingMore, onLoadMore, onRetry, onOpen, empty }: {
   posts: Post[];
   loading: boolean;
@@ -47,10 +41,6 @@ export default function PostGrid({ posts, loading, error, settled, hasMore, load
   </>;
 }
 
-/**
- * The Media tab's grid. It reads the profile's own media projection rather than the post list, so
- * a photo attached to a comment is here too, and a tile is the link to the post it belongs to.
- */
 export function MediaGrid({ items, loading, error, settled, hasMore, loadingMore, onLoadMore, onRetry, empty }: {
   items: MediaItem[];
   loading: boolean;

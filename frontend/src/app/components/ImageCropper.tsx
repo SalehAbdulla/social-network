@@ -5,17 +5,6 @@ import { X } from 'lucide-react';
 import { useDialogFocus } from '../lib/useDialogFocus';
 import { CROP_PRESETS, cropToAspect } from '../lib/crop';
 
-/**
- * The crop step for one chosen photo: a preview of exactly the rectangle the canvas will
- * keep and a row of shape presets. It is the browser's own `object-fit: cover` drawing the
- * preview in a box of the chosen aspect, so what is shown is what `cropToAspect` produces —
- * no second geometry to keep in step.
- *
- * The keyboard contract is `useDialogFocus`, and the backdrop is a sibling of the panel for
- * the reason the comment sheet gives: `backdrop-filter` makes an element the containing block
- * of a `position: fixed` descendant. `Ratio` defaults to the square, which is Instagram's
- * default framing for a new post.
- */
 export default function ImageCropper({ file, onApply, onClose }: {
   file: File;
   onApply: (cropped: File) => void;
@@ -25,9 +14,6 @@ export default function ImageCropper({ file, onApply, onClose }: {
   const [preset, setPreset] = useState<typeof CROP_PRESETS[number]>(CROP_PRESETS[0]);
   const [busy, setBusy] = useState(false);
   const [url, setUrl] = useState('');
-  // The object URL is created and revoked with the file, the same lifecycle the tile uses —
-  // assigned in a task rather than in the effect body, so the effect does not set state
-  // synchronously (the rule `ImagePicker.Preview` also sidesteps this way).
   useEffect(() => {
     const objectUrl = URL.createObjectURL(file);
     const timer = setTimeout(() => setUrl(objectUrl), 0);

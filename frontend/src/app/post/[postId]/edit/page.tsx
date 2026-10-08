@@ -13,8 +13,6 @@ export default function EditPost() {
   const { user } = useBackend();
   const post = useResource<Post>(`/post?id=${encodeURIComponent(postId)}`);
   const notOwner = !!post.data && post.data.userId !== user.userId;
-  // Reported with a toast rather than inline error UI; the route stays put so the
-  // reason remains tied to the URL the user asked for (and to the smoke test).
   useEffect(() => {
     if (notOwner) toast.error('You can only edit your own posts.');
   }, [notOwner]);

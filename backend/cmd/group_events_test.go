@@ -12,8 +12,6 @@ import (
 	"social-network/backend/pkg/payload/notification"
 )
 
-// createEvent posts an event through the API, so its startsAt is stored in the
-// same RFC3339 form production writes.
 func createEvent(t *testing.T, client integrationClient, base, title string, startsAt time.Time) models.GroupContent {
 	t.Helper()
 	return decoded[models.GroupContent](t, client.call("POST", base+"/content/events", map[string]string{
@@ -21,9 +19,6 @@ func createEvent(t *testing.T, client integrationClient, base, title string, sta
 	}, 201))
 }
 
-// insertEvent writes an event straight to the table, which is the only way to get
-// one whose start has already passed: the API refuses a start that is not in the
-// future.
 func insertEvent(t *testing.T, repo *repositories.DB, groupID int, title string, startsAt time.Time) int {
 	t.Helper()
 	result, err := repo.Conn.Exec(
@@ -62,11 +57,6 @@ func reminderStamp(t *testing.T, repo *repositories.DB, eventID int) string {
 	return stamp
 }
 
-// TestGroupEventsAreOrderedUpcomingThenPast pins the ordering the events tab
-// splits on. The second past event is deliberately the one that just started:
-// startsAt is stored as RFC3339 ("2026-09-29T18:00:00Z"), so an ordering that
-// compared that string with datetime('now') would call an event later today
-// upcoming, because 'T' sorts after ' '.
 func TestGroupEventsAreOrderedUpcomingThenPast(t *testing.T) {
 	server, repo := integrationServer(t, true, false)
 	owner := newIntegrationClient(t, server)
@@ -90,8 +80,6 @@ func TestGroupEventsAreOrderedUpcomingThenPast(t *testing.T) {
 	if !slices.Equal(got, want) {
 		t.Fatalf("event order %v, want %v: upcoming soonest first, then past most recent first", got, want)
 	}
-	// The flag the events tab splits on has to agree with that order, because the
-	// server decides both from the same expression.
 	for index, event := range events {
 		if wantUpcoming := index < 2; event.Upcoming != wantUpcoming {
 			t.Fatalf("event %q reports upcoming=%v, want %v", event.Title, event.Upcoming, wantUpcoming)
@@ -99,9 +87,6 @@ func TestGroupEventsAreOrderedUpcomingThenPast(t *testing.T) {
 	}
 }
 
-// TestEventReminderNotifiesGoingMembersOnce covers the reminder sweep: who hears
-// about an event an hour before it starts, who does not, and what stops the
-// ticker from sending the same reminder twice.
 func TestEventReminderNotifiesGoingMembersOnce(t *testing.T) {
 	server, repo := integrationServer(t, true, false)
 	owner := newIntegrationClient(t, server)
@@ -124,8 +109,6 @@ func TestEventReminderNotifiesGoingMembersOnce(t *testing.T) {
 	member.call("PUT", fmt.Sprintf("%s/events/%d/rsvp", base, soon.ID), map[string]string{"status": "going"}, 200)
 	decliner.call("PUT", fmt.Sprintf("%s/events/%d/rsvp", base, soon.ID), map[string]string{"status": "not_going"}, 200)
 
-	// Creating the events already told both members about them, so the sweep's
-	// contribution is measured as a difference rather than as a total.
 	groupEvents := func(client integrationClient) int {
 		t.Helper()
 		return decoded[notification.NotificationResponse](t, client.call("GET", "/api/v1/notifications?types=group_event", nil, 200)).TotalElements
@@ -149,16 +132,11 @@ func TestEventReminderNotifiesGoingMembersOnce(t *testing.T) {
 	if added := groupEvents(owner) - authorBefore; added != 0 {
 		t.Fatalf("the event's author received %d reminders, want none", added)
 	}
-	// The reminder points at the group, like the new-event notification, because
-	// the group is the id the group routes carry.
 	newest := decoded[notification.NotificationResponse](t, member.call("GET", "/api/v1/notifications?types=group_event", nil, 200)).Notifications
 	if len(newest) == 0 || newest[0].EntityId != group.GroupID || newest[0].ActorId != "dummy-id" {
 		t.Fatalf("the newest group notification is not the reminder: %+v", newest)
 	}
 
-	// The second sweep is a no-op, and only the event inside the window was
-	// stamped — the far one still has its reminder to come, and the past one never
-	// gets one.
 	again, err := handlers.HandlerCtx.SendEventReminders(time.Now().UTC(), handlers.EventReminderLead)
 	if err != nil {
 		t.Fatal(err)

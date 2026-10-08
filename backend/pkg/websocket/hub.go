@@ -33,6 +33,7 @@ func (h *Hub) Run() {
 			return
 		case client := <-h.Register:
 			h.mu.Lock()
+			// presence flips on the first socket in and the last one out
 			first := len(h.clients[client.UserID]) == 0
 			if first {
 				h.clients[client.UserID] = make(map[*Client]struct{})
@@ -90,10 +91,6 @@ func (h *Hub) BroadcastToAll(message []byte) {
 	}
 }
 
-// BroadcastToAllExcept is BroadcastToAll minus one account. "Everyone but the one who
-// caused it" is a real case — the feed's new-posts notice must not be offered to the
-// author whose own redirect just loaded the page — and saying it here beats making the
-// caller walk GetOnlineUsers and skip an id.
 func (h *Hub) BroadcastToAllExcept(message []byte, excludeUserID string) {
 	h.mu.RLock()
 	defer h.mu.RUnlock()

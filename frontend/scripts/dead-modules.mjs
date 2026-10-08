@@ -1,12 +1,3 @@
-// Reports source modules nothing imports.
-//
-// Spot-checking for dead files has missed them twice in this repository (a
-// component whose only importer was itself dead reads as "used" if the check is
-// done by name), so this resolves every relative import to its target and inverts
-// the graph instead. Next.js route files are entry points by convention and are
-// skipped.
-//
-//   node scripts/dead-modules.mjs
 import { readdirSync, readFileSync, statSync } from 'node:fs';
 import path from 'node:path';
 

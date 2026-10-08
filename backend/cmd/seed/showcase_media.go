@@ -1,16 +1,3 @@
-// Image generation and media registration for the showcase seed.
-//
-// The showcase needs pictures — avatars, cover photos, post, story and group images — and it
-// needs them to survive the app's own bookkeeping. Rather than point at an external placeholder
-// service (which a machine running the tests offline cannot reach) it draws its own, with the
-// standard library's PNG encoder and the drawing helper `golang.org/x/image` already carries.
-// Nothing here adds a dependency: the font is the tiny bitmap face of `basicfont`, scaled up,
-// exactly because pulling a real OpenType face would drag `x/text` into a module that deliberately
-// does not carry it.
-//
-// Every file is written under the upload directory with a deterministic UUID name and recorded in
-// the `media` table, so `GET /api/v1/media/{id}` serves it and the orphan collector — which only
-// ever touches a UUID-named file with no referencing row — leaves it alone.
 package main
 
 import (
@@ -31,32 +18,20 @@ import (
 	"golang.org/x/image/math/fixed"
 )
 
-// seedNamespace keeps every generated id in one place, so a file or row this package writes is
-// recognisable and re-derived the same way on a second run.
 const seedNamespace = "social-network/showcase/"
 
-// seedUUID derives a stable v5 (SHA-1) UUID from a key. A deterministic name is what makes the
-// seed idempotent: run it twice and the same avatar is written over the same file and points at
-// the same `media` row, rather than leaving a second copy nobody references.
 func seedUUID(key string) string {
 	return uuid.NewSHA1(uuid.NameSpaceURL, []byte(seedNamespace+key)).String()
 }
 
-// mediaSeeder writes generated images and records them. It works through the seed's transaction so
-// a media row can never outlive a rolled-back seed.
 type mediaSeeder struct {
 	exec func(query string, args ...any) (sql.Result, error)
 	dir  string
 }
 
-// save encodes one image, writes it under its deterministic name and points a `media` row at it,
-// answering the URL the rest of the showcase stores. `owner` is the account the row attributes the
-// upload to, which the media visibility check reads.
 func (m *mediaSeeder) save(key, owner string, img image.Image) (string, error) {
 	id := seedUUID("media:" + key)
 	var buf bytes.Buffer
-	// BestSpeed: these are flat gradients, so the default compression spends seconds chasing a few
-	// bytes that a seed command does not care about.
 	encoder := png.Encoder{CompressionLevel: png.BestSpeed}
 	if err := encoder.Encode(&buf, img); err != nil {
 		return "", err
@@ -75,8 +50,6 @@ func (m *mediaSeeder) save(key, owner string, img image.Image) (string, error) {
 	return "/api/v1/media/" + id, nil
 }
 
-// palette is one three-stop gradient. The two background tones carry the canvas and the accent is
-// what the blobs are drawn from, so a generated picture reads as deliberate rather than as noise.
 type palette struct {
 	from, to, accent color.RGBA
 }
@@ -102,7 +75,6 @@ func pickPalette(r *rand.Rand) palette { return showcasePalettes[r.Intn(len(show
 
 func lerp(a, b uint8, t float64) uint8 { return uint8(float64(a) + (float64(b)-float64(a))*t) }
 
-// fillGradient paints a diagonal blend of the palette's two background tones.
 func fillGradient(img *image.RGBA, p palette) {
 	b := img.Bounds()
 	w, h := b.Dx(), b.Dy()
@@ -114,8 +86,6 @@ func fillGradient(img *image.RGBA, p palette) {
 	}
 }
 
-// addBlobs lays a few soft accent circles over the gradient, which is what stops two pictures from
-// the same palette looking identical and gives a busy feed some variety.
 func addBlobs(img *image.RGBA, r *rand.Rand, p palette, count int) {
 	b := img.Bounds()
 	w, h := b.Dx(), b.Dy()
@@ -127,7 +97,6 @@ func addBlobs(img *image.RGBA, r *rand.Rand, p palette, count int) {
 		if r.Intn(2) == 0 {
 			col = p.to
 		}
-		// A translucent-edge disc: full over the middle, fading to nothing at the rim.
 		minX, maxX := max(0, cx-radius), min(w, cx+radius)
 		minY, maxY := max(0, cy-radius), min(h, cy+radius)
 		radiusSq := radius * radius
@@ -139,7 +108,6 @@ func addBlobs(img *image.RGBA, r *rand.Rand, p palette, count int) {
 				if distSq >= radiusSq {
 					continue
 				}
-				// Squared distance, so the falloff costs no square roots inside the disc.
 				edge := 1 - float64(distSq)/float64(radiusSq)
 				alpha := edge * edge * 0.55
 				dst := img.RGBAAt(b.Min.X+x, b.Min.Y+y)
@@ -154,8 +122,6 @@ func addBlobs(img *image.RGBA, r *rand.Rand, p palette, count int) {
 	}
 }
 
-// vignette darkens the corners a touch, the way a phone photo does, so a flat gradient reads more
-// like a photograph than a UI panel.
 func vignette(img *image.RGBA) {
 	b := img.Bounds()
 	w, h := b.Dx(), b.Dy()
@@ -172,8 +138,6 @@ func vignette(img *image.RGBA) {
 	}
 }
 
-// renderText rasterises a short label with the 7×13 bitmap face. The face is tiny on purpose: it
-// is scaled up afterwards, which is how a real font is avoided without losing legibility.
 func renderText(label string, fg color.RGBA) *image.RGBA {
 	face := basicfont.Face7x13
 	w := font.MeasureString(face, label).Ceil() + 4
@@ -184,7 +148,6 @@ func renderText(label string, fg color.RGBA) *image.RGBA {
 	return img
 }
 
-// scaleUp grows a label with a smooth filter, which keeps a scaled 7px glyph from looking shredded.
 func scaleUp(src image.Image, factor int) *image.RGBA {
 	if factor < 1 {
 		factor = 1
@@ -195,15 +158,12 @@ func scaleUp(src image.Image, factor int) *image.RGBA {
 	return dst
 }
 
-// drawCentered stamps a scaled label at the middle of a canvas.
 func drawCentered(dst *image.RGBA, label *image.RGBA, at image.Point) {
 	b := label.Bounds()
 	rect := image.Rect(at.X-b.Dx()/2, at.Y-b.Dy()/2, at.X-b.Dx()/2+b.Dx(), at.Y-b.Dy()/2+b.Dy())
 	stddraw.Draw(dst, rect, label, b.Min, stddraw.Over)
 }
 
-// avatarImage draws a 320×320 profile photo: a gradient, three accent blobs and the member's
-// initials, which is what a person would recognise in a feed of twenty of them.
 func avatarImage(r *rand.Rand, initials string) *image.RGBA {
 	const size = 320
 	img := image.NewRGBA(image.Rect(0, 0, size, size))
@@ -216,7 +176,6 @@ func avatarImage(r *rand.Rand, initials string) *image.RGBA {
 	return img
 }
 
-// coverImage draws the wide banner a profile header uses.
 func coverImage(r *rand.Rand) *image.RGBA {
 	const w, h = 1200, 400
 	img := image.NewRGBA(image.Rect(0, 0, w, h))
@@ -227,7 +186,6 @@ func coverImage(r *rand.Rand) *image.RGBA {
 	return img
 }
 
-// photoImage draws a feed photo at one of a few believable aspect ratios.
 func photoImage(r *rand.Rand, w, h int) *image.RGBA {
 	img := image.NewRGBA(image.Rect(0, 0, w, h))
 	p := pickPalette(r)
@@ -237,12 +195,10 @@ func photoImage(r *rand.Rand, w, h int) *image.RGBA {
 	return img
 }
 
-// storyImage draws the tall canvas a story uses.
 func storyImage(r *rand.Rand) *image.RGBA {
 	return photoImage(r, 720, 1280)
 }
 
-// groupImage draws the square badge a group list shows.
 func groupImage(r *rand.Rand, initials string) *image.RGBA {
 	const size = 400
 	img := image.NewRGBA(image.Rect(0, 0, size, size))

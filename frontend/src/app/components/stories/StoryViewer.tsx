@@ -17,26 +17,14 @@ import StoryHeader from './StoryHeader';
 import StoryFooter from './StoryFooter';
 import StoryPreviewCard from './StoryPreviewCard';
 
-/** A press longer than this is a hold (pause); anything shorter is a tap (navigate). */
 const HOLD_MS = 200;
 
-/**
- * Instagram's web story viewer: a near-black full-viewport overlay with a single 9:16 card
- * centred over it, the neighbour authors dimmed at its shoulders, and the author's stories
- * playing one after another across the whole listing.
- *
- * The behaviour lives in `useStoryPlayer`; this component is the shell — it lays the pieces
- * out, decides tap-versus-hold, and owns the parts that talk to the API (the heart, the
- * reply, the viewers list). It is a dialog: `useDialogFocus` traps focus, locks the page
- * scroll and closes on Escape, and returns focus to the tray item that opened it.
- */
 export default function StoryViewer({ groups, start, onClose, onSeen, onDelete, onNavigate }: {
   groups: StoryGroup<Story>[];
   start: Position;
   onClose: () => void;
   onSeen?: (story: Story) => void;
   onDelete?: (storyId: number) => Promise<void>;
-  /** Called as the current story changes, so the route can keep the URL in step. */
   onNavigate?: (story: Story) => void;
 }) {
   const { user } = useBackend();
@@ -48,15 +36,8 @@ export default function StoryViewer({ groups, start, onClose, onSeen, onDelete, 
   const { story, group, pos, paused, muted, hold, ready, failed } = player;
   const isOwn = !!story && story.userId === user.userId;
 
-  // Keep the address bar on the story being watched: advancing replaces the URL rather than
-  // pushing a new history entry, so Back leaves the viewer instead of stepping back a story.
   useEffect(() => { if (story) onNavigate?.(story); }, [story?.storyId, onNavigate]);
 
-  // The heart is viewer-relative and per story; seeded from the story, updated optimistically
-  // so the tap is instant, then put back if the write fails.
-  // The heart and the reply draft belong to the story on screen, so both are keyed by its id:
-  // when the story advances they simply read as fresh, with no effect to clear them (which
-  // would also drop a half-typed reply mid-advance for no reason).
   const [like, setLike] = useState<{ id: number; liked: boolean; count: number } | null>(null);
   const liked = like && like.id === story?.storyId ? like.liked : (story?.liked ?? false);
   const likeCount = like && like.id === story?.storyId ? like.count : (story?.likeCount ?? 0);
@@ -214,7 +195,6 @@ export default function StoryViewer({ groups, start, onClose, onSeen, onDelete, 
   </div>;
 }
 
-/** The author-only "seen by" list, shown over the viewer when the footer's control is used. */
 function ViewersPanel({ data, loading, onClose }: { data: ViewerEntry[] | null; loading: boolean; onClose: () => void }) {
   return <div className="story-viewers-scrim" onClick={onClose}>
     <div className="story-viewers" role="dialog" aria-label="Story viewers" onClick={event => event.stopPropagation()}>
@@ -235,7 +215,6 @@ function ViewersPanel({ data, loading, onClose }: { data: ViewerEntry[] | null; 
   </div>;
 }
 
-/** The author-only replies list, the sibling of the viewers panel. */
 function RepliesPanel({ data, loading, onClose }: { data: ReplyEntry[] | null; loading: boolean; onClose: () => void }) {
   return <div className="story-viewers-scrim" onClick={onClose}>
     <div className="story-viewers" role="dialog" aria-label="Story replies" onClick={event => event.stopPropagation()}>

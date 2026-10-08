@@ -18,8 +18,6 @@ export function CreateStory({ close, saved }: { close: () => void; saved: () => 
   const [color, setColor] = useState('#4f46e5');
   const [media, setMedia] = useState<{ file: File; preview: string } | null>(null);
   const [busy, setBusy] = useState(false);
-  // The drawer's keyboard contract, applied to the composer: focus starts in the
-  // text field, Escape closes, and Tab stays inside the dialog.
   const firstField = useRef<HTMLTextAreaElement>(null);
   const dialog = useDialogFocus<HTMLDivElement>(close, { initialFocus: firstField });
   useEffect(() => () => { if (media) URL.revokeObjectURL(media.preview); }, [media]);
@@ -40,14 +38,8 @@ export function CreateStory({ close, saved }: { close: () => void; saved: () => 
   </form></div>;
 }
 const STORIES_PER_PAGE = 30;
-// `/stories` caps a page at 30 rows and pages with a raw offset.
 const STORIES_KEY = '/stories';
-// The author's own expired stories: the same page size and offset shape, a different list.
 const ARCHIVE_KEY = '/stories/archive';
-// Which authors wore the glowing ring the last time the tray painted, for this session. The
-// viewer is its own route, so the tray unmounts while it is open and remounts on the way back; this
-// small memory lets a ring the reader has just watched cross-fade blue→grey instead of appearing
-// already grey. A full reload starts it empty, which is correct — nothing was watched this session.
 const lastUnseen = new Set<string>();
 
 export default function StoriesBar() {
@@ -65,16 +57,11 @@ export default function StoriesBar() {
   const [edges, setEdges] = useState({ left: false, right: false });
   const drag = useRef({ active: false, startX: 0, startLeft: 0, moved: false });
   const reload = stories.reload;
-  // A background refresh would collapse the pages the reader scrolled through,
-  // so it only runs while the strip still shows the newest stories.
   useEffect(() => {
     const timer = setInterval(() => { if (!strip.current || strip.current.scrollLeft === 0) reload(); }, 60000);
     return () => clearInterval(timer);
   }, [reload]);
 
-  // One ring per author, the authors with something new first — Instagram's tray order. The
-  // viewer's own stories are held out here: their own tile carries them, so nobody appears twice
-  // and the own ring can never be mistaken for "new".
   const groups = groupStories(stories.items.filter(story => story.userId !== user.userId));
   const ordered = [
     ...groups.filter(group => authorHasUnseen(group.stories)),
@@ -83,8 +70,6 @@ export default function StoriesBar() {
   const ownStories = stories.items.filter(story => story.userId === user.userId).sort((a, b) => a.storyId - b.storyId);
   const ownHead = ownStories.length ? ownStories[ownStories.length - 1] : null;
 
-  // Rings that were unseen last paint but are seen now (just watched) stay glowing for one frame,
-  // so the component's own cross-fade eases them to grey rather than snapping.
   const unseenIds = groups.filter(group => authorHasUnseen(group.stories)).map(group => group.userId);
   const [fading, setFading] = useState<string[]>([]);
   useEffect(() => {
@@ -107,7 +92,6 @@ export default function StoriesBar() {
     router.push(`/stories/${story.nickname}/${story.storyId}`);
   }
 
-  // The left/right fades and the chevrons follow the scroll position and the content width.
   const syncEdges = useCallback(() => {
     const el = strip.current; if (!el) return;
     setEdges({ left: el.scrollLeft > 2, right: el.scrollLeft + el.clientWidth < el.scrollWidth - 2 });
@@ -129,8 +113,6 @@ export default function StoriesBar() {
     if (event.key === 'ArrowRight') { event.preventDefault(); nudge(1); }
     else if (event.key === 'ArrowLeft') { event.preventDefault(); nudge(-1); }
   }
-  // Mouse drag scrolls the strip; a drag suppresses the click it ends on, so releasing over a
-  // ring never opens it. Touch scrolls natively (the strip sets `touch-action: pan-x`).
   function onDragStart(event: React.PointerEvent) {
     if (event.pointerType !== 'mouse') return;
     const el = strip.current; if (!el) return;
@@ -163,16 +145,6 @@ export default function StoriesBar() {
       onPointerLeave={onDragEnd}
       onClickCapture={onTrayClickCapture}
     >
-      {/* Instagram leads the tray with the viewer's own entry: their face inside a dashed circle
-          with a plus on the rim and "Your story" under it, so the first thing in the strip is the
-          thing the reader can do rather than somebody else's story. Once they have a live story of
-          their own the dashed circle becomes their own ring — always the seen style, because you
-          are not surprised by your own story. The face and the "+" are two controls: the ring opens
-          what they already have (or the composer when they have nothing), and the badge always
-          opens the composer, so a story can keep being added after the first. A button cannot sit
-          inside a button, so the two are siblings in a relative wrapper rather than one tile-wide
-          button. The tray's numbers are the `--story-*` tokens: a 56px ring, the face at the 48px
-          it leaves inside it, a 16px plus on the rim, and a 12px caption 4px under it. */}
       <div className="story-tray-item flex w-[var(--story-item)] shrink-0 flex-col items-center gap-[var(--story-caption-gap)]">
         <span className="relative flex shrink-0">
           <button type="button" onClick={() => (ownHead ? openGroup({ userId: user.userId, stories: ownStories }) : setCreating(true))} aria-label={ownHead ? `${displayName(user)}, your story` : 'Add to your story'} className="block">
@@ -195,11 +167,6 @@ export default function StoriesBar() {
   </section>;
 }
 
-// One ring in the stories tray, drawn for an author: their newest story's face inside the shared
-// ring and their handle under it. A ring nobody has opened wears the gradient and its glow; once
-// every story behind it is seen it drops to the muted ring, and the label brightens for "new".
-// `data-story-id` names the newest story — what the browser suite clicks — and the whole item is
-// the target, so a tap on the circle or the label opens the viewer route.
 function StoryTrayItem({ group, forceUnseen, onView }: { group: StoryGroup<Story>; forceUnseen: boolean; onView: () => void }) {
   const head = group.stories[group.stories.length - 1];
   const unseen = forceUnseen || authorHasUnseen(group.stories);
@@ -209,10 +176,6 @@ function StoryTrayItem({ group, forceUnseen, onView }: { group: StoryGroup<Story
   </button>;
 }
 
-// One story in the author's archive, where Instagram shows a grid of thumbnails rather than a
-// tray of rings: the whole story on a tile with the author's own delete control on it. It is a
-// separate component from `StoryTrayItem` because the two want different things from the same
-// row — the tray wants a face and a name, the archive wants the story itself.
 function StoryCard({ story, currentUserId, onView, onDelete }: { story: Story; currentUserId: string; onView: (story: Story) => void; onDelete: () => Promise<void> }) {
   const [menuOpen, setMenuOpen] = useState(false);
   const [deleting, setDeleting] = useState(false);
@@ -224,7 +187,6 @@ function StoryCard({ story, currentUserId, onView, onDelete }: { story: Story; c
     {story.mediaType === 'image' && <img {...mediaImageProps(story.mediaUrl, '180px')} alt="Story preview" className="absolute inset-0 h-full w-full object-cover opacity-75 transition duration-500 hover:scale-110" />}
     {story.mediaType === 'video' && <video src={story.mediaUrl} muted className="absolute inset-0 h-full w-full object-cover opacity-75" />}
     <div className="absolute inset-0 bg-black/15" />
-    {/* The archive tile wears the same ring the tray does, so "new" reads identically here. */}
     <span className="absolute left-3 top-3 z-10"><StoryRing name={story.nickname} avatarUrl={story.avatar} size={34} seen={story.viewed} /></span>
     {story.mediaType === 'text' && <p className="absolute left-3 right-3 top-16 z-10 line-clamp-4 text-sm text-white/80">{story.content}</p>}
     <span className="absolute inset-x-0 bottom-0 z-10 truncate bg-black/40 p-2 text-xs">{story.nickname}</span>
@@ -232,10 +194,6 @@ function StoryCard({ story, currentUserId, onView, onDelete }: { story: Story; c
   </div>;
 }
 
-// The author's own expired stories — the ones that have left the strip and would otherwise
-// disappear. It is the caller's own list by construction (the endpoint answers only the signed-in
-// account's stories), so there is nothing to filter or guard here. Opening one hands the whole
-// archive to the same viewer the strip uses, as a single author's carousel.
 export function StoryArchive({ close }: { close: () => void }) {
   const { user } = useBackend();
   const archived = usePagedList<Story, Story[]>({
@@ -246,8 +204,6 @@ export function StoryArchive({ close }: { close: () => void }) {
     keyOf: story => story.storyId,
   });
   const [selected, setSelected] = useState<number | null>(null);
-  // One overlay at a time: while a story is open the viewer owns the keyboard, so this dialog's
-  // trap is off and Escape closes the story rather than the archive behind it.
   const dialog = useDialogFocus<HTMLDivElement>(close, { enabled: selected === null });
   const items = archived.items;
   async function remove(story: Story) {

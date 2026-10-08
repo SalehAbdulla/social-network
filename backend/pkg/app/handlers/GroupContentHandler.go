@@ -132,8 +132,6 @@ func (re *HandlerContext) GroupContent(w http.ResponseWriter, r *http.Request) {
 	}
 	c.ID = id
 	if kind == "events" {
-		// The event was validated as starting in the future, and the create
-		// response is what the tab renders until it refetches.
 		c.Upcoming = true
 		re.notifyGroupEvent(groupID, userID)
 	}
@@ -141,9 +139,6 @@ func (re *HandlerContext) GroupContent(w http.ResponseWriter, r *http.Request) {
 	respond(w, http.StatusCreated, c)
 }
 
-// notifyGroupEvent tells every member except its author about a new event. The
-// notification points at the group, which is the id the group routes carry; the
-// event itself is the newest row on the group's events tab.
 func (re *HandlerContext) notifyGroupEvent(groupID int, authorID string) {
 	members, err := re.GroupService.Repo.AllGroupMembers(groupID)
 	if err != nil {

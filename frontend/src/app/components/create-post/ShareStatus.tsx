@@ -2,20 +2,10 @@
 
 import { CircleAlert } from 'lucide-react';
 
-/** The three states a share can be in once the reader has committed, `editing` excluded. */
 export type SharePhase = 'sharing' | 'success' | 'error';
 
-/**
- * The sharing, success and failure panel that stands in for the whole dialog body.
- *
- * The success mark is a circled check whose stroke draws itself (250ms), reduced to an instant
- * stroke under `prefers-reduced-motion`. The failure state keeps the server's own message when
- * there is one and offers the two ways out; nothing typed is lost because the shell keeps the draft
- * while it is on screen. The live region announces each state change.
- */
 export default function ShareStatus({ phase, message, onRetry, onBack, onDone }: {
   phase: SharePhase;
-  /** The server's message for the error state, or a generic one. */
   message: string;
   onRetry: () => void;
   onBack: () => void;

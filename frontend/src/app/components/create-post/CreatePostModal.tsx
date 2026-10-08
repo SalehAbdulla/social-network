@@ -19,25 +19,14 @@ import { DEFAULT_CROP, fileKey, type CreateContext, type CropRatio, type Selecte
 type Step = 'select' | 'crop' | 'details';
 type Privacy = 'public' | 'followers' | 'selected';
 
-/** The line a refused file earns, worded once so the picker, the drop and the paste agree. */
 const UNSUPPORTED = 'Unsupported file. Use JPEG, PNG, GIF or WebP up to 10 MB.';
 
-/**
- * The one Create-post dialog, Instagram-shaped: select, crop, details, share.
- *
- * Every entry point renders this through `useCreatePost`, so there is a single flow to keep in step
- * — the feed and the profile open it for a post, a group opens it for a group post and only the
- * writer and the audience row change. It reuses the app's `Avatar`, `Button`-blue and emoji set,
- * and it writes through the endpoints the app already had: `/posts` for a feed post and
- * `/groups/{id}/content/posts` for a group one.
- */
 export default function CreatePostModal({ context, groupId, groupName = '', groupAvatar = '', onClose, onShared }: {
   context: CreateContext;
   groupId?: string;
   groupName?: string;
   groupAvatar?: string;
   onClose: () => void;
-  /** Called once the post exists, so the surface can drop it in optimistically. */
   onShared: (post?: Post) => void;
 }) {
   const [step, setStep] = useState<Step>('select');
@@ -72,8 +61,6 @@ export default function CreatePostModal({ context, groupId, groupName = '', grou
   const shareBlocked = !hasContent || (context === 'feed' && selectedMissing);
   const shareHint = !hasContent ? 'Write something or add a photo.' : selectedMissing ? 'Choose at least one follower.' : '';
 
-  // The X, a backdrop click and Escape all run the discard check: the shell answers them through
-  // `requestClose`, and the confirm — when it is open — is what closes first.
   const requestClose = useCallback(() => {
     if (phase === 'sharing') return;
     if (confirmOpen) { setConfirmOpen(false); return; }
@@ -82,17 +69,14 @@ export default function CreatePostModal({ context, groupId, groupName = '', grou
   }, [phase, confirmOpen, dirty, onClose]);
   const dialog = useDialogFocus<HTMLDivElement>(requestClose, { initialFocus: pickRef as React.RefObject<HTMLElement | null> });
 
-  // Object URLs are revoked with the dialog, and every new one is tracked, so nothing leaks.
   useEffect(() => () => { liveUrls.current.forEach(url => URL.revokeObjectURL(url)); }, []);
 
-  // Focus follows the step: the media area for cropping, the caption for the details.
   useEffect(() => {
     if (!editing) return;
     if (step === 'crop') cropRef.current?.focus();
     else if (step === 'details') captionRef.current?.focus();
   }, [step, editing]);
 
-  // A reload or a navigation with unsaved content is worth a browser prompt.
   useEffect(() => {
     if (!editing || !dirty) return;
     const handler = (event: BeforeUnloadEvent) => { event.preventDefault(); event.returnValue = ''; };
@@ -100,7 +84,6 @@ export default function CreatePostModal({ context, groupId, groupName = '', grou
     return () => window.removeEventListener('beforeunload', handler);
   }, [editing, dirty]);
 
-  // The success mark stays a beat, then the dialog closes on its own (or on a click).
   useEffect(() => {
     if (phase !== 'success') return;
     const timer = window.setTimeout(onClose, 1200);
@@ -113,7 +96,6 @@ export default function CreatePostModal({ context, groupId, groupName = '', grou
     return { id: `${fileKey(file)}:${url}`, file, url, naturalWidth: width, naturalHeight: height, crop: { ...DEFAULT_CROP } };
   }
 
-  /** Validates and adds a selection. A refused file words itself; the rest are kept. */
   async function addFiles(files: File[]) {
     if (!editing || !files.length) return;
     let list = images;
@@ -157,7 +139,6 @@ export default function CreatePostModal({ context, groupId, groupName = '', grou
     setImages(list => list.map(image => image.id === id ? { ...image, crop } : image));
   }
 
-  /** Applies one shape to every photo, the way Instagram keeps one ratio for the whole post. */
   function applyRatio(ratio: CropRatio) {
     setImages(list => list.map(image => ({ ...image, crop: withRatio(image, ratio, MEDIA_SQUARE) })));
   }
@@ -176,7 +157,6 @@ export default function CreatePostModal({ context, groupId, groupName = '', grou
   function goBack() {
     if (step === 'details') { setStep(images.length ? 'crop' : 'select'); return; }
     if (step !== 'crop') return;
-    // A photo is unsaved content, so backing out of the crop step asks before dropping it.
     if (dirty) { pending.current = () => { clearPhotos(); setStep('select'); }; setConfirmOpen(true); return; }
     setStep('select');
   }
@@ -186,7 +166,6 @@ export default function CreatePostModal({ context, groupId, groupName = '', grou
     catch { return (await upload(file, abort.current?.signal)).url; }
   }
 
-  /** Uploads the framed photos (each once, with one retry) and writes the post. */
   async function share() {
     if (!editing || busy.current || shareBlocked) return;
     busy.current = true;

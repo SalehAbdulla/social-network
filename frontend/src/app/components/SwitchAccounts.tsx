@@ -7,20 +7,6 @@ import { displayName, errorMessage, removeSavedAccount, request, switchAccount, 
 import { useDialogFocus } from '../lib/useDialogFocus';
 import Avatar from './Avatar';
 
-/**
- * The account switcher.
- *
- * One browser can hold several signed-in accounts, and this is where they are
- * listed and changed. Switching is passwordless because the tokens that make it
- * possible stay in a server-owned HttpOnly cookie: this dialog only ever names an
- * account, and the server decides whether a saved session matches.
- *
- * It is mounted once, in `BackendProvider`, and opened by any surface that
- * dispatches `social:switch-accounts` — the rail's More menu, the right rail's
- * account row, and the profile's gear menu. Switching or forgetting the active
- * account reloads the page, because the socket, the caches and every
- * viewer-relative answer belonged to the account being left.
- */
 export default function SwitchAccounts({ open, onClose, accounts, activeUserId, refreshAccounts }: {
   open: boolean;
   onClose: () => void;
@@ -54,8 +40,6 @@ export default function SwitchAccounts({ open, onClose, accounts, activeUserId, 
     try {
       await removeSavedAccount(account.userId);
       if (account.userId === activeUserId) {
-        // The server handed the session to the next account, so a reload lands on
-        // whichever remains — or on /login when none does.
         // eslint-disable-next-line @next/next/no-location-assign-relative-destination
         window.location.href = '/';
         return;

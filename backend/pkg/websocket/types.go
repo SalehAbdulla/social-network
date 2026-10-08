@@ -15,10 +15,6 @@ const (
 	MsgTypeCloseChat     = "close_chat"
 	MsgTypeUserOffline   = "user_offline"
 
-	// The six below were string literals at their send sites until the protocol was
-	// written down. They live here so that "the events this server can send" is one
-	// list rather than a list plus a grep, which is what `backend/README.md` documents
-	// and `protocol_doc_test.go` checks.
 	MsgTypeMessageChanged      = "message_changed"
 	MsgTypeReadReceipt         = "read_receipt"
 	MsgTypeSocialChanged       = "social_changed"

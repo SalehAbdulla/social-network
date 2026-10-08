@@ -1,13 +1,3 @@
-// Reports the JavaScript and CSS one build ships, by route and in total.
-//
-// The numbers come from the build's own output rather than from a bundle analyser: Next writes
-// one `<route>_client-reference-manifest.js` per route, and each names the chunks that route's
-// client references load — so this reports what the browser is actually told to fetch, with no
-// extra dependency to add. A chunk shared by several routes is counted once per route that
-// loads it, because that is what a reader of that route pays, and the chunk table names the
-// heaviest chunks by the routes that pull them, which is where a size problem is actionable.
-//
-//   npm run build && npm run size
 import { readFileSync, readdirSync, statSync } from 'node:fs';
 import path from 'node:path';
 
@@ -30,7 +20,6 @@ if (!manifests.length) {
   process.exit(1);
 }
 
-// Sizes are cached because a chunk shared by twenty routes would otherwise be stat'ed twenty times.
 const sizes = new Map();
 function size(relative) {
   if (!sizes.has(relative)) {
@@ -57,8 +46,6 @@ for (const file of manifests) {
   });
 }
 
-// The framework is a separate line because it is not any one route's to trim: it is what the
-// router itself costs before a page renders.
 const build = JSON.parse(readFileSync(path.join(dist, 'build-manifest.json'), 'utf8'));
 const framework = [...(build.polyfillFiles ?? []), ...(build.rootMainFiles ?? [])];
 const frameworkBytes = framework.reduce((total, chunk) => total + size(chunk), 0);

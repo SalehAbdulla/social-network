@@ -8,12 +8,8 @@ import (
 type MessageRepository interface {
 	GetChatUsers(currentUserID string) ([]models.ChatUser, error)
 	GetMessages(conversationPartnerID string, currentUserID string, offset int, limit int) ([]models.Message, int, error)
-	// GetConversationMedia is the same thread as GetMessages, filtered to the rows that
-	// carry an attachment: it backs the chat's media tab.
 	GetConversationMedia(conversationPartnerID string, currentUserID string, offset int, limit int) ([]models.Message, int, error)
 	SaveMessage(senderID string, recipientID string, textMessage string, media ...string) (models.Message, error)
-	// CanMessage is implemented alongside the social queries; the message
-	// service uses it to enforce the chat rule in one place.
 	CanMessage(actor, target string) (bool, error)
 }
 
@@ -29,11 +25,6 @@ func (db *DB) GetMessages(conversationPartnerID string, currentUserID string, of
 		return nil, 0, realtimeforum.ErrInternal
 	}
 
-	// The two subqueries answer for one message each: its reaction total, and the
-	// reader's own reaction. They ride the (entityType, entityId) index 000013 added, so
-	// a page of messages costs one indexed lookup per row rather than a second query.
-	// The reader's `?` sits in the SELECT list, which is why it is the first argument
-	// below rather than the last: bind order follows the text, not the meaning.
 	query := `
 		SELECT messageId, senderId, recipientId, content, createdAt, isRead, mediaUrl, mediaType, editedAt,
 			(SELECT COALESCE(SUM(r.score), 0) FROM reaction r WHERE r.entityType = 'message' AND r.entityId = message.messageId),
@@ -70,10 +61,6 @@ func (db *DB) GetMessages(conversationPartnerID string, currentUserID string, of
 	return messages, totalElements, nil
 }
 
-// GetConversationMedia lists the attachments in one direct conversation, newest first. It is
-// the same thread `GetMessages` reads — the same two participants, the same rule about rows
-// hidden for this viewer — narrowed to the messages that carry an attachment. Nothing here
-// computes a reaction total: a tile in the media tab has no control to draw.
 func (db *DB) GetConversationMedia(conversationPartnerID string, currentUserID string, offset int, limit int) ([]models.Message, int, error) {
 	const mediaFilter = `mediaUrl <> '' AND NOT EXISTS (SELECT 1 FROM hidden_message h WHERE h.messageId=message.messageId AND h.userId=?) AND ((senderId = ? AND recipientId = ?) OR (senderId = ? AND recipientId = ?))`
 
@@ -146,11 +133,6 @@ func (db *DB) SaveMessage(senderID string, recipientID string, textMessage strin
 	return msg, nil
 }
 
-// chatUsersQuery lists the conversations the viewer can still use. Threads whose
-// participants no longer satisfy the chat rule are hidden, not deleted: the rows stay
-// in `message` and reappear as soon as either user follows the other again. It is a
-// constant so the plan test (query_plan_test.go) explains this text rather than a
-// paraphrase of it.
 const chatUsersQuery = `
         SELECT u.userId,u.nickName,u.firstName,u.lastName,COALESCE(u.avatar,''),MAX(m.createdAt) AS lastMessageTime
         FROM user u JOIN message m ON

@@ -5,21 +5,11 @@ on:
   pull_request:
   workflow_dispatch:
 
-# The definition of done in TODO.md names these checks; this workflow runs exactly
-# them so a branch cannot land unverified. It is deliberately conservative: the
-# browser smoke suite (`npm run test:integration`) needs a Chrome path and several
-# minutes, so its job runs on a manual dispatch only, and the base-image pin check
-# reports without blocking.
-
 concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
 
 env:
-  # Must match the base images in the two Dockerfiles: Go 1.26 for the backend,
-  # Node 22 for the frontend. A floating patch release is intentional — the
-  # standard-library advisories govulncheck reports are fixed by building with a
-  # current patch, so pinning an old one would keep the findings.
   GO_VERSION: "1.26.x"
   NODE_VERSION: "22"
 
@@ -61,24 +51,12 @@ jobs:
       - name: Lint
         run: npm run lint
       - name: Build
-        # A production build refuses to guess the backend address, because the value
-        # is compiled into the rewrites (see frontend/next.config.ts). A build never
-        # exercises them, so naming one here is enough.
         env:
           BACKEND_URL: http://backend:5174
         run: npm run build
       - name: Typecheck
-        # Build first: `next build` writes the gitignored `next-env.d.ts`, which is what
-        # declares the image module types (png/svg/jpg) that `tsc` resolves. Running this
-        # before the build leaves those modules undeclared and fails with TS2307; this
-        # now matches the `make check` order (build, then types).
         run: npx tsc --noEmit
       - name: Dependency audit
-        # Blocking on the dependencies that actually ship: a production advisory
-        # should stop the build. `--omit=dev` leaves out the build toolchain, where
-        # an advisory can sit unfixed upstream (currently `braces`, reached through
-        # eslint-config-next) without blocking every push. The step was report-only
-        # before the 2026-09-28 framework bump cleared the production advisories.
         run: npm audit --omit=dev --audit-level=high
 
   vulnerabilities:
@@ -96,16 +74,11 @@ jobs:
       - name: Install govulncheck
         run: go install golang.org/x/vuln/cmd/govulncheck@latest
       - name: Scan
-        # Fails only on a vulnerability the code actually reaches; packages that
-        # are imported but never called are listed and do not fail the job.
         run: govulncheck ./...
 
   base-images:
     name: Base-image pins current
     runs-on: ubuntu-latest
-    # Reports rather than blocks: a new upstream patch release is not a defect in
-    # the commit that notices it. A drift line here means "run the script with
-    # --write and commit the pins". Needs no Docker, only Node and network.
     continue-on-error: true
     steps:
       - uses: actions/checkout@v4
@@ -118,11 +91,6 @@ jobs:
   browser:
     name: Browser smoke suite
     runs-on: ubuntu-latest
-    # Opt-in: real browser work over several minutes, so it must not gate every
-    # push. Three things have to be in the one runner — Go (the harness shells out
-    # to `go build`), a C compiler (the SQLite driver is CGO), and a Chrome binary.
-    # ubuntu-latest ships all three; CHROME_PATH is set explicitly rather than
-    # leaning on the script's fallback list, so the override is exercised.
     if: github.event_name == 'workflow_dispatch'
     steps:
       - uses: actions/checkout@v4

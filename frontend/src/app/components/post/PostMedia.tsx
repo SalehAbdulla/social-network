@@ -5,17 +5,10 @@ import { ChevronLeft, ChevronRight, Volume2, VolumeX } from 'lucide-react';
 import { type Post, displayName } from '../../api/social';
 import { mediaImageProps } from '../../lib/mediaVariants';
 
-/** Attachments carry no type, so the file name decides whether a slot is a clip or a photo. */
 export function isVideo(url: string): boolean {
   return /\.(mp4|webm|mov|m4v)(\?|$)/i.test(url);
 }
 
-/**
- * The media pane of the post view: one photo, a carousel of several, or a muted autoplaying clip.
- * It is the black pane on the left of the dialog (the block above the panel below 900px), and the
- * picture is `object-fit: contain`, so a portrait stays portrait and a landscape stays wide while
- * the pane's own width follows the picture rather than forcing a grey letterbox.
- */
 export default function PostMedia({ post, onOpen, onRatio }: { post: Post; onOpen?: (index: number) => void; onRatio?: (ratio: number) => void }) {
   const urls = post.imageUrls;
   const [index, setIndex] = useState(0);

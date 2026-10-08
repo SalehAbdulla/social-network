@@ -11,9 +11,6 @@ type CommentRepository interface {
 	DeleteComment(commentId int, userId string) error
 }
 
-// commentPageSelect is the comment list's projection and predicate, shared with the
-// plan test (query_plan_test.go) so what that measures is the query this runs. The
-// ORDER BY is appended at the call site because it comes from the request.
 const commentPageSelect = `
 		SELECT c.commentId, c.postId, p.publicId, c.userId, u.nickName, c.content, c.imageUrls, c.score, c.createdAt,
 		       COALESCE(r.score, 0) AS userScore
@@ -156,7 +153,6 @@ func (db *DB) CreateComment(userId string, postId int, content string, imageURLs
 }
 
 func (db *DB) DeleteComment(commentId int, userId string) error {
-	// Get the postId before deleting so we can update the counter
 	var postId int
 	err := db.Conn.QueryRow(
 		`SELECT postId FROM comment WHERE commentId = ? AND userId = ?`,
@@ -183,7 +179,6 @@ func (db *DB) DeleteComment(commentId int, userId string) error {
 		return realtimeforum.ErrForbidden
 	}
 
-	// Decrement the comments counter on the post
 	_, err = db.Conn.Exec(
 		`UPDATE post SET commentsCounter = MAX(commentsCounter - 1, 0) WHERE postId = ?`,
 		postId,

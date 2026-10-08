@@ -11,9 +11,6 @@ import (
 )
 
 type RegisterRequestDTO struct {
-	// Nickname is optional. When it is blank the service generates a unique
-	// handle, because user.nickName is NOT NULL UNIQUE and every /profile/{id}
-	// link assumes one.
 	Nickname        string
 	Email           string
 	FirstName       string
@@ -77,10 +74,6 @@ func validBirthDate(value string) bool {
 	return age >= 13 && age <= 100
 }
 
-// ValidatePassword applies the signup password rules to a new credential, so
-// the register form and the change-password form cannot drift apart. An empty
-// password is a bad request rather than a length failure, because a missing
-// field is a different mistake from a too-short one.
 func ValidatePassword(password, confirm string) error {
 	if password == "" {
 		return realtimeforum.ErrBadRequest
@@ -109,12 +102,9 @@ func (d *RegisterRequestDTO) ParseAndValidate(r *http.Request) error {
 	d.BirthDate = strings.TrimSpace(r.FormValue("birthDate"))
 	d.Gender = strings.TrimSpace(strings.ToLower(r.FormValue("gender")))
 	d.Bio = strings.TrimSpace(r.FormValue("aboutMe"))
-	// A missing isPublic keeps the historical public default, so a client that
-	// does not know about the choice behaves exactly as before.
 	publicChoice := strings.TrimSpace(strings.ToLower(r.FormValue("isPublic")))
 	d.IsPublic = publicChoice == "" || publicChoice == "true" || publicChoice == "on"
 
-	// Only a nickname the visitor actually typed has to be valid.
 	if rawNickname != "" && nicknameErr != nil {
 		return nicknameErr
 	}

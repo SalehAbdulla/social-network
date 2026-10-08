@@ -3,12 +3,6 @@
 import { useRef } from 'react';
 import { Bookmark, Clapperboard, Heart, LayoutGrid, type LucideIcon } from 'lucide-react';
 
-/**
- * The profile's tab strip. Icon-only, each tab a fixed 179px with the icon centred and its name
- * carried by both `aria-label` and `title`; the active tab is marked by a short line under its
- * icon, the one Instagram uses on the profile, rather than the filled pill the rest of the app
- * draws.
- */
 export type ProfileTab = 'posts' | 'media' | 'likes' | 'saved';
 
 const META: Record<ProfileTab, { label: string; icon: LucideIcon }> = {
@@ -22,7 +16,6 @@ export default function ProfileTabs({ tabs, value, onChange, label }: {
   tabs: ProfileTab[];
   value: ProfileTab;
   onChange: (tab: ProfileTab) => void;
-  /** Names the strip for assistive technology, e.g. "Profile". */
   label: string;
 }) {
   const list = useRef<HTMLDivElement>(null);

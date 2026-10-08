@@ -20,27 +20,16 @@ import CommentComposer from './CommentComposer';
 
 const COMMENTS_PER_PAGE = 10;
 
-/**
- * The Instagram post view: the media pane on the left and the panel on the right — header, the
- * scrollable caption-and-thread, the action bar, the likes line, the date and the composer. It is
- * the one implementation of a full post: `PostModal` opens it in a dialog and `/post/[postId]`
- * renders it inline, so the header, the media and the action row are the same everywhere.
- */
 export default function PostView({ post, group = false, avatarOf, canManage, sharePath, thread, onEdit, onRemoved, onDelete, onNestedChange }: {
   post: Post;
   group?: boolean;
-  /** The group roster's avatar for a user id, when the surface holds one. */
   avatarOf?: (userId: string) => string;
   canManage?: boolean;
-  /** The path Share copies, when the post's own address is not `/post/{id}`. */
   sharePath?: string;
-  /** A group's own thread, drawn in place of the feed's comment list and composer. */
   thread?: ReactNode;
   onEdit?: () => void;
   onRemoved?: (postId: string) => void;
-  /** Overrides the built-in delete, for a post that is not in the `post` table (a group post). */
   onDelete?: () => void;
-  /** Reports a nested dialog (a photo viewer or the post menu) so the modal stands its trap down. */
   onNestedChange?: (open: boolean) => void;
 }) {
   const { user } = useBackend();
@@ -48,9 +37,6 @@ export default function PostView({ post, group = false, avatarOf, canManage, sha
   const isOwner = group ? !!canManage : post.userId === user.userId;
   const hasMedia = !!post.imageUrls?.length;
 
-  // A post row carries no avatar of its own, so the one photo the client can always resolve is the
-  // reader's; everyone else keeps their initials until a row carries an avatar. A surface that
-  // holds a roster (a group) hands its own lookup in through `avatarOf`.
   const resolveAvatar = useCallback(
     (userId: string) => avatarOf?.(userId) || (userId === user.userId ? user.avatar : ''),
     [avatarOf, user.userId, user.avatar],

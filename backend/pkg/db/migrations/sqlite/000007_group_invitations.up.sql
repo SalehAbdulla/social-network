@@ -1,7 +1,3 @@
--- socialGroupInvitation was added to 000003_groups.up.sql after that migration had already
--- been applied to existing databases, so those databases never got the table and group
--- invitations failed with "no such table". Create it idempotently so both fresh and
--- previously migrated databases end up with the same schema.
 CREATE TABLE IF NOT EXISTS socialGroupInvitation (
     invitationId INTEGER PRIMARY KEY,
     groupId INTEGER NOT NULL REFERENCES socialGroup(groupId) ON DELETE CASCADE,

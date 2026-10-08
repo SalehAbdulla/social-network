@@ -7,24 +7,12 @@ import { errorMessage } from '../api/social';
 import { IMAGE_ACCEPT, MAX_IMAGE_BYTES, MAX_IMAGE_PIXELS, MAX_VIDEO_BYTES, MEDIA_ACCEPT, formatBytes, isImageType, isVideoType, oversizeMessage } from '../lib/mediaLimits';
 import ImageCropper from './ImageCropper';
 
-/** The dimensions the picker has measured for one selected file. */
 type Dimensions = { width: number; height: number };
 
-/**
- * Identifies a selected file across re-renders. A `File` is a fresh object after
- * any state update, so the measured details are keyed by what the file *is* rather
- * than by identity; two files with the same name, size and modification time hold
- * the same bytes and report the same dimensions anyway.
- */
 function fileKey(file: File): string {
   return `${file.name}:${file.size}:${file.lastModified}`;
 }
 
-/**
- * Checks one image the way the server will, before the upload is spent: type, size
- * and the decoded canvas. It returns the measured dimensions so the picker can show
- * them — a file's size or shape should never be first mentioned in a rejection.
- */
 export async function validateImage(file: File): Promise<Dimensions> {
   if (!isImageType(file.type)) throw new Error('Choose a JPEG, PNG, GIF or WebP image. PDFs are not supported.');
   if (!file.size) throw new Error('The selected file is empty.');
@@ -41,25 +29,8 @@ export async function validateImage(file: File): Promise<Dimensions> {
   } finally { URL.revokeObjectURL(url); }
 }
 
-/**
- * The caption over a tile. An overlay rather than a line under the preview, so the
- * square frame keeps its size and the grid cannot grow a row it did not have.
- */
-/** What a chosen photo is for, which decides the shape and size it has to be. */
 export type MediaPurpose = 'image' | 'avatar' | 'cover' | 'post';
 
-/**
- * The per-purpose floor, checked once the file is decoded so the message can name the rule the
- * photo missed. These are the picker's rules rather than the server's: the server takes any
- * 10 MB image and is never told what it will be used for, so a floor that depends on the purpose
- * is something only the browser knows.
- *
- * `post` is a ratio rather than a floor because a feed card draws media in a fixed frame, where a
- * very tall or very wide picture is cropped to a sliver. **The avatar rule is a floor and not the
- * square the item named:** `Avatar` draws under `object-cover`, so any aspect renders correctly,
- * and refusing a landscape portrait outright would reject a photo the app shows perfectly — the
- * crop step is there for whoever wants the square.
- */
 export function checkPurpose(dimensions: Dimensions, purpose: MediaPurpose) {
   if (purpose === 'avatar' && (dimensions.width < 200 || dimensions.height < 200)) {
     throw new Error('Profile photos must be at least 200×200. Choose a larger photo.');
@@ -86,8 +57,6 @@ function Preview({ file, onDimensions }: { file: File; onDimensions?: (dimension
     return () => { clearTimeout(timer); URL.revokeObjectURL(url); };
   }, [file]);
   if (!src) return null;
-  // A video reports its own dimensions once its metadata arrives; an image's are
-  // already known from the check above, so only the video needs the callback.
   return file.type.startsWith('video/')
     ? <video src={src} controls onLoadedMetadata={event => onDimensions?.({ width: event.currentTarget.videoWidth, height: event.currentTarget.videoHeight })} className="aspect-square w-full bg-slate-100 object-contain" />
     : <img src={src} alt={`Preview of ${file.name}`} className="aspect-square w-full bg-slate-100 object-contain" />;
@@ -97,12 +66,8 @@ export default function ImagePicker({ files, onChange, existing = [], onRemoveEx
   files: File[]; onChange: (files: File[]) => void; existing?: string[]; onRemoveExisting?: (url: string) => void; max?: number; disabled?: boolean; allowVideo?: boolean; purpose?: MediaPurpose;
 }) {
   const [checking, setChecking] = useState(false);
-  // The index of the selected file whose crop step is open, if any.
   const [cropping, setCropping] = useState<number | null>(null);
-  // The per-purpose floor, in the picker's own words, so the rule is known before a choice.
   const purposeHint = purpose === 'avatar' ? 'at least 200×200' : purpose === 'cover' ? 'at least 800×300' : purpose === 'post' ? 'between 1:2 and 2:1' : '';
-  // Measured per selected file, keyed by `fileKey`. An entry for a file the parent
-  // has removed is harmless: nothing renders it, and the next selection overwrites it.
   const [details, setDetails] = useState<Record<string, Dimensions>>({});
   return <div className="space-y-3">
     <label className="flex cursor-pointer items-center gap-3 rounded-xl border border-dashed border-slate-300 bg-slate-50 p-4 text-sm">
@@ -112,8 +77,6 @@ export default function ImagePicker({ files, onChange, existing = [], onRemoveEx
         const selected = Array.from(event.target.files || []); event.target.value = '';
         if (selected.length + files.length + existing.length > max) { toast.error(`Choose up to ${max} photo${max === 1 ? '' : 's'} in total.`); return; }
         setChecking(true);
-        // Every file is checked before any of them is accepted, so a rejected
-        // selection adds nothing; the measurements are kept for the captions.
         const measured: Record<string, Dimensions> = {};
         try {
           await Promise.all(selected.map(async file => {
@@ -137,8 +100,6 @@ export default function ImagePicker({ files, onChange, existing = [], onRemoveEx
     </div>}
     {cropping !== null && files[cropping] && <ImageCropper file={files[cropping]} onClose={() => setCropping(null)} onApply={cropped => {
       const index = cropping;
-      // The caption for the new file must be measured again: its key (name, size, time) changed,
-      // so the number the previous file reported does not name this one.
       void validateImage(cropped).then(dimensions => setDetails(current => ({ ...current, [fileKey(cropped)]: dimensions }))).catch(() => {});
       onChange(files.map((item, position) => position === index ? cropped : item));
       setCropping(null);

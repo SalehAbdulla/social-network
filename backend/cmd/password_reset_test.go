@@ -22,9 +22,6 @@ import (
 	"social-network/backend/pkg/middleware"
 )
 
-// captureMailer stands in for the provider. Capturing is the only way a test can
-// hold the token that went out in a link, and failing on demand is what makes the
-// "delivery failed" path reachable at all.
 type captureMailer struct {
 	mu       sync.Mutex
 	sent     []capturedMail
@@ -61,7 +58,6 @@ func (m *captureMailer) recipients() []string {
 	return found
 }
 
-// token reads the newest link, which is where the flow's secret actually travels.
 func (m *captureMailer) token(t *testing.T) string {
 	t.Helper()
 	m.mu.Lock()
@@ -82,8 +78,6 @@ func (m *captureMailer) token(t *testing.T) string {
 	return token
 }
 
-// resetFlow points the handler at this test's mailer, so the request path runs
-// the real service and only delivery is replaced.
 func resetFlow(t *testing.T, repo *repositories.DB, manager *service.SessionManager, mailer service.Mailer) {
 	t.Helper()
 	handlers.HandlerCtx.PasswordResetService = service.NewPasswordResetService(repo, manager, mailer, "http://localhost:4000")
@@ -107,9 +101,6 @@ func storedResetHash(t *testing.T, repo *repositories.DB, userID string) string 
 	return hash
 }
 
-// loginStatus attempts a sign-in and reports the status instead of asserting it,
-// which is what "the old password no longer works" needs. It speaks the form
-// encoding the login endpoint is driven with elsewhere.
 func loginStatus(t *testing.T, client integrationClient, email, password string) int {
 	t.Helper()
 	form := url.Values{"identifier": {email}, "password": {password}}
@@ -126,8 +117,6 @@ func loginStatus(t *testing.T, client integrationClient, email, password string)
 	return response.StatusCode
 }
 
-// expiryInThePast writes a token that can no longer be claimed, without waiting
-// thirty minutes for one to age.
 func expiryInThePast(t *testing.T, repo *repositories.DB, userID, token string) {
 	t.Helper()
 	sum := sha256.Sum256([]byte(token))
@@ -137,10 +126,6 @@ func expiryInThePast(t *testing.T, repo *repositories.DB, userID, token string) 
 	}
 }
 
-// TestPasswordResetFlow covers the path end to end: the address gets a link, the
-// link carries a token the table never stores in clear, redeeming it changes the
-// password, and every session the account had — including the one that asked — is
-// gone afterwards.
 func TestPasswordResetFlow(t *testing.T) {
 	manager := isolatedSessionManager(t)
 	server, repo := integrationServer(t, true, false)
@@ -150,14 +135,11 @@ func TestPasswordResetFlow(t *testing.T) {
 	mailer := &captureMailer{}
 	resetFlow(t, repo, manager, mailer)
 
-	// A signed-in browser, whose session the reset has to end.
 	browser := newIntegrationClient(t, server)
 	browser.login("dummy@example.com")
 	beforeToken := sessionCookie(t, browser, serverURL)
 	clientWithToken(t, server, beforeToken).call("GET", "/api/v1/users/me", nil, 200)
 
-	// The address is sent the way a person types it, because the lookup has to
-	// normalise it exactly as registration stored it.
 	accepted := decoded[map[string]string](t, browser.call("POST", "/api/v1/auth/password-reset",
 		map[string]string{"email": "Dummy@Example.com "}, http.StatusAccepted))
 	if !strings.Contains(accepted["message"], "If that address has an account") {
@@ -171,8 +153,6 @@ func TestPasswordResetFlow(t *testing.T) {
 	}
 
 	token := mailer.token(t)
-	// The token travels in the link and nowhere else: the table holds its sha256,
-	// so a leaked database does not hand over a working link.
 	sum := sha256.Sum256([]byte(token))
 	if stored := storedResetHash(t, repo, "dummy-id"); stored == token || stored != hex.EncodeToString(sum[:]) {
 		t.Fatalf("the table does not hold the token's hash: %q", stored)
@@ -186,17 +166,12 @@ func TestPasswordResetFlow(t *testing.T) {
 		t.Fatalf("unexpected body: %+v", confirmed)
 	}
 
-	// The old credential is gone and the new one signs in. Wrong credentials answer
-	// 400 in this API (`ErrInvalidCredentials`), which is what the login-lockout
-	// test pins too.
 	if status := loginStatus(t, newIntegrationClient(t, server), "dummy@example.com", seededPassword); status != http.StatusBadRequest {
 		t.Fatalf("the old password still signs in: %d", status)
 	}
 	newIntegrationClient(t, server).call("POST", "/api/v1/auth/login",
 		url.Values{"identifier": {"dummy@example.com"}, "password": {"ResetPassword123!"}}, 200)
 
-	// Every session of the account is dead, the resetting browser included: this
-	// is the "I lost control of this account" path, so nothing stays signed in.
 	clientWithToken(t, server, beforeToken).call("GET", "/api/v1/users/me", nil, http.StatusUnauthorized)
 	if rows := sessionRowCount(t, repo, "dummy-id"); rows != 1 {
 		t.Fatalf("expected only the new sign-in's session, got %d", rows)
@@ -206,10 +181,6 @@ func TestPasswordResetFlow(t *testing.T) {
 	}
 }
 
-// TestPasswordResetTokenRules pins the three ways a token stops working: it is
-// single-use, it expires, and a newer request replaces it. It also pins that a
-// password the register form would refuse is refused *before* the token is spent,
-// so a typo does not cost the visitor their link.
 func TestPasswordResetTokenRules(t *testing.T) {
 	manager := isolatedSessionManager(t)
 	server, repo := integrationServer(t, true, false)
@@ -231,7 +202,6 @@ func TestPasswordResetTokenRules(t *testing.T) {
 	request()
 	first := mailer.token(t)
 
-	// A weak password is refused by the shared rules, and the link survives it.
 	weak := confirm(first, "short", http.StatusBadRequest)
 	if weak.Error == "" {
 		t.Fatalf("a weak password was accepted: %+v", weak)
@@ -240,7 +210,6 @@ func TestPasswordResetTokenRules(t *testing.T) {
 		t.Fatalf("a refused password spent the token: %d rows", rows)
 	}
 
-	// A second request replaces the first link, so an older mail stops working.
 	request()
 	second := mailer.token(t)
 	if second == first {
@@ -253,8 +222,6 @@ func TestPasswordResetTokenRules(t *testing.T) {
 
 	confirm(second, "SecondLinkPassword123!", http.StatusOK)
 
-	// Spent: the same token cannot be used twice, and it is not reported
-	// differently from a token that never existed.
 	reused := confirm(second, "ThirdLinkPassword123!", http.StatusBadRequest)
 	if !strings.Contains(reused.Error, "invalid or has expired") {
 		t.Fatalf("unexpected refusal for a spent link: %+v", reused)
@@ -264,8 +231,6 @@ func TestPasswordResetTokenRules(t *testing.T) {
 		t.Fatalf("a spent link and an unknown one answer differently: %q vs %q", reused.Error, unknown.Error)
 	}
 
-	// Expired: the row is written with a past expiry rather than waiting out the
-	// real window.
 	request()
 	expired := mailer.token(t)
 	expiryInThePast(t, repo, "dummy-id", expired)
@@ -275,9 +240,6 @@ func TestPasswordResetTokenRules(t *testing.T) {
 	}
 }
 
-// rawReset posts a request and returns the status, the Retry-After header and the
-// error envelope, because the rate-limited answer is the one case where a header is
-// part of the contract.
 func rawReset(t *testing.T, client integrationClient, email string) (int, string, errorEnvelope) {
 	t.Helper()
 	encoded, err := json.Marshal(map[string]string{"email": email})
@@ -300,8 +262,6 @@ func rawReset(t *testing.T, client integrationClient, email string) (int, string
 	return response.StatusCode, response.Header.Get("Retry-After"), envelope
 }
 
-// TestPasswordResetAnswersTheSameForAnUnknownAddress pins the property the flow is
-// built around: the endpoint cannot be used to find out which addresses exist.
 func TestPasswordResetAnswersTheSameForAnUnknownAddress(t *testing.T) {
 	manager := isolatedSessionManager(t)
 	server, repo := integrationServer(t, true, false)
@@ -320,8 +280,6 @@ func TestPasswordResetAnswersTheSameForAnUnknownAddress(t *testing.T) {
 	if mailer.count() != 1 || mailer.recipients()[0] != "dummy@example.com" {
 		t.Fatalf("the mail went somewhere unexpected: %d to %v", mailer.count(), mailer.recipients())
 	}
-	// Exactly one token exists, and it belongs to the address that has an account:
-	// nothing at all is recorded for the other one.
 	var total int
 	if err := repo.Conn.QueryRow("SELECT COUNT(*) FROM passwordReset").Scan(&total); err != nil {
 		t.Fatal(err)
@@ -331,10 +289,6 @@ func TestPasswordResetAnswersTheSameForAnUnknownAddress(t *testing.T) {
 	}
 }
 
-// TestPasswordResetIsRateLimitedWithoutRevealingAnything checks the limit the item
-// asked for, and the part that is easy to get wrong: it has to apply to an address
-// with no account too, or the limit itself answers the question the endpoint
-// refuses to answer.
 func TestPasswordResetIsRateLimitedWithoutRevealingAnything(t *testing.T) {
 	manager := isolatedSessionManager(t)
 	server, repo := integrationServer(t, true, false)
@@ -343,9 +297,6 @@ func TestPasswordResetIsRateLimitedWithoutRevealingAnything(t *testing.T) {
 	resetFlow(t, repo, manager, mailer)
 	client := newIntegrationClient(t, server)
 
-	// The window is swapped for a short one the way the login-lockout test does it,
-	// so the assertion is about the behaviour rather than about the production
-	// constant's value.
 	const attempts = 3
 	handlers.HandlerCtx.ResetLimiter = middleware.NewAttemptLimiter(attempts, 400*time.Millisecond)
 
@@ -375,10 +326,6 @@ func TestPasswordResetIsRateLimitedWithoutRevealingAnything(t *testing.T) {
 	}
 }
 
-// TestPasswordResetIsUnavailableWithoutAProvider is the production posture: with no
-// SMTP configured the mailer is nil, so there is no log mailer to write a working
-// credential into a log file, and the endpoints say so instead of accepting a
-// request whose link will never arrive.
 func TestPasswordResetIsUnavailableWithoutAProvider(t *testing.T) {
 	manager := isolatedSessionManager(t)
 	server, repo := integrationServer(t, true, false)
@@ -401,10 +348,6 @@ func TestPasswordResetIsUnavailableWithoutAProvider(t *testing.T) {
 	}
 }
 
-// TestPasswordResetDeliveryFailureLeavesNoLiveToken covers the path where the mail
-// cannot be sent. The visitor is told the same thing as ever — a different answer
-// for this address would be the oracle again — but the token nobody received is
-// discarded rather than left live.
 func TestPasswordResetDeliveryFailureLeavesNoLiveToken(t *testing.T) {
 	manager := isolatedSessionManager(t)
 	server, repo := integrationServer(t, true, false)
@@ -426,11 +369,6 @@ func TestPasswordResetDeliveryFailureLeavesNoLiveToken(t *testing.T) {
 	}
 }
 
-// TestPasswordResetTokenCannotBeRedeemedTwiceAtOnce is the reason the claim is a
-// single UPDATE rather than a read followed by a write: four confirms racing on one
-// token have to produce one password change and three refusals. A read-then-write
-// design passes the sequential tests above and fails this one, which is exactly why
-// it is here.
 func TestPasswordResetTokenCannotBeRedeemedTwiceAtOnce(t *testing.T) {
 	manager := isolatedSessionManager(t)
 	_, repo := integrationServer(t, true, false)

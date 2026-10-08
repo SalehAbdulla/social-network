@@ -1,25 +1,3 @@
-# Mirrors .github/workflows/ci.yml for the school's GitLab, which is where this
-# repository's `origin` actually points (learn.reboot01.com/git). Both files run
-# the same four checks that TODO.md's definition of done names, so a branch
-# cannot land on either host unverified.
-#
-# Three deliberate divergences from the GitHub workflow, all about the runner
-# rather than the checks:
-#
-#   * The containers job is `allow_failure: true`. It is blocking on GitHub.
-#     Docker-in-Docker needs a runner that permits a privileged service, which
-#     the school's runner cannot be assumed to have; the job still runs and
-#     reports when it can, and the other three checks still block. Flip it to
-#     blocking once a pipeline has shown the DinD service working.
-#   * Images are referenced by tag *and* digest — `golang:1.26-bookworm@sha256:…`
-#     — the same pins the Dockerfiles carry, refreshed together by
-#     `scripts/pin-base-images.mjs`, which rewrites both files. That script also
-#     runs here as the `base-images` job and reports when a pin has fallen behind.
-#   * The browser job is `when: manual`, not attached to every pipeline. It takes
-#     several minutes and drives a real browser, which makes it the most
-#     environment-sensitive check in this file; play it from the pipeline view (or
-#     the API) once, and wire it in permanently once its runner is known-good.
-
 default:
   interruptible: true
 
@@ -27,8 +5,6 @@ stages:
   - checks
   - containers
 
-# Caches have to live under the project directory to be picked up by GitLab's
-# cache, so the Go module and build caches are pointed there explicitly.
 variables:
   GOMODCACHE: $CI_PROJECT_DIR/.cache/go-mod
   GOCACHE: $CI_PROJECT_DIR/.cache/go-build
@@ -58,22 +34,13 @@ frontend:
     paths:
       - frontend/.npm-cache/
   variables:
-    # A production build refuses to guess the backend address, because the value is
-    # compiled into the rewrites (see frontend/next.config.ts). A build never
-    # exercises them, so naming one here is enough.
     BACKEND_URL: http://backend:5174
   script:
     - cd frontend
-    # No setup-node action here, so the job keeps its own npm cache; the install
-    # itself is the same `npm ci` against the same lockfile.
     - npm ci --cache .npm-cache --prefer-offline
     - npm run lint
-    # Build before typecheck: `next build` writes the gitignored `next-env.d.ts`, which
-    # declares the image module types `tsc` needs. `make check` builds first too.
     - npm run build
     - npx tsc --noEmit
-    # Blocking on shipped dependencies (`--omit=dev`), not the build toolchain —
-    # `braces` (via eslint-config-next) has no upstream fix just now.
     - npm audit --omit=dev --audit-level=high
 
 govulncheck:
@@ -88,16 +55,10 @@ govulncheck:
   script:
     - cd backend
     - go install golang.org/x/vuln/cmd/govulncheck@latest
-    # Fails only on a vulnerability the code actually reaches; packages that are
-    # imported but never called are listed and do not fail the job. The path is
-    # spelled out because there is no setup-go action adding it to PATH here.
     - $(go env GOPATH)/bin/govulncheck ./...
 
 base-images:
   stage: checks
-  # Reports rather than blocks: a new upstream patch release is not a defect in
-  # the commit that notices it. A drift line here means "run the script with
-  # --write and commit the pins". Needs no Docker, only Node and network.
   image: node:22-bookworm@sha256:363e1587494626837fa7f9a23bdb453d13b0ff3c67c705c2805cfc69c2d2fad7
   allow_failure: true
   script:
@@ -105,19 +66,10 @@ base-images:
 
 browser:
   stage: checks
-  # Manual and allowed to fail while it is being stabilised. It needs three things
-  # in one container: Go (the harness shells out to `go build`), a C compiler (the
-  # SQLite driver is CGO) and a Chrome binary. Go comes from the image, which also
-  # keeps it on the pinned digest this repository manages — Debian's own
-  # `golang-go` is 1.19, under the `go 1.25` directive in backend/go.mod. Node 22
-  # comes from NodeSource because Debian bookworm ships 18 and the frontend needs
-  # 22; that download is the one unpinned step here.
   image: golang:1.26-bookworm@sha256:a688600ca24f8a4d3ca77f95b0dd40704a9fc787c826660eb7ba0b641b8b175d
   when: manual
   allow_failure: true
   variables:
-    # Set explicitly rather than relying on the script's fallback list, so the
-    # override path a Linux runner depends on is the one being exercised.
     CHROME_PATH: /usr/bin/chromium
   before_script:
     - apt-get update && apt-get install -y --no-install-recommends ca-certificates chromium curl gnupg
@@ -143,7 +95,5 @@ containers:
     DOCKER_CERT_PATH: "$DOCKER_TLS_CERTDIR/client"
   allow_failure: true
   script:
-    # The image ships the compose plugin in /usr/local/libexec/docker/cli-plugins,
-    # so `docker compose` needs nothing installed.
     - docker compose config
     - docker compose build

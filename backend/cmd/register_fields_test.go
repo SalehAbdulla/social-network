@@ -18,8 +18,6 @@ import (
 
 var nicknameShape = regexp.MustCompile(`^[a-z0-9_]{2,33}$`)
 
-// registerValues is the mandatory part of the spec's signup form: first name,
-// last name, email, password and date of birth.
 func registerValues(first, last, email string) url.Values {
 	return url.Values{
 		"firstName": {first}, "lastName": {last}, "email": {email},
@@ -28,8 +26,6 @@ func registerValues(first, last, email string) url.Values {
 	}
 }
 
-// uploadAvatar posts a one-pixel PNG through the real media endpoint, which is
-// the step the signup form runs once the new session cookie exists.
 func uploadAvatar(t *testing.T, server *httptest.Server, client integrationClient) string {
 	t.Helper()
 	png, err := base64.StdEncoding.DecodeString("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aD1sAAAAASUVORK5CYII=")
@@ -76,17 +72,11 @@ func uploadAvatar(t *testing.T, server *httptest.Server, client integrationClien
 	return envelope.Data.URL
 }
 
-// TestRegisterFieldParity covers the spec's signup field list: the five
-// mandatory fields are enough on their own, the nickname is optional and
-// generated when it is missing, and About Me plus the public/private choice are
-// stored with the account. The avatar travels through the media endpoint just
-// after signup, because uploading needs the session the signup creates.
 func TestRegisterFieldParity(t *testing.T) {
 	server, _ := integrationServer(t, true, false)
 	stranger := newIntegrationClient(t, server)
 	stranger.login("alex@example.com")
 
-	// Mandatory fields only: no nickname, no About Me, no avatar.
 	owner := newIntegrationClient(t, server)
 	registered := decoded[map[string]string](t, owner.call("POST", "/api/v1/auth/register", registerValues("Nora", "Fields", "nora@example.com"), 201))
 	handle := registered["nickname"]
@@ -99,13 +89,11 @@ func TestRegisterFieldParity(t *testing.T) {
 	}
 	userId := profile.UserID
 
-	// A second member with the same name still gets their own handle.
 	second := decoded[map[string]string](t, newIntegrationClient(t, server).call("POST", "/api/v1/auth/register", registerValues("Nora", "Fields", "nora2@example.com"), 201))
 	if second["nickname"] == handle || !nicknameShape.MatchString(second["nickname"]) {
 		t.Fatalf("colliding names produced %q and %q", handle, second["nickname"])
 	}
 
-	// A typed nickname is kept, and a duplicate is still rejected.
 	typed := newIntegrationClient(t, server)
 	chosen := decoded[map[string]string](t, typed.call("POST", "/api/v1/auth/register", func() url.Values {
 		values := registerValues("Ty", "Ped", "typed@example.com")
@@ -121,8 +109,6 @@ func TestRegisterFieldParity(t *testing.T) {
 		return values
 	}(), 400)
 
-	// About Me and the private choice are stored with the account, and a
-	// stranger reading the profile gets the stripped-down view.
 	private := newIntegrationClient(t, server)
 	privateRegistered := decoded[map[string]string](t, private.call("POST", "/api/v1/auth/register", func() url.Values {
 		values := registerValues("Pat", "Private", "pat@example.com")
@@ -139,7 +125,6 @@ func TestRegisterFieldParity(t *testing.T) {
 		t.Fatalf("a private signup leaked its About Me: %+v", publicView)
 	}
 
-	// The spellings a form can send.
 	for value, wantPublic := range map[string]bool{"on": true, "off": false} {
 		client := newIntegrationClient(t, server)
 		client.call("POST", "/api/v1/auth/register", func() url.Values {
@@ -159,8 +144,6 @@ func TestRegisterFieldParity(t *testing.T) {
 	}
 	newIntegrationClient(t, server).call("POST", "/api/v1/auth/register", longAbout(), 400)
 
-	// The avatar: uploaded right after signup, attached to the profile, served
-	// to the owner and to anyone who can read the public profile.
 	avatarURL := uploadAvatar(t, server, owner)
 	current := decoded[models.SocialUser](t, owner.call("GET", "/api/v1/users/me", nil, 200))
 	current.Avatar = avatarURL

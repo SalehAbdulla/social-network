@@ -11,8 +11,6 @@ import (
 type MessageService interface {
 	GetChatUsers(currentUserID string) ([]message.ChatUserDTO, error)
 	GetMessages(conversationPartnerID string, currentUserID string, offset int, limit int) (message.MessagesResponse, error)
-	// GetConversationMedia is the media tab: the same conversation and the same chat rule
-	// as GetMessages, narrowed to the rows that carry an attachment.
 	GetConversationMedia(conversationPartnerID string, currentUserID string, offset int, limit int) (message.ConversationMediaResponse, error)
 	SendMessage(senderID string, recipientID string, textMessage string) (message.MessageDTO, error)
 	GetUserNickname(userID string) (string, error)
@@ -41,8 +39,6 @@ func (m MessageServiceImpl) GetMessages(conversationPartnerID string, currentUse
 		return message.MessagesResponse{}, err
 	}
 
-	// Threads whose participants are no longer allowed to chat stay hidden, so
-	// the inbox listing and direct URLs agree with the send rule.
 	if allowed, err := m.messageRepo.CanMessage(currentUserID, conversationPartnerID); err != nil {
 		return message.MessagesResponse{}, err
 	} else if !allowed {
@@ -79,8 +75,6 @@ func (m MessageServiceImpl) GetMessages(conversationPartnerID string, currentUse
 	}, nil
 }
 
-// GetConversationMedia is the media tab: the same conversation and the same chat rule as
-// GetMessages, narrowed to the rows that carry an attachment.
 func (m MessageServiceImpl) GetConversationMedia(conversationPartnerID string, currentUserID string, offset int, limit int) (message.ConversationMediaResponse, error) {
 	if conversationPartnerID == currentUserID {
 		return message.ConversationMediaResponse{}, realtimeforum.ErrBadRequest
@@ -90,8 +84,6 @@ func (m MessageServiceImpl) GetConversationMedia(conversationPartnerID string, c
 		return message.ConversationMediaResponse{}, err
 	}
 
-	// The tab lists a thread the reader is allowed to open, so it enforces the same rule the
-	// message list and the send endpoints enforce — otherwise it would be a way around it.
 	if allowed, err := m.messageRepo.CanMessage(currentUserID, conversationPartnerID); err != nil {
 		return message.ConversationMediaResponse{}, err
 	} else if !allowed {

@@ -22,16 +22,9 @@ type AuthRepository interface {
 	PasswordHash(userID string) (string, error)
 	UpdatePassword(userID, hashedPassword string) error
 	UserIDByEmail(email string) (string, error)
-	// AccountsForUsers reads the account-switcher's view of a set of ids in one
-	// round trip. The caller has already resolved which tokens are live; this is
-	// only the display data.
 	AccountsForUsers(userIDs []string) (map[string]models.SavedAccount, error)
 }
 
-// UserIDByEmail resolves an address to the account that owns it. The address is
-// expected already normalised (trimmed and lowercased), which is how the
-// registration form stored it. ErrNotFound means "no such address" — the caller
-// decides whether to say so, and the reset endpoint deliberately does not.
 func (db *DB) UserIDByEmail(email string) (string, error) {
 	var userID string
 	err := db.Conn.QueryRow("SELECT userId FROM user WHERE email = ?", email).Scan(&userID)
@@ -120,8 +113,6 @@ func (db *DB) GetUserCredentials(identifier string) (string, string, error) {
 	return userID, hashedPassword, nil
 }
 
-// PasswordHash returns the stored bcrypt hash for one account. It is looked up
-// by id, not by identifier, because the caller is already authenticated.
 func (db *DB) PasswordHash(userID string) (string, error) {
 	var hashed string
 	err := db.Conn.QueryRow("SELECT password FROM user WHERE userId = ?", userID).Scan(&hashed)
@@ -134,9 +125,6 @@ func (db *DB) PasswordHash(userID string) (string, error) {
 	return hashed, nil
 }
 
-// UpdatePassword replaces one account's hash. It does not touch sessions; the
-// caller rotates those, because issuing the replacement token is what revokes
-// the old one (see SaveSession).
 func (db *DB) UpdatePassword(userID, hashedPassword string) error {
 	result, err := db.Conn.Exec("UPDATE user SET password = ? WHERE userId = ?", hashedPassword, userID)
 	if err != nil {
@@ -177,16 +165,11 @@ func (db *DB) DoesUserExists(userID string) error {
 	return nil
 }
 
-// AccountsForUsers reads an avatar and two names for each id, in one query. A id
-// that no longer exists is simply absent from the map, which lets the switcher
-// drop it rather than draw a blank row.
 func (db *DB) AccountsForUsers(userIDs []string) (map[string]models.SavedAccount, error) {
 	accounts := make(map[string]models.SavedAccount, len(userIDs))
 	if len(userIDs) == 0 {
 		return accounts, nil
 	}
-	// The placeholder list is built from the slice's own length, so the query is
-	// always parameterised — no id is ever interpolated into the SQL.
 	placeholders := strings.TrimSuffix(strings.Repeat("?,", len(userIDs)), ",")
 	args := make([]any, len(userIDs))
 	for i, id := range userIDs {

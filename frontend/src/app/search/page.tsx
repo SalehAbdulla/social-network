@@ -17,29 +17,16 @@ import { PostListSkeleton, RowsSkeleton } from '../components/Skeletons';
 
 const POSTS_PER_PAGE = 10;
 
-/**
- * One page, three answers.
- *
- * The people and group halves are the endpoints that already had a `q`; the post
- * half is `/posts/search`, added with this page. Nothing is merged or re-ranked
- * across the three — each endpoint keeps its own rule about what the viewer may see,
- * which is exactly why the page asks them separately rather than through a single
- * query that would have to re-implement all of them.
- */
 function SearchScreen() {
   const router = useRouter();
   const query = (useSearchParams().get('q') ?? '').trim();
   const [input, setInput] = useState(query);
   const [recent, setRecent] = useState<string[]>([]);
 
-  // Storage is read after mount and inside a task rather than in the effect body, for
-  // the reason `PostForm` does the same: the server and the first client render agree
-  // on an empty list, so hydration cannot mismatch.
   useEffect(() => {
     const timer = window.setTimeout(() => setRecent(readRecentSearches()), 0);
     return () => window.clearTimeout(timer);
   }, []);
-  // A chip, a link or the back button changes the URL, which is the source of truth.
   useEffect(() => {
     const timer = window.setTimeout(() => setInput(query), 0);
     return () => window.clearTimeout(timer);
@@ -126,7 +113,5 @@ function SearchScreen() {
 }
 
 export default function Search() {
-  // useSearchParams needs a Suspense boundary around it, which this default export
-  // provides — the same shape the reset page uses for its token.
   return <Suspense fallback={<p className="p-8 text-sm text-slate-500">Loading search…</p>}><SearchScreen /></Suspense>;
 }

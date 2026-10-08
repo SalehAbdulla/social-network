@@ -8,14 +8,8 @@ import (
 )
 
 type NotificationRepository interface {
-	// types narrows the query to those entity types: the bell badge asks for
-	// everything except `message` while the Messages badge asks for `message`
-	// only. A nil list means every known type; an empty list matches nothing.
 	GetNotifications(userID string, offset, limit int, unreadOnly bool, types []string) ([]models.Notification, int, error)
 	GetUnreadCount(userID string, types []string) (int, error)
-	// GetUnreadCounts answers both badges at once: the bell (every type but
-	// `message`) and the Messages badge (`message` only). It is the same predicate
-	// as GetUnreadCount, split into two subtotals by one pass.
 	GetUnreadCounts(userID string) (int, int, error)
 	CreateNotification(userID, actorID, entityType string, entityID int) (models.Notification, error)
 	MarkAsRead(notificationID int, userID string) error
@@ -23,9 +17,6 @@ type NotificationRepository interface {
 	MarkAsReadByActor(userID, actorID, entityType string) error
 }
 
-// notificationTypeFilter builds `<column> IN (?,?,…)` together with its
-// arguments. A nil list expands to every type the API exposes and an empty list
-// becomes a false predicate, because `IN ()` is not valid SQL.
 func notificationTypeFilter(column string, types []string) (string, []any) {
 	if types == nil {
 		types = models.NotificationEntityTypes()
@@ -40,9 +31,6 @@ func notificationTypeFilter(column string, types []string) (string, []any) {
 	return column + " IN (" + strings.TrimSuffix(strings.Repeat("?,", len(types)), ",") + ")", args
 }
 
-// notificationPageSelect is the notifications list's projection and joins, shared with
-// the plan test (query_plan_test.go) so the plan it prints is this query's. The type
-// filter and the userId predicate are appended at the call site, both of them dynamic.
 const notificationPageSelect = `
 		SELECT n.notificationId, n.userId, n.actorId, COALESCE(u.nickName, ''), n.entityType, n.entityId, n.isRead, n.createdAt, COALESCE(p.publicId, '')
 		FROM notification n
@@ -99,8 +87,6 @@ func (db *DB) GetNotifications(userID string, offset, limit int, unreadOnly bool
 	return notifications, totalElements, nil
 }
 
-// GetUnreadCount counts the unread rows a filtered badge should show. `types`
-// follows the same nil/empty rules as GetNotifications.
 func (db *DB) GetUnreadCount(userID string, types []string) (int, error) {
 	filter, filterArgs := notificationTypeFilter("entityType", types)
 	args := append(append([]any{}, filterArgs...), userID)
@@ -116,11 +102,6 @@ func (db *DB) GetUnreadCount(userID string, types []string) (int, error) {
 	return count, nil
 }
 
-// GetUnreadCounts answers both badges in one query. The bell counts every unread
-// row except private messages; the Messages entry counts only those. Both subtotals
-// come from the same predicate GetUnreadCount applies, which is the point: the
-// sidebar asked the server twice for one answer, on every socket event and every
-// poll. COALESCE is required because SUM over no rows is NULL, not zero.
 func (db *DB) GetUnreadCounts(userID string) (int, int, error) {
 	var notifications, messages int
 	err := db.Conn.QueryRow(

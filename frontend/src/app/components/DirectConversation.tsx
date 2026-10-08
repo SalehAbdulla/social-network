@@ -14,24 +14,12 @@ import MessageThread from './messages/MessageThread';
 import Composer from './messages/Composer';
 import DetailsPanel from './messages/DetailsPanel';
 
-// `/messages` is capped at 10 rows per request by the backend.
 const MESSAGES_PER_PAGE = 10;
-// The details panel reads 30 attachments a request.
 const MEDIA_PER_PAGE = 30;
 
-/**
- * One direct conversation.
- *
- * It is the piece the redesign left in charge of behaviour only: the header, the thread,
- * the composer and the details column are their own components, and this owns the data —
- * the paged thread, the paged attachments, the socket's typing and read receipts, and the
- * writes (send, edit, delete, react, read) the endpoints already exposed.
- */
 export default function DirectConversation({ partner, person, variant = 'page', onBack, onExpand, onClose, draft, onDraft }: {
   partner: string;
   person?: ChatUser;
-  /** `dock` swaps the page header for the dock's and drops the details column, so the /messages
-   *  page and the floating dock are one conversation with two skins, not two implementations. */
   variant?: 'page' | 'dock';
   onBack?: () => void;
   onExpand?: () => void;
@@ -42,7 +30,6 @@ export default function DirectConversation({ partner, person, variant = 'page', 
   const dock = variant === 'dock';
   const { user, connected, sendEvent } = useBackend();
   const thread = usePagedList<ChatMessage, { messages: ChatMessage[]; totalElements: number }>({
-    // Newest first, so page 1 is the newest slice and "load more" walks backwards.
     key: `/messages?partnerId=${encodeURIComponent(partner)}`,
     pageQuery: page => `&offset=${(page - 1) * MESSAGES_PER_PAGE}`,
     pageSize: MESSAGES_PER_PAGE,
@@ -50,11 +37,7 @@ export default function DirectConversation({ partner, person, variant = 'page', 
     keyOf: message => message.messageId,
   });
   const [details, setDetails] = useState(false);
-  // The set the viewer was opened over: the details grid steps through one another, while
-  // an attachment on a single bubble opens on its own.
   const [viewer, setViewer] = useState<{ images: string[]; index: number } | null>(null);
-  // The details panel reads its own endpoint, and only while it is open, so a conversation
-  // whose panel was never opened does not pay for it.
   const media = usePagedList<ConversationMedia, { media: ConversationMedia[]; totalElements: number }>({
     key: `/messages/media?partnerId=${encodeURIComponent(partner)}`,
     pageQuery: page => `&offset=${(page - 1) * MEDIA_PER_PAGE}`,
@@ -72,7 +55,6 @@ export default function DirectConversation({ partner, person, variant = 'page', 
   const [replyTo, setReplyTo] = useState<ChatMessage | null>(null);
   const [typing, setTyping] = useState(false);
   const [busy, setBusy] = useState(false);
-  // Bumped when an edit starts, so the composer's draft is seeded from the message again.
   const [composerSeed, setComposerSeed] = useState(0);
   useLiveRefresh(thread.refresh);
 
@@ -95,7 +77,6 @@ export default function DirectConversation({ partner, person, variant = 'page', 
   }, [connected, partner, sendEvent]);
 
   useEffect(() => {
-    // Opening a thread marks the partner's side read, once, the way the endpoint expects.
     if (thread.items.some(message => message.recipientId === user.userId && !message.isRead)) {
       void request('/messages/read', 'POST', { partnerId: partner }).catch(error => toast.error(errorMessage(error)));
     }
@@ -107,7 +88,6 @@ export default function DirectConversation({ partner, person, variant = 'page', 
       const uploaded = file ? await upload(file) : null;
       await request('/messages', 'POST', { recipientId: partner, text, mediaUrl: uploaded?.url || '', mediaType: uploaded?.mediaType || '' });
     }
-    // Folding the newest page in keeps the history the reader already scrolled to.
     setEditing(null);
     setReplyTo(null);
     thread.refresh();
@@ -116,7 +96,6 @@ export default function DirectConversation({ partner, person, variant = 'page', 
   async function remove(id: number, scope: string) {
     if (busy) return;
     setBusy(true);
-    // A hard reload: merging cannot drop the deleted row from the loaded pages.
     try { await request(`/messages/${id}?scope=${scope}`, 'DELETE'); thread.reload(); }
     catch (error) { toast.error(errorMessage(error)); }
     finally { setBusy(false); }
@@ -125,8 +104,6 @@ export default function DirectConversation({ partner, person, variant = 'page', 
   async function react(message: ChatMessage) {
     if (busy) return;
     setBusy(true);
-    // Optimistic like the post arrows: the heart fills now and the server's total replaces
-    // the guess when it answers. A failure puts the previous numbers back and says why.
     const previous = { score: message.score, userScore: message.userScore };
     const userScore = message.userScore === 1 ? 0 : 1;
     thread.update(items => items.map(item => item.messageId === message.messageId

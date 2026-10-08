@@ -34,13 +34,6 @@ func isASCII(s string) bool {
 	return true
 }
 
-// HandleError answers with the envelope for one of this API's sentinels, and
-// switches on them with errors.Is rather than == so a sentinel that arrives wrapped
-// in an ErrDetail keeps its status while the message stays about this request.
-//
-// An unknown error is a 500 whose body says nothing specific, which is deliberate:
-// the text of a real failure can name a file path or a query, and the log line
-// below is where that belongs.
 func (re *HandlerContext) HandleError(w http.ResponseWriter, r *http.Request, err error) {
 
 	var statusCode int
@@ -77,8 +70,6 @@ func (re *HandlerContext) HandleError(w http.ResponseWriter, r *http.Request, er
 		statusCode = http.StatusBadRequest
 		level = slog.LevelWarn
 	case errors.Is(err, realtimeforum.ErrResetUnavailable):
-		// 503, not 500: nothing is broken, the server simply has no mail provider
-		// and must not pretend it sent a link (see DEPLOYMENT.md).
 		statusCode = http.StatusServiceUnavailable
 		level = slog.LevelWarn
 	case errors.Is(err, realtimeforum.ErrInternal):

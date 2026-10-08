@@ -9,10 +9,6 @@ import (
 	realtimeforum "social-network/backend"
 )
 
-// resolvePostID turns the public UUID a route path or query carries into the post table's own
-// integer key, which every internal read and write is keyed on. A value that is not a UUID is a
-// 400 — a client that mangled the id — while a well-formed id that matches no row is the same 404
-// a post read gives, so the resolver cannot be used to learn which posts exist.
 func (re *HandlerContext) resolvePostID(publicID string) (int, error) {
 	if _, err := uuid.Parse(publicID); err != nil {
 		return 0, realtimeforum.ErrBadRequest
@@ -20,9 +16,6 @@ func (re *HandlerContext) resolvePostID(publicID string) (int, error) {
 	return re.SocialService.Repo.PostIDByPublicID(publicID)
 }
 
-// pageParams reads the `page`/`size` pair the list endpoints share, with the same
-// defaults and the same 100-row ceiling GET /api/v1/posts enforces, so paging the
-// saved list behaves like paging the feed.
 func (re *HandlerContext) pageParams(w http.ResponseWriter, r *http.Request) (int, int, bool) {
 	pageNumber, pageSize := 1, 10
 	if raw := r.URL.Query().Get("page"); raw != "" {
@@ -44,9 +37,6 @@ func (re *HandlerContext) pageParams(w http.ResponseWriter, r *http.Request) (in
 	return pageNumber, pageSize, true
 }
 
-// SavePost adds a post to the caller's private bookmark list. Both this and
-// UnsavePost answer with the resulting state, because both are idempotent: the
-// second press of a save button is not a conflict.
 func (re *HandlerContext) SavePost(w http.ResponseWriter, r *http.Request) {
 	publicID := r.PathValue("postId")
 	postID, err := re.resolvePostID(publicID)
@@ -85,7 +75,6 @@ func (re *HandlerContext) UnsavePost(w http.ResponseWriter, r *http.Request) {
 	respond(w, http.StatusOK, map[string]any{"postId": publicID, "saved": false})
 }
 
-// SavedPosts is the caller's bookmark list, in the feed's response shape.
 func (re *HandlerContext) SavedPosts(w http.ResponseWriter, r *http.Request) {
 	pageNumber, pageSize, ok := re.pageParams(w, r)
 	if !ok {

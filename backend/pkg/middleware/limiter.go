@@ -5,13 +5,6 @@ import (
 	"time"
 )
 
-// AttemptLimiter counts failed attempts per key inside a fixed window, so one
-// account can be slowed down without touching its neighbours. That is the gap
-// the peer-keyed limiter cannot close: behind a reverse proxy every request
-// arrives from the same address.
-//
-// Only failures count, and a success forgets them, so a member who mistypes a
-// password and then gets it right is not left throttled.
 type AttemptLimiter struct {
 	mu       sync.Mutex
 	limit    int
@@ -24,10 +17,9 @@ type attemptWindow struct {
 	until time.Time
 }
 
-// maxTrackedKeys bounds the memory a stream of made-up keys can occupy.
+// without a cap, one key per request would grow the map forever
 const maxTrackedKeys = 10000
 
-// NewAttemptLimiter allows limit failures per key per window.
 func NewAttemptLimiter(limit int, window time.Duration) *AttemptLimiter {
 	return &AttemptLimiter{
 		limit:    limit,
@@ -36,7 +28,6 @@ func NewAttemptLimiter(limit int, window time.Duration) *AttemptLimiter {
 	}
 }
 
-// RetryAfter reports how long the key stays locked, or zero when it is free.
 func (l *AttemptLimiter) RetryAfter(key string) time.Duration {
 	if key == "" {
 		return 0
@@ -58,7 +49,6 @@ func (l *AttemptLimiter) RetryAfter(key string) time.Duration {
 	return remaining
 }
 
-// Fail records one failed attempt against the key.
 func (l *AttemptLimiter) Fail(key string) {
 	if key == "" {
 		return
@@ -75,15 +65,12 @@ func (l *AttemptLimiter) Fail(key string) {
 	}
 	entry, ok := l.attempts[key]
 	if !ok || now.After(entry.until) {
-		// The window is anchored on the first failure, so a slow guesser cannot
-		// push the lock away by trickling attempts.
 		l.attempts[key] = &attemptWindow{count: 1, until: now.Add(l.window)}
 		return
 	}
 	entry.count++
 }
 
-// Reset forgets a key, which is what a successful sign-in does.
 func (l *AttemptLimiter) Reset(key string) {
 	if key == "" {
 		return

@@ -2,13 +2,6 @@
 
 import { useEffect, useRef } from 'react';
 
-/**
- * The "Discard post?" confirmation, shown over the dialog when there is unsaved content.
- *
- * It is presentational: the shell owns the state and answers Escape (the confirm closes first), so
- * this only draws the scrim and the card and puts focus on Cancel — the non-destructive choice —
- * when it appears.
- */
 export default function DiscardDialog({ onDiscard, onCancel }: { onDiscard: () => void; onCancel: () => void }) {
   const cancelRef = useRef<HTMLButtonElement>(null);
   useEffect(() => { cancelRef.current?.focus(); }, []);

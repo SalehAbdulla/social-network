@@ -55,7 +55,6 @@ func TestGroupContentPrivacyAndRSVP(t *testing.T) {
 	owner.call("GET", fmt.Sprintf("%s/content/comments?parentId=%d", otherBase, post.ID), nil, 404)
 	owner.call("PUT", fmt.Sprintf("%s/events/%d/rsvp", otherBase, event.ID), map[string]string{"status": "going"}, 404)
 	var count int
-	// Group notifications contain a group target so the UI can navigate directly.
 	notifications := decoded[struct {
 		Notifications []struct {
 			EntityType string `json:"entityType"`

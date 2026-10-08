@@ -13,25 +13,15 @@ func routes() http.Handler {
 	mux.HandleFunc("POST /api/v1/auth/login", handlers.HandlerCtx.Login)
 	mux.HandleFunc("GET /api/v1/auth/nickname-availability", handlers.HandlerCtx.NicknameAvailability)
 
-	// Password reset is unauthenticated by definition — it is what someone uses
-	// when they cannot sign in. The per-address rate limit lives in the handler,
-	// next to the answer it protects, and the endpoint reports 503 when this
-	// deployment has no way to deliver a link.
 	mux.HandleFunc("POST /api/v1/auth/password-reset", handlers.HandlerCtx.RequestPasswordReset)
 	mux.HandleFunc("POST /api/v1/auth/password-reset/confirm", handlers.HandlerCtx.ConfirmPasswordReset)
 
-	// Probes are unauthenticated on purpose: a container healthcheck has no
-	// session cookie. They sit under /api/v1 so the same URL answers directly
-	// and through the frontend proxy, which is the path a browser uses.
 	mux.HandleFunc("GET /api/v1/health", handlers.HandlerCtx.Health)
 	mux.HandleFunc("GET /api/v1/ready", handlers.HandlerCtx.Ready)
 
 	mux.Handle("POST /api/v1/auth/logout", pkgmiddleware.AuthMiddleware(http.HandlerFunc(handlers.HandlerCtx.Logout)))
 	mux.Handle("GET /api/v1/auth/me", pkgmiddleware.AuthMiddleware(http.HandlerFunc(handlers.HandlerCtx.Me)))
 
-	// Multiple accounts on one browser. The list a browser saved is read back for
-	// the switcher, and a switch or a removal is performed server-side so the
-	// session tokens never reach the page.
 	mux.Handle("GET /api/v1/auth/accounts", pkgmiddleware.AuthMiddleware(http.HandlerFunc(handlers.HandlerCtx.Accounts)))
 	mux.Handle("POST /api/v1/auth/switch", pkgmiddleware.AuthMiddleware(http.HandlerFunc(handlers.HandlerCtx.SwitchAccount)))
 	mux.Handle("POST /api/v1/auth/accounts/remove", pkgmiddleware.AuthMiddleware(http.HandlerFunc(handlers.HandlerCtx.RemoveSavedAccount)))
@@ -78,9 +68,6 @@ func routes() http.Handler {
 		"PUT /api/v1/follow-requests/{userId}":    handlers.HandlerCtx.DecideFollowRequest,
 		"DELETE /api/v1/follow-requests/{userId}": handlers.HandlerCtx.DecideFollowRequest,
 		"GET /api/v1/users":                       handlers.HandlerCtx.Discover,
-		// A literal segment beside `{userId}` is fine here for the reason the handle route
-		// below records: Go's mux prefers the more specific pattern, so `/users/suggestions`
-		// is not read as a userId.
 		"GET /api/v1/users/suggestions":           handlers.HandlerCtx.Suggestions,
 		"GET /api/v1/users/{userId}":              handlers.HandlerCtx.UserProfile,
 		"PUT /api/v1/users/me":                    handlers.HandlerCtx.UpdateProfile,
@@ -108,18 +95,13 @@ func routes() http.Handler {
 		"GET /api/v1/saved-posts":                 handlers.HandlerCtx.SavedPosts,
 		"GET /api/v1/posts/search":                handlers.HandlerCtx.SearchPosts,
 		"GET /api/v1/hashtags/{tag}":              handlers.HandlerCtx.HashtagPosts,
-		// A handle resolves to a profile, but the route cannot live under `/users/`: a
-		// literal segment there beside `{userId}` collides with `/users/{userId}/media`
-		// and its siblings, which have the same shape, and Go's mux refuses that at
-		// registration rather than at request time.
-		"GET /api/v1/handles/{nickname}":     handlers.HandlerCtx.UserByNickname,
-		"POST /api/v1/posts/{postId}/save":   handlers.HandlerCtx.SavePost,
-		"DELETE /api/v1/posts/{postId}/save": handlers.HandlerCtx.UnsavePost,
+		"GET /api/v1/handles/{nickname}":          handlers.HandlerCtx.UserByNickname,
+		"POST /api/v1/posts/{postId}/save":        handlers.HandlerCtx.SavePost,
+		"DELETE /api/v1/posts/{postId}/save":      handlers.HandlerCtx.UnsavePost,
 	} {
 		mux.Handle(pattern, pkgmiddleware.AuthMiddleware(handler))
 	}
 
-	// Catch-all — return JSON 404 for unknown endpoints
 	for _, method := range []string{"GET", "POST"} {
 		mux.Handle(method+" /api/v1/groups/{groupId}/content/{kind}", pkgmiddleware.AuthMiddleware(http.HandlerFunc(handlers.HandlerCtx.GroupContent)))
 	}

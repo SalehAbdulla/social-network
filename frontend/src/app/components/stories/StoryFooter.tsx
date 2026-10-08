@@ -2,12 +2,6 @@
 
 import { Heart, Send } from 'lucide-react';
 
-/**
- * The story card's bottom row. For someone else's story it is the reply pill plus the heart
- * and send buttons; for your own story the reply box is replaced by the "Seen by" control,
- * because you do not reply to yourself — the author reads the replies, and the viewers are
- * the thing only they can see.
- */
 export default function StoryFooter({ isOwn, nickname, viewerCount, replyCount, onOpenViewers, onOpenReplies, liked, likeCount, onToggleLike, reply, onReplyChange, onReplyFocus, onReplyBlur, onSendReply, sending, sent }: {
   isOwn: boolean;
   nickname: string;

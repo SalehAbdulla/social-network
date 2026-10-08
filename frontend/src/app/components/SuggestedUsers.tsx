@@ -9,21 +9,14 @@ import { useBackend } from './BackendProvider';
 import Avatar from './Avatar';
 import { SUGGEST_AVATAR_SIZE } from '../lib/sizing';
 
-/** How many people the column offers. Five is Instagram's number, and the endpoint's default. */
 const LIMIT = 5;
 
-/**
- * The row's one line of muted meta copy: the mutuals when there are any, the default when
- * there are none. `mutualCount` is the whole number, `mutuals` is only the two names the
- * server shipped, so the "+ N more" is arithmetic on the count rather than on the names.
- */
 export function reasonFor(person: UserSuggestion): string {
   if (!person.mutuals?.length) return 'Suggested for you';
   const more = person.mutualCount - 1;
   return more > 0 ? `Followed by ${person.mutuals[0]} + ${more} more` : `Followed by ${person.mutuals[0]}`;
 }
 
-/** The first paint of one row: the face and the two lines, at the real 56px. */
 function RowSkeleton() {
   return <div aria-hidden="true" className="flex h-[var(--rc-row-height)] items-center gap-3">
     <span className="block shrink-0 animate-pulse rounded-full bg-rail-hover-strong" style={{ width: 'var(--rc-avatar)', height: 'var(--rc-avatar)' }} />
@@ -34,24 +27,9 @@ function RowSkeleton() {
   </div>;
 }
 
-/**
- * The feed's "Suggested for you" list — Instagram's friends-of-friends column, five rows.
- *
- * It reads `GET /users/suggestions`, the endpoint that does the ranking the plain people
- * list cannot: accounts the viewer does not follow yet, ordered by how many people they
- * both know, each row worded from its mutuals. A follow is optimistic — the row switches to
- * "Following" the moment it is clicked and is put back with a toast if the write fails — and
- * a private profile switches to "Requested", the state a follow request leaves behind.
- *
- * A rail is decoration, so it fails quietly: a load error hides the whole block and says so
- * on the console, on the rule that a heading with no people under it is worse than none.
- */
 export default function SuggestedUsers() {
   const { refreshUser } = useBackend();
   const { data, error, loading } = useResource<UserSuggestion[]>(`/users/suggestions?limit=${LIMIT}`);
-  // The rows this column has acted on. Whether the viewer follows is global state
-  // (`user.following`), but the row must keep showing "Following"/"Requested" rather than
-  // vanish, so the outcome is held here and cleared only by a rollback.
   const [acted, setActed] = useState<Record<string, 'following' | 'requested'>>({});
   const [busy, setBusy] = useState('');
 
@@ -81,7 +59,6 @@ export default function SuggestedUsers() {
   </section>;
 
   const people = (data ?? []).slice(0, LIMIT);
-  // Nothing to offer is not an empty box, it is no box at all.
   if (people.length === 0) return null;
 
   return <section aria-label="Suggested for you" className="mt-[var(--rc-header-top)]">

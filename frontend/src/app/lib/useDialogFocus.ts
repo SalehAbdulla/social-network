@@ -2,25 +2,8 @@
 
 import { useEffect, useRef, type RefObject } from 'react';
 
-// Everything a dialog may contain that a keyboard can reach. `[tabindex]` covers
-// custom controls; `:not(:disabled)` and the visibility filter below keep
-// hidden or inert controls out of the cycle.
 const FOCUSABLE = 'a[href], button:not(:disabled), input:not(:disabled), select:not(:disabled), textarea:not(:disabled), summary, [tabindex]:not([tabindex="-1"])';
 
-/**
- * The keyboard contract the mobile navigation drawer already had, packaged for
- * every dialog: on open focus moves inside (to `initialFocus` when given, else
- * the first control), Tab and Shift+Tab cycle within the dialog, Escape closes
- * it, the page behind is frozen and focus returns to whatever had it before.
- *
- * `onClose` is read through a ref, so a caller can pass an inline arrow without
- * re-running the effect — which would re-focus and re-lock on every render.
- *
- * Set `enabled: false` while a dialog is closed but its state still lives in the
- * parent (an inline confirmation), so the trap is only installed when there is
- * something to trap. `lockScroll: false` suits a prompt that is part of the page
- * rather than an overlay.
- */
 export function useDialogFocus<T extends HTMLElement>(onClose: () => void, options: {
   initialFocus?: RefObject<HTMLElement | null>;
   enabled?: boolean;

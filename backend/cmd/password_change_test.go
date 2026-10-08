@@ -14,16 +14,11 @@ import (
 	"social-network/backend/pkg/app/repositories"
 )
 
-// The credential the seeded account signs in with, and the replacement this test
-// rotates to. Both satisfy the shared rules: twelve characters or more with a
-// letter, a number and a symbol.
 const (
 	seededPassword  = "DummyUser123!"
 	rotatedPassword = "RotatedPassword123!"
 )
 
-// callRaw performs a request and returns the error envelope, because the shared
-// call helper returns only the data member and the message is the assertion here.
 func callRaw(t *testing.T, client integrationClient, method, path string, body any, status int) errorEnvelope {
 	t.Helper()
 	encoded, err := json.Marshal(body)
@@ -51,9 +46,6 @@ func callRaw(t *testing.T, client integrationClient, method, path string, body a
 	return envelope
 }
 
-// clientWithToken is a browser presenting one token directly, which is how a
-// revoked cookie has to be tested: the login flow would never leave two live
-// sessions for one account open at once.
 func clientWithToken(t *testing.T, server *httptest.Server, token string) integrationClient {
 	t.Helper()
 	client := newIntegrationClient(t, server)
@@ -80,13 +72,7 @@ func storedPasswordHash(t *testing.T, repo *repositories.DB, userID string) stri
 	return hash
 }
 
-// TestPasswordChangeRotatesTheSession covers the credential path end to end: the
-// password is replaced, the browser that changed it keeps working on the
-// replacement cookie, and every other session of that account stops working.
 func TestPasswordChangeRotatesTheSession(t *testing.T) {
-	// The store-backed manager is what makes the rotation observable here: the
-	// replacement token revokes the account's other session rows, and a token is
-	// only recognisable after that if the manager can read the table.
 	manager := isolatedSessionManager(t)
 	server, repo := integrationServer(t, true, false)
 	manager.UseStore(repo)
@@ -94,10 +80,6 @@ func TestPasswordChangeRotatesTheSession(t *testing.T) {
 	client := newIntegrationClient(t, server)
 	client.login("dummy@example.com")
 
-	// A second, already-issued session for the same account. The login flow
-	// cannot produce this — signing in revokes the previous token — so it is
-	// written straight to the table: this is the stolen-cookie case, and the
-	// rotation is what has to end it.
 	const stolenToken = "stolen-session-token"
 	now := time.Now().UTC()
 	const layout = "2006-01-02 15:04:05"
@@ -112,9 +94,6 @@ func TestPasswordChangeRotatesTheSession(t *testing.T) {
 	beforeToken := sessionCookie(t, client, serverURL)
 	beforeHash := storedPasswordHash(t, repo, "dummy-id")
 
-	// A weak or mismatched payload is refused before the credential is compared,
-	// so a rejected request never touches the stored hash. The confirmation is
-	// enforced server-side rather than trusted to the dialog.
 	for name, body := range map[string]map[string]string{
 		"matching but too short": {"currentPassword": seededPassword, "newPassword": "Short1!", "confirmPassword": "Short1!"},
 		"confirmation differs":   {"currentPassword": seededPassword, "newPassword": rotatedPassword, "confirmPassword": rotatedPassword + "x"},
@@ -129,8 +108,6 @@ func TestPasswordChangeRotatesTheSession(t *testing.T) {
 		t.Fatal("a rejected request changed the stored password")
 	}
 
-	// A wrong current password is answered in its own words rather than with the
-	// generic sign-in error, and nothing rotates.
 	wrong := callRaw(t, client, "PUT", "/api/v1/users/me/password", map[string]string{
 		"currentPassword": "NotMyPassword123!", "newPassword": rotatedPassword, "confirmPassword": rotatedPassword,
 	}, http.StatusBadRequest)
@@ -151,9 +128,6 @@ func TestPasswordChangeRotatesTheSession(t *testing.T) {
 		t.Fatal("the response did not rotate the session cookie")
 	}
 
-	// The browser that changed the password is still signed in on the new cookie,
-	// while the token it used before and the stolen one are both dead — in the
-	// table and over HTTP.
 	client.call("GET", "/api/v1/users/me", nil, 200)
 	if count := sessionRowCount(t, repo, "dummy-id"); count != 1 {
 		t.Fatalf("expected only the rotated session row to remain, found %d", count)
@@ -161,8 +135,6 @@ func TestPasswordChangeRotatesTheSession(t *testing.T) {
 	clientWithToken(t, server, beforeToken).call("GET", "/api/v1/users/me", nil, 401)
 	clientWithToken(t, server, stolenToken).call("GET", "/api/v1/users/me", nil, 401)
 
-	// The credential itself changed: the old password no longer signs in, and the
-	// new one does.
 	signIn := func(password string, status int) {
 		t.Helper()
 		newIntegrationClient(t, server).call("POST", "/api/v1/auth/login", url.Values{
@@ -175,8 +147,6 @@ func TestPasswordChangeRotatesTheSession(t *testing.T) {
 		t.Fatalf("the stored credential is not a fresh bcrypt hash: %q", hash)
 	}
 
-	// Without a session the request never reaches the handler, and the route is a
-	// PUT: any other method gets the same JSON 404 as an unknown path.
 	newIntegrationClient(t, server).call("PUT", "/api/v1/users/me/password", map[string]string{
 		"currentPassword": seededPassword, "newPassword": rotatedPassword, "confirmPassword": rotatedPassword,
 	}, 401)

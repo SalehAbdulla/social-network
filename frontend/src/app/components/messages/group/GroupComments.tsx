@@ -11,11 +11,6 @@ import Menu, { MenuItem } from '../../ui/Menu';
 import { itemName, type GroupItem } from './groupContent';
 import { groupExactTime } from './groupTime';
 
-/**
- * A post's comments, read once so the count on the card is real before the list is
- * opened. There is no comment total on a group content row — the endpoint returns the
- * comments themselves — so the count is the length of the first page.
- */
 export function useGroupComments(groupId: string, postId: number) {
   const [items, setItems] = useState<GroupItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -31,24 +26,13 @@ export function useGroupComments(groupId: string, postId: number) {
   return { items, loading, setItems, reload: () => setRevision(value => value + 1) };
 }
 
-/**
- * The inline comment list and its one-line input, drawn where the feed's card would draw its own.
- *
- * The list is collapsed by default behind a "View all N comments" link, which is what keeps a
- * post with a long thread from pushing the next post off the screen. Posting is optimistic: the
- * comment appears at once, and is taken back — with the text restored to the field — if the
- * write fails. The input is the same 36px pill the group already used, with a blue "Post"
- * button that appears only once there is something to post.
- */
 export default function GroupComments({ groupId, postId, meId, isOwner, comments, avatarOf, variant = 'inline' }: {
   groupId: string;
   postId: number;
   meId: string;
   isOwner: boolean;
   comments: ReturnType<typeof useGroupComments>;
-  /** Resolves a commenter's avatar from the roster the caller already holds. */
   avatarOf?: (userId: string) => string;
-  /** `panel` is the overlay's right column: the thread scrolls and the composer is pinned under it. */
   variant?: 'inline' | 'panel';
 }) {
   const { user } = useBackend();
@@ -62,7 +46,6 @@ export default function GroupComments({ groupId, postId, meId, isOwner, comments
     const value = text.trim();
     if (busy || !value) return;
     setBusy(true);
-    // The optimistic row the list draws until the server answers with the real one.
     const tempId = -Date.now();
     const optimistic: GroupItem = {
       id: tempId,
@@ -81,7 +64,6 @@ export default function GroupComments({ groupId, postId, meId, isOwner, comments
       going: 0,
       notGoing: 0,
       upcoming: false,
-      // A comment the reader just wrote has no likes on it yet.
       likeCount: 0,
       likedByMe: false,
     };
@@ -109,7 +91,6 @@ export default function GroupComments({ groupId, postId, meId, isOwner, comments
 
   const label = total === 1 ? 'View 1 comment' : `View all ${total} comments`;
 
-  // The comment row, shared by the inline thread and the overlay's panel so the two cannot drift.
   const renderComment = (comment: GroupItem) => {
     const mine = comment.userId === meId;
     const name = mine ? 'You' : itemName(comment);
@@ -128,7 +109,6 @@ export default function GroupComments({ groupId, postId, meId, isOwner, comments
     </div>;
   };
 
-  // The composer is the same form in both layouts; only where it sits changes.
   const form = <form className="grp-comment-form" onSubmit={add}>
     <label className="grp-comment-field">
       <span className="sr-only">Add a comment</span>
@@ -137,9 +117,6 @@ export default function GroupComments({ groupId, postId, meId, isOwner, comments
     {!!text.trim() && <Button type="submit" variant="text" loading={busy}>Post</Button>}
   </form>;
 
-  // The overlay's column: the thread fills the space and scrolls, the composer is pinned beneath it
-  // — the same shape the feed's own comments take in that slot. The thread is shown whole, because
-  // opening the overlay is already the reader asking to see it.
   if (variant === 'panel') return <div className="flex min-h-0 flex-1 flex-col">
     <div className="order-2 shrink-0 border-t border-border p-4">{form}</div>
     <div className="order-1 min-h-0 flex-1 space-y-3 overflow-y-auto p-4">
@@ -156,11 +133,6 @@ export default function GroupComments({ groupId, postId, meId, isOwner, comments
   </div>;
 }
 
-/**
- * The group's thread in the post view's panel. The modal is handed an element rather than a value,
- * so `GroupThread` reads the comments itself and hands them to `GroupComments` in its panel layout
- * — the same thread the inline card draws, in the shape the overlay's column expects.
- */
 export function GroupThread({ groupId, postId, meId, isOwner, avatarOf }: {
   groupId: string;
   postId: number;

@@ -10,14 +10,8 @@ import (
 	"social-network/backend/pkg/app/service"
 )
 
-// TestAuthMiddleware pins the only door into the API. Three outcomes matter: a
-// request without a cookie, one with a token the session manager does not know,
-// and one with a live token, which must also hand the account to the handler
-// through the context — every handler reads it with UserIDFromContext.
 func TestAuthMiddleware(t *testing.T) {
 	const userID = "middleware-user-id"
-	// No store is attached, so the default manager is memory-only here, which is
-	// what keeps this test independent of a database.
 	if err := service.DefaultSessionManager.CreateSession(userID, "known-token"); err != nil {
 		t.Fatal(err)
 	}
@@ -55,8 +49,6 @@ func TestAuthMiddleware(t *testing.T) {
 			}
 			cleared := recorder.Header().Get("Set-Cookie")
 			if testCase.wantStatus == http.StatusUnauthorized {
-				// A rejected request clears the cookie, so a browser with a stale
-				// token stops presenting it on every later call.
 				if !strings.Contains(cleared, "session_token=;") || !strings.Contains(cleared, "Max-Age=0") {
 					t.Fatalf("expected the session cookie to be cleared, got %q", cleared)
 				}
@@ -67,8 +59,6 @@ func TestAuthMiddleware(t *testing.T) {
 	}
 }
 
-// TestUserIDFromContext covers the read side: a context nobody put a user in
-// yields no user rather than an empty string that looks like one.
 func TestUserIDFromContext(t *testing.T) {
 	if id, ok := UserIDFromContext(context.Background()); ok || id != "" {
 		t.Fatalf("a bare context reported a user: %q, %v", id, ok)

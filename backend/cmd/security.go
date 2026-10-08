@@ -10,16 +10,8 @@ import (
 	"time"
 )
 
-// defaultRateLimitPerMinute is the tested boundary: `cmd/load_smoke_test.go` sends a
-// full window's worth of requests and pins that the twelve-hundredth is answered and the
-// next is refused, so raising this number would be a change to a contract rather than a
-// tweak. A deployment can override it per instance through RATE_LIMIT_PER_MINUTE, which
-// is a deployment's business rather than a test's — see DEPLOYMENT.md.
 const defaultRateLimitPerMinute = 1200
 
-// effectiveRateLimitPerMinute is the ceiling for one direct peer: the configured value,
-// or the default when none was configured (which is every test that builds an AppConfig
-// by hand, including the one that pins the boundary).
 func effectiveRateLimitPerMinute() int {
 	if app.RateLimitPerMinute > 0 {
 		return app.RateLimitPerMinute
@@ -27,8 +19,6 @@ func effectiveRateLimitPerMinute() int {
 	return defaultRateLimitPerMinute
 }
 
-// Limits are per direct peer. Forwarded headers are deliberately not trusted;
-// deployments should also enforce per-client limits at their reverse proxy.
 func Security(next http.Handler) http.Handler {
 	type bucket struct {
 		count int
@@ -44,9 +34,6 @@ func Security(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("X-Content-Type-Options", "nosniff")
 		w.Header().Set("Referrer-Policy", "same-origin")
-		// The API only ever answers with JSON, so it can refuse to be framed or
-		// to load anything. Document-level policy (HSTS, a CSP for the app itself)
-		// belongs where the browser reads a document: the frontend or the proxy.
 		w.Header().Set("X-Frame-Options", "DENY")
 		w.Header().Set("Content-Security-Policy", "default-src 'none'; frame-ancestors 'none'")
 		if r.Method != "GET" && r.Method != "HEAD" && r.Method != "OPTIONS" {

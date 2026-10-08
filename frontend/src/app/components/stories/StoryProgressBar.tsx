@@ -2,15 +2,6 @@
 
 import type { RefObject } from 'react';
 
-/**
- * The segmented bar at the top of the story card: one segment per story of the current
- * author, equal width, the seen ones filled, the current one growing.
- *
- * Only the current segment animates, and it is painted by the player's rAF loop writing a
- * `scaleX` through `fillRef` — this component never re-renders to move it. The seen and
- * upcoming segments are static, so a frame of progress costs one style write and no React
- * work at all.
- */
 export default function StoryProgressBar({ count, current, fillRef }: {
   count: number; current: number; fillRef: RefObject<HTMLSpanElement | null>;
 }) {

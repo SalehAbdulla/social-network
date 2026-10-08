@@ -5,10 +5,6 @@ import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { deflateSync } from 'node:zlib';
 
-// A PNG written by hand. The downscale check below needs a photo wider than the cap,
-// and nothing in these dependencies encodes one: the fixtures here are all 1x1, and a
-// canvas only exists inside the browser. The format is a signature, an IHDR, a zlib
-// stream of raw scanlines and an IEND, each chunk carrying its own CRC.
 function crc32(buffer) {
   let crc = 0xFFFFFFFF;
   for (const byte of buffer) {
@@ -31,12 +27,12 @@ function largePng(width, height) {
   const header = Buffer.alloc(13);
   header.writeUInt32BE(width, 0);
   header.writeUInt32BE(height, 4);
-  header[8] = 8; // bit depth
-  header[9] = 2; // colour type: truecolour RGB
+  header[8] = 8;
+  header[9] = 2;
   const raw = Buffer.alloc(height * (1 + width * 3));
   let at = 0;
   for (let y = 0; y < height; y++) {
-    raw[at++] = 0; // filter: none
+    raw[at++] = 0;
     for (let x = 0; x < width; x++) {
       raw[at++] = (x + y) & 0xFF;
       raw[at++] = (x * 2) & 0xFF;
@@ -56,11 +52,6 @@ const taskDir = process.env.TEST_ARTIFACT_DIR || path.resolve('../backend/tmp/br
 await mkdir(taskDir, { recursive: true });
 const browserProfile = path.join(taskDir, `profile-${Date.now()}`);
 await mkdir(browserProfile);
-// Chrome is not bundled and its executable lives in a different place on each
-// platform, so CHROME_PATH wins wherever it is set — a Linux runner has to set it
-// — and the rest are the usual install locations. Failing here, by name, beats
-// letting a nonexistent binary come back as a spawn error that reads like a
-// broken suite.
 const chrome = [
   process.env.CHROME_PATH,
   ...(process.platform === 'win32'
@@ -93,16 +84,9 @@ const pending = new Map();
 const exceptions = [];
 const exceptionDetails = [];
 const failedResponses = [];
-// Every same-origin response the browser saw, grouped by page. It exists so a test
-// can assert that an action did *not* refetch a list, which nothing else can check
-// — and it is per page because the suite keeps several tabs open at once, where
-// another tab's legitimate refetch must not read as this one's.
 const responsesByPage = new Map();
 const requestsMatching = (page, fragment) => (responsesByPage.get(page) || []).filter(url => url.includes(fragment));
 const requestsTo = (page, fragment) => requestsMatching(page, fragment).length;
-// Console errors, so a regression that only shows up as a warning or a React
-// hydration complaint cannot pass unnoticed: the suite watches exceptions, which
-// those are not.
 const consoleErrors = [];
 let holdGroupRefresh = false;
 const heldGroupRequests = [];
@@ -121,7 +105,7 @@ socket.addEventListener('message', async ({ data }) => {
       try {
         const inspected = await command('Runtime.callFunctionOn', { objectId: detail.exception.objectId, functionDeclaration: 'function() { return { type: this.type, target: this.target?.tagName, src: this.target?.src, href: this.target?.href, url: this.target?.url, stack: this.stack }; }', returnByValue: true }, event.sessionId);
         detail.event = inspected.result.value;
-      } catch { /* Navigation can discard the exception object. */ }
+      } catch {  }
     }
   }
   if (event.method === 'Runtime.consoleAPICalled' && event.params.type === 'error') {
@@ -136,7 +120,6 @@ socket.addEventListener('message', async ({ data }) => {
     }
   }
   if (event.method === 'Fetch.requestPaused') {
-    // Use the system font offline without making the stylesheet loader reject.
     if (new URL(event.params.request.url).hostname === 'fonts.googleapis.com') {
       await command('Fetch.fulfillRequest', { requestId: event.params.requestId, responseCode: 200, responseHeaders: [{ name: 'Content-Type', value: 'text/css' }], body: '' }, event.sessionId);
       return;
@@ -145,7 +128,7 @@ socket.addEventListener('message', async ({ data }) => {
       heldGroupRequests.push(event); return;
     }
     const local = event.params.request.url.startsWith(base + '/') || event.params.request.url.startsWith('data:') || event.params.request.url.startsWith('blob:');
-    try { await command(local ? 'Fetch.continueRequest' : 'Fetch.failRequest', local ? { requestId: event.params.requestId } : { requestId: event.params.requestId, errorReason: 'BlockedByClient' }, event.sessionId); } catch { /* A page may close with a request pending. */ }
+    try { await command(local ? 'Fetch.continueRequest' : 'Fetch.failRequest', local ? { requestId: event.params.requestId } : { requestId: event.params.requestId, errorReason: 'BlockedByClient' }, event.sessionId); } catch {  }
   }
 });
 function command(method, params = {}, sessionId) {
@@ -178,11 +161,9 @@ async function createPage(email = 'dummy@example.com') {
   await command('Emulation.setDeviceMetricsOverride', { width: 1440, height: 960, deviceScaleFactor: 1, mobile: false }, sessionId);
   await command('Network.enable', {}, sessionId);
 
-  // Keep the smoke test offline except for the local application.
   await command('Fetch.enable', { patterns: [{ urlPattern: '*' }] }, sessionId);
   await command('Page.navigate', { url: base + '/login' }, sessionId);
   await until(sessionId, `!!document.querySelector('input[name="identifier"]')`, 'login form');
-  // Tests explicitly authenticate; page visits must never create a session.
   if (email) await evaluate(sessionId, `(async () => { const response = await fetch('/api/v1/auth/login', { method: 'POST', body: new URLSearchParams({identifier: ${JSON.stringify(email)}, password: 'DummyUser123!'}) }); if (!response.ok) throw new Error('Login failed'); })()`);
   return sessionId;
 }
@@ -197,17 +178,11 @@ async function button(page, text) {
   await until(page, `[...document.querySelectorAll('button')].some(element => element.textContent.trim() === ${JSON.stringify(text)} && !element.disabled)`, `button ${text}`);
   await evaluate(page, `(() => { const button = [...document.querySelectorAll('button')].find(element => element.textContent.trim() === ${JSON.stringify(text)}); if (!button) throw new Error('Button not found: ' + ${JSON.stringify(text)}); button.click(); })()`);
 }
-// The author's own Edit and Delete live in the card's "…" menu rather than as icons of their own, so
-// reaching one is deliberately two steps: open the menu, then press the row. `until` between them,
-// because the rows do not exist until React has re-rendered with the menu open.
 async function postMenu(page, label) {
   await evaluate(page, `document.querySelector('[aria-label="Post options"]').click()`);
   await until(page, `!!document.querySelector('[role="menuitem"]')`, 'the post options menu opens');
   await evaluate(page, `(() => { const item = [...document.querySelectorAll('[role="menuitem"]')].find(node => node.textContent.trim() === ${JSON.stringify(label)}); if (!item) throw new Error('Menu item not found: ' + ${JSON.stringify(label)}); item.click(); })()`);
 }
-// Account actions — Change password, Saved, Theme, Log out — live behind the profile's settings
-// gear rather than as their own buttons, so reaching one is two steps: open the gear, then press
-// the row. `until` between them, because the rows do not exist until React has re-rendered.
 async function settingsItem(page, label) {
   await until(page, `!!document.querySelector('[aria-label="Options"]')`, 'the profile settings gear');
   await evaluate(page, `document.querySelector('[aria-label="Options"]').click()`);
@@ -215,15 +190,6 @@ async function settingsItem(page, label) {
   await evaluate(page, `(() => { const item = [...document.querySelectorAll('[role="menuitem"]')].find(node => node.textContent.trim() === ${JSON.stringify(label)}); if (!item) throw new Error('Menu item not found: ' + ${JSON.stringify(label)}); item.click(); })()`);
 }
 
-// A click on a page that was just created can land before React has attached its
-// handler. The button is in the server-rendered HTML, so the click is accepted and
-// nothing happens — a 60-second stall rather than a failure with a cause. That was
-// measured, not assumed: in the run that failed here the frontend log contained no
-// request for the page the click was meant to open, so the navigation never started.
-// Clicking again while waiting for what the click should cause closes the race
-// without weakening the check, since repeating a navigation click is harmless and
-// the assertion still has to hold. Returns how many clicks it took, so a hiccup is
-// reported instead of hidden.
 async function buttonThen(page, text, expression, label, timeout = 60000) {
   const end = Date.now() + timeout;
   let clicks = 0;
@@ -233,17 +199,13 @@ async function buttonThen(page, text, expression, label, timeout = 60000) {
       await button(page, text);
       clicks += 1;
     } catch {
-      break; // The button left the page, so an earlier click did land.
+      break;
     }
     await pause(500);
   }
   await until(page, expression, label, Math.max(1000, end - Date.now()));
   return clicks;
 }
-// The development mailer writes reset links into the backend's log, which is the
-// only place a browser test can read one: the API never returns the token. The line
-// can trail the HTTP response by a moment because the harness pipes the backend's
-// stdout into that file, hence the polling rather than a single read.
 async function resetTokenFromLog(logPath, timeout = 10000) {
   const deadline = Date.now() + timeout;
   while (Date.now() < deadline) {
@@ -251,7 +213,7 @@ async function resetTokenFromLog(logPath, timeout = 10000) {
       const text = await readFile(logPath, 'utf8');
       const matches = [...text.matchAll(/\/reset\?token=([A-Za-z0-9_-]{20,})/g)];
       if (matches.length) return matches[matches.length - 1][1];
-    } catch { /* The log may not exist yet. */ }
+    } catch {  }
     await pause(200);
   }
   throw new Error(`No reset link reached ${logPath}`);
@@ -260,13 +222,8 @@ async function enter(page, shift = false) {
   await command('Input.dispatchKeyEvent', { type: 'keyDown', key: 'Enter', code: 'Enter', windowsVirtualKeyCode: 13, text: '\r', modifiers: shift ? 8 : 0 }, page);
   await command('Input.dispatchKeyEvent', { type: 'keyUp', key: 'Enter', code: 'Enter', windowsVirtualKeyCode: 13, modifiers: shift ? 8 : 0 }, page);
 }
-// Ctrl + Enter, through the browser's own key pipeline rather than by calling the
-// handler. Ctrl rather than Meta because the suite runs on every platform and the
-// composer accepts either; the key is delivered to whatever has focus, which is why
-// the step that uses this focuses the textarea first — the same place a reader's
-// caret is when they reach for the shortcut.
 async function enterWithControl(page) {
-  const modifiers = 2; // 1 = Alt, 2 = Ctrl, 4 = Meta, 8 = Shift
+  const modifiers = 2;
   await command('Input.dispatchKeyEvent', { type: 'keyDown', key: 'Enter', code: 'Enter', windowsVirtualKeyCode: 13, text: '\r', modifiers }, page);
   await command('Input.dispatchKeyEvent', { type: 'keyUp', key: 'Enter', code: 'Enter', windowsVirtualKeyCode: 13, modifiers }, page);
 }
@@ -315,10 +272,6 @@ try {
   assert.equal(originalDummy.nickname, 'dummyuser');
   console.log('PASS: authenticated frontend loads through the same-origin proxy');
 
-  // The feed's "Suggested for you" column: it offers people the viewer does not already
-  // follow, and acting on one switches that row to "Following" (or "Requested" when the
-  // profile is private). The write is undone at the end, because the request flows later in
-  // this suite start from nobody following anybody.
   await until(dummy, `!!document.querySelector('section[aria-label="Suggested for you"]')`, 'the feed offers people to follow', 15000);
   const findFollow = `[...document.querySelectorAll('section[aria-label="Suggested for you"] button')].find(candidate => candidate.textContent === 'Follow')`;
   assert(await evaluate(dummy, `!!(${findFollow})`), 'the rail offers a person to follow');
@@ -337,10 +290,7 @@ try {
   console.log('PASS: the feed suggests people to follow, and acting on one settles the row');
 
   await navigate(dummy, '/create-post');
-  // A post is a description and its media now — there is no title field — so the text alone names
-  // the post this step reads back.
   await fill(dummy, 'textarea', `Persisted browser integration test ${stamp}`);
-  // Two photos rather than one, so the lightbox below has a set to move through.
   const pixel = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aD1sAAAAASUVORK5CYII=';
   const fixture = path.join(taskDir, 'pixel.png');
   const secondFixture = path.join(taskDir, 'pixel-2.png');
@@ -351,9 +301,6 @@ try {
   await command('DOM.setFileInputFiles', { nodeId: fileNode.nodeId, files: [fixture, secondFixture] }, dummy);
   await until(dummy, `!!document.querySelector('img[alt="Preview of pixel.png"]')`, 'image preview');
   await until(dummy, `!!document.querySelector('img[alt="Preview of pixel-2.png"]')`, 'second image preview');
-  // The tile reports what was chosen before the upload is spent — the measured
-  // canvas and the file's own size — so a rejection is never the first mention of
-  // either. The fixture is a 1x1 PNG, hence the shape of the expected caption.
   const tileDetails = await evaluate(dummy, `(() => { const tile = document.querySelector('img[alt="Preview of pixel.png"]').closest('div'); const caption = tile && tile.querySelector('span'); return caption && caption.textContent.trim(); })()`);
   assert(/^\d+ × \d+ · \d+ B$/.test(String(tileDetails)), `the picker must show the file's dimensions and size, got ${JSON.stringify(tileDetails)}`);
   await button(dummy, 'Publish Post');
@@ -366,11 +313,6 @@ try {
   await until(dummy, `(async () => (await (await fetch('/api/v1/post?id=${postId}')).json()).data.score === 1)()`, 'post reaction');
   console.log('PASS: post creation, image upload, detail page and reaction persist');
 
-  // The Instagram composer is a dialog and not only a route. The left rail carries one "Create"
-  // entry — the single place a desktop starts a post, after the feed's own duplicate button was
-  // removed — and it opens a one-item menu whose "Post" opens the dialog, which Escape then closes
-  // without leaving. `/create-post`, the step above, stays the deep link, so both entries are
-  // still covered.
   await navigate(dummy, '/');
   await evaluate(dummy, `document.querySelector('button[aria-label="Create"]').click()`);
   await until(dummy, `!!document.querySelector('[role="menu"][aria-label="Create"] [role="menuitem"]')`, 'the rail opens its create menu');
@@ -380,9 +322,6 @@ try {
   await until(dummy, `!document.querySelector('[role="dialog"][aria-label="Create a post"]')`, 'Escape closes the composer');
   console.log('PASS: the sidebar opens the composer as a dialog and Escape closes it');
 
-  // Client-side cropping: a portrait photo cropped to a square must travel as a square. The
-  // picker's tile caption is driven by the file it now holds, so it is the proof the crop
-  // really happened rather than a CSS frame — the fixture starts 600×900 and ends 600×600.
   await navigate(dummy, '/create-post');
   const cropFixture = path.join(taskDir, 'crop-fixture.png');
   await writeFile(cropFixture, largePng(600, 900));
@@ -398,21 +337,9 @@ try {
   await until(dummy, `(() => { const tile = document.querySelector('img[alt="Preview of crop-fixture.png"]')?.closest('div'); const caption = tile && tile.querySelector('span'); return caption && /^600 × 600 /.test(caption.textContent.trim()); })()`, 'the crop changed the file to a square');
   console.log('PASS: a photo is cropped to a square in the browser before it is uploaded');
 
-  // This step and the composer-dialog one above navigated away from the post the next steps
-  // assume they are looking at (they read it off the detail page), so come back to it — and
-  // wait for the card, which is fetched after the route change and is what the next steps read
-  // the options menu and the like button off, so a fast hand-off cannot outrun it.
   await navigate(dummy, `/post/${postId}`);
   await until(dummy, `!!document.querySelector('[aria-label="Post options"]')`, 'the post page is loaded again');
 
-  // The item's own claim, measured in the browser: the feed must stop downloading
-  // full-resolution originals, so every request for this post's picture carries a `?size=`.
-  // The upload here is a 1x1 PNG, which is narrower than both caps and therefore has no
-  // derivatives at all — so what the server answers is the original, and the point is which
-  // URL the browser asked for rather than what came back. That combination is the useful one:
-  // it proves the srcset is used for an upload that has nothing to choose between.
-  // The browser fetches the picture after the document, so wait for that request rather than
-  // racing it: the assertion below is about which URL arrives, not about it arriving.
   for (let attempt = 0; attempt < 40 && requestsMatching(dummy, mediaURL).length === 0; attempt++) await pause(250);
   const mediaRequests = requestsMatching(dummy, mediaURL);
   assert(mediaRequests.length > 0, 'the post picture should have been requested');
@@ -437,10 +364,6 @@ try {
   assert.equal(edited.score, 1);
   console.log('PASS: owner edit button, prefilled editor, cancel and save preserve photos and votes');
 
-  // The lightbox replaces opening the raw file in a new tab: the photo opens in a
-  // dialog, the arrow keys move through the set, Escape closes it, and the focus
-  // goes back to the picture it was opened from. The click is a real mouse event so
-  // the button can hold focus at all — a scripted `.click()` would not.
   await until(dummy, `!!document.querySelector('button[aria-label="Open image 1 of 2"]')`, 'photos open in a viewer');
   await clickAt(dummy, 'button[aria-label="Open image 1 of 2"]');
   await until(dummy, `document.activeElement?.getAttribute('aria-label') === 'Post photos viewer'`, 'the viewer takes focus');
@@ -454,9 +377,6 @@ try {
   await until(dummy, `document.activeElement?.getAttribute('aria-label') === 'Open image 1 of 2'`, 'focus returns to the picture it was opened from');
   console.log('PASS: a photo opens in a lightbox, moves with the arrow keys and closes on Escape');
 
-  // Bookmarks: the control lives on the card, the list has a page of its own, and
-  // un-saving from that page drops the row rather than leaving a stale card. Both
-  // writes are idempotent on the server, so the waits are on the resulting state.
   await until(dummy, `!!document.querySelector('button[aria-label="Save post"]')`, 'the save control is on the post');
   await evaluate(dummy, `document.querySelector('button[aria-label="Save post"]').click()`);
   await until(dummy, `(async () => (await (await fetch('/api/v1/saved-posts?page=1&size=10')).json()).data.posts.some(post => post.postId === ${JSON.stringify(postId)}))()`, 'the post reaches the saved list');
@@ -468,17 +388,8 @@ try {
   assert.equal(await evaluate(dummy, `(async () => (await (await fetch('/api/v1/saved-posts?page=1&size=10')).json()).data.totalElements)()`), 0, 'the saved list is empty after un-saving');
   console.log('PASS: a post is saved from its card, listed on the private Saved page, and dropped when un-saved');
 
-  // The composer's own contract, measured rather than assumed: the reason a publish
-  // is blocked is on the page and attached to the field it is about, a draft survives
-  // a reload while saying what did not come back, and Ctrl/Cmd + Enter publishes from
-  // the textarea where the text was typed. The storage key here is the one
-  // `lib/postDraft.ts` owns, which is the part of that module a browser can check.
   const draftKey = 'social:post-draft';
   await navigate(dummy, '/create-post');
-  // The audience banner is the part of the preview that is about the reader rather than
-  // the look: it must say who can read the draft, not merely repeat the privacy label.
-  // This account is public, so `public` reaches everyone and `followers` does not; the
-  // `selected` wording is asserted later, where a follower exists to name.
   await until(dummy, `document.querySelector('[aria-label="Audience"]')?.innerText.includes('Visible to everyone')`, 'a public post on a public profile reaches everyone');
   await fill(dummy, 'main select', 'followers');
   await until(dummy, `document.querySelector('[aria-label="Audience"]')?.innerText.includes('Visible to your followers')`, 'the banner follows the audience the draft chooses');
@@ -511,10 +422,6 @@ try {
   await api(dummy, `/posts?id=${composed.postId}`, 'DELETE');
   console.log('PASS: the composer says what is missing, keeps a draft across a reload, and publishes on Ctrl/Cmd+Enter');
 
-  // A photo larger than the cap is shrunk in the browser before it is sent, so the bytes
-  // that travel and the bytes kept are the capped ones. The fixture is 2000 px wide — a
-  // phone photo's shape — and the assertion is on what the *server* serves back, since
-  // that is the file the upload actually produced.
   const largeFixture = path.join(taskDir, 'large.png');
   await writeFile(largeFixture, largePng(2000, 1500));
   await navigate(dummy, '/create-post');
@@ -522,9 +429,6 @@ try {
   const largeDocument = await command('DOM.getDocument', {}, dummy);
   const largeNode = await command('DOM.querySelector', { nodeId: largeDocument.root.nodeId, selector: 'input[type="file"]' }, dummy);
   await command('DOM.setFileInputFiles', { nodeId: largeNode.nodeId, files: [largeFixture] }, dummy);
-  // The picker decodes the file before it accepts it — that is where the caption's
-  // dimensions come from — so publishing before the preview exists would send a post
-  // with no photo at all. The wait is the same one the smaller fixture above uses.
   await until(dummy, `!!document.querySelector('img[alt="Preview of large.png"]')`, 'the large photo is attached');
   await button(dummy, 'Publish Post');
   await until(dummy, `location.pathname === '/' && document.body.innerText.includes(${JSON.stringify(`Downscaled upload ${stamp}`)})`, 'the large photo publishes');
@@ -536,9 +440,6 @@ try {
   await api(dummy, `/posts?id=${largePost.postId}`, 'DELETE');
   console.log('PASS: a photo above the cap is downscaled in the browser before it is uploaded');
 
-  // A hashtag and a mention are links, and each goes somewhere real: the tag to its
-  // results page, the mention to the member it names through the handle lookup. The tag
-  // is compared whole by the endpoint, so the fixture uses one only this post carries.
   const tag = `rebootcheck${stamp}`;
   await navigate(dummy, '/create-post');
   await fill(dummy, 'textarea', `A tagged post #${tag} that mentions @alexdemo too.`);
@@ -571,10 +472,6 @@ try {
   assert(!(await evaluate(alex, `!!document.querySelector('textarea')`)), 'the editor is not offered to a non-owner');
   await navigate(alex, `/post/${postId}`);
   await until(alex, `!!document.querySelector('article')`, 'Alex post details');
-  // A post's insights belong to its author: the panel is on the post page for the account that
-  // wrote it, absent for everyone else, and the endpoint itself refuses a non-author rather than
-  // answering the same numbers to whoever asks. The post here is `dummy`'s and already carries
-  // one reaction from the step above, so the numbers have something to report.
   await navigate(dummy, `/post/${postId}`);
   await until(dummy, `!!document.querySelector('section[aria-label="Post insights"]')`, 'the author sees the insights panel');
   const insightsText = await evaluate(dummy, `document.querySelector('section[aria-label="Post insights"]').innerText`);
@@ -598,7 +495,6 @@ try {
   assert.deepEqual(refetchedWhileVoting, [], `Comment liking must not refetch the post or comments: ${JSON.stringify(refetchedWhileVoting)}`);
   console.log('PASS: comment likes toggle in place without refetching or losing the draft');
 
-  // A comment can carry an uploaded photo, exactly like a post.
   const commentPhotoFixture = path.join(taskDir, 'comment-photo.png');
   await writeFile(commentPhotoFixture, Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aD1sAAAAASUVORK5CYII=', 'base64'));
   const commentDocument = await command('DOM.getDocument', {}, alex);
@@ -612,8 +508,6 @@ try {
   assert(photoComment && photoComment.imageUrls.length === 1, `the comment kept its photo: ${JSON.stringify(photoComment)}`);
   const commentPhoto = photoComment.imageUrls[0];
   assert(await evaluate(alex, `(async () => (await fetch(${JSON.stringify(commentPhoto)})).ok)()`), 'the uploaded comment photo is served');
-  // Recency is what a reader wants here, and the exact instant has to stay
-  // available: relative in the text, a real timestamp in `dateTime` and `title`.
   const freshComment = await evaluate(alex, `(() => {
     const node = [...document.querySelectorAll('article time[datetime]')].find(item => item.textContent.trim().length > 0);
     return node ? { text: node.textContent.trim(), title: node.getAttribute('title'), dateTime: node.getAttribute('datetime') } : null;
@@ -622,13 +516,6 @@ try {
   assert(freshComment.dateTime && freshComment.title, `the exact instant stays on the element: ${JSON.stringify(freshComment)}`);
   console.log('PASS: a comment carries an uploaded photo, renders it and stores its URL');
 
-  // A post from somebody else, arriving over the socket, is offered rather than imposed:
-  // the feed raises a sticky "New posts" pill and only the press folds the page in, so a
-  // reader halfway down the list is not thrown back to the top. Both accounts are put on
-  // the feed first, and the publish is retried because the frame is live-only — it must
-  // not be sent before `dummy`'s socket has finished its handshake, and there is no DOM
-  // signal for that handshake to wait on. The author is skipped by the server, and that
-  // half is asserted too so the frame's contract cannot drift in silence.
   await navigate(dummy, '/');
   await navigate(alex, '/');
   await until(alex, `!!document.querySelector('[aria-label="Your account"]')`, 'the second account is on the feed');
@@ -647,8 +534,6 @@ try {
   for (const id of socketPosts) await api(alex, `/posts?id=${id}`, 'DELETE');
   console.log('PASS: a post created elsewhere raises a "New posts" pill instead of replacing the feed');
 
-  // On a phone the same comment area is a bottom drawer rather than the inline list: shut
-  // until the reader asks for it, opened by the comment button, dismissed with Escape.
   await command('Emulation.setDeviceMetricsOverride', { width: 390, height: 844, deviceScaleFactor: 1, mobile: true }, alex);
   await navigate(alex, `/post/${postId}`);
   await until(alex, `!!document.querySelector('button[aria-label="Show comments"]')`, 'comment button on a phone');
@@ -661,13 +546,6 @@ try {
   await command('Emulation.setDeviceMetricsOverride', { width: 1440, height: 960, deviceScaleFactor: 1, mobile: false }, alex);
   console.log('PASS: on a phone the comments open as a bottom drawer and close on Escape');
 
-  // The feed's Instagram overlay: clicking a post opens a pop-up — media on the left; header,
-  // caption, the post's actions and the comments on the right, with the composer pinned at the
-  // bottom. This is the desktop *feed* path the steps above never exercised: they read and write
-  // comments off the `/post/{postId}` page, which stays the deep link and still opens `#comment-{id}`
-  // inline, and the step they end on proves the phone's drawer. Escape closes the overlay and focus
-  // returns to the picture that opened it; the phone step below proves the drawer, not this, is what
-  // a narrow screen gets.
   await navigate(dummy, '/');
   const feedMedia = `article[data-post-id="${postId}"] button[aria-label^="Open image"]`;
   await until(dummy, `!!document.querySelector(${JSON.stringify(feedMedia)})`, 'the post is on the feed with its media');
@@ -680,9 +558,6 @@ try {
   await until(dummy, `!!document.querySelector('[role="dialog"][aria-label="Post"] img[alt="comment-photo.png"]')`, 'the overlay previews a comment photo');
   await fill(dummy, `[role="dialog"][aria-label="Post"] #comment-${postId}`, `Overlay comment ${stamp}`);
   await evaluate(dummy, `[...document.querySelectorAll('[role="dialog"][aria-label="Post"] button')].find(button => button.textContent.trim() === 'Post').click()`);
-  // Wait for this comment's own text, not just any `Comment attachment`: the post already carries a
-  // comment photo from the post-page step above, so the generic selector would pass before this
-  // write lands and the API read below would run too early.
   await until(dummy, `document.querySelector('[role="dialog"][aria-label="Post"]').innerText.includes(${JSON.stringify(`Overlay comment ${stamp}`)})`, 'the overlay shows the comment it wrote');
   await until(dummy, `!!document.querySelector('[role="dialog"][aria-label="Post"] img[alt="Comment attachment"]')`, 'the overlay renders the comment photo');
   const overlayComment = (await api(dummy, `/posts/comments?postId=${postId}`)).comments.find(item => item.commentText === `Overlay comment ${stamp}`);
@@ -692,7 +567,6 @@ try {
   assert(await evaluate(dummy, `document.activeElement?.getAttribute('aria-label')?.startsWith('Open image')`), 'focus returns to the picture that opened the overlay');
   console.log('PASS: the feed opens a post overlay that reads and writes a comment photo, and Escape returns focus');
 
-  // On a phone the feed keeps the bottom drawer and is never offered the overlay.
   await command('Emulation.setDeviceMetricsOverride', { width: 390, height: 844, deviceScaleFactor: 1, mobile: true }, dummy);
   await navigate(dummy, '/');
   const feedComments = `article[data-post-id="${postId}"] button[aria-label="Show comments"]`;
@@ -705,36 +579,19 @@ try {
   await command('Emulation.setDeviceMetricsOverride', { width: 1440, height: 960, deviceScaleFactor: 1, mobile: false }, dummy);
   console.log('PASS: on a phone the feed opens the comment drawer, not the overlay');
 
-  // The profile media tab lists comment photos next to post photos. The tile asks for one of
-  // the server's derivatives rather than the original, so what identifies the photo here is its
-  // URL up to the `?size=` — asserting the bare URL would now be asserting that the grid
-  // downloads full-resolution originals, which is the opposite of what the app is for.
   await navigate(alex, '/profile');
   await until(alex, `!!document.querySelector('[aria-label="Profile statistics"]')`, 'own profile');
-  // The header carries the Instagram shape: a posts count beside followers and following,
-  // and the number is the profile resource's own rather than a guess from the loaded page.
   const ownProfileData = await api(alex, '/users/me');
   const shownPostCount = await evaluate(alex, `Number((document.querySelector('[aria-label="Post count"]')?.innerText.match(/[0-9]+/) || [NaN])[0])`);
   assert.equal(shownPostCount, ownProfileData.postCount, `the header shows the profile's own post count: ${shownPostCount} vs ${ownProfileData.postCount}`);
   await evaluate(alex, `document.querySelector('[data-tab="media"]').click()`);
   await until(alex, `[...document.querySelectorAll('a[href="/post/${postId}"] img')].some(image => { const src = image.getAttribute('src') || ''; return src.startsWith(${JSON.stringify(commentPhoto)}) && src.includes('size='); })`, 'comment photo in the profile media tab');
-  // The 935px column is its full width at any desktop viewport, so the grid is three columns of 3:4 tiles.
   const mediaGrid = await evaluate(alex, `(() => { const grid = document.querySelector('[data-media-grid]'); const tile = grid.querySelector('img'); const box = tile.getBoundingClientRect(); return { columns: getComputedStyle(grid).gridTemplateColumns.split(' ').length, ratio: box.width / box.height, width: Math.round(box.width) }; })()`);
   assert.equal(mediaGrid.columns, 3, `the media grid is three columns: ${JSON.stringify(mediaGrid)}`);
   assert(Math.abs(mediaGrid.ratio - 3 / 4) < 0.02, `the media tiles are 3:4 portrait: ${JSON.stringify(mediaGrid)}`);
   console.log('PASS: the profile header counts posts and the media tab is a three-column portrait grid');
   console.log('PASS: the profile media tab lists the comment photo');
 
-  // Upload edge cases through the same-origin path the composers use: an empty
-  // file and a file whose extension lies are both refused with 400, which is the
-  // status the composer turns into a toast.
-  //
-  // The size ceilings are deliberately not driven from here. This harness enables
-  // Fetch interception on every request, and a body in the tens of megabytes
-  // wedges it before the reply reaches the script — measured twice, at 11 MB and
-  // at 50 MB. The ceilings are asserted in backend/cmd/media_upload_test.go, and
-  // the rewrite itself was measured forwarding a 50 MB body into a 413 in 0.11s
-  // by hand, so what is missing here is harness reach, not application coverage.
   const uploadFixture = (name, type, bytes) => `(async () => {
     const form = new FormData();
     form.append('file', new File([${bytes}], ${JSON.stringify(name)}, { type: ${JSON.stringify(type)} }));
@@ -777,8 +634,6 @@ try {
   await until(dummy, `!document.querySelector('[role="dialog"]')`, 'dismiss followers dialog');
   console.log('PASS: profile statistics open the live followers dialog without connection controls');
 
-  // Counts the comments the post already carries, so the audience edit below is
-  // asserted to preserve them rather than to match a hardcoded number.
   const commentsBeforeAudienceEdit = (await api(dummy, `/post?id=${postId}`)).commentsCounter;
   await navigate(dummy, `/post/${postId}/edit`);
   await until(dummy, `document.querySelector('h1')?.textContent === 'Edit Post'`, 'edit audience');
@@ -803,10 +658,6 @@ try {
   const postsRequestsBefore = requestsTo(alex, '/posts?liked=');
   await button(alex, 'Unfollow');
   await until(alex, stats(beforeFollow.followers.length - 1), 'viewed profile updates follower count');
-  // The control is optimistic and the list did not change, so it must not be
-  // re-read — not by the click, and not by the `social_changed` echo the follow
-  // endpoint pushes to the actor as well as the target. The follower count is a
-  // different, single resource and is still allowed to be re-read.
   assert.equal(requestsTo(alex, '/posts?liked='), postsRequestsBefore, `unfollowing must not refetch the profile post list: ${requestsMatching(alex, '/posts?liked=')}`);
   await until(dummy, stats(beforeFollow.followers.length - 1), 'owner sees live follower count');
   await button(alex, 'Follow');
@@ -815,15 +666,10 @@ try {
   await until(dummy, stats(beforeFollow.followers.length), 'owner sees restored count');
   console.log('PASS: profile follow/unfollow and live database counts');
 
-  // A pending follow must not grant access to the private profile or its media.
-  // The previous journey explicitly selected Alex; use follower-based access here.
   await api(dummy, `/posts/${postId}`, 'PUT', { ...restricted, privacy: 'followers', selectedFollowerIds: [] });
   await api(alex, `/users/${originalDummy.userId}/follow`, 'DELETE');
   const privateOwner = await api(dummy, '/users/me');
   await api(dummy, '/users/me', 'PUT', { ...privateOwner, isPublic: false });
-  // The banner must not promise "everyone" for a public post on a private profile: the
-  // server's rule for a public post still requires the viewer to follow the author, so
-  // the wording has to narrow with the profile and say why.
   await navigate(dummy, '/create-post');
   await until(dummy, `!!document.querySelector('main select')`, 'the composer for a private profile');
   await fill(dummy, 'main select', 'public');
@@ -832,14 +678,9 @@ try {
   await navigate(alex, `/profile/${originalDummy.userId}`);
   await button(alex, 'Follow');
   await until(alex, `!!document.querySelector('button[title="Cancel follow request"]')`, 'private profile shows Requested');
-  // A blocked chat is explained before the click: the profile swaps the Message
-  // link for a disabled action that states the rule, instead of letting the
-  // attempt fail with the backend's 403.
   assert(await evaluate(alex, `!document.querySelector('a[href="/messages/${originalDummy.userId}"]') && [...document.querySelectorAll('[title]')].some(node => node.getAttribute('title').includes('one of you follows the other'))`), 'a private profile replaces the message link with an explanation');
   assert.equal((await api(dummy, '/users/me')).followers.includes(originalAlex.userId), false);
   assert.equal(await evaluate(alex, `(async () => (await fetch('/api/v1/media/${mediaURL.split('/').pop()}', { cache: 'no-store' })).status)()`), 403);
-  // The chat rule: a stranger cannot open or write a private thread with a
-  // private profile, and the rejected message must never be stored.
   assert.equal(await evaluate(alex, `(async () => (await fetch('/api/v1/messages?partnerId=${originalDummy.userId}', { cache: 'no-store' })).status)()`), 403, 'a private profile must hide the thread from a stranger');
   assert.equal(await evaluate(alex, `(async () => (await fetch('/api/v1/messages', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ recipientId: ${JSON.stringify(originalDummy.userId)}, text: 'stranger hello' }) })).status)()`), 403, 'a private profile must reject a stranger message');
   assert.equal((await api(alex, '/messages/users')).some(person => person.userId === originalDummy.userId), false, 'a blocked thread must not appear in the inbox');
@@ -937,30 +778,19 @@ try {
   await command('Emulation.setDeviceMetricsOverride', { width: 390, height: 844, deviceScaleFactor: 1, mobile: true }, dummy);
   await pause(500);
   assert(await evaluate(dummy, 'document.documentElement.scrollWidth <= window.innerWidth'), 'Mobile chat has no horizontal overflow');
-  // The Instagram shell on a phone: the off-canvas drawer is gone and a bottom tab bar has
-  // taken over. The bar has to be on screen (its bottom inside the viewport) while the
-  // sidebar has to be `display:none` — which is the one thing a present-but-hidden element
-  // can actually be asserted on.
   await until(dummy, `(() => { const bar = document.querySelector('nav[aria-label="Primary"]'); if (!bar) return false; const r = bar.getBoundingClientRect(); return r.height > 0 && r.bottom <= window.innerHeight + 1; })()`, 'mobile bottom tab bar is on screen');
   assert(await evaluate(dummy, `getComputedStyle(document.querySelector('aside[aria-label="Main navigation"]')).display === 'none'`), 'the sidebar is not shown on a phone');
   const mobileShot = await command('Page.captureScreenshot', { format: 'png' }, dummy);
   await writeFile(path.join(taskDir, 'mobile-chat.png'), Buffer.from(mobileShot.data, 'base64'));
-  // A tab is a real link that navigates, which is the whole point of the bar replacing the drawer.
   await clickAt(dummy, 'nav[aria-label="Primary"] a[href="/search"]');
   await until(dummy, `location.pathname === '/search'`, 'the Search tab opens search');
   await command('Emulation.setDeviceMetricsOverride', { width: 1440, height: 960, deviceScaleFactor: 1, mobile: false }, dummy);
   console.log('PASS: groups inside conversations, join approval, group chat, events, RSVP, posts, editing and mobile layout');
 
-  // A group notification opens the surface that needs attention instead of the chat:
-  // a join request is answered in the details panel, an event lives on the Events tab.
   await navigate(dummy, '/notifications');
   await until(dummy, `!!document.querySelector('a[href="/messages/groups/${group.groupId}?tab=info"]')`, 'join request notification target');
   await evaluate(dummy, `document.querySelector('a[href="/messages/groups/${group.groupId}?tab=info"]').click()`);
   await until(dummy, `!!document.querySelector('aside[aria-label="Group details"]') && !!document.querySelector('a[href="/profile/${originalAlex.userId}"]')`, 'request notification opens the group details panel');
-  // The member and request lists are paged now. A short group has to render every
-  // member on the first page and report that the list has ended, with no way to
-  // ask for a second page: a stray "Load more members" button would mean the page
-  // size or the end-of-list rule is wired wrong.
   await until(dummy, `!!document.querySelector('a[href="/profile/${originalAlex.userId}"]')`, 'member list in the details panel');
   assert(await evaluate(dummy, `[...document.querySelectorAll('button')].every(button => button.textContent.trim() !== 'Load more members')`), 'a short member list must not offer a second page');
   assert(await evaluate(dummy, `document.body.innerText.includes("You're all caught up")`), 'the member list has to report that it ended');
@@ -968,16 +798,9 @@ try {
   await until(alex, `!!document.querySelector('a[href="/messages/groups/${group.groupId}?tab=events"]')`, 'event notification target');
   await evaluate(alex, `document.querySelector('a[href="/messages/groups/${group.groupId}?tab=events"]').click()`);
   await until(alex, `document.querySelector('[aria-label="Group conversation tabs"] button[aria-selected="true"]')?.textContent === 'Events' && document.body.innerText.includes(${JSON.stringify(`Meetup ${stamp}`)})`, 'event notification opens the events tab');
-  // The events tab is split into what is to come and what has been, and the split
-  // is what the server decided when it ordered the tab: the new event has to sit
-  // under the Upcoming heading. Compared in the DOM rather than in innerText,
-  // because the heading is styled uppercase and innerText returns rendered text.
   assert(await evaluate(alex, `(() => { const heading = [...document.querySelectorAll('h4')].find(node => node.textContent.trim().toLowerCase() === 'upcoming'); const event = [...document.querySelectorAll('article')].find(node => node.innerText.includes(${JSON.stringify(`Meetup ${stamp}`)})); return !!heading && !!event && (heading.compareDocumentPosition(event) & Node.DOCUMENT_POSITION_FOLLOWING) !== 0; })()`), 'the upcoming event belongs under the Upcoming heading');
   console.log('PASS: group notifications deep-link to the tab that needs attention');
 
-  // The unified search page: one query, three surfaces. People and groups have had a
-  // `q` for a while; the post half is the endpoint this change added, so the
-  // assertion that matters most is that a term only the post carries brings it back.
   await navigate(dummy, '/search');
   await until(dummy, `!!document.querySelector('input[aria-label="Search posts, people and groups"]')`, 'search page');
   await fill(dummy, 'input[aria-label="Search posts, people and groups"]', `browser post content ${stamp}`);
@@ -989,7 +812,6 @@ try {
   await fill(dummy, 'input[aria-label="Search posts, people and groups"]', `Browser group ${stamp}`);
   await button(dummy, 'Search');
   await until(dummy, `document.body.innerText.includes(${JSON.stringify(`Browser group ${stamp}`)})`, 'the group half finds the group');
-  // The terms are kept in this browser and offered back, including after a reload.
   await navigate(dummy, '/search');
   await until(dummy, `[...document.querySelectorAll('button')].some(candidate => candidate.textContent.trim() === ${JSON.stringify(`Browser group ${stamp}`)})`, 'the last term is offered back');
   await command('Page.navigate', { url: base + '/search' }, dummy);
@@ -1002,12 +824,9 @@ try {
   await button(dummy, 'Share story');
   await until(dummy, `!document.querySelector('[role="dialog"]')`, 'the story composer closes');
   storyId = (await api(dummy, '/stories')).find(story => story.content === `Browser story ${stamp}`).storyId;
-  // The strip is a tray of rings. A just-created story is the author's own, and an own ring is
-  // always the seen style, so the "unseen" proof is borrowed from a reader who has not opened it.
   await until(dummy, `!!document.querySelector('[data-story-id="${storyId}"]')`, 'the story joins the tray');
   await navigate(alex, '/');
   await until(alex, `document.querySelector('[data-story-id="${storyId}"] [data-story-ring]')?.dataset.storyRing === 'unseen'`, 'a fresh story wears the unseen ring for a reader');
-  // Opening it is what turns the ring and records the view for this reader alone.
   await evaluate(alex, `document.querySelector('[data-story-id="${storyId}"]').click()`);
   await until(alex, `document.querySelector('[role="dialog"][aria-label="Story"]') !== null`, 'the story opens');
   await until(alex, `!!document.querySelector('input[aria-label="Reply to story"]')`, 'a reader is offered the reply box');
@@ -1017,10 +836,8 @@ try {
   await evaluate(alex, `document.querySelector('button[aria-label="Close story"]').click()`);
   await until(alex, `document.querySelector('[role="dialog"]') === null`, 'the reader closes the story');
   assert.equal((await api(alex, '/stories')).find(story => story.storyId === storyId).viewed, true, 'the view is recorded for this reader');
-  // Closing returns to the feed, where the ring the reader turned is now grey.
   await until(alex, `document.querySelector('[data-story-id="${storyId}"] [data-story-ring]')?.dataset.storyRing === 'seen'`, 'viewing the story turns its ring');
 
-  // The author — and only the author — can see who opened it, and read what they said.
   await navigate(dummy, '/');
   await until(dummy, `!!document.querySelector('[data-story-id="${storyId}"]')`, 'the author is back at the tray');
   await evaluate(dummy, `document.querySelector('[data-story-id="${storyId}"]').click()`);
@@ -1037,9 +854,6 @@ try {
   await evaluate(dummy, `document.querySelector('button[aria-label="Close story"]').click()`);
   await until(dummy, `document.querySelector('[role="dialog"]') === null`, 'the author closes the story');
 
-  // A story that has expired is not gone: it is in the author's own archive, which now lives on the
-  // author's profile rather than in the feed's strip. The demo seed leaves one expired story behind,
-  // because nothing can pass a story's real 24-hour life inside a run.
   await navigate(dummy, '/profile');
   await button(dummy, 'View archive');
   await until(dummy, `document.querySelector('[role="dialog"][aria-label="Story archive"]')?.innerText.includes('From yesterday, kept in the archive')`, 'the author reads an archived story');
@@ -1085,9 +899,6 @@ try {
   assert(await evaluate(dummy, `document.activeElement === document.querySelector('textarea[aria-label="Message"]')`), 'Direct composer keeps focus after mouse sends');
   await checkMessageMenus(dummy, 'Message actions');
 
-  // Reacting to a message: the heart is the reader's own and the total is shared, and it
-  // is the same reaction endpoint the feed uses. The reaction is taken back at the end of
-  // the step, so what follows still deletes the message from a clean slate.
   const bubble = `[...document.querySelectorAll('article')].find(item => item.innerText.includes(${JSON.stringify(`Browser message ${stamp}`)}))`;
   await until(dummy, `!!(${bubble})?.querySelector('button[aria-label="React to this message"]')`, 'the message offers a reaction');
   await evaluate(dummy, `(${bubble})?.querySelector('button[aria-label="React to this message"]').click()`);
@@ -1111,9 +922,6 @@ try {
   await until(dummy, `!document.body.innerText.includes(${JSON.stringify(`Edited browser message ${stamp}`)})`, 'delete for everyone');
   console.log('PASS: live typing, messages, read receipts, edits and scoped deletion');
 
-  // The conversation's media tab: the attachments in the thread, and one opening in the same
-  // lightbox the feed uses rather than in a new tab. The attachment is seeded through the API
-  // because the composer path is already covered above.
   const mediaMessage = await evaluate(dummy, `(async () => {
     const binary = atob('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aD1sAAAAASUVORK5CYII=');
     const bytes = new Uint8Array([...binary].map(character => character.charCodeAt(0)));
@@ -1125,34 +933,16 @@ try {
   })()`);
   assert(mediaMessage?.mediaUrl, `the media message must be sent: ${JSON.stringify(mediaMessage)}`);
   await navigate(dummy, `/messages/${originalAlex.userId}`);
-  // The attachments now live in the details panel the header's Info icon opens, rather than
-  // in a tab that replaced the thread.
   await evaluate(dummy, `document.querySelector('button[aria-label="Conversation details"]').click()`);
   await until(dummy, `!!document.querySelector('button[aria-label="Open attachment 1"]')`, 'the details panel lists the attachment');
   await evaluate(dummy, `document.querySelector('button[aria-label="Open attachment 1"]').click()`);
   await until(dummy, `!!document.querySelector('[role="dialog"][aria-label="Conversation media viewer"]')`, 'the attachment opens in the lightbox');
   await command('Input.dispatchKeyEvent', { type: 'keyDown', key: 'Escape', code: 'Escape', windowsVirtualKeyCode: 27 }, dummy);
   await until(dummy, `!document.querySelector('[role="dialog"][aria-label="Conversation media viewer"]')`, 'the lightbox closes again');
-  // The thread keeps its composer while the details panel is open, so the steps that follow
-  // can type straight away; the panel is closed again to leave the page as it was found.
   await evaluate(dummy, `document.querySelector('button[aria-label="Close details"]').click()`);
   await until(dummy, `!!document.querySelector('textarea[aria-label="Message"]')`, 'the thread keeps its composer');
   console.log('PASS: a conversation lists its attachments, and one opens in the app rather than a new tab');
 
-  // Fifty sockets through the frontend proxy at once, with one message that every
-  // one of them has to receive: the hub's fan-out and Next's upgrade path are what a
-  // single connection cannot exercise, and this is the only place both are real.
-  //
-  // Throughput and the limiter's ceiling are measured in Go instead, and deliberately:
-  // this run shares one per-peer budget with every other step, and a burst big enough
-  // to be interesting trips the 1200-a-minute limit — which 429s the rest of the suite
-  // and, since a failed fetch is a console error, fails the guard at the end as well.
-  // The Go harness has its own bucket and no other traffic.
-  //
-  // The handlers are attached when each socket is constructed, before its handshake
-  // finishes: a frame that arrives with no handler attached is dropped by the
-  // browser, which is how the first version of this step managed to open fifty
-  // sockets and receive nothing.
   const opened = await evaluate(alex, `(async () => {
     const url = (location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host + '/ws';
     window.__loadFrames = 0;
@@ -1168,10 +958,6 @@ try {
     return results.filter(Boolean).length;
   })()`);
   assert.equal(opened, 50, `fifty sockets have to open through the proxy, got ${opened}`);
-  // The message goes over a socket rather than through the REST endpoint, because
-  // the two push different frames: the REST path sends `message_changed` as a
-  // refetch cue, while `incoming_msg` is what the socket delivery path fans out —
-  // and the socket path is the one being loaded here.
   await pause(300);
   await evaluate(dummy, `(async () => {
     const socket = new WebSocket((location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host + '/ws');
@@ -1185,9 +971,6 @@ try {
   await evaluate(alex, `window.__loadSockets.forEach(socket => socket.close()); delete window.__loadSockets; true`);
   console.log('PASS: 50 sockets through the frontend proxy, all receiving one fan-out');
 
-  // New notifications and new private messages are displayed differently: the
-  // bell counts everything except messages, the Messages entry counts only
-  // those, so an unread chat must move one badge and leave the other alone.
   await navigate(alex, '/');
   await until(alex, `!!document.querySelector('aside[aria-label="Main navigation"]')`, 'Alex sidebar ready');
   const messagesBefore = (await api(alex, '/notifications/unread-count?types=message')).count;
@@ -1205,15 +988,6 @@ try {
   await until(alex, `!document.querySelector('aside[aria-label="Main navigation"] a[href="/messages"] span[aria-label$="unread messages"]')`, 'opening the chat clears the messages badge', 10000);
   console.log('PASS: notifications and private messages are shown and counted separately');
 
-  // The session is revoked under the open tab, so the next authenticated request is
-  // answered 401 and the visitor lands on the login form. Which request that is cannot
-  // be fixed: the sidebar's live-refresh poll may already be in flight. In the run that
-  // first failed here (integration-1790759494435) the logout's answer and two 401s from
-  // those polls arrived in the same millisecond, the tab had already been sent to
-  // /login, and the composer this step meant to type into was gone — while the run
-  // before it had no poll 401 at all and passed. So the send is attempted and reported,
-  // and what is asserted is the contract both paths share: a 401 puts the reader in
-  // front of the login form.
   await fill(dummy, 'textarea[aria-label="Message"]', 'This unauthorized message must not be sent');
   await api(dummy, '/auth/logout', 'POST');
   const endedBy = await evaluate(dummy, `(() => {
@@ -1230,18 +1004,10 @@ try {
   await until(dummy, `location.pathname === '/' && !!document.querySelector('aside[aria-label="Main navigation"]')`, 'sign back in after expiry');
   console.log('PASS: API 401 redirects to login and the normal login form restores access');
 
-  // The legacy /connections URL is kept as a redirect (see the page), so a
-  // signed-in member has to land on the profile rather than on a 404. The
-  // anonymous sweep above only proves the session gate fires.
   await command('Page.navigate', { url: base + '/connections' }, dummy);
   await until(dummy, `location.pathname === '/profile'`, 'the legacy connections URL redirects to the profile');
   console.log('PASS: the legacy connections URL still redirects to the profile');
 
-  // The password change is the one flow that rotates the session, so it is worth
-  // a browser pass rather than only the API test: the dialog must refuse a
-  // mismatched confirmation, close on success, and leave this tab working on the
-  // replacement cookie. The seeded password is restored at the end, because the
-  // rest of the suite signs in with it.
   await navigate(dummy, '/profile');
   await settingsItem(dummy, 'Change password');
   await until(dummy, `!!document.querySelector('[aria-label="Change password"]')`, 'password dialog');
@@ -1266,9 +1032,6 @@ try {
   await until(dummy, `!document.querySelector('[aria-label="Change password"]')`, 'the seeded password is restored', 15000);
   console.log('PASS: the replacement password works as the current one and the seed is restored');
 
-  // The signup form has to work from the mandatory fields alone: the nickname is
-  // optional and the backend generates a handle, and the avatar, About me and the
-  // visibility choice are present but skippable.
   const newcomer = await createPage(null);
   const registerClicks = await buttonThen(newcomer, 'Need an account? Register', `!!document.querySelector('input[name="firstName"]')`, 'register form');
   if (registerClicks > 1) console.log(`NOTE: the register link took ${registerClicks} clicks; the first landed before hydration`);
@@ -1289,9 +1052,6 @@ try {
   assert(/^[a-z0-9_]{2,33}$/.test(minimalProfile.nickname), `generated handle: ${JSON.stringify(minimalProfile.nickname)}`);
   console.log('PASS: signing up with the mandatory fields only generates a handle');
 
-  // The same form with everything filled in: the chosen handle survives, About me
-  // and the private choice land on the profile, and the photo is uploaded with
-  // the session the signup just created.
   const optional = await createPage(null);
   await buttonThen(optional, 'Need an account? Register', `!!document.querySelector('input[name="firstName"]')`, 'second register form');
   await fill(optional, 'input[name="firstName"]', 'Browser');
@@ -1305,8 +1065,6 @@ try {
   await fill(optional, 'textarea[name="aboutMe"]', `About me ${stamp}`);
   await fill(optional, 'select[name="isPublic"]', 'false');
   await until(optional, `document.body.innerText.includes('Nickname is available.')`, 'nickname availability');
-  // Per-purpose rules: an avatar under 200×200 is refused before the upload is spent, with the
-  // floor named, and the refused file is not added to the picker. The valid photo below is 256×256.
   const tooSmall = path.join(taskDir, 'too-small-avatar.png');
   await writeFile(tooSmall, Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aD1sAAAAASUVORK5CYII=', 'base64'));
   const registerDocument = await command('DOM.getDocument', {}, optional);
@@ -1327,15 +1085,7 @@ try {
   assert(/^\/api\/v1\/media\//.test(optionalProfile.avatar), `the signup photo was not saved: ${JSON.stringify(optionalProfile.avatar)}`);
   assert(await evaluate(optional, `(async () => (await fetch(${JSON.stringify(optionalProfile.avatar)})).ok)()`), 'the signup photo is served');
   console.log('PASS: the optional signup fields reach the profile and the avatar uploads after signup');
-  // Password reset is the one flow that leaves the application, and there is no
-  // inbox here. The backend's development mailer writes the message into its own
-  // log, so the link is read from there — the only way a browser test can hold a
-  // token the server never exposes. The account is the one just created, which
-  // leaves the seeded account that later steps depend on untouched.
   const resetEmail = `browser-optional-${stamp}@example.com`;
-  // These pages are reached the way /login is reached — Page.navigate directly —
-  // because the shared navigate helper waits for the signed-in shell's sidebar, and
-  // a visitor who cannot sign in has no shell.
   const forgot = await createPage(null);
   await command('Page.navigate', { url: base + '/forgot' }, forgot);
   await until(forgot, `location.pathname === '/forgot' && !!document.querySelector('input[name="email"]')`, 'the forgot form');
@@ -1354,8 +1104,6 @@ try {
   await button(resetPage, 'Set new password');
   await until(resetPage, `location.pathname === '/login'`, 'the reset sends the visitor to sign in', 15000);
 
-  // The account that was signed in when the reset happened is signed out: a reset
-  // ends every session it had, which is the whole point of the flow.
   const revoked = await evaluate(optional, `(async () => (await fetch('/api/v1/users/me')).status)()`);
   assert.equal(revoked, 401, 'a reset must end the sessions the account had');
 
@@ -1368,9 +1116,6 @@ try {
   await until(afterReset, `location.pathname === '/'`, 'signing in with the password the link set', 15000);
   console.log('PASS: the reset link from the mail log sets a new password and signs in');
 
-  // The dev-only component gallery: a route that shows the redesigned pieces on their own. It
-  // is signed-in because it lives under the app shell, and it draws the audience banner the
-  // preview carries, which is the piece the composer shares with the feed.
   await navigate(dummy, '/dev/components');
   await until(dummy, `document.body.innerText.includes('Component gallery') && !!document.querySelector('[aria-label="Audience"]')`, 'the component gallery renders the redesigned pieces');
   console.log('PASS: the dev-only component gallery renders the redesigned pieces in isolation');
@@ -1386,9 +1131,6 @@ try {
   await evaluate(dummy, `window.scrollTo(0, 0)`);
   const screenshot = await command('Page.captureScreenshot', { format: 'png' }, dummy);
   await writeFile(path.join(taskDir, 'frontend.png'), Buffer.from(screenshot.data, 'base64'));
-  // Responsive review, measured rather than eyeballed: each surface has to fit
-  // the four widths the release list names without horizontal overflow, and the
-  // failure message reports the widest node so a regression is actionable.
   for (const route of ['/create-post', '/messages', `/messages/groups/${group.groupId}`, '/profile', '/notifications', '/discover']) {
     for (const width of [320, 375, 768, 1440]) {
       await command('Emulation.setDeviceMetricsOverride', { width, height: 900, deviceScaleFactor: 1, mobile: width < 640 }, dummy);

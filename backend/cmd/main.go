@@ -32,8 +32,6 @@ func main() {
 
 	logger.InitLogger(&app)
 
-	// A machine driving a whole test suite is one direct peer, so the browser harness
-	// raises this; the default is left alone for everyone else.
 	if configured := os.Getenv("RATE_LIMIT_PER_MINUTE"); configured != "" {
 		parsed, err := strconv.Atoi(configured)
 		if err != nil || parsed <= 0 {
@@ -55,6 +53,7 @@ func main() {
 	if configured := os.Getenv("DATABASE_PATH"); configured != "" {
 		databasePath = configured
 	}
+	// foreign keys are off unless asked for, and a locked write should wait rather than fail
 	database, err := sql.Open("sqlite3", databasePath+"?_foreign_keys=on&_busy_timeout=5000")
 	if err != nil {
 		app.Logger.Error("failed to open database", "error", err)
@@ -69,7 +68,6 @@ func main() {
 		os.Exit(1)
 	}
 
-	// Sessions outlive the process, so a restart no longer signs everyone out.
 	service.DefaultSessionManager.UseStore(dbConn)
 	go func() {
 		cleanup := func() {
@@ -89,8 +87,6 @@ func main() {
 			cleanup()
 		}
 	}()
-	// Reset tokens are swept on the same schedule: once a row is past its expiry
-	// it can never be claimed again, so keeping it only keeps a hash around.
 	go func() {
 		purge := func() {
 			removed, err := dbConn.DeleteExpiredPasswordResets(time.Now().UTC())
@@ -121,11 +117,6 @@ func main() {
 	hc.SocialService = &service.SocialService{Repo: dbConn}
 	hc.GroupService = &service.GroupService{Repo: dbConn}
 
-	// Password reset is the one flow that has to leave the machine, so delivery is
-	// a deployment decision: configured SMTP where credentials exist, the log in
-	// development, and deliberately nothing in production — a reset link in a log
-	// file is a working credential in a log file, so production without a provider
-	// refuses the request (503) instead of writing one.
 	var mailer service.Mailer
 	if host := os.Getenv("SMTP_HOST"); host != "" {
 		port := os.Getenv("SMTP_PORT")
@@ -154,10 +145,6 @@ func main() {
 	}
 	handlers.SetHandlerContext(hc)
 
-	// Uploads that nothing references any more — a deleted post, comment, story
-	// or message, or an upload that was never attached — are swept at boot and
-	// then hourly, the same shape as the session cleanup above. The grace window
-	// is what keeps a file that was just uploaded but not yet attached safe.
 	go func() {
 		prune := func() {
 			result, err := hc.PruneOrphanedMedia(handlers.MediaGrace)
@@ -177,9 +164,6 @@ func main() {
 		}
 	}()
 
-	// Event reminders go out an hour before an event starts, checked every few
-	// minutes: the sweep is one query and the stamp makes a repeat harmless, so a
-	// short interval costs nothing and keeps the timing tight.
 	go func() {
 		remind := func() {
 			result, err := hc.SendEventReminders(time.Now().UTC(), handlers.EventReminderLead)

@@ -50,20 +50,15 @@ func (db *DB) SocialProfile(id string, viewers ...string) (models.SocialUser, er
 			return u, err
 		}
 	}
-	// The header's post count. It runs the same fragment the posts list does, so the number
-	// and the page below it cannot disagree — and it means a viewer who may not read a post
-	// is not counted for it, which is why a private profile shows the owner their own total
-	// and everyone else whatever is actually visible to them.
 	viewer := id
 	if len(viewers) > 0 {
 		viewer = viewers[0]
 	}
+	// postVisibility binds the viewer once per clause
 	if err := db.Conn.QueryRow("SELECT COUNT(*) FROM post p WHERE p.userId = ? AND "+postVisibility, id, viewer, viewer, viewer, viewer).Scan(&u.PostCount); err != nil {
 		return u, err
 	}
 	if len(viewers) > 0 && viewers[0] != id {
-		// The third flag is the chat rule seen from viewers[0]: the profile is
-		// public, or either user follows the other.
 		err = db.Conn.QueryRow(`SELECT
 			EXISTS(SELECT 1 FROM connection WHERE requesterId=? AND recipientId=? AND status='pending'),
 			EXISTS(SELECT 1 FROM connection WHERE requesterId=? AND recipientId=? AND status='pending'),
@@ -75,11 +70,6 @@ func (db *DB) SocialProfile(id string, viewers ...string) (models.SocialUser, er
 	return u, err
 }
 
-// UserIDByNickname resolves a handle to the account it belongs to, which is what a
-// mention needs: the linkifier only has the text of an `@handle`, and the profile route
-// is keyed by id. The comparison ignores case on both sides — a nickname is stored as it
-// was typed, and a mention in the middle of a sentence must not require the reader to
-// reproduce the capitalisation.
 func (db *DB) UserIDByNickname(nickname string) (string, error) {
 	var id string
 	err := db.Conn.QueryRow("SELECT userId FROM user WHERE lower(nickName) = lower(?)", nickname).Scan(&id)
@@ -92,10 +82,6 @@ func (db *DB) UserIDByNickname(nickname string) (string, error) {
 	return id, nil
 }
 
-// CanMessage reports whether actor may start or continue a private chat with
-// target: the spec allows it when at least one of them follows the other, and a
-// public profile is reachable by anyone. A missing target reports ErrNotFound so
-// callers can answer 404 instead of 403.
 func (db *DB) CanMessage(actor, target string) (bool, error) {
 	if target == "" || actor == target {
 		return false, nil
@@ -142,19 +128,6 @@ func (db *DB) DiscoverUsers(currentID, search string, offset int) ([]models.Soci
 	return users, nil
 }
 
-// Suggestions ranks a handful of accounts the viewer does not follow yet, for the feed's
-// right-hand column. It is the one thing `DiscoverUsers` cannot do for itself: a friends-of-
-// friends ordering.
-//
-// The ranking is the number of mutual follows — people the viewer follows who also follow
-// the candidate — which is exactly Instagram's, and it is computed in the query rather than
-// per row. The exclusions are the ones the feed must never suggest: the viewer, anyone they
-// already follow, and anyone they have an outstanding follow request to (a pending request
-// is not a follow yet, but offering to follow again would only produce a 409). Ties break on
-// the account's own recency so a fresh profile surfaces above a dormant one.
-//
-// The mutual names are read in a single second query for the whole page rather than one per
-// row, so the cost is two queries whatever the limit.
 func (db *DB) Suggestions(viewer string, limit int) ([]models.UserSuggestion, error) {
 	rows, err := db.Conn.Query(`
 		SELECT u.userId, u.nickName, u.firstName, u.lastName, COALESCE(u.avatar, ''), u.isPublic,
@@ -250,7 +223,6 @@ func (db *DB) FollowUser(actor, target string) (string, error) {
 		return "", err
 	}
 	defer tx.Rollback()
-	// Acquire the write lock before checking state, including for opposite requests.
 	if _, err = tx.Exec("UPDATE user SET isPublic=isPublic WHERE userId=?", target); err != nil {
 		return "", err
 	}
@@ -307,10 +279,6 @@ func (db *DB) UnfollowUser(actor, target string) error {
 	return tx.Commit()
 }
 
-// followRequestsQuery lists the pending requests waiting for a decision, newest
-// first. It is a constant so the plan test (query_plan_test.go) can explain the same
-// text instead of a paraphrase, which is what makes the index it asserts on the index
-// this query uses.
 const followRequestsQuery = `SELECT c.requesterId,u.nickName,c.createdAt FROM connection c
 		JOIN user u ON u.userId=c.requesterId WHERE c.recipientId=? AND c.status='pending'
 		ORDER BY c.createdAt DESC,c.requesterId LIMIT 30 OFFSET ?`
@@ -352,9 +320,6 @@ func (db *DB) DecideFollowRequest(recipient, requester string, accept bool) erro
 	return tx.Commit()
 }
 
-// ProfilePostIDs lists the posts a profile owns (or the ones it liked), newest first, filtered
-// by the feed's own visibility rule. The ids it answers with are the post table's own keys; the
-// caller reads each post through GetPostByID, which is where the public UUID is attached.
 func (db *DB) ProfilePostIDs(userID string, liked bool, offset int, viewerID string) ([]int, error) {
 	query := "SELECT p.postId FROM post p WHERE p.userId=? AND " + postVisibility + " ORDER BY p.createdAt DESC, p.postId DESC LIMIT 20 OFFSET ?"
 	args := []any{userID, viewerID, viewerID, viewerID, viewerID, offset}
@@ -378,9 +343,6 @@ func (db *DB) ProfilePostIDs(userID string, liked bool, offset int, viewerID str
 	return ids, rows.Err()
 }
 
-// ProfileMedia merges the photos a user published in posts with the ones they
-// attached to comments, newest first, applying the same postPrivacy rules the
-// feed uses. It backs the profile media tab.
 func (db *DB) ProfileMedia(userID string, offset int, viewerID string) ([]models.MediaItem, error) {
 	rows, err := db.Conn.Query(`
 		SELECT image.value, media.postId, media.title, media.createdAt FROM (
@@ -474,15 +436,6 @@ func (db *DB) CreateStory(s models.Story) (int, error) {
 	return int(id), err
 }
 
-// Stories lists the live stories a viewer may see — their own, a public author's, or a private
-// author's they follow — with the viewer-relative `viewed` flag already folded in. A story is as
-// private as the account behind it: it reaches its author and the accepted followers of a private
-// author, never a stranger, so a private account's story cannot leak into the wider strip. The
-// viewer's own stories come first, so their own tile reads the ring correctly however many other
-// authors they follow; the rest put unseen authors before seen ones and each run newest first, so
-// a story that has just been opened drops to the end. The flag rides a LEFT JOIN on `storyView`
-// rather than a second query per row, and the join is keyed on `(storyId, userId)` — the table's
-// primary key — so it costs one lookup per story and nothing when there are no views.
 func (db *DB) Stories(offset int, viewerID string) ([]models.Story, error) {
 	rows, err := db.Conn.Query(`SELECT s.storyId,s.userId,u.nickName,COALESCE(u.avatar,''),s.content,s.mediaUrl,s.mediaType,s.backgroundColor,s.createdAt,s.expiresAt,(v.userId IS NOT NULL),EXISTS(SELECT 1 FROM reaction r WHERE r.entityType='story' AND r.entityId=s.storyId AND r.userId=? AND r.score>0),(SELECT COUNT(*) FROM reaction r2 WHERE r2.entityType='story' AND r2.entityId=s.storyId AND r2.score>0) FROM story s JOIN user u ON u.userId=s.userId LEFT JOIN storyView v ON v.storyId=s.storyId AND v.userId=? WHERE s.expiresAt > datetime('now') AND (s.userId=? OR u.isPublic=1 OR EXISTS(SELECT 1 FROM follow f WHERE f.followerId=? AND f.followedId=s.userId)) ORDER BY (s.userId=?) DESC,(v.userId IS NOT NULL),s.createdAt DESC,s.storyId DESC LIMIT 30 OFFSET ?`, viewerID, viewerID, viewerID, viewerID, viewerID, offset)
 	if err != nil {
@@ -500,11 +453,6 @@ func (db *DB) Stories(offset int, viewerID string) ([]models.Story, error) {
 	return stories, rows.Err()
 }
 
-// ArchivedStories lists one account's own expired stories, newest first — the ones that have
-// left every strip and would otherwise disappear entirely. It is the author's own list and
-// nobody else's: the predicate is the caller's id, so there is no one else's archive to ask for.
-// The viewer-relative `viewed` flag is folded in exactly as `Stories` folds it, so a row means
-// the same thing in both lists.
 func (db *DB) ArchivedStories(offset int, userID string) ([]models.Story, error) {
 	rows, err := db.Conn.Query(`SELECT s.storyId,s.userId,u.nickName,COALESCE(u.avatar,''),s.content,s.mediaUrl,s.mediaType,s.backgroundColor,s.createdAt,s.expiresAt,(v.userId IS NOT NULL),EXISTS(SELECT 1 FROM reaction r WHERE r.entityType='story' AND r.entityId=s.storyId AND r.userId=? AND r.score>0),(SELECT COUNT(*) FROM reaction r2 WHERE r2.entityType='story' AND r2.entityId=s.storyId AND r2.score>0) FROM story s JOIN user u ON u.userId=s.userId LEFT JOIN storyView v ON v.storyId=s.storyId AND v.userId=? WHERE s.userId=? AND s.expiresAt <= datetime('now') ORDER BY s.createdAt DESC,s.storyId DESC LIMIT 30 OFFSET ?`, userID, userID, userID, offset)
 	if err != nil {
@@ -522,10 +470,6 @@ func (db *DB) ArchivedStories(offset int, userID string) ([]models.Story, error)
 	return stories, rows.Err()
 }
 
-// MarkStoryViewed records that the viewer has opened a live story. It is idempotent — the
-// write is `ON CONFLICT DO NOTHING`, so opening the same story again is a state rather
-// than an error — but it still refuses a story that is unknown or expired with the same
-// `ErrNotFound` a read would give, so the endpoint cannot confirm that a dead story exists.
 func (db *DB) MarkStoryViewed(storyID int, viewerID string) error {
 	var live bool
 	if err := db.Conn.QueryRow("SELECT EXISTS(SELECT 1 FROM story WHERE storyId=? AND expiresAt > datetime('now'))", storyID).Scan(&live); err != nil {
@@ -538,11 +482,6 @@ func (db *DB) MarkStoryViewed(storyID int, viewerID string) error {
 	return err
 }
 
-// StoryViewers answers a story's "seen by" list, newest view first. It is author-only by
-// construction: the query runs only for a story whose owner is the caller, and anything else —
-// an unknown story, or someone else's — is the same `ErrNotFound`, so the endpoint cannot be
-// used to confirm that a story exists. The owner is left out, because an author who opened
-// their own story is not a reader of it.
 func (db *DB) StoryViewers(storyID int, ownerID string) ([]models.StoryViewer, error) {
 	var owned bool
 	if err := db.Conn.QueryRow("SELECT EXISTS(SELECT 1 FROM story WHERE storyId=? AND userId=?)", storyID, ownerID).Scan(&owned); err != nil {
@@ -573,9 +512,6 @@ func (db *DB) StoryViewers(storyID int, ownerID string) ([]models.StoryViewer, e
 	return viewers, rows.Err()
 }
 
-// LiveStoryOwner answers the account that owns a story that can still be read. It is the lookup
-// a reply runs before it is written: a story that is unknown or expired is the same ErrNotFound
-// a read gives, so a reply cannot be a way to learn that a dead story exists.
 func (db *DB) LiveStoryOwner(storyID int) (string, error) {
 	var owner string
 	err := db.Conn.QueryRow("SELECT userId FROM story WHERE storyId=? AND expiresAt > datetime('now')", storyID).Scan(&owner)
@@ -585,8 +521,6 @@ func (db *DB) LiveStoryOwner(storyID int) (string, error) {
 	return owner, err
 }
 
-// AddStoryReply records a reply to a story. The caller has already resolved the story and its
-// owner (see LiveStoryOwner and SocialService.ReplyToStory); this only writes the row.
 func (db *DB) AddStoryReply(storyID int, userID, content string) (int, error) {
 	result, err := db.Conn.Exec("INSERT INTO storyReply (storyId,userId,content) VALUES (?,?,?)", storyID, userID, content)
 	if err != nil {
@@ -596,11 +530,6 @@ func (db *DB) AddStoryReply(storyID int, userID, content string) (int, error) {
 	return int(id), err
 }
 
-// StoryReplies answers a story's replies, newest first. It is author-only by construction, the
-// same shape as StoryViewers: the query runs only for a story whose owner is the caller, and an
-// unknown story and someone else's are the same ErrNotFound, so the route cannot be used to
-// confirm that a story exists. The story need not still be live — an author keeps the replies
-// left before it expired, which is what makes the reply a record rather than a transient.
 func (db *DB) StoryReplies(storyID int, ownerID string) ([]models.StoryReply, error) {
 	var owned bool
 	if err := db.Conn.QueryRow("SELECT EXISTS(SELECT 1 FROM story WHERE storyId=? AND userId=?)", storyID, ownerID).Scan(&owned); err != nil {

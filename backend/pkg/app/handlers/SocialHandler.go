@@ -38,9 +38,6 @@ func (re *HandlerContext) decode(w http.ResponseWriter, r *http.Request, value a
 	return true
 }
 
-// allowedOrigin gates the WebSocket upgrade. A JSON endpoint can fall back to
-// CORS and Sec-Fetch-Site, but a browser always sends Origin on a WebSocket
-// handshake, so a request without one is not a browser and is rejected here.
 func (re *HandlerContext) allowedOrigin(r *http.Request) bool {
 	origin := r.Header.Get("Origin")
 	if origin == "" {
@@ -71,10 +68,6 @@ func (re *HandlerContext) offset(w http.ResponseWriter, r *http.Request) (int, b
 	return n, true
 }
 
-// Suggestions answers the feed's "Suggested for you" column: a few accounts the caller does
-// not follow yet, ranked by mutual follows. It is read-only and returns only the fields the
-// row draws — no email, no posts, no private collections — so it cannot leak anything the
-// profile route would not. `limit` is validated here and clamped in the service.
 func (re *HandlerContext) Suggestions(w http.ResponseWriter, r *http.Request) {
 	limit := 5
 	if raw := r.URL.Query().Get("limit"); raw != "" {
@@ -101,10 +94,6 @@ func (re *HandlerContext) UserProfile(w http.ResponseWriter, r *http.Request) {
 	re.writeProfile(w, r, id)
 }
 
-// UserByNickname is how a mention reaches a profile: a linkifier only has the text of an
-// `@handle`, so this turns the handle into the account it names and answers with exactly
-// what `/users/{userId}` would. The masking lives in one place below rather than being
-// copied, so a private profile cannot be read through the mention route instead.
 func (re *HandlerContext) UserByNickname(w http.ResponseWriter, r *http.Request) {
 	id, err := re.SocialService.Repo.UserIDByNickname(r.PathValue("nickname"))
 	if err != nil {
@@ -114,8 +103,6 @@ func (re *HandlerContext) UserByNickname(w http.ResponseWriter, r *http.Request)
 	re.writeProfile(w, r, id)
 }
 
-// writeProfile answers with one member's profile, as much of it as the viewer is
-// entitled to see.
 func (re *HandlerContext) writeProfile(w http.ResponseWriter, r *http.Request, id string) {
 	u, err := re.SocialService.Repo.SocialProfile(id, currentUser(r))
 	if err != nil {
@@ -130,19 +117,10 @@ func (re *HandlerContext) writeProfile(w http.ResponseWriter, r *http.Request, i
 		}
 		if !visible {
 			u.FirstName, u.LastName, u.Bio, u.Avatar, u.CoverPhoto, u.Location = "", "", "", "", "", ""
-			// The public contact fields go with the rest of the profile: a viewer who may not
-			// see it may not reach the account through a website, an email or a phone either.
 			u.Website, u.ContactEmail, u.Phone = "", "", ""
 			u.Followers, u.Following = []string{}, []string{}
-			// The count is masked with the lists above rather than left to the fragment:
-			// a `selected` grant can keep a post readable to someone who may not read the
-			// profile at all, and a count that moved with it would leak that it exists.
 			u.PostCount = 0
 		} else {
-			// Each contact field is published only while its own switch is on, so a viewer who
-			// may see the profile still sees just the parts its owner chose to share. The blank
-			// is applied to the copy being answered with; the stored value is left alone, so the
-			// owner's edit form and a later flip of the switch still have it.
 			if !u.ShowWebsite {
 				u.Website = ""
 			}
@@ -223,8 +201,6 @@ func (re *HandlerContext) ProfilePosts(w http.ResponseWriter, r *http.Request) {
 	respond(w, http.StatusOK, items)
 }
 
-// ProfileMedia backs the profile media tab: the photos a user published in posts
-// and the ones they attached to comments, merged newest first.
 func (re *HandlerContext) ProfileMedia(w http.ResponseWriter, r *http.Request) {
 	offset, ok := re.offset(w, r)
 	if !ok {
@@ -307,8 +283,6 @@ func (re *HandlerContext) socialNotification(actor, target, kind string) {
 	re.notifyUser(target, actor, kind, 0)
 }
 
-// FollowLists serves the followers and following lists of one profile so the
-// frontend can open them from the profile they belong to instead of a page.
 func (re *HandlerContext) FollowLists(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("userId")
 	if id == "" || id == "me" {
@@ -348,7 +322,6 @@ func (re *HandlerContext) FollowLists(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 			if !browsable {
-				// The avatar and nickname identify the entry, the rest stays private.
 				profile.FirstName, profile.LastName, profile.Bio = "", "", ""
 				profile.CoverPhoto, profile.Location = "", ""
 				profile.Followers, profile.Following = []string{}, []string{}
@@ -372,11 +345,6 @@ func (re *HandlerContext) Stories(w http.ResponseWriter, r *http.Request) {
 	respond(w, http.StatusOK, items)
 }
 
-// ArchivedStories answers the caller's own expired stories — the archive the strip cannot show,
-// because the strip lists only what is still live. It is a route of its own rather than a flag on
-// `/stories`, the way saved posts are their own list: the two answer different permissions (any
-// live story versus the caller's own), and a query parameter that flips a permission is not a
-// shape this API uses.
 func (re *HandlerContext) ArchivedStories(w http.ResponseWriter, r *http.Request) {
 	offset, ok := re.offset(w, r)
 	if !ok {
@@ -390,9 +358,6 @@ func (re *HandlerContext) ArchivedStories(w http.ResponseWriter, r *http.Request
 	respond(w, http.StatusOK, items)
 }
 
-// MarkStoryViewed records that the caller opened a story, so the stories strip can draw a
-// "seen" ring. It answers 200 for a story already viewed (the write is a state, not a
-// change) and 404 for one that is unknown or expired, the same answer a read gives.
 func (re *HandlerContext) MarkStoryViewed(w http.ResponseWriter, r *http.Request) {
 	id, ok := re.resourceID(w, r)
 	if !ok {
@@ -440,9 +405,6 @@ func (re *HandlerContext) DeleteStory(w http.ResponseWriter, r *http.Request) {
 	respond(w, http.StatusOK, nil)
 }
 
-// StoryViewers answers the author's own list of who opened a story. It is 404 for a story that
-// is unknown or someone else's rather than 403 — the same choice the comment and message
-// reactions make — so the route is not a way to learn that a story exists.
 func (re *HandlerContext) StoryViewers(w http.ResponseWriter, r *http.Request) {
 	id, ok := re.resourceID(w, r)
 	if !ok {
@@ -456,10 +418,6 @@ func (re *HandlerContext) StoryViewers(w http.ResponseWriter, r *http.Request) {
 	respond(w, http.StatusOK, viewers)
 }
 
-// ReplyToStory records the caller's reply to a story. It is 404 for a story that is unknown or
-// expired, 400 for the author answering their own story, and 403 when the chat rule keeps the
-// caller from addressing the author — the same rule that gates private messages, because a reply
-// is private text addressed to one account.
 func (re *HandlerContext) ReplyToStory(w http.ResponseWriter, r *http.Request) {
 	id, ok := re.resourceID(w, r)
 	if !ok {
@@ -479,9 +437,6 @@ func (re *HandlerContext) ReplyToStory(w http.ResponseWriter, r *http.Request) {
 	respond(w, http.StatusCreated, map[string]int{"storyId": id, "replyId": replyID})
 }
 
-// StoryReplies answers the author's own list of replies to a story. It is 404 for a story that is
-// unknown or someone else's rather than 403 — the same choice StoryViewers makes — so the route
-// is not a way to learn that a story exists or that it has been replied to.
 func (re *HandlerContext) StoryReplies(w http.ResponseWriter, r *http.Request) {
 	id, ok := re.resourceID(w, r)
 	if !ok {

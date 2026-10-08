@@ -21,8 +21,6 @@ var upgrader = websocket.Upgrader{
 
 func (re *HandlerContext) ServeWs(w http.ResponseWriter, r *http.Request) {
 
-	// The session token travels in the HttpOnly cookie only. A query-string
-	// fallback would leak the token into proxy access logs and browser history.
 	cookie, err := r.Cookie("session_token")
 	if err != nil || cookie.Value == "" {
 		http.Error(w, "unauthorized", http.StatusUnauthorized)
@@ -99,7 +97,6 @@ func (re *HandlerContext) handlePrivateMessage(sender *pkgwebsocket.Client, msg 
 		return
 	}
 
-	// The socket is a second door into the same rule the REST endpoint enforces.
 	if err := re.SocialService.CanMessage(sender.UserID, payload.RecipientId); err != nil {
 		log.Printf("rejected private message from %s to %s: %v", sender.UserID, payload.RecipientId, err)
 		return

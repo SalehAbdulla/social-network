@@ -7,13 +7,6 @@ import { mediaImageProps } from '../../lib/mediaVariants';
 import Avatar from '../Avatar';
 import Loading from '../Loading';
 
-/**
- * The details column the Info icon opens.
- *
- * It replaces the old "Media" tab: the same attachment list, but beside the thread rather
- * than instead of it, so the conversation stays readable while a photo is browsed. Under
- * 1200px the CSS overlays it on the chat instead of squeezing the bubbles.
- */
 export default function DetailsPanel({ name, avatar, href, handle, media, mediaLoading, mediaError, mediaHasMore, onLoadMoreMedia, onRetryMedia, onOpenMedia, onClose }: {
   name: string;
   avatar: string;
@@ -29,8 +22,6 @@ export default function DetailsPanel({ name, avatar, href, handle, media, mediaL
   onClose: () => void;
 }) {
   const images = media.map(item => item.mediaUrl);
-  // An upload the app cannot draw inline — anything the server did not tag as an image or
-  // a video — is listed as a file rather than dropped from the panel.
   const files = media.filter(item => item.mediaType !== 'image' && item.mediaType !== 'video');
   return <aside className="dm-details" aria-label="Conversation details">
     <div className="dm-details-head">

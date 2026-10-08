@@ -5,16 +5,6 @@ import (
 	"social-network/backend/pkg/models"
 )
 
-// PostInsights gathers the author-facing numbers for one post: how many accounts its
-// audience rule admits right now, and what reactions and comments it has drawn.
-//
-// The audience is decided by the same rule `postVisibility` expresses, but read from the
-// post's own row and its author's `isPublic` rather than against a viewer, because the
-// question here is "how many people" rather than "may this person". An unknown post is
-// answered `ErrNotFound`, the same answer a read gives.
-//
-// Every reaction count comes from the `reaction` table's `(entityType, entityId)` index
-// (000013), so this stays a lookup however many posts the app holds.
 func (db *DB) PostInsights(postID int) (models.PostInsights, error) {
 	var insights models.PostInsights
 	var privacy string
@@ -36,8 +26,6 @@ func (db *DB) PostInsights(postID int) (models.PostInsights, error) {
 		insights.Audience = "everyone"
 		err = db.Conn.QueryRow("SELECT COUNT(*) FROM user").Scan(&insights.Reach)
 	default:
-		// `followers`, and `public` written by a private profile, which the visibility
-		// fragment narrows to followers all the same.
 		insights.Audience = "followers"
 		err = db.Conn.QueryRow("SELECT COUNT(*) FROM follow WHERE followedId = ?", insights.AuthorId).Scan(&insights.Reach)
 	}

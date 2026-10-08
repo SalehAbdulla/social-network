@@ -16,7 +16,6 @@ export function useResource<T>(path: string, enabled = true) {
       .catch(error => {
         if (abort.signal.aborted) return;
         setState({ path, data: null, error: errorMessage(error) });
-        // A 401 already redirects to the login page, so a toast would only add noise there.
         if (!isUnauthorized(error)) notifyError(errorMessage(error), reload);
       });
     return () => abort.abort();

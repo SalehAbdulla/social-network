@@ -21,10 +21,6 @@ import (
 	"social-network/backend/pkg/media"
 )
 
-// buildPhoto is a real JPEG rather than a header: the derivatives are the subject here, so the
-// upload has to be a picture the resize path can do something with. The size is bigger than both
-// caps on purpose — 3200x2400 is an ordinary phone photo, and the item is about exactly that
-// picture arriving in a feed at full resolution.
 func buildPhoto(t *testing.T, width, height int) []byte {
 	t.Helper()
 	canvas := image.NewRGBA(image.Rect(0, 0, width, height))
@@ -40,8 +36,6 @@ func buildPhoto(t *testing.T, width, height int) []byte {
 	return encoded.Bytes()
 }
 
-// fetchMedia gets one media URL through a signed-in client and reports the status, the type and
-// the body, so a test can decode what the server actually sent rather than trusting a length.
 func fetchMedia(t *testing.T, server *httptest.Server, client integrationClient, path string) (int, string, []byte) {
 	t.Helper()
 	response, err := client.client.Get(server.URL + path)
@@ -56,8 +50,6 @@ func fetchMedia(t *testing.T, server *httptest.Server, client integrationClient,
 	return response.StatusCode, response.Header.Get("Content-Type"), body
 }
 
-// TestPhotoUploadGetsDerivatives is the measurement this item is about: what a feed card costs
-// after the change, and that the three spellings of one URL answer three different pictures.
 func TestPhotoUploadGetsDerivatives(t *testing.T) {
 	server, _ := integrationServer(t, true, false)
 	client := newIntegrationClient(t, server)
@@ -110,8 +102,6 @@ func TestPhotoUploadGetsDerivatives(t *testing.T) {
 			len(thumbBody), len(largeBody), len(originalBody))
 	}
 
-	// "original" is accepted as a word, and a value nobody knows is refused rather than quietly
-	// answered with the full-size file.
 	sameStatus, _, sameBody := fetchMedia(t, server, client, url+"?size=original")
 	if sameStatus != http.StatusOK || len(sameBody) != len(originalBody) {
 		t.Fatalf("?size=original should serve the original: %d, %d bytes", sameStatus, len(sameBody))
@@ -122,8 +112,6 @@ func TestPhotoUploadGetsDerivatives(t *testing.T) {
 	}
 }
 
-// buildAnimatedGIF is two frames wide enough that the format, not the size, is the reason it gets
-// no derivative: a still derivative of an animation is a different picture, not a smaller one.
 func buildAnimatedGIF(t *testing.T) []byte {
 	t.Helper()
 	frames := []*image.Paletted{}
@@ -141,9 +129,6 @@ func buildAnimatedGIF(t *testing.T) []byte {
 	return encoded.Bytes()
 }
 
-// TestSmallAndAnimatedUploadsHaveNoDerivatives covers the fallback the whole design rests on: an
-// image with no derivative still answers `?size=` with the original, so a caller needs to know
-// nothing about which uploads have what.
 func TestSmallAndAnimatedUploadsHaveNoDerivatives(t *testing.T) {
 	server, _ := integrationServer(t, true, false)
 	client := newIntegrationClient(t, server)
@@ -187,9 +172,6 @@ func TestSmallAndAnimatedUploadsHaveNoDerivatives(t *testing.T) {
 	}
 }
 
-// TestDerivativeRequestsAreBehindAuthentication is the one security claim that adding a query
-// parameter could have broken: a variant goes through the same access check as the original, so
-// an unauthenticated caller cannot read a picture by asking for a smaller copy of it.
 func TestDerivativeRequestsAreBehindAuthentication(t *testing.T) {
 	server, _ := integrationServer(t, true, false)
 	owner := newIntegrationClient(t, server)
@@ -213,16 +195,11 @@ func TestDerivativeRequestsAreBehindAuthentication(t *testing.T) {
 	}
 }
 
-// TestCollectedMediaTakesItsDerivativesWithIt covers the leak this change would otherwise have
-// introduced: a derivative's name is not a UUID, so the stray sweep used to treat it as a file an
-// operator had put there and leave it behind forever. An operator's own files are still safe —
-// that promise is the reason the sweep is so careful in the first place.
 func TestCollectedMediaTakesItsDerivativesWithIt(t *testing.T) {
 	server, _ := integrationServer(t, true, false)
 	client := newIntegrationClient(t, server)
 	client.login("dummy@example.com")
 
-	// Uploaded and never attached, so the collector owns it once the grace window is zero.
 	status, message, url := postMediaFixture(t, server, client, "orphan.jpg", buildPhoto(t, 2000, 1500))
 	if status != http.StatusCreated {
 		t.Fatalf("upload refused: %d %q", status, message)
@@ -234,8 +211,6 @@ func TestCollectedMediaTakesItsDerivativesWithIt(t *testing.T) {
 		}
 	}
 
-	// A stray derivative of an upload that never existed, and two files that are plainly not this
-	// application's, all old enough to be candidates for the sweep.
 	strayDerivative := filepath.Join(app.UploadDir, media.FileName(uuid.NewString(), media.Variants()[0]))
 	operatorNotes := filepath.Join(app.UploadDir, "notes_large")
 	operatorText := filepath.Join(app.UploadDir, "notes.txt")

@@ -3,15 +3,6 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { MoreHorizontal, type LucideIcon } from 'lucide-react';
 
-/**
- * The app's one "…" menu.
- *
- * The trigger is the shared 16px muted icon, the panel is the shared popover, and the keyboard
- * contract is the same everywhere: ArrowUp/ArrowDown/Home/End move between the rows, Escape and
- * a click outside close it, and Escape hands focus back to the trigger. Only one menu is open at
- * a time — opening one closes any other — which is what keeps a post's menu and a comment's menu
- * from both standing.
- */
 export function MenuItem({ onClick, children, disabled = false, tone }: {
   onClick: () => void;
   children: ReactNode;
@@ -29,9 +20,7 @@ export default function Menu({ label, children, className = '', align = 'end', t
   label: string;
   children: ReactNode;
   className?: string;
-  /** Which edge the panel hangs from. `end` is the "…" in a card's corner. */
   align?: 'start' | 'end';
-  /** The trigger's glyph. Defaults to the shared "…"; a caller can name its own, e.g. a gear. */
   triggerIcon?: LucideIcon;
 }) {
   const [open, setOpen] = useState(false);

@@ -4,7 +4,6 @@ import { Maximize2, SquarePen, X, MessageCircle } from 'lucide-react';
 import IconButton from '../ui/IconButton';
 import ConversationRow, { type ConversationItem } from './ConversationRow';
 
-/** The first paint of one row: the 44px face and the two lines, at the real 56px. */
 function RowSkeleton() {
   return <div aria-hidden="true" className="dock-row-skel">
     <span className="dock-skel dock-skel-face" />
@@ -15,14 +14,6 @@ function RowSkeleton() {
   </div>;
 }
 
-/**
- * The dock's opened list — the same conversation column the messages page shows, compacted
- * into the panel: a title with the two controls, the rows, and the compose button.
- *
- * It owns nothing: the dock resolves each conversation into a `ConversationItem` (with an
- * `onSelect` that opens its chat in the same panel rather than navigating) and hands the list
- * down, so a person and a group are drawn by the messages page's own row component.
- */
 export default function DockList({ items, loading, error, onRetry, onExpand, onClose, onCompose }: {
   items: ConversationItem[];
   loading: boolean;

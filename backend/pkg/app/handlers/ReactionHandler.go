@@ -11,10 +11,6 @@ import (
 	"strings"
 )
 
-// idString accepts a JSON string or a JSON number and keeps it as text. A reaction target's id
-// is not one type: a post is named by its public UUID (see migration 000020) while a comment, a
-// message and a group row are still named by their own integer key, and the client should not
-// have to know which -- so both spellings decode here.
 type idString string
 
 func (s *idString) UnmarshalJSON(data []byte) error {
@@ -70,8 +66,6 @@ func (re *HandlerContext) React(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// reactionEntityID reads a reaction target's id the way its type stores it: a post's public
-// UUID resolves to the post table's own key, and every other target is that row's integer id.
 func (re *HandlerContext) reactionEntityID(entityType, raw string) (int, error) {
 	if raw == "" {
 		return 0, realtimeforum.ErrBadRequest

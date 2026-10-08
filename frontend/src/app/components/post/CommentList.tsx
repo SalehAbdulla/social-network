@@ -5,11 +5,6 @@ import { type Comment } from '../../api/social';
 import Button from '../ui/Button';
 import CommentItem from './CommentItem';
 
-/**
- * The thread under the caption: the rows, three skeletons while the first page loads, an inline
- * failure with a retry, the empty state, and the "load more" control. It is announced live so a
- * comment the reader posts is read back without moving focus.
- */
 export default function CommentList({ items, loading, error, settled, hasMore, loadingMore, meId, isOwner, avatarOf, busyId, onLike, onDelete, onRetry, onLoadMore, onOpenPhoto }: {
   items: Comment[];
   loading: boolean;

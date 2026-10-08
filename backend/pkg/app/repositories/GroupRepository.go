@@ -75,9 +75,6 @@ func (db *DB) Group(groupID int, userID string) (models.Group, error) {
 	return group, err
 }
 
-// AddGroupRequest records a join request and reports whether a new or re-opened
-// one landed, so the caller knows when to tell the owner. The notification is
-// not written here: notifications go through the service, which also pushes them.
 func (db *DB) AddGroupRequest(groupID int, userID string) (bool, error) {
 	tx, err := db.Conn.Begin()
 	if err != nil {
@@ -93,15 +90,8 @@ func (db *DB) AddGroupRequest(groupID int, userID string) (bool, error) {
 	return count > 0, tx.Commit()
 }
 
-// groupPageSize is the page the group lists hand the frontend: 30 rows, with one
-// extra row requested so the client can tell "there is more" without a count.
 const groupPageSize = 30
 
-// Both list queries are shared between the paged API list and the unbounded one
-// the notification fan-out needs, so the two cannot drift apart. The final
-// ORDER BY key is not decoration: paginating on a sort without a total order
-// lets SQLite return the same row twice and skip another, and members who joined
-// in the same second tie on joinedAt.
 const groupMembersQuery = `SELECT u.userId,u.nickName,u.firstName,u.lastName,COALESCE(u.avatar,''),gm.role,gm.joinedAt
         FROM socialGroupMember gm JOIN user u ON u.userId=gm.userId WHERE gm.groupId=? ORDER BY gm.role='owner' DESC,gm.joinedAt,gm.userId`
 
@@ -121,7 +111,6 @@ func scanGroupMembers(rows *sql.Rows) ([]models.GroupMember, error) {
 	return members, rows.Err()
 }
 
-// GroupMembers reads one page of the member list for the API.
 func (db *DB) GroupMembers(groupID, offset int) ([]models.GroupMember, error) {
 	rows, err := db.Conn.Query(groupMembersQuery+" LIMIT ? OFFSET ?", groupID, groupPageSize+1, offset)
 	if err != nil {
@@ -130,9 +119,6 @@ func (db *DB) GroupMembers(groupID, offset int) ([]models.GroupMember, error) {
 	return scanGroupMembers(rows)
 }
 
-// AllGroupMembers is for the notification fan-out, and is deliberately not
-// paged: every member has to hear about an event or an announcement, so paging
-// here would quietly stop telling everyone past the thirtieth.
 func (db *DB) AllGroupMembers(groupID int) ([]models.GroupMember, error) {
 	rows, err := db.Conn.Query(groupMembersQuery, groupID)
 	if err != nil {
@@ -141,7 +127,6 @@ func (db *DB) AllGroupMembers(groupID int) ([]models.GroupMember, error) {
 	return scanGroupMembers(rows)
 }
 
-// GroupRequests reads one page of pending join requests for the owner.
 func (db *DB) GroupRequests(groupID, offset int) ([]models.GroupRequest, error) {
 	rows, err := db.Conn.Query(groupRequestsQuery+" LIMIT ? OFFSET ?", groupID, groupPageSize+1, offset)
 	if err != nil {
@@ -184,8 +169,6 @@ func (db *DB) GroupRequestDecision(groupID, requestID int, status string) error 
 	return tx.Commit()
 }
 
-// AddGroupInvitation records an invitation and reports whether a new or
-// re-opened one landed, so the caller knows when to tell the invitee.
 func (db *DB) AddGroupInvitation(groupID int, inviterID, inviteeID string) (bool, error) {
 	tx, err := db.Conn.Begin()
 	if err != nil {
