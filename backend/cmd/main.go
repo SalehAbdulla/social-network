@@ -16,38 +16,37 @@ import (
 	"social-network/backend/pkg/config"
 	sqlitedb "social-network/backend/pkg/db/sqlite"
 	"social-network/backend/pkg/logger"
+	"social-network/backend/pkg/web"
 	pkgwebsocket "social-network/backend/pkg/websocket"
 )
 
-var app config.AppConfig
-
 func main() {
-	app.InProduction = os.Getenv("APP_ENV") == "production"
-	app.UploadDir = os.Getenv("UPLOAD_DIR")
-	app.FrontendOrigin = os.Getenv("FRONTEND_ORIGIN")
-	if app.FrontendOrigin == "" {
-		app.FrontendOrigin = "http://localhost:4000"
+	web.App.InProduction = os.Getenv("APP_ENV") == "production"
+	web.App.UploadDir = os.Getenv("UPLOAD_DIR")
+	web.App.FrontendOrigin = os.Getenv("FRONTEND_ORIGIN")
+	if web.App.FrontendOrigin == "" {
+		web.App.FrontendOrigin = "http://localhost:4000"
 	}
-	app.LogLevel = os.Getenv("LOG_LEVEL")
+	web.App.LogLevel = os.Getenv("LOG_LEVEL")
 
-	logger.InitLogger(&app)
+	logger.InitLogger(&web.App)
 
 	if configured := os.Getenv("RATE_LIMIT_PER_MINUTE"); configured != "" {
 		parsed, err := strconv.Atoi(configured)
 		if err != nil || parsed <= 0 {
-			app.Logger.Error("ignoring invalid RATE_LIMIT_PER_MINUTE", "value", configured)
+			web.App.Logger.Error("ignoring invalid RATE_LIMIT_PER_MINUTE", "value", configured)
 		} else {
-			app.RateLimitPerMinute = parsed
+			web.App.RateLimitPerMinute = parsed
 		}
 	}
 
 	backendDir, err := config.BackendDir()
 	if err != nil {
-		app.Logger.Error("failed to locate backend files", "error", err)
+		web.App.Logger.Error("failed to locate backend files", "error", err)
 		os.Exit(1)
 	}
-	if app.UploadDir == "" {
-		app.UploadDir = filepath.Join(backendDir, "uploads")
+	if web.App.UploadDir == "" {
+		web.App.UploadDir = filepath.Join(backendDir, "uploads")
 	}
 	databasePath := filepath.Join(backendDir, "pkg", "db", "socialnetwork.db")
 	if configured := os.Getenv("DATABASE_PATH"); configured != "" {
@@ -56,7 +55,7 @@ func main() {
 	// foreign keys are off unless asked for, and a locked write should wait rather than fail
 	database, err := sql.Open("sqlite3", databasePath+"?_foreign_keys=on&_busy_timeout=5000")
 	if err != nil {
-		app.Logger.Error("failed to open database", "error", err)
+		web.App.Logger.Error("failed to open database", "error", err)
 		os.Exit(1)
 	}
 	defer database.Close()
@@ -64,7 +63,7 @@ func main() {
 	dbConn := &db.DB{Conn: database}
 
 	if err := sqlitedb.RunMigrations(database); err != nil {
-		app.Logger.Error("failed to run database migrations", "error", err)
+		web.App.Logger.Error("failed to run database migrations", "error", err)
 		os.Exit(1)
 	}
 
@@ -73,11 +72,11 @@ func main() {
 		cleanup := func() {
 			removed, err := service.DefaultSessionManager.CleanupExpired()
 			if err != nil {
-				app.Logger.Error("session cleanup failed", "error", err)
+				web.App.Logger.Error("session cleanup failed", "error", err)
 				return
 			}
 			if removed > 0 {
-				app.Logger.Info("expired sessions removed", "count", removed)
+				web.App.Logger.Info("expired sessions removed", "count", removed)
 			}
 		}
 		cleanup()
@@ -91,11 +90,11 @@ func main() {
 		purge := func() {
 			removed, err := dbConn.DeleteExpiredPasswordResets(time.Now().UTC())
 			if err != nil {
-				app.Logger.Error("password reset cleanup failed", "error", err)
+				web.App.Logger.Error("password reset cleanup failed", "error", err)
 				return
 			}
 			if removed > 0 {
-				app.Logger.Info("expired password reset tokens removed", "count", removed)
+				web.App.Logger.Info("expired password reset tokens removed", "count", removed)
 			}
 		}
 		purge()
@@ -113,7 +112,7 @@ func main() {
 	messageService := service.NewMessageService(dbConn, dbConn)
 	notificationService := service.NewNotificationService(dbConn)
 
-	hc := handlers.NewHandlerContext(&app, authService, postService, commentService, reactService, messageService, notificationService)
+	hc := handlers.NewHandlerContext(&web.App, authService, postService, commentService, reactService, messageService, notificationService)
 	hc.SocialService = &service.SocialService{Repo: dbConn}
 	hc.GroupService = &service.GroupService{Repo: dbConn}
 
@@ -134,14 +133,14 @@ func main() {
 			Password: os.Getenv("SMTP_PASSWORD"),
 			From:     from,
 		}
-	} else if !app.InProduction {
-		mailer = service.LogMailer{Logger: app.Logger}
+	} else if !web.App.InProduction {
+		mailer = service.LogMailer{Logger: web.App.Logger}
 	}
-	hc.PasswordResetService = service.NewPasswordResetService(dbConn, service.DefaultSessionManager, mailer, app.FrontendOrigin)
+	hc.PasswordResetService = service.NewPasswordResetService(dbConn, service.DefaultSessionManager, mailer, web.App.FrontendOrigin)
 	if mailer == nil {
-		app.Logger.Warn("password reset is unavailable: set SMTP_HOST to enable it")
+		web.App.Logger.Warn("password reset is unavailable: set SMTP_HOST to enable it")
 	} else {
-		app.Logger.Info("password reset delivery configured", "delivery", mailer.Describe())
+		web.App.Logger.Info("password reset delivery configured", "delivery", mailer.Describe())
 	}
 	handlers.SetHandlerContext(hc)
 
@@ -149,11 +148,11 @@ func main() {
 		prune := func() {
 			result, err := hc.PruneOrphanedMedia(handlers.MediaGrace)
 			if err != nil {
-				app.Logger.Error("media cleanup failed", "error", err)
+				web.App.Logger.Error("media cleanup failed", "error", err)
 				return
 			}
 			if result.Rows > 0 || result.Files > 0 {
-				app.Logger.Info("orphaned media removed", "rows", result.Rows, "files", result.Files)
+				web.App.Logger.Info("orphaned media removed", "rows", result.Rows, "files", result.Files)
 			}
 		}
 		prune()
@@ -168,11 +167,11 @@ func main() {
 		remind := func() {
 			result, err := hc.SendEventReminders(time.Now().UTC(), handlers.EventReminderLead)
 			if err != nil {
-				app.Logger.Error("event reminders failed", "error", err)
+				web.App.Logger.Error("event reminders failed", "error", err)
 				return
 			}
 			if result.Events > 0 {
-				app.Logger.Info("event reminders sent", "events", result.Events, "members", result.Members)
+				web.App.Logger.Info("event reminders sent", "events", result.Events, "members", result.Members)
 			}
 		}
 		remind()
@@ -187,11 +186,11 @@ func main() {
 	hc.SetHub(wsHub)
 	go wsHub.Run()
 
-	app.Logger.Info("starting application", "port", config.PORT_NUMBER)
+	web.App.Logger.Info("starting application", "port", config.PORT_NUMBER)
 
 	serve := &http.Server{
 		Addr:              config.PORT_NUMBER,
-		Handler:           routes(),
+		Handler:           web.Routes(),
 		ReadHeaderTimeout: 5 * time.Second,
 		ReadTimeout:       60 * time.Second,
 		WriteTimeout:      60 * time.Second,
@@ -201,7 +200,7 @@ func main() {
 
 	err = serve.ListenAndServe()
 	if err != nil {
-		app.Logger.Error("server failed", "error", err)
+		web.App.Logger.Error("server failed", "error", err)
 		os.Exit(1)
 	}
 }

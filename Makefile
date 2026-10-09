@@ -49,7 +49,7 @@ test: ## Run the Go tests, including the query-plan check
 	cd backend && go test ./...
 
 test-race: ## Run the session, reset and websocket tests under the race detector
-	cd backend && go test ./cmd/ -count=1 -race
+	cd backend && go test ./tests/ -count=1 -race
 
 smoke: ## Run the browser suite (needs Chrome; see CHROME_PATH above)
 	cd frontend && CHROME_PATH="$(CHROME_PATH)" npm run test:integration

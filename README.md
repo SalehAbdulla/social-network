@@ -193,13 +193,15 @@ privacy rule, and a mention opens the member it names.
 
 ```
 backend/
-  cmd/                     main, router, security middleware, integration tests, seed
+  cmd/                     main (the composition root) and the seed command
+  pkg/web/                 router, security middleware, request logger, and the app config
   pkg/app/handlers/        HTTP and WebSocket handlers (validation, responses)
   pkg/app/service/         business rules (privacy, permissions, notifications, sessions)
   pkg/app/repositories/    SQL; the post-visibility fragment lives in PostRepository.go
   pkg/db/migrations/sqlite versioned up/down migrations, applied automatically at boot
   pkg/websocket/           hub, clients, frame types, and the protocol document in the README
   pkg/config, pkg/logger, pkg/middleware, pkg/models, pkg/payload
+  tests/                   the integration and contract suites that drive the real router
 frontend/
   src/app/                 routes (feed, post, profile, messages, groups, notifications, login)
   src/app/components/      UI building blocks, including the dialogs and their focus contract
@@ -301,9 +303,9 @@ cd frontend && npm run test:integration
 node scripts/pin-base-images.mjs
 ```
 
-`make api-tour` is the one that needs a server: it calls every route in `backend/cmd/router.go`
+`make api-tour` is the one that needs a server: it calls every route in `backend/pkg/web/router.go`
 with the status each should answer, from registration to the group it deletes again, and
-`backend/cmd/api_tour_test.go` fails if the tour and the router ever disagree about what routes
+`backend/tests/api_tour_test.go` fails if the tour and the router ever disagree about what routes
 exist. It is the way to exercise the API without the UI, and it documents two things a client
 author would otherwise learn from a 400: registration and login read form values while the rest of
 the API reads JSON, and a socket upgrade needs an allowed `Origin` or it is refused with 403.
@@ -342,7 +344,7 @@ unaffected and all pass.
   offset step have to be the same number, and when they drift apart a page boundary silently skips
   rows. Discover is the one that takes both — it sends `size`, defaulting to 30 and capped at 100 —
   because its page size changed to twelve and that coupling was the thing that would have broken.
-  `backend/cmd/discover_pagination_test.go` walks the list with `size=3` and asserts every account
+  `backend/tests/discover_pagination_test.go` walks the list with `size=3` and asserts every account
   comes back exactly once.
 - **Media access** mirrors the post or comment it hangs off. Avatars, group images and
   story media are readable by any signed-in member, and a cover photo needs a public
