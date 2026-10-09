@@ -1,0 +1,88 @@
+# Production Compose — co-hosted on the Oracle "Always Free" VPS (see DEPLOYMENT.md).
+#
+# This stack runs BESIDE the `beyond` stack on the same host, so everything here is
+# chosen to not collide with it:
+#
+#   • `name: social-network` — its own compose project, volume and network, so
+#     `docker compose ls` shows two independent projects and nothing merges.
+#   • No host port 80/443 — `beyond-nginx` already owns those. Our frontend joins
+#     beyond's `beyond-prod` network under a unique alias and nginx proxies the
+#     public hostname straight to it (see deploy/nginx-social.conf).
+#   • BACKEND_URL is a UNIQUE alias (`social-network-backend`), not `backend`.
+#     Our frontend sits on both networks, and `beyond` also has a service named
+#     `backend`; the plain name would resolve to *their* Spring Boot app half the
+#     time. The alias only exists on our own network, so it is unambiguous.
+#   • Logs are capped. Unbounded json-file logs once filled this host's root disk
+#     and took beyond's production down; every service caps its own.
+#
+# Usage (on the VPS, from the checkout):
+#   docker compose -f compose.prod.yaml --env-file .env.prod up -d --build
+
+name: social-network
+
+x-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "3"
+
+services:
+  backend:
+    image: social-network-backend
+    build: ./backend
+    container_name: social-network-backend
+    environment:
+      APP_ENV: ${APP_ENV:-production}
+      FRONTEND_ORIGIN: ${FRONTEND_ORIGIN:?set FRONTEND_ORIGIN in .env.prod}
+      DATABASE_PATH: /data/socialnetwork.db
+      UPLOAD_DIR: /data/uploads
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+      # Every browser request arrives from the frontend container's address, so the
+      # whole site shares one rate-limit bucket. Raised above the 1,200 default.
+      RATE_LIMIT_PER_MINUTE: ${RATE_LIMIT_PER_MINUTE:-6000}
+      SMTP_HOST: ${SMTP_HOST:-}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_USERNAME: ${SMTP_USERNAME:-}
+      SMTP_PASSWORD: ${SMTP_PASSWORD:-}
+      SMTP_FROM: ${SMTP_FROM:-}
+    volumes:
+      - social-network-data:/data
+    restart: unless-stopped
+    logging: *default-logging
+    networks:
+      default:
+        aliases:
+          - social-network-backend
+
+  frontend:
+    image: social-network-frontend
+    build:
+      context: ./frontend
+      args:
+        # Must be the unique alias above — see the header comment.
+        BACKEND_URL: http://social-network-backend:5174
+    container_name: social-network-frontend
+    depends_on:
+      backend:
+        condition: service_healthy
+    # Loopback only, for probes and debugging. Public traffic arrives through
+    # beyond's nginx on the shared network, never through this port.
+    ports:
+      - "127.0.0.1:${FRONTEND_PORT:-4100}:4000"
+    restart: unless-stopped
+    logging: *default-logging
+    networks:
+      default:
+      beyond-prod:
+        aliases:
+          - social-network-frontend
+
+volumes:
+  social-network-data:
+    name: social-network-data
+
+networks:
+  default:
+    name: social-network
+  beyond-prod:
+    external: true

@@ -1,0 +1,156 @@
+name: Deploy to prod (Oracle VPS, co-hosted with beyond)
+
+# ──────────────────────────────────────────────────────────────────────────
+# Pushing a `v*` tag deploys that exact tag; `workflow_dispatch` deploys a
+# chosen ref by hand. Ordinary commits to `main` never deploy.
+#
+# This runs on a GitHub-hosted runner and reaches the VPS over SSH. It does
+# NOT use the self-hosted runner on the VPS — that one belongs to the `beyond`
+# repo, and a deploy must not queue behind another project's CI.
+#
+# Required repository secrets:  PROD_HOST, PROD_SSH_USER, PROD_SSH_KEY
+# Optional repository variables: PROD_APP_DIR (default ~/social-network),
+#                                SITE_HOST    (default social.beyondedubh.com)
+# ──────────────────────────────────────────────────────────────────────────
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-social-prod
+  # Queue rather than cancel: a cancelled deploy leaves the checkout and the
+  # containers half-updated, and neither run can tell what state that is.
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    name: Deploy
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    environment: production
+    env:
+      PROD_HOST: ${{ secrets.PROD_HOST }}
+      PROD_USER: ${{ secrets.PROD_SSH_USER }}
+      APP_DIR: ${{ vars.PROD_APP_DIR || '~/social-network' }}
+      SITE_HOST: ${{ vars.SITE_HOST || 'social.beyondedubh.com' }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Load SSH key
+        run: |
+          mkdir -p ~/.ssh && chmod 700 ~/.ssh
+          printf '%s\n' "${{ secrets.PROD_SSH_KEY }}" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          ssh-keyscan -H "$PROD_HOST" >> ~/.ssh/known_hosts 2>/dev/null || true
+
+      - name: Pre-flight (disk space and Docker)
+        run: |
+          ssh -i ~/.ssh/id_ed25519 -o StrictHostKeyChecking=accept-new \
+            "${PROD_USER}@${PROD_HOST}" 'bash -s' <<'REMOTE'
+          set -euo pipefail
+          avail_kb=$(df -Pk / | awk 'NR==2{print $4}')
+          printf 'free disk on /: %s GB\n' "$((avail_kb / 1024 / 1024))"
+          # The root volume is shared with the beyond stack and its CI runner, and
+          # an image build needs a few GB. Refuse early rather than fill the disk
+          # and take the other project down.
+          if [ "$avail_kb" -lt 5242880 ]; then
+            echo "❌ less than 5 GB free on / — refusing to build. Free space first."
+            docker system df || true
+            exit 1
+          fi
+          command -v docker >/dev/null || { echo "❌ docker not installed"; exit 1; }
+          docker compose version >/dev/null || { echo "❌ compose plugin missing"; exit 1; }
+          echo "✅ pre-flight ok"
+          REMOTE
+
+      - name: Back up the data volume (before migrations run)
+        run: |
+          ssh -i ~/.ssh/id_ed25519 -o StrictHostKeyChecking=accept-new \
+            "${PROD_USER}@${PROD_HOST}" 'bash -s' <<'REMOTE'
+          set -euo pipefail
+          if ! docker volume inspect social-network-data >/dev/null 2>&1; then
+            echo "no social-network-data volume yet (first deploy) — nothing to back up"
+            exit 0
+          fi
+          mkdir -p "$HOME/social-network-backups"
+          # SQLite's own .backup is safe on a live database (a plain cp can catch a
+          # torn page). The uploads ride along, because a media row without its file
+          # serves a 404 and a file without its row gets swept.
+          docker run --rm \
+            -v social-network-data:/data \
+            -v "$HOME/social-network-backups:/backup" \
+            alpine:3.20 sh -c 'apk add --no-cache sqlite >/dev/null &&
+              sqlite3 /data/socialnetwork.db ".backup /backup/socialnetwork.db" &&
+              tar czf /backup/uploads.tgz -C /data uploads 2>/dev/null || true'
+          ls -lh "$HOME/social-network-backups" | tail -5
+          REMOTE
+
+      - name: Deploy on the VPS
+        env:
+          DEPLOY_REF: ${{ github.ref_name }}
+          REPO_URL: ${{ github.server_url }}/${{ github.repository }}.git
+        run: |
+          ssh -i ~/.ssh/id_ed25519 -o StrictHostKeyChecking=accept-new \
+            "${PROD_USER}@${PROD_HOST}" "APP_DIR='${APP_DIR}' DEPLOY_REF='${DEPLOY_REF}' REPO_URL='${REPO_URL}' bash -s" <<'REMOTE'
+          set -euo pipefail
+          APP_DIR="${APP_DIR/#\~/$HOME}"
+          if [ ! -d "$APP_DIR/.git" ]; then
+            echo "first deploy: cloning $REPO_URL into $APP_DIR"
+            git clone --depth 1 "$REPO_URL" "$APP_DIR"
+          fi
+          cd "$APP_DIR"
+          git fetch --depth 1 origin "$DEPLOY_REF"
+          git checkout -f FETCH_HEAD
+          if [ ! -f .env.prod ]; then
+            echo "❌ .env.prod is missing. Copy .env.example.prod to .env.prod and fill it in."
+            exit 1
+          fi
+          # Dangling images only — never prunes images the running stacks use.
+          docker image prune -f >/dev/null 2>&1 || true
+          docker compose -f compose.prod.yaml --env-file .env.prod up -d --build
+          docker compose -f compose.prod.yaml --env-file .env.prod ps
+          REMOTE
+
+      - name: Health gate (frontend → backend readiness, on the host)
+        run: |
+          ssh -i ~/.ssh/id_ed25519 -o StrictHostKeyChecking=accept-new \
+            "${PROD_USER}@${PROD_HOST}" 'bash -s' <<'REMOTE'
+          set -uo pipefail
+          # The loopback listener is our own; going through the frontend exercises
+          # the rewrite to the backend, which is the chain that actually serves.
+          for attempt in $(seq 1 30); do
+            code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 5 \
+              http://127.0.0.1:4100/api/v1/ready || true)
+            echo "attempt ${attempt}: GET 127.0.0.1:4100/api/v1/ready -> ${code:-no response}"
+            [ "$code" = "200" ] && { echo "✅ readiness is 200 through the frontend"; exit 0; }
+            sleep 5
+          done
+          echo "❌ readiness never returned 200"
+          docker compose -f "$HOME/social-network/compose.prod.yaml" --env-file "$HOME/social-network/.env.prod" logs --tail 40 backend || true
+          exit 1
+          REMOTE
+
+      - name: Health check (public HTTPS)
+        run: |
+          for attempt in 1 2 3 4 5 6; do
+            code=$(curl -s -o /dev/null -w '%{http_code}' --connect-timeout 10 --max-time 30 \
+              "https://${SITE_HOST}/api/v1/ready" || true)
+            echo "attempt ${attempt}: GET https://${SITE_HOST}/api/v1/ready -> ${code:-no response}"
+            [ "$code" = "200" ] && { echo "✅ the site is serving traffic"; exit 0; }
+            sleep 10
+          done
+          echo "❌ https://${SITE_HOST}/api/v1/ready never returned 200."
+          echo "   On a first deploy, add the DNS A record, the nginx site block and"
+          echo "   the cert SAN first — see DEPLOYMENT.md."
+          exit 1
+
+      - name: Reclaim disk (dangling images left by the rebuild)
+        if: always()
+        run: |
+          ssh -i ~/.ssh/id_ed25519 -o StrictHostKeyChecking=accept-new \
+            "${PROD_USER}@${PROD_HOST}" 'docker image prune -f >/dev/null 2>&1; df -h / | tail -1' || true

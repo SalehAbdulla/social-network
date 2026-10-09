@@ -1,4 +1,5 @@
-tmp
+# `.env.prod` holds production secrets for the co-hosted VPS deploy — never commit it.
+.env.prod
 realTimeForum.db
 .DS_Store
 main

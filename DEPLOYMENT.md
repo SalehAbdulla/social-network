@@ -17,7 +17,70 @@ Put an HTTPS reverse proxy in front of port 4000, preserve the Host and Origin h
 | `PORT` | Listening port, default 5174 |
 | `LOG_LEVEL` | Logging verbosity |
 
-## Password reset
+## Co-hosted deploy on the Oracle VPS
+
+Production for this project runs on the same Oracle Cloud **Always Free** `VM.Standard.A1.Flex`
+(ARM64, Ubuntu) that already hosts `beyond`, rather than on a host of its own. The two stacks are
+kept independent — `docker compose ls` shows `beyond` and `social-network` as separate projects:
+
+| Concern | How it is kept separate |
+| --- | --- |
+| Compose project | `name: social-network` in `compose.prod.yaml` — its own project, network and volume |
+| Data | the `social-network-data` volume (SQLite + uploads); never shared with `beyond` |
+| Public ports | **none** — `beyond-nginx` already owns 80/443 |
+| Ingress | our frontend joins beyond's `beyond-prod` network under the alias `social-network-frontend`, and a site block in beyond's nginx proxies the hostname to it (`deploy/nginx-social.conf`) |
+| Loopback probe | the frontend also listens on `127.0.0.1:4100` for health checks and debugging |
+| Logs | every service caps its logs — unbounded json-file logs once filled this host's disk and took `beyond` down |
+
+**`BACKEND_URL` is a unique alias, not `backend`.** Our frontend sits on two networks, and `beyond`
+also has a service called `backend`; the plain name would resolve to *their* Spring Boot app about
+half the time. The build arg is therefore `http://social-network-backend:5174`, which exists only on
+our own network.
+
+### One-time setup
+
+1. **DNS** — add an `A` record for the subdomain (e.g. `social.beyondedubh.com`) pointing at the VPS.
+2. **Certificate SAN** — the cert is shared with `beyond`, so re-issue it with the new name added
+   (full list, per beyond's `docker/nginx/README.md`):
+   ```sh
+   sudo certbot certonly --webroot -w /home/ubuntu/beyond/docker/nginx/certbot-webroot \
+     --expand -d beyondedubh.com -d www.beyondedubh.com -d api.beyondedubh.com \
+     -d auth.beyondedubh.com -d admin.beyondedubh.com -d db.beyondedubh.com \
+     -d sonar.beyondedubh.com -d social.beyondedubh.com
+   sudo cp /etc/letsencrypt/live/beyondedubh.com/fullchain.pem ~/beyond/docker/nginx/ssl/
+   sudo cp /etc/letsencrypt/live/beyondedubh.com/privkey.pem  ~/beyond/docker/nginx/ssl/
+   sudo chown ubuntu:ubuntu ~/beyond/docker/nginx/ssl/*
+   ```
+3. **nginx site block** — validate *before* reloading, so a typo cannot take `beyond` down:
+   ```sh
+   cp deploy/nginx-social.conf ~/beyond/docker/nginx/sites/social.conf
+   docker exec beyond-nginx nginx -t && docker exec beyond-nginx nginx -s reload
+   ```
+4. **Env** — `cp .env.example.prod .env.prod` in the checkout and fill it in (`.env.prod` is git-ignored).
+5. **Actions** — add secrets `PROD_HOST`, `PROD_SSH_USER`, `PROD_SSH_KEY`, and optionally the
+   variables `PROD_APP_DIR` (default `~/social-network`) and `SITE_HOST`.
+
+### Deploying
+
+`.github/workflows/deploy-prod.yml` runs on a **GitHub-hosted** runner (not the self-hosted runner on
+the VPS, which belongs to `beyond`) and pushes over SSH. It fires on a `v*` tag or by hand:
+
+```sh
+git tag v1.0.0 && git push origin v1.0.0
+```
+
+The job checks free disk, **backs up the volume before migrations run**, builds the ARM images on the
+host, then gates on `127.0.0.1:4100/api/v1/ready` (through the frontend, so the rewrite is exercised)
+and finally on the public HTTPS readiness endpoint.
+
+### Two limits worth stating
+
+- **Disk is shared and was at ~72%.** The root volume also holds `beyond` and its CI runner. The
+  workflow refuses to build with under 5 GB free and prunes dangling images afterwards, but the build
+  still needs a few GB while it runs.
+- **The reverse proxy is shared.** A broken site block or cert re-issue is a `beyond` outage, which is
+  why the steps above run `nginx -t` first and re-issue the cert with the full SAN list.
+
 
 `POST /api/v1/auth/password-reset` starts the flow and `POST /api/v1/auth/password-reset/confirm` redeems the link. The first is the only endpoint in this API that answers the same way whether or not the address exists — `202` with one sentence either way — because "no such account" is a registration oracle. Tokens are 256 random bits and the table stores only a sha256 of one, so a leaked database does not hand over working links. A link is single-use, expires after **30 minutes**, and requesting a new one invalidates the previous link. Redeeming stores the new hash and revokes **every** session the account had, so the visitor signs in again rather than being handed a session by whoever clicked the link. Requests are limited to three per address per fifteen minutes, counted for unknown addresses too: a limit that applied only to registered ones would answer the question the endpoint refuses to answer.
 
