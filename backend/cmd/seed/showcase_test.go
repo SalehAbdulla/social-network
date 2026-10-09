@@ -141,6 +141,8 @@ func TestShowcaseSeed(t *testing.T) {
 		t.Fatalf("the top suggestion has no mutuals: %+v", suggestions[0])
 	}
 
+	assertGroupContentMatchesSeed(t, repo)
+
 	before := snapshot(t, repo)
 	if err := seedShowcase(repo, uploads); err != nil {
 		t.Fatalf("second run: %v", err)
@@ -148,4 +150,61 @@ func TestShowcaseSeed(t *testing.T) {
 	if after := snapshot(t, repo); before != after {
 		t.Fatalf("re-running changed the dataset:\n before %s\n after  %s", before, after)
 	}
+	assertGroupContentMatchesSeed(t, repo)
+}
+
+func groupContentCount(t *testing.T, repo *repositories.DB, title, kind string) int {
+	t.Helper()
+	var n int
+	if err := repo.Conn.QueryRow(`SELECT COUNT(*) FROM groupContent gc
+		JOIN socialGroup g ON g.groupId = gc.groupId WHERE g.title = ? AND gc.kind = ?`, title, kind).Scan(&n); err != nil {
+		t.Fatal(err)
+	}
+	return n
+}
+
+// assertGroupContentMatchesSeed checks that every group row carries the kind the
+// seed data gives it, rather than whatever kind a previous run left behind at
+// the same row id.
+func assertGroupContentMatchesSeed(t *testing.T, repo *repositories.DB) {
+	t.Helper()
+	for _, g := range showcaseGroups {
+		posts, comments := 0, 0
+		for _, p := range g.Posts {
+			posts++
+			comments += len(p.Comments)
+		}
+		for kind, want := range map[string]int{
+			"posts":    posts,
+			"comments": comments,
+			"events":   len(g.Events),
+			"messages": len(g.Messages),
+		} {
+			if got := groupContentCount(t, repo, g.Title, kind); got != want {
+				t.Fatalf("group %q %s = %d, want %d", g.Title, kind, got, want)
+			}
+		}
+	}
+}
+
+// TestShowcaseSeedRepairsGroupContentKinds reorders the groups between two runs
+// so a second run writes group content to different row ids than the first. The
+// seeder must land every row with the right kind instead of leaving the previous
+// kind in place.
+func TestShowcaseSeedRepairsGroupContentKinds(t *testing.T) {
+	repo, uploads := seedTestShowcase(t)
+
+	original := append([]showcaseGroup(nil), showcaseGroups...)
+	t.Cleanup(func() { showcaseGroups = original })
+
+	reversed := append([]showcaseGroup(nil), original...)
+	for i, j := 0, len(reversed)-1; i < j; i, j = i+1, j-1 {
+		reversed[i], reversed[j] = reversed[j], reversed[i]
+	}
+	showcaseGroups = reversed
+
+	if err := seedShowcase(repo, uploads); err != nil {
+		t.Fatalf("reordered reseed: %v", err)
+	}
+	assertGroupContentMatchesSeed(t, repo)
 }

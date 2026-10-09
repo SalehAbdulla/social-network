@@ -339,11 +339,25 @@ func insertPosts(exec execFunc, media *mediaSeeder, ids map[string]string, now t
 		}
 	}
 
-	for _, idx := range []int{2, 3, 4, 7, 10, 14} {
-		if idx < len(showcasePosts) {
-			if err := setReaction(exec, ids, "dummyuser", "post", postIDBase+idx, 1, now.Add(-time.Duration(idx)*time.Hour)); err != nil {
-				return err
-			}
+	if err := insertExplicitLikes(exec, ids, now); err != nil {
+		return err
+	}
+	return nil
+}
+
+// insertExplicitLikes applies the deterministic showcaseLikes reactions, so the
+// demo accounts like a believable spread of posts and popular posts carry a
+// stable, hand-picked mix of likers on top of the randomly spread ones.
+func insertExplicitLikes(exec execFunc, ids map[string]string, now time.Time) error {
+	for _, like := range showcaseLikes {
+		if like.Post < 0 || like.Post >= len(showcasePosts) {
+			continue
+		}
+		post := showcasePosts[like.Post]
+		created := now.Add(-time.Duration(post.AgeHours) * time.Hour)
+		when := created.Add(now.Sub(created) / 2)
+		if err := setReaction(exec, ids, like.Handle, "post", postIDBase+like.Post, 1, when); err != nil {
+			return err
 		}
 	}
 	return nil
@@ -436,7 +450,7 @@ func insertGroups(exec execFunc, media *mediaSeeder, ids map[string]string, now 
 		if _, err := exec(`INSERT INTO socialGroup (groupId, ownerId, title, description, createdAt, imageUrl)
 			VALUES (?, ?, ?, ?, ?, ?)
 			ON CONFLICT(groupId) DO UPDATE SET ownerId=excluded.ownerId, title=excluded.title,
-			  description=excluded.description, imageUrl=excluded.imageUrl`,
+			  description=excluded.description, imageUrl=excluded.imageUrl, createdAt=excluded.createdAt`,
 			groupID, ownerID, g.Title, g.Description, formatTime(created), imageURL); err != nil {
 			return err
 		}
@@ -479,8 +493,9 @@ func insertGroups(exec execFunc, media *mediaSeeder, ids map[string]string, now 
 			}
 			if _, err := exec(`INSERT INTO groupContent (id, groupId, userId, kind, parentId, title, content, mediaUrl, startsAt, createdAt)
 				VALUES (?, ?, ?, 'posts', NULL, '', ?, ?, '', ?)
-				ON CONFLICT(id) DO UPDATE SET groupId=excluded.groupId, userId=excluded.userId, content=excluded.content,
-				  mediaUrl=excluded.mediaUrl, createdAt=excluded.createdAt`,
+				ON CONFLICT(id) DO UPDATE SET groupId=excluded.groupId, userId=excluded.userId, kind=excluded.kind,
+				  parentId=excluded.parentId, title=excluded.title, content=excluded.content,
+				  mediaUrl=excluded.mediaUrl, startsAt=excluded.startsAt, createdAt=excluded.createdAt`,
 				postID, groupID, ids[post.Author], post.Text, mediaURL, formatTime(createdAt)); err != nil {
 				return err
 			}
@@ -491,8 +506,9 @@ func insertGroups(exec execFunc, media *mediaSeeder, ids map[string]string, now 
 				contentID++
 				if _, err := exec(`INSERT INTO groupContent (id, groupId, userId, kind, parentId, title, content, mediaUrl, startsAt, createdAt)
 					VALUES (?, ?, ?, 'comments', ?, '', ?, '', '', ?)
-					ON CONFLICT(id) DO UPDATE SET groupId=excluded.groupId, userId=excluded.userId, parentId=excluded.parentId,
-					  content=excluded.content, createdAt=excluded.createdAt`,
+					ON CONFLICT(id) DO UPDATE SET groupId=excluded.groupId, userId=excluded.userId, kind=excluded.kind,
+					  parentId=excluded.parentId, title=excluded.title, content=excluded.content,
+					  mediaUrl=excluded.mediaUrl, startsAt=excluded.startsAt, createdAt=excluded.createdAt`,
 					contentID, groupID, ids[c.Author], postID, c.Text, formatTime(now.Add(-time.Duration(c.AgeHours)*time.Hour))); err != nil {
 					return err
 				}
@@ -503,8 +519,9 @@ func insertGroups(exec execFunc, media *mediaSeeder, ids map[string]string, now 
 			eventID := contentID
 			if _, err := exec(`INSERT INTO groupContent (id, groupId, userId, kind, parentId, title, content, mediaUrl, startsAt, createdAt)
 				VALUES (?, ?, ?, 'events', NULL, ?, ?, '', ?, datetime('now'))
-				ON CONFLICT(id) DO UPDATE SET groupId=excluded.groupId, userId=excluded.userId, title=excluded.title,
-				  content=excluded.content, startsAt=excluded.startsAt`,
+				ON CONFLICT(id) DO UPDATE SET groupId=excluded.groupId, userId=excluded.userId, kind=excluded.kind,
+				  parentId=excluded.parentId, title=excluded.title, content=excluded.content,
+				  mediaUrl=excluded.mediaUrl, startsAt=excluded.startsAt`,
 				eventID, groupID, ids[e.Author], e.Title, e.Text, now.Add(time.Duration(e.StartsInHours)*time.Hour).Format(time.RFC3339)); err != nil {
 				return err
 			}
@@ -533,8 +550,9 @@ func insertGroups(exec execFunc, media *mediaSeeder, ids map[string]string, now 
 			}
 			if _, err := exec(`INSERT INTO groupContent (id, groupId, userId, kind, parentId, title, content, mediaUrl, startsAt, createdAt)
 				VALUES (?, ?, ?, 'messages', NULL, '', ?, ?, '', ?)
-				ON CONFLICT(id) DO UPDATE SET groupId=excluded.groupId, userId=excluded.userId, content=excluded.content,
-				  mediaUrl=excluded.mediaUrl, createdAt=excluded.createdAt`,
+				ON CONFLICT(id) DO UPDATE SET groupId=excluded.groupId, userId=excluded.userId, kind=excluded.kind,
+				  parentId=excluded.parentId, title=excluded.title, content=excluded.content,
+				  mediaUrl=excluded.mediaUrl, startsAt=excluded.startsAt, createdAt=excluded.createdAt`,
 				contentID, groupID, ids[m.Author], m.Text, mediaURL, formatTime(now.Add(-time.Duration(m.AgeHours)*time.Hour))); err != nil {
 				return err
 			}
