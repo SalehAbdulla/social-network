@@ -68,10 +68,16 @@ environment and release details live in the [documentation map](#documentation-m
   message is gone.
 - **Cross-language drift guards.** A Go test reads the TypeScript media-limit module and compares the
   numbers, so the browser and the server can only move together.
-- **A real test suite.** Go unit and integration tests, a query-plan check, an end-to-end API tour,
-  and a headless-Chrome browser suite over an isolated database.
+- **Destructive actions ask first.** Unfollowing, and switching a profile between public and
+  private, both open a confirmation that has to be accepted; Cancel and Escape leave the state
+  exactly as it was.
+- **A real test suite.** Go unit and integration tests, a query-plan check, and an end-to-end API
+  tour — 110 requests, each asserting the status it should answer. The headless-Chrome browser
+  suite is written and part of the repository, but is currently being brought back in step with
+  the redesigned composer; `TODO.md` records exactly where it stands.
 - **Reproducible, unprivileged containers.** Two images with pinned base-image digests, non-root
-  users, readiness probes, and migrations applied at boot.
+  users, readiness probes, and migrations applied at boot. Both have been built and run — see
+  [Running the stack](#running-the-stack).
 
 ## Architecture
 
@@ -103,11 +109,14 @@ change that rotates the session and signs out the account's other browsers. Prof
 avatar beside the counts — posts, followers and following — with the name and bio under them,
 and the media tab is a three-column grid of squares. The post count is viewer-relative, the
 same as the two follower counts: it is the posts the person looking may read, so the number
-and the list under it cannot disagree. Following a private profile is a request the owner
-accepts or declines; following a
-public profile happens immediately. Discovery has two doors: the Discover page, and the
-"People you may know" rail the feed shows, which offers a few members you do not follow
-yet and a button to change that.
+and the list under it cannot disagree. Following a private profile is a request the owner accepts
+or declines; following a public profile happens immediately, and unfollowing asks for confirmation
+first, because it is the one thing on that screen that cannot be undone from it. Switching a
+profile between public and private asks the same way, inside the edit dialog. Discovery has two
+doors: the Discover page, and the "People you may know" rail the feed shows, which offers a few
+members you do not follow yet and a button to change that. The Discover page asks for twelve people
+at a time and draws more as the reader scrolls — the cadence the feed uses — rather than fetching
+everyone at once.
 
 **Posts, comments and reactions** — three privacy levels (`public`, `followers` for
 "almost private", `selected` for "only the followers you pick"), up to four images or
@@ -115,16 +124,13 @@ GIFs per post, comments with their own image, and reaction scores. On a wide scr
 feed opens a post in an Instagram-style overlay — the media on the left, and on the right
 the header, caption, the post's actions and the comments with the composer pinned at the
 bottom — while the post's own page keeps its inline list and a phone keeps the bottom
-drawer. Stories expire
-after 24 hours, and the strip draws a gradient ring around an author's avatar until
-you open their story — the "seen" state is kept per account on the server, so it
-follows you to another device. An unsent post is kept in the browser, so a refresh does not lose the
-text or the audience chosen for it; the composer says what a publish is still missing
-instead of disabling its button, and Ctrl/Cmd + Enter publishes. Beside the form it
-previews the draft exactly as the card will draw it, under a banner that names the
-audience the draft has chosen — "Visible to everyone", or the followers it picks by
-name, or, once the author's own profile is private, the reminder that even a public
-post then reaches only those followers. Any post can also be bookmarked: the list
+drawer. Stories expire after 24 hours, and the strip draws a gradient ring around an author's
+avatar until you open their story — the "seen" state is kept per account on the server, so it
+follows you to another device. Creating a post is a three-step composer — choose the photos, crop
+them, then write the caption and pick the audience — and its Share button stays disabled until
+there is something to publish, with the reason in the button's tooltip; Ctrl/Cmd + Enter shares
+from the caption field. Editing an existing post keeps the older single-page form, which names
+what is still missing beside the field it is about. Any post can also be bookmarked: the list
 is private to the member and lives at `/saved`, and because it runs
 the same three privacy levels as the feed, a saved post that later becomes unreadable
 simply drops out of it. The feed does not replace what a reader is looking at when a post
@@ -201,31 +207,44 @@ frontend/
   src/app/lib/             shared hooks: paging, live refresh, dialog focus, the upload limits
   src/proxy.ts             page-level session gate (the API and /ws are excluded)
   scripts/                 browser smoke suite driven over the Chrome DevTools Protocol
-scripts/                   the API tour, the base-image pin check, the WSL launcher
-make help                  the commands in one place: dev, check, smoke, seed, seed-showcase, api-tour, pin-check
+scripts/                   the image build, the API tour, the backup drill, the base-image pin
+                           check, and the WSL launcher
+make help                  every command in one place: dev, check, smoke, seed, seed-showcase,
+                           api-tour, images, compose-up, compose-config, pin-check
 compose.yaml               both services and the social-data volume
 deploy/Caddyfile.example   a sample reverse proxy, reviewed rather than run here
 DEPLOYMENT.md              environment variables, headers, limits, backup, release checklist and checks
 TODO.md                    the open work list and the reasoning behind what is closed
 .github/workflows/ci.yml   the checks below as a GitHub Actions workflow
-.gitlab-ci.yml             the same four checks for the school's GitLab, which is this repo's origin
+.gitlab-ci.yml             the same checks for the school's GitLab, which is this repo's origin
 ```
 
 ## Getting started
 
-### Docker (a full stack)
+### Running the stack
 
 ```sh
 cp .env.example .env      # APP_ENV + FRONTEND_ORIGIN; see DEPLOYMENT.md for the rest
-docker compose up --build -d
+make compose-up           # builds both images, starts the stack, waits for the frontend
 open http://localhost:4000
 ```
+
+`make compose-up` runs `scripts/build-images.sh`, which uses whichever Compose CLI the host has
+(`docker compose` or the standalone `docker-compose`), validates `compose.yaml` first, builds both
+images and then starts them. `make images` stops after the build, and `make compose-config` only
+validates the file — that one needs no daemon, which makes it a useful first check. The equivalent
+by hand is `docker compose up --build -d`.
 
 Two images are built (`social-network-backend`, `social-network-frontend`), both run as
 unprivileged users, and only the frontend publishes a port — bound to loopback, with the
 reverse proxy expected to sit in front of it. SQLite and uploads live in the `social-data`
 volume, and migrations run at backend startup. Stop with `docker compose down`; do not add
 `-v` unless you mean to delete all application data.
+
+Both images have been built and run end to end: `docker ps -a` shows the two containers healthy
+with non-zero sizes, the backend logs `Migrations applied successfully` as it boots, and the
+frontend's own healthcheck reaches the backend across the Compose network. `DEPLOYMENT.md`
+records that run, including the base-image digests every `FROM` pulled at.
 
 ### Local development
 
@@ -252,7 +271,7 @@ chats, direct conversations, notifications, bookmarks and a populated "Suggested
 It is idempotent and safe to re-run. Sign in with any of the members' handles (or
 `dummy@example.com` / `alex@example.com`) using `DummyUser123!` for the two fixtures and
 `Password123!` for the rest; the command prints the same reminder when it finishes. `make seed`
-and `make seed -demo` remain the small fixtures the automated suites rely on.
+and `make seed-demo` remain the small fixtures the automated suites rely on.
 
 The backend also answers `GET /api/v1/health` (liveness) and `GET /api/v1/ready` (readiness,
 database-backed) without a session; both containers use the second one as their `HEALTHCHECK`.
@@ -264,6 +283,9 @@ They are documented in `DEPLOYMENT.md`.
 make check          # backend build/vet/test and frontend lint/types/build
 make smoke          # the browser suite, with CHROME_PATH set if Chrome is not in the usual place
 make api-tour       # every route in the API, against a running backend
+make compose-config # validate compose.yaml — no daemon needed
+make images         # build both images (needs a reachable daemon)
+make compose-up     # build both images and start the stack
 make pin-check      # whether the base-image pins still match their tags
 make help           # the rest
 ```
@@ -288,18 +310,25 @@ the API reads JSON, and a socket upgrade needs an allowed `Origin` or it is refu
 
 The last command in that block builds temporary backend and frontend servers, seeds an isolated
 database under `backend/tmp`, and drives headless Chrome through the real UI; it needs Chrome
-installed (`CHROME_PATH` overrides the location; the fallbacks are the usual install
-paths per platform, and a Linux runner normally sets it). `docker compose config` and
-`docker compose build` are the container checks, and `npm audit --omit=dev` / `govulncheck ./...` cover
-dependency advisories. `node scripts/pin-base-images.mjs` asks a different question — whether the
-base-image digests the Dockerfiles and `.gitlab-ci.yml` pin are still what their tags point at, and
-which toolchain they carry — and it reports drift without blocking. Everything except the browser
-suite runs in CI on every push; the browser suite has an opt-in job in both files instead — see
-`.gitlab-ci.yml` (this repository's origin is the school's GitLab) and `.github/workflows/ci.yml`.
-`DEPLOYMENT.md` puts them in release order. The Go suite carries the load smoke — fifty
-concurrent sockets whose broadcast is asserted, sustained throughput, and the rate limiter's
-boundary — and the browser suite opens fifty sockets through the frontend proxy, which is the only
-place the proxy's upgrade path is exercised at concurrency.
+installed (`CHROME_PATH` overrides the location; the fallbacks are the usual install paths per
+platform, and a Linux runner normally sets it). `make compose-config` and `make images` are the
+container checks — the first needs no daemon, the second needs a reachable one — and
+`npm audit --omit=dev` / `govulncheck ./...` cover dependency advisories.
+`node scripts/pin-base-images.mjs` asks a different question — whether the base-image digests the
+Dockerfiles and `.gitlab-ci.yml` pin are still what their tags point at, and which toolchain they
+carry — and it reports drift without blocking. Everything except the browser suite runs in CI on
+every push; the browser suite has an opt-in job in both files instead — see `.gitlab-ci.yml` (this
+repository's origin is the school's GitLab) and `.github/workflows/ci.yml`. `DEPLOYMENT.md` puts
+them in release order. The Go suite carries the load smoke — fifty concurrent sockets whose
+broadcast is asserted, sustained throughput, and the rate limiter's boundary — and the browser
+suite opens fifty sockets through the frontend proxy, which is the only place the proxy's upgrade
+path is exercised at concurrency.
+
+**The browser suite is currently out of step with the UI.** It stops early in `integration-smoke.mjs`
+looking for a `textarea` and a "Publish Post" button on `/create-post`, which the three-step
+composer replaced; the sections after it are stale for the same reason. This is recorded with the
+diagnosis and the work it needs in `TODO.md` — the Go suites, `make check` and `make api-tour` are
+unaffected and all pass.
 
 ## Design rules worth knowing
 
@@ -308,6 +337,13 @@ place the proxy's upgrade path is exercised at concurrency.
   the six surfaces cannot drift apart. `followers` is a live relation (unfollowing revokes
   access), while `selected` is a grant recorded when the post was written: it survives an
   unfollow and only an edit re-validates it.
+- **Paged lists agree on their page size.** Lists that page with `page`/`size` let the client say
+  how many it wants. Lists that page with `offset` cannot: the server's `LIMIT` and the client's
+  offset step have to be the same number, and when they drift apart a page boundary silently skips
+  rows. Discover is the one that takes both — it sends `size`, defaulting to 30 and capped at 100 —
+  because its page size changed to twelve and that coupling was the thing that would have broken.
+  `backend/cmd/discover_pagination_test.go` walks the list with `size=3` and asserts every account
+  comes back exactly once.
 - **Media access** mirrors the post or comment it hangs off. Avatars, group images and
   story media are readable by any signed-in member, and a cover photo needs a public
   profile or a follow. Stories carry no audience, which is recorded as a decision in
