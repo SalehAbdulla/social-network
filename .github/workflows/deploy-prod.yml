@@ -10,7 +10,7 @@ name: Deploy to prod (Oracle VPS, co-hosted with beyond)
 #
 # Required repository secrets:  PROD_HOST, PROD_SSH_USER, PROD_SSH_KEY
 # Optional repository variables: PROD_APP_DIR (default ~/social-network),
-#                                SITE_HOST    (default social.beyondedubh.com)
+#                                SITE_HOST    (default salehsocial.duckdns.org)
 # ──────────────────────────────────────────────────────────────────────────
 
 on:
@@ -37,7 +37,7 @@ jobs:
       PROD_HOST: ${{ secrets.PROD_HOST }}
       PROD_USER: ${{ secrets.PROD_SSH_USER }}
       APP_DIR: ${{ vars.PROD_APP_DIR || '~/social-network' }}
-      SITE_HOST: ${{ vars.SITE_HOST || 'social.beyondedubh.com' }}
+      SITE_HOST: ${{ vars.SITE_HOST || 'salehsocial.duckdns.org' }}
     steps:
       - uses: actions/checkout@v4
 

@@ -37,28 +37,39 @@ also has a service called `backend`; the plain name would resolve to *their* Spr
 half the time. The build arg is therefore `http://social-network-backend:5174`, which exists only on
 our own network.
 
-### One-time setup
+### One-time setup (already applied — recorded here)
 
-1. **DNS** — add an `A` record for the subdomain (e.g. `social.beyondedubh.com`) pointing at the VPS.
-2. **Certificate SAN** — the cert is shared with `beyond`, so re-issue it with the new name added
-   (full list, per beyond's `docker/nginx/README.md`):
+1. **DNS** — a free DuckDNS subdomain, **`salehsocial.duckdns.org`**, with its `A` record pointing at
+   the VPS (`84.13.131.23`). DuckDNS is on the Public Suffix List, so Let's Encrypt issues for it over
+   the ordinary HTTP-01 webroot flow.
+2. **Certificate** — our **own** certificate, separate from beyond's:
    ```sh
    sudo certbot certonly --webroot -w /home/ubuntu/beyond/docker/nginx/certbot-webroot \
-     --expand -d beyondedubh.com -d www.beyondedubh.com -d api.beyondedubh.com \
-     -d auth.beyondedubh.com -d admin.beyondedubh.com -d db.beyondedubh.com \
-     -d sonar.beyondedubh.com -d social.beyondedubh.com
-   sudo cp /etc/letsencrypt/live/beyondedubh.com/fullchain.pem ~/beyond/docker/nginx/ssl/
-   sudo cp /etc/letsencrypt/live/beyondedubh.com/privkey.pem  ~/beyond/docker/nginx/ssl/
-   sudo chown ubuntu:ubuntu ~/beyond/docker/nginx/ssl/*
+     --non-interactive --agree-tos -m info@beyondedubh.com -d salehsocial.duckdns.org
    ```
-3. **nginx site block** — validate *before* reloading, so a typo cannot take `beyond` down:
+   The first issuance needs no site block: with no `server_name` match, nginx falls back to beyond's
+   default port-80 server, which already serves the same ACME webroot.
+3. **Certificate files** — copied in under their **own** names. beyond's server blocks use
+   `/etc/nginx/ssl/fullchain.pem` + `privkey.pem` for *every* beyondedubh.com host, so writing our
+   cert over those names would break all of them:
+   ```sh
+   sudo cp /etc/letsencrypt/live/salehsocial.duckdns.org/fullchain.pem ~/beyond/docker/nginx/ssl/salehsocial-fullchain.pem
+   sudo cp /etc/letsencrypt/live/salehsocial.duckdns.org/privkey.pem  ~/beyond/docker/nginx/ssl/salehsocial-privkey.pem
+   sudo chown ubuntu:ubuntu ~/beyond/docker/nginx/ssl/salehsocial-*.pem
+   chmod 644 ~/beyond/docker/nginx/ssl/salehsocial-*.pem   # 600 fails: nginx runs as another uid
+   ```
+4. **Renewal hook** — `deploy/certbot-deploy-hook.sh` installed as
+   `/etc/letsencrypt/renewal-hooks/deploy/social-network-nginx.sh` (root, `+x`). Deploy hooks are
+   **global**, so it exits quietly when our cert is absent and never writes beyond's files.
+5. **nginx site block** — validate *before* reloading, so a typo cannot take `beyond` down:
    ```sh
    cp deploy/nginx-social.conf ~/beyond/docker/nginx/sites/social.conf
    docker exec beyond-nginx nginx -t && docker exec beyond-nginx nginx -s reload
    ```
-4. **Env** — `cp .env.example.prod .env.prod` in the checkout and fill it in (`.env.prod` is git-ignored).
-5. **Actions** — add secrets `PROD_HOST`, `PROD_SSH_USER`, `PROD_SSH_KEY`, and optionally the
-   variables `PROD_APP_DIR` (default `~/social-network`) and `SITE_HOST`.
+6. **Env** — `cp .env.example.prod .env.prod` and fill it in (`.env.prod` is git-ignored). Set
+   `FRONTEND_ORIGIN=https://salehsocial.duckdns.org`, then `docker compose ... up -d` to apply it.
+7. **Actions** — secrets `PROD_HOST`, `PROD_SSH_USER`, `PROD_SSH_KEY`; optionally the variables
+   `PROD_APP_DIR` (default `~/social-network`) and `SITE_HOST` (default `salehsocial.duckdns.org`).
 
 ### Deploying
 
@@ -78,8 +89,10 @@ and finally on the public HTTPS readiness endpoint.
 - **Disk is shared and was at ~72%.** The root volume also holds `beyond` and its CI runner. The
   workflow refuses to build with under 5 GB free and prunes dangling images afterwards, but the build
   still needs a few GB while it runs.
-- **The reverse proxy is shared.** A broken site block or cert re-issue is a `beyond` outage, which is
-  why the steps above run `nginx -t` first and re-issue the cert with the full SAN list.
+- **The reverse proxy and its TLS are shared.** beyond's nginx terminates TLS for every hostname on
+  this box, so a broken site block — or a certificate written over `fullchain.pem` — is a `beyond`
+  outage. That is why our cert uses its own filenames, the renewal hook is guarded, and every change
+  runs `nginx -t` before the reload.
 
 
 `POST /api/v1/auth/password-reset` starts the flow and `POST /api/v1/auth/password-reset/confirm` redeems the link. The first is the only endpoint in this API that answers the same way whether or not the address exists — `202` with one sentence either way — because "no such account" is a registration oracle. Tokens are 256 random bits and the table stores only a sha256 of one, so a leaked database does not hand over working links. A link is single-use, expires after **30 minutes**, and requesting a new one invalidates the previous link. Redeeming stores the new hash and revokes **every** session the account had, so the visitor signs in again rather than being handed a session by whoever clicked the link. Requests are limited to three per address per fifteen minutes, counted for unknown addresses too: a limit that applied only to registered ones would answer the question the endpoint refuses to answer.
