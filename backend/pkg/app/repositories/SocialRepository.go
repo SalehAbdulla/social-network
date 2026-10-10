@@ -427,17 +427,32 @@ func (db *DB) CanViewMedia(id, viewerID string) (bool, error) {
 	return allowed, err
 }
 
+// storyVisibility is the one fragment every story read path filters with, the way postVisibility
+// guards the post listings: the author always sees their own, a public story follows the author's
+// profile privacy, a followers story needs an accepted follow, and a selected story needs a row in
+// story_selected_follower. `s` is the story alias and `u` its author; the caller supplies viewerID
+// four times.
+const storyVisibility = `(s.userId = ? OR (s.privacy = 'public' AND (u.isPublic = 1 OR EXISTS (SELECT 1 FROM follow f WHERE f.followerId = ? AND f.followedId = s.userId))) OR (s.privacy = 'followers' AND EXISTS (SELECT 1 FROM follow f WHERE f.followerId = ? AND f.followedId = s.userId)) OR (s.privacy = 'selected' AND EXISTS (SELECT 1 FROM story_selected_follower ssf WHERE ssf.storyId = s.storyId AND ssf.userId = ?)))`
+
 func (db *DB) CreateStory(s models.Story) (int, error) {
-	result, err := db.Conn.Exec("INSERT INTO story (userId,content,mediaUrl,mediaType,backgroundColor) VALUES (?,?,?,?,?)", s.UserID, s.Content, s.MediaURL, s.MediaType, s.BackgroundColor)
+	result, err := db.Conn.Exec("INSERT INTO story (userId,content,mediaUrl,mediaType,backgroundColor,privacy) VALUES (?,?,?,?,?,?)", s.UserID, s.Content, s.MediaURL, s.MediaType, s.BackgroundColor, s.Privacy)
 	if err != nil {
 		return 0, err
 	}
 	id, err := result.LastInsertId()
-	return int(id), err
+	if err != nil {
+		return 0, err
+	}
+	for _, selectedID := range s.SelectedFollowerIds {
+		if _, err := db.Conn.Exec("INSERT INTO story_selected_follower(storyId,userId) VALUES (?,?) ON CONFLICT DO NOTHING", id, selectedID); err != nil {
+			return 0, err
+		}
+	}
+	return int(id), nil
 }
 
 func (db *DB) Stories(offset int, viewerID string) ([]models.Story, error) {
-	rows, err := db.Conn.Query(`SELECT s.storyId,s.userId,u.nickName,COALESCE(u.avatar,''),s.content,s.mediaUrl,s.mediaType,s.backgroundColor,s.createdAt,s.expiresAt,(v.userId IS NOT NULL),EXISTS(SELECT 1 FROM reaction r WHERE r.entityType='story' AND r.entityId=s.storyId AND r.userId=? AND r.score>0),(SELECT COUNT(*) FROM reaction r2 WHERE r2.entityType='story' AND r2.entityId=s.storyId AND r2.score>0) FROM story s JOIN user u ON u.userId=s.userId LEFT JOIN storyView v ON v.storyId=s.storyId AND v.userId=? WHERE s.expiresAt > datetime('now') AND (s.userId=? OR u.isPublic=1 OR EXISTS(SELECT 1 FROM follow f WHERE f.followerId=? AND f.followedId=s.userId)) ORDER BY (s.userId=?) DESC,(v.userId IS NOT NULL),s.createdAt DESC,s.storyId DESC LIMIT 30 OFFSET ?`, viewerID, viewerID, viewerID, viewerID, viewerID, offset)
+	rows, err := db.Conn.Query(`SELECT s.storyId,s.userId,u.nickName,COALESCE(u.avatar,''),s.content,s.mediaUrl,s.mediaType,s.backgroundColor,s.privacy,s.createdAt,s.expiresAt,(v.userId IS NOT NULL),EXISTS(SELECT 1 FROM reaction r WHERE r.entityType='story' AND r.entityId=s.storyId AND r.userId=? AND r.score>0),(SELECT COUNT(*) FROM reaction r2 WHERE r2.entityType='story' AND r2.entityId=s.storyId AND r2.score>0) FROM story s JOIN user u ON u.userId=s.userId LEFT JOIN storyView v ON v.storyId=s.storyId AND v.userId=? WHERE s.expiresAt > datetime('now') AND `+storyVisibility+` ORDER BY (s.userId=?) DESC,(v.userId IS NOT NULL),s.createdAt DESC,s.storyId DESC LIMIT 30 OFFSET ?`, viewerID, viewerID, viewerID, viewerID, viewerID, viewerID, viewerID, offset)
 	if err != nil {
 		return nil, err
 	}
@@ -445,7 +460,7 @@ func (db *DB) Stories(offset int, viewerID string) ([]models.Story, error) {
 	stories := []models.Story{}
 	for rows.Next() {
 		var s models.Story
-		if err := rows.Scan(&s.StoryID, &s.UserID, &s.Nickname, &s.Avatar, &s.Content, &s.MediaURL, &s.MediaType, &s.BackgroundColor, &s.CreatedAt, &s.ExpiresAt, &s.Viewed, &s.Liked, &s.LikeCount); err != nil {
+		if err := rows.Scan(&s.StoryID, &s.UserID, &s.Nickname, &s.Avatar, &s.Content, &s.MediaURL, &s.MediaType, &s.BackgroundColor, &s.Privacy, &s.CreatedAt, &s.ExpiresAt, &s.Viewed, &s.Liked, &s.LikeCount); err != nil {
 			return nil, err
 		}
 		stories = append(stories, s)
@@ -454,7 +469,7 @@ func (db *DB) Stories(offset int, viewerID string) ([]models.Story, error) {
 }
 
 func (db *DB) ArchivedStories(offset int, userID string) ([]models.Story, error) {
-	rows, err := db.Conn.Query(`SELECT s.storyId,s.userId,u.nickName,COALESCE(u.avatar,''),s.content,s.mediaUrl,s.mediaType,s.backgroundColor,s.createdAt,s.expiresAt,(v.userId IS NOT NULL),EXISTS(SELECT 1 FROM reaction r WHERE r.entityType='story' AND r.entityId=s.storyId AND r.userId=? AND r.score>0),(SELECT COUNT(*) FROM reaction r2 WHERE r2.entityType='story' AND r2.entityId=s.storyId AND r2.score>0) FROM story s JOIN user u ON u.userId=s.userId LEFT JOIN storyView v ON v.storyId=s.storyId AND v.userId=? WHERE s.userId=? AND s.expiresAt <= datetime('now') ORDER BY s.createdAt DESC,s.storyId DESC LIMIT 30 OFFSET ?`, userID, userID, userID, offset)
+	rows, err := db.Conn.Query(`SELECT s.storyId,s.userId,u.nickName,COALESCE(u.avatar,''),s.content,s.mediaUrl,s.mediaType,s.backgroundColor,s.privacy,s.createdAt,s.expiresAt,(v.userId IS NOT NULL),EXISTS(SELECT 1 FROM reaction r WHERE r.entityType='story' AND r.entityId=s.storyId AND r.userId=? AND r.score>0),(SELECT COUNT(*) FROM reaction r2 WHERE r2.entityType='story' AND r2.entityId=s.storyId AND r2.score>0) FROM story s JOIN user u ON u.userId=s.userId LEFT JOIN storyView v ON v.storyId=s.storyId AND v.userId=? WHERE s.userId=? AND s.expiresAt <= datetime('now') ORDER BY s.createdAt DESC,s.storyId DESC LIMIT 30 OFFSET ?`, userID, userID, userID, offset)
 	if err != nil {
 		return nil, err
 	}
@@ -462,7 +477,7 @@ func (db *DB) ArchivedStories(offset int, userID string) ([]models.Story, error)
 	stories := []models.Story{}
 	for rows.Next() {
 		var s models.Story
-		if err := rows.Scan(&s.StoryID, &s.UserID, &s.Nickname, &s.Avatar, &s.Content, &s.MediaURL, &s.MediaType, &s.BackgroundColor, &s.CreatedAt, &s.ExpiresAt, &s.Viewed, &s.Liked, &s.LikeCount); err != nil {
+		if err := rows.Scan(&s.StoryID, &s.UserID, &s.Nickname, &s.Avatar, &s.Content, &s.MediaURL, &s.MediaType, &s.BackgroundColor, &s.Privacy, &s.CreatedAt, &s.ExpiresAt, &s.Viewed, &s.Liked, &s.LikeCount); err != nil {
 			return nil, err
 		}
 		stories = append(stories, s)
