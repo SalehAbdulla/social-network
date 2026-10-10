@@ -1,19 +1,16 @@
 'use client';
 
 import { useState } from 'react';
-import { ChevronDown, Globe, ImagePlus, Lock, Smile, Users } from 'lucide-react';
-import { type SocialUser, displayName } from '../../api/social';
+import { ImagePlus, Smile, Users } from 'lucide-react';
+import { type SocialUser } from '../../api/social';
 import Avatar from '../Avatar';
 import { geometry, imageStyle, boxStyle, MEDIA_SQUARE } from './useCropper';
 import { CAPTION_MAX, type CreateContext, type SelectedImage } from './types';
+import { ROW } from './rows';
+import VisibilityRow from './VisibilityRow';
+import { type Visibility } from './visibility';
 
 const EMOJI = ['😀', '❤️', '👍', '🎉', '😂', '🙏', '👋', '🔥'];
-
-const PRIVACY = [
-  { value: 'public' as const, label: 'Public', desc: 'Anyone on or off Social Network', Icon: Globe },
-  { value: 'followers' as const, label: 'Followers', desc: 'Your followers only', Icon: Users },
-  { value: 'selected' as const, label: 'Only me', desc: 'Only the followers you choose', Icon: Lock },
-];
 
 function Preview({ image }: { image: SelectedImage }) {
   const view = geometry(image, MEDIA_SQUARE);
@@ -32,8 +29,8 @@ export default function DetailsStep({ context, groupName, groupAvatar, images, i
   textMode: boolean;
   caption: string;
   onCaption: (value: string) => void;
-  privacy: 'public' | 'followers' | 'selected';
-  onPrivacy: (value: 'public' | 'followers' | 'selected') => void;
+  privacy: Visibility;
+  onPrivacy: (value: Visibility) => void;
   followers: SocialUser[];
   selectedFollowers: string[];
   onToggleFollower: (id: string) => void;
@@ -42,8 +39,6 @@ export default function DetailsStep({ context, groupName, groupAvatar, images, i
   captionRef: React.RefObject<HTMLTextAreaElement | null>;
 }) {
   const [emojiOpen, setEmojiOpen] = useState(false);
-  const [audienceOpen, setAudienceOpen] = useState(false);
-  const current = PRIVACY.find(option => option.value === privacy) ?? PRIVACY[0];
 
   return <>
     {!textMode && <div className="cp-media">
@@ -74,43 +69,18 @@ export default function DetailsStep({ context, groupName, groupAvatar, images, i
           onChange={event => onCaption(event.target.value.slice(0, CAPTION_MAX))}
         />
         <div className="cp-caption-foot">
-          <button type="button" className="cp-emoji-btn" aria-label="Choose emoji" aria-expanded={emojiOpen} onClick={() => setEmojiOpen(value => !value)}><Smile aria-hidden="true" /></button>
+          <button type="button" className="flex size-7 items-center justify-center rounded-full text-text transition-colors hover:bg-dm-surface motion-reduce:transition-none" aria-label="Choose emoji" aria-expanded={emojiOpen} onClick={() => setEmojiOpen(value => !value)}><Smile size={20} aria-hidden="true" /></button>
           <span className="cp-counter" data-over={caption.length >= CAPTION_MAX}>{caption.length}/{CAPTION_MAX.toLocaleString()}</span>
         </div>
         {emojiOpen && <div className="cp-emoji-pop" aria-label="Emoji picker">
           {EMOJI.map(emoji => <button key={emoji} type="button" aria-label={`Insert ${emoji}`} onClick={() => onCaption((caption + emoji).slice(0, CAPTION_MAX))}>{emoji}</button>)}
         </div>}
       </div>
-
       <div className="cp-rows">
         {context === 'group'
           ? <div className="cp-row"><Users size={20} aria-hidden="true" /><span className="cp-row-label">Sharing to</span><span className="cp-row-value" dir="auto">{groupName}</span></div>
-          : <>
-            <button type="button" className="cp-row" aria-expanded={audienceOpen} onClick={() => setAudienceOpen(value => !value)}>
-              <current.Icon size={20} aria-hidden="true" />
-              <span className="cp-row-label">Audience</span>
-              <span className="cp-row-value">{current.label}</span>
-              <ChevronDown className="cp-row-chev" aria-hidden="true" />
-            </button>
-            {audienceOpen && <div className="cp-sub" role="radiogroup" aria-label="Audience">
-              {PRIVACY.map(option => <label key={option.value} className="cp-radio">
-                <input type="radio" name="cp-privacy" checked={privacy === option.value} onChange={() => onPrivacy(option.value)} />
-                <span className="cp-radio-text">
-                  <span className="cp-radio-title">{option.label}</span>
-                  <span className="cp-radio-desc">{option.desc}</span>
-                </span>
-              </label>)}
-              {privacy === 'selected' && <div className="cp-selected-list">
-                {followersLoading && <span className="cp-radio-desc">Loading followers…</span>}
-                {!followersLoading && followers.length === 0 && <span className="cp-radio-desc">You do not have any followers yet.</span>}
-                {followers.map(person => <label key={person.userId} className="cp-chip">
-                  <input type="checkbox" checked={selectedFollowers.includes(person.userId)} onChange={() => onToggleFollower(person.userId)} />
-                  <span dir="auto">{displayName(person)}</span>
-                </label>)}
-              </div>}
-            </div>}
-          </>}
-        {textMode && <button type="button" className="cp-addrow" onClick={onAddPhotos}><ImagePlus aria-hidden="true" />Add photos</button>}
+          : <VisibilityRow value={privacy} onChange={onPrivacy} followers={followers} selected={selectedFollowers} onToggle={onToggleFollower} loading={followersLoading} />}
+        {textMode && <button id='btn' type="button" className={ROW} onClick={onAddPhotos}><ImagePlus size={20} aria-hidden="true" />photo</button>}
       </div>
     </div>
   </>;
