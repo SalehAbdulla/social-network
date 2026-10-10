@@ -14,6 +14,15 @@ var (
 	ErrGender               = errors.New("gender must be either male or female")
 	ErrMethodNotAllowed     = errors.New("method not allowed")
 	ErrInvalidPassForm      = errors.New("password must contain at least one letter, one number, and one symbol")
+	// One message for every password rule, so a form shows the whole
+	// requirement instead of revealing it one failed attempt at a time.
+	ErrPasswordRequirements = errors.New("password must be 12-64 characters long and include at least one letter, one number, and one symbol")
+	ErrMessageLength        = errors.New("a message must be between 1 and 2,000 characters")
+	ErrInvalidJSON          = errors.New("the request body is not valid JSON")
+	ErrEventTitleLength     = errors.New("an event needs a title between 3 and 100 characters")
+	ErrEventContentLength   = errors.New("an event needs details of up to 5,000 characters")
+	ErrEventStartTime       = errors.New("an event must start at a date and time in the future")
+	ErrEventDetails         = errors.New("add a title and some details for the event")
 	ErrInvalidCredentials   = errors.New("invalid email or password")
 	ErrWrongPassword        = errors.New("your current password is incorrect")
 	ErrPasswordsDontMatch   = errors.New("passwords do not match")
