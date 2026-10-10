@@ -23,7 +23,10 @@ export interface SelectedImage {
 
 export const DEFAULT_CROP: CropState = { ratio: 'original', zoom: 1, x: 0, y: 0 };
 
-export const CAPTION_MAX = 2200;
+// The caption is stored as the post's content, so it shares the backend's
+// ceiling (ErrContentLength: 10-500 characters). A larger counter here would let
+// the user type a caption the server then refuses on submit.
+export const CAPTION_MAX = 500;
 
 export const RATIO_VALUE: Record<Exclude<CropRatio, 'original'>, number> = { '1:1': 1, '4:5': 4 / 5, '16:9': 16 / 9 };
 
