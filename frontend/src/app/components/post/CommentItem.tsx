@@ -3,6 +3,7 @@
 import { Heart } from 'lucide-react';
 import { type Comment, dateLabel, displayName, isoTimestamp, relativeLabel } from '../../api/social';
 import { linkify } from '../../lib/linkify';
+import { useNow } from '../../lib/useNow';
 import Avatar from '../Avatar';
 import Menu, { MenuItem } from '../ui/Menu';
 
@@ -16,6 +17,7 @@ export default function CommentItem({ comment, canManage, avatarUrl, busy, onLik
   onOpenPhoto: (images: string[], index: number) => void;
 }) {
   const name = displayName(comment);
+  const now = useNow();
   const liked = comment.userScore === 1;
   const photos = comment.imageUrls ?? [];
   return <div className="pv-cmt">
@@ -28,7 +30,7 @@ export default function CommentItem({ comment, canManage, avatarUrl, busy, onLik
         </button>
       ))}
       <p className="pv-line">
-        <time dateTime={isoTimestamp(comment.createdAt)} title={dateLabel(comment.createdAt)}>{relativeLabel(comment.createdAt)}</time>
+        <time dateTime={isoTimestamp(comment.createdAt)} title={dateLabel(comment.createdAt)}>{relativeLabel(comment.createdAt, now)}</time>
         {comment.score > 0 && <>{' · '}{comment.score} {comment.score === 1 ? 'like' : 'likes'}</>}
       </p>
     </div>
