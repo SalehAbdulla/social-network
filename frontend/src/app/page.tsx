@@ -1,6 +1,6 @@
 'use client';
 
-import { Suspense } from 'react';
+import { Suspense, useEffect } from 'react';
 import { RefreshCw } from 'lucide-react';
 import { type Page, type Post } from './api/social';
 import { usePagedList } from './lib/usePagedList';
@@ -27,13 +27,22 @@ function FeedScreen() {
   });
   const { openFor, modal } = usePostModal(feed.items, postId => feed.update(items => items.filter(item => item.postId !== postId)));
 
-  const create = useCreatePost({
-    context: 'feed',
-    onShared: post => {
-      if (post) feed.update(items => [post, ...items]);
+  const { update } = feed;
+  // A post can be created from the sidebar or the bottom nav, where the feed does
+  // not own the modal. Listening for the broadcast keeps the list current
+  // whichever button was pressed, instead of waiting for a reload.
+  useEffect(() => {
+    const onCreated = (event: Event) => {
+      const post = (event as CustomEvent<Post>).detail;
+      if (!post) return;
+      update(items => items.some(item => item.postId === post.postId) ? items : [post, ...items]);
       window.scrollTo({ top: 0, behavior: 'smooth' });
-    },
-  });
+    };
+    window.addEventListener('social:post_created', onCreated);
+    return () => window.removeEventListener('social:post_created', onCreated);
+  }, [update]);
+
+  const create = useCreatePost({ context: 'feed' });
 
   return <div className="px-4 pt-[var(--feed-top)] pb-4">
     <div className="mx-auto flex w-max max-w-full">
