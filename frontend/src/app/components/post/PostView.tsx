@@ -9,6 +9,7 @@ import {
 } from '../../api/social';
 import { useBackend } from '../BackendProvider';
 import { usePagedList } from '../../lib/usePagedList';
+import { useNow } from '../../lib/useNow';
 import { linkify } from '../../lib/linkify';
 import Avatar from '../Avatar';
 import Lightbox from '../Lightbox';
@@ -33,6 +34,7 @@ export default function PostView({ post, group = false, avatarOf, canManage, sha
   onNestedChange?: (open: boolean) => void;
 }) {
   const { user } = useBackend();
+  const now = useNow();
   const router = useRouter();
   const isOwner = group ? !!canManage : post.userId === user.userId;
   const hasMedia = !!post.imageUrls?.length;
@@ -171,14 +173,14 @@ export default function PostView({ post, group = false, avatarOf, canManage, sha
           <div className="min-w-0 flex-1">
             <p ref={caption} className="pv-body" data-clamped={!expanded} dir="auto"><span className="pv-name">{displayName(post)}</span>{' '}{linkify(post.content)}</p>
             {overflowing && <button type="button" className="pv-more" onClick={() => setExpanded(value => !value)}>{expanded ? 'less' : 'more'}</button>}
-            <p className="pv-line"><time dateTime={isoTimestamp(post.createdAt)} title={dateLabel(post.createdAt)}>{relativeLabel(post.createdAt)}</time></p>
+            <p className="pv-line"><time dateTime={isoTimestamp(post.createdAt)} title={dateLabel(post.createdAt)}>{relativeLabel(post.createdAt, now)}</time></p>
           </div>
         </div>
         {thread ?? <CommentList items={list.items} loading={list.loading} error={list.error} settled={list.settled} hasMore={list.hasMore} loadingMore={list.loadingMore} meId={user.userId} isOwner={isOwner} avatarOf={resolveAvatar} busyId={busyComment} onLike={comment => void likeComment(comment)} onDelete={comment => void deleteComment(comment)} onRetry={list.reload} onLoadMore={list.loadMore} onOpenPhoto={(images, index) => setPhotoViewer({ images, index })} />}
       </div>
       <PostActions liked={vote.userScore === 1} saved={saved} showSave={!group} busy={busy} onLike={() => void like()} onComment={focusComposer} onShare={() => void share()} onSave={() => void toggleSave()} />
       <p className={vote.score > 0 ? 'pv-likes' : 'pv-likes pv-likes-zero'}>{vote.score > 0 ? `${vote.score} ${vote.score === 1 ? 'like' : 'likes'}` : 'Be the first to like this'}</p>
-      <p className="pv-date"><time dateTime={isoTimestamp(post.createdAt)} title={dateLabel(post.createdAt)}>{relativeLabel(post.createdAt)}</time></p>
+      <p className="pv-date"><time dateTime={isoTimestamp(post.createdAt)} title={dateLabel(post.createdAt)}>{relativeLabel(post.createdAt, now)}</time></p>
       {!thread && <div ref={composer}>
         {files.length > 0 && <div className="pv-previews">
           {files.map(item => <span key={item.url} className="pv-thumb"><img src={item.url} alt={item.file.name} />
