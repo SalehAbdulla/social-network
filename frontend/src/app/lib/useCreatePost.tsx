@@ -23,7 +23,13 @@ export function useCreatePost(options: {
       groupName={groupName}
       groupAvatar={groupAvatar}
       onClose={close}
-      onShared={post => onShared?.(post)}
+      onShared={post => {
+        onShared?.(post);
+        // The buttons that open this modal live in the sidebar and the bottom
+        // nav — outside the feed. A window event lets whichever feed is mounted
+        // pick the post up, instead of only the one that owns the modal.
+        if (post && typeof window !== 'undefined') window.dispatchEvent(new CustomEvent('social:post_created', { detail: post }));
+      }}
     />
     : null;
   return { open, close, isOpen, modal };
