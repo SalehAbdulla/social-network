@@ -1962,8 +1962,6 @@ article[data-highlight='true'] { animation: grp-post-flash 1.6s ease-out; }
   --cp-thumb: 64px;
   --cp-thumb-radius: 4px;
   --cp-avatar: 28px;
-  --cp-close: 24px;
-  --cp-edge: 16px;
   --cp-gap: 16px;
   --cp-motion: 150ms;
 }
@@ -1982,26 +1980,17 @@ article[data-highlight='true'] { animation: grp-post-flash 1.6s ease-out; }
   }
   /* The details step is the media area plus the side panel; the width animation is what grows it. */
   .cp-dialog[data-step='details'] { width: min(calc(var(--cp-media) + var(--cp-panel)), 94vw); }
-  /* Text-only mode has no media and no side panel: it stays the narrow dialog with a full panel. */
-  .cp-dialog[data-mode='text'] { width: var(--cp-dialog-w); }
-  .cp-dialog[data-mode='text'] .cp-panel { width: 100%; border-inline-start: 0; }
+  /* Text-only and story modes have no media area and no side panel: they stay the narrow dialog with
+     a full-width panel. */
+  .cp-dialog[data-mode='text'], .cp-dialog[data-mode='story'] { width: var(--cp-dialog-w); }
+  .cp-dialog[data-mode='text'] .cp-panel, .cp-dialog[data-mode='story'] .cp-panel { width: 100%; border-inline-start: 0; }
   .cp-dialog[data-anim='true'] { animation: cp-in var(--cp-motion) ease; }
   @keyframes cp-in { from { opacity: 0; transform: scale(0.98); } to { opacity: 1; transform: scale(1); } }
-
-  /* The close X sits on the viewport, 16px from the corner, not inside the dialog. */
-  .cp-close { position: fixed; top: var(--cp-edge); inset-inline-end: var(--cp-edge); z-index: 62; display: flex; width: var(--cp-close); height: var(--cp-close); align-items: center; justify-content: center; color: #fff; }
-  .cp-close svg { width: var(--cp-close); height: var(--cp-close); }
-  .cp-close:disabled { opacity: 0.4; }
 
   .cp-header { display: flex; flex: none; align-items: center; height: var(--cp-header-h); border-bottom: 1px solid var(--cp-border); padding: 0 8px; }
   .cp-head-zone { display: flex; flex: 1 1 0%; align-items: center; }
   .cp-head-zone[data-align='end'] { justify-content: flex-end; }
-  .cp-back { display: flex; width: 32px; height: 32px; align-items: center; justify-content: center; color: var(--cp-text); }
-  .cp-back[hidden] { display: none; }
   .cp-title { flex: 1 1 0%; text-align: center; font-size: 14px; font-weight: 600; }
-  .cp-action { background: transparent; padding: 0 8px; font-size: 14px; font-weight: 600; color: var(--cp-blue); }
-  .cp-action:disabled { opacity: 0.4; cursor: not-allowed; }
-  .cp-action:not(:disabled):hover { opacity: 0.7; }
 
   /* The dialog is capped at 90vh, so on a short viewport the body scrolls rather than the header
      and the actions being clipped off-screen. On a roomy screen nothing overflows and no scrollbar
@@ -2100,13 +2089,10 @@ article[data-highlight='true'] { animation: grp-post-flash 1.6s ease-out; }
   .cp-author-name { font-size: 14px; font-weight: 600; }
 
   .cp-caption-wrap { display: flex; min-height: 0; flex: 1 1 0%; flex-direction: column; }
-  .cp-caption { flex: 1 1 0%; width: 100%; min-height: var(--cp-caption-min); resize: none; border: 0; outline: none; background: transparent; padding: 0 16px; font-size: 14px; line-height: 18px; color: var(--cp-text); }
+  .cp-caption {flex: 1 1 0%; width: 100%; min-height: var(--cp-caption-min); resize: none; border: 0; outline: none; background: transparent; padding: 0 16px; font-size: 14px; line-height: 18px; color: var(--cp-text); }
   .cp-caption:focus, .cp-caption:focus-visible { outline: none; }
   .cp-caption::placeholder { color: var(--cp-muted); }
   .cp-caption-foot { display: flex; flex: none; align-items: center; justify-content: space-between; padding: 0 16px 8px; }
-  .cp-emoji-btn { display: flex; width: 28px; height: 28px; align-items: center; justify-content: center; border-radius: 9999px; color: var(--cp-text); }
-  .cp-emoji-btn:hover { background-color: var(--cp-field); }
-  .cp-emoji-btn svg { width: 20px; height: 20px; }
   .cp-counter { font-size: 12px; color: var(--cp-muted); }
   .cp-counter[data-over='true'] { color: var(--cp-danger); }
   .cp-emoji-pop { display: flex; flex-wrap: wrap; gap: 2px; padding: 8px 16px; border-top: 1px solid var(--cp-border); }
@@ -2119,8 +2105,22 @@ article[data-highlight='true'] { animation: grp-post-flash 1.6s ease-out; }
   .cp-row-label { flex: 1 1 0%; text-align: start; }
   .cp-row-value { display: flex; align-items: center; gap: 6px; color: var(--cp-muted); }
   .cp-row-value svg { width: 20px; height: 20px; }
-  .cp-row-chev { width: 16px; height: 16px; color: var(--cp-muted); transition: transform var(--cp-motion) ease; }
-  .cp-row[aria-expanded='true'] .cp-row-chev { transform: rotate(180deg); }
+
+  /* The story composer's three rows. Each carries its own id so one can be tuned on its own, and
+     they share one geometry so the leading icon, the label and the trailing control line up across
+     all three. The styling lives here (in the dialog's own tokens) rather than in utility classes,
+     so the rows cannot render unstyled if a utility class is ever missing from a build. */
+  #story-audience, #story-media, #story-background {
+    display: flex; width: 100%; height: var(--cp-row-h); align-items: center; gap: 8px;
+    padding: 0 16px; border-top: 1px solid var(--cp-border); font-size: 14px; color: var(--cp-text);
+    transition: background-color var(--cp-motion) ease;
+  }
+  #story-audience:hover, #story-media:hover, #story-background:hover { background-color: var(--cp-field); }
+  #story-audience > svg:first-child, #story-media > svg:first-child, #story-background > svg:first-child { width: 20px; height: 20px; flex: none; }
+  #story-audience {cursor: pointer; }
+  #story-media { cursor: pointer; }
+  #story-background { cursor: pointer; }
+  #story-background input[type='color'] { width: 32px; height: 24px; margin-inline-start: auto; border: 0; border-radius: 4px; padding: 0; background: transparent; cursor: pointer; }
 
   .cp-sub { border-top: 1px solid var(--cp-border); padding: 8px 16px 12px; }
   .cp-radio { display: flex; align-items: flex-start; gap: 12px; padding: 8px 0; cursor: pointer; }
@@ -2138,8 +2138,6 @@ article[data-highlight='true'] { animation: grp-post-flash 1.6s ease-out; }
   /* Text-only mode: no side panel, a taller caption and an "Add photos" row. */
   .cp-dialog[data-mode='text'] .cp-caption { min-height: var(--cp-caption-min-text); font-size: 16px; line-height: 22px; }
   .cp-text-panel { display: flex; flex: 1 1 0%; flex-direction: column; min-height: 0; }
-  .cp-addrow { display: flex; align-items: center; gap: 12px; height: var(--cp-row-h); border-top: 1px solid var(--cp-border); padding: 0 16px; font-size: 14px; }
-  .cp-addrow svg { width: 20px; height: 20px; }
 }
 
 @layer components {
@@ -2171,7 +2169,7 @@ article[data-highlight='true'] { animation: grp-post-flash 1.6s ease-out; }
   .cp-dialog[data-anim='true'] { animation: none; }
   .cp-spinner { animation: none; }
   .cp-check-mark { animation: none; stroke-dashoffset: 0; }
-  .cp-dialog, .cp-thumb-remove, .cp-row-chev { transition-duration: 0.01ms; }
+  .cp-dialog, .cp-thumb-remove, #story-audience, #story-media, #story-background { transition-duration: 0.01ms; }
   .cp-progress-fill { transition-duration: 0.01ms; }
 }
 
@@ -2366,4 +2364,8 @@ article[data-highlight='true'] { animation: grp-post-flash 1.6s ease-out; }
 @media (min-width: 768px) { .story-tray-nav { display: flex; } }
 @media (prefers-reduced-motion: reduce) {
   .story-tray-item .story-ring, .story-tray-label, .story-tray-nav { transition: none; }
+}
+
+#btn {
+  margin-top:10px;
 }
