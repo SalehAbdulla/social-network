@@ -36,11 +36,11 @@ func (re *HandlerContext) decode(w http.ResponseWriter, r *http.Request, value a
 	r.Body = http.MaxBytesReader(w, r.Body, 1<<20)
 	decoder := json.NewDecoder(r.Body)
 	if err := decoder.Decode(value); err != nil {
-		re.HandleError(w, r, backend.ErrBadRequest)
+		re.HandleError(w, r, backend.ErrInvalidJSON)
 		return false
 	}
 	if err := decoder.Decode(new(any)); err != io.EOF {
-		re.HandleError(w, r, backend.ErrBadRequest)
+		re.HandleError(w, r, backend.ErrInvalidJSON)
 		return false
 	}
 	return true
