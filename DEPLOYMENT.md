@@ -71,18 +71,66 @@ our own network.
 7. **Actions** — secrets `PROD_HOST`, `PROD_SSH_USER`, `PROD_SSH_KEY`; optionally the variables
    `PROD_APP_DIR` (default `~/social-network`) and `SITE_HOST` (default `salehsocial.duckdns.org`).
 
-### Deploying
+### How to ship
 
-`.github/workflows/deploy-prod.yml` runs on a **GitHub-hosted** runner (not the self-hosted runner on
-the VPS, which belongs to `beyond`) and pushes over SSH. It fires on a `v*` tag or by hand:
+There are two separate actions, and the difference is the point: **a normal push never deploys.**
+
+#### 1. Push code — no deploy (the everyday loop)
+
+CI runs, production is untouched. Safe to do as often as you like.
 
 ```sh
-git tag v1.0.0 && git push origin v1.0.0
+git add -A
+git commit -m "what changed and why"
+git push origin main
 ```
 
-The job checks free disk, **backs up the volume before migrations run**, builds the ARM images on the
-host, then gates on `127.0.0.1:4100/api/v1/ready` (through the frontend, so the rewrite is exercised)
-and finally on the public HTTPS readiness endpoint.
+`origin` carries **two** push URLs (the school GitLab and GitHub), so a single `git push` updates both.
+CI runs on the GitHub side; `main` is not a deploy trigger.
+
+#### 2. Push *and* deploy — tag the release
+
+A `v*` tag is the only thing that deploys. Tag the commit you want live:
+
+```sh
+git tag -a v1.0.2 -m "What this release changes"
+git push origin v1.0.2
+```
+
+Use an **annotated** tag (`-a -m`) so the release carries a message and a date rather than being a bare
+pointer. Tags are never moved — to re-release, cut a new version.
+
+To deploy a tag that already exists without cutting a new one, dispatch the workflow by hand:
+
+```sh
+gh workflow run 'Deploy to prod (Oracle VPS, co-hosted with beyond)' \
+  -R SalehAbdulla/social-network --ref main
+```
+
+Watch it with `gh run watch -R SalehAbdulla/social-network`, or in the repo's **Actions** tab.
+
+#### What the deploy does
+
+`.github/workflows/deploy-prod.yml` runs on a **GitHub-hosted** runner (not the self-hosted runner on
+the VPS, which belongs to `beyond`) and reaches the host over SSH:
+
+1. **Pre-flight** — refuses to build with under 5 GB free, because the root volume is shared with `beyond`.
+2. **Backs up the volume** — SQLite `.backup` plus the uploads — *before* migrations run.
+3. **Deploys** — fetches the tag on the VPS and runs `docker compose -f compose.prod.yaml up -d --build`; the ARM images are built in place.
+4. **Hard gate** — `127.0.0.1:4100/api/v1/ready` through the frontend, so the rewrite to the backend is exercised.
+5. **Public gate** — `https://salehsocial.duckdns.org/api/v1/ready`.
+6. **Reclaims** dangling images.
+
+#### Rolling back
+
+Redeploy the previous tag, and restore the step-2 backup if the release already wrote data under a new
+migration (the old binary expects the old schema):
+
+```sh
+gh workflow run 'Deploy to prod (Oracle VPS, co-hosted with beyond)' --ref v1.0.1
+```
+
+Never "roll back" by deleting the `social-network-data` volume — that is data loss, not rollback.
 
 ### Two limits worth stating
 
