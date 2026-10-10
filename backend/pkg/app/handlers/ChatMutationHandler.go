@@ -11,6 +11,9 @@ import (
 	pkgwebsocket "social-network/backend/pkg/websocket"
 )
 
+// A chat message's ceiling, matching the composer's maxLength in the UI.
+const messageMaxLength = 2000
+
 func (re *HandlerContext) chatEvent(sender, recipient, event string, data any) {
 	if re.Hub == nil {
 		return
@@ -32,8 +35,12 @@ func (re *HandlerContext) SendChatMessage(w http.ResponseWriter, r *http.Request
 	}
 	sender := currentUser(r)
 	req.Text = strings.TrimSpace(req.Text)
-	if (req.Text == "" && req.MediaURL == "") || utf8.RuneCountInString(req.Text) > 2000 {
-		re.HandleError(w, r, backend.ErrBadRequest)
+	if req.Text == "" && req.MediaURL == "" {
+		re.HandleError(w, r, backend.ErrMessageLength)
+		return
+	}
+	if utf8.RuneCountInString(req.Text) > messageMaxLength {
+		re.HandleError(w, r, backend.ErrMessageLength)
 		return
 	}
 	if err := re.SocialService.CanMessage(sender, req.RecipientID); err != nil {
@@ -80,8 +87,8 @@ func (re *HandlerContext) EditChatMessage(w http.ResponseWriter, r *http.Request
 		return
 	}
 	req.Text = strings.TrimSpace(req.Text)
-	if req.Text == "" || utf8.RuneCountInString(req.Text) > 2000 {
-		re.HandleError(w, r, backend.ErrBadRequest)
+	if req.Text == "" || utf8.RuneCountInString(req.Text) > messageMaxLength {
+		re.HandleError(w, r, backend.ErrMessageLength)
 		return
 	}
 	sender, recipient, err := re.SocialService.Repo.MessageParticipants(id)
