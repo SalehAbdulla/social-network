@@ -94,8 +94,16 @@ func (re *HandlerContext) GroupContent(w http.ResponseWriter, r *http.Request) {
 	}
 	input.Content = strings.TrimSpace(input.Content)
 	input.Title = strings.TrimSpace(input.Title)
-	if (input.Content == "" && input.MediaURL == "") || utf8.RuneCountInString(input.Content) > 5000 || utf8.RuneCountInString(input.Title) > 100 {
-		re.HandleError(w, r, backend.ErrBadRequest)
+	if utf8.RuneCountInString(input.Title) > 100 {
+		re.HandleError(w, r, backend.ErrGroupTitleLength)
+		return
+	}
+	if utf8.RuneCountInString(input.Content) > 5000 {
+		re.HandleError(w, r, backend.ErrGroupContentLength)
+		return
+	}
+	if input.Content == "" && input.MediaURL == "" {
+		re.HandleError(w, r, backend.ErrGroupDetails)
 		return
 	}
 	if input.MediaURL != "" && input.MediaURL != existing.MediaURL {
@@ -105,9 +113,17 @@ func (re *HandlerContext) GroupContent(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	if kind == "events" {
+		if len(input.Title) < 3 {
+			re.HandleError(w, r, backend.ErrGroupTitleLength)
+			return
+		}
+		if input.Content == "" {
+			re.HandleError(w, r, backend.ErrGroupDetails)
+			return
+		}
 		start, err := time.Parse(time.RFC3339, input.StartsAt)
-		if err != nil || !start.After(time.Now()) || len(input.Title) < 3 || input.Content == "" {
-			re.HandleError(w, r, backend.ErrBadRequest)
+		if err != nil || !start.After(time.Now()) {
+			re.HandleError(w, r, backend.ErrEventStartTime)
 			return
 		}
 		input.StartsAt = start.UTC().Format(time.RFC3339)
