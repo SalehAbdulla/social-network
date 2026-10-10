@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { ChevronLeft, ChevronRight, X } from 'lucide-react';
 import { isoTimestamp, relativeLabel } from '../../../api/social';
 import { useDialogFocus } from '../../../lib/useDialogFocus';
+import { useNow } from '../../../lib/useNow';
 import { mediaVariant } from '../../../lib/mediaVariants';
 import Avatar from '../../Avatar';
 import IconButton from '../../ui/IconButton';
@@ -23,6 +24,7 @@ export default function GroupLightbox({ items, index, meId, isOwner, avatarOf, o
 }) {
   const item = items[index];
   const many = items.length > 1;
+  const now = useNow();
   const dialog = useDialogFocus<HTMLDivElement>(onClose);
   const [failedId, setFailedId] = useState<number | null>(null);
   const failed = failedId === item?.id;
@@ -58,7 +60,7 @@ export default function GroupLightbox({ items, index, meId, isOwner, avatarOf, o
       <div className="min-w-0 flex-1">
         <p className="grp-lightbox-name" dir="auto">
           {item.userId === meId ? 'You' : itemName(item)}
-          <time className="grp-lightbox-time" dateTime={isoTimestamp(item.createdAt)} title={groupExactTime(item.createdAt)}> · {relativeLabel(item.createdAt)}</time>
+          <time className="grp-lightbox-time" dateTime={isoTimestamp(item.createdAt)} title={groupExactTime(item.createdAt)}> · {relativeLabel(item.createdAt, now)}</time>
         </p>
         {!!item.content && <p className="grp-lightbox-text" dir="auto">{item.content}</p>}
       </div>
