@@ -3,29 +3,44 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { ChevronLeft, ChevronRight, MoreVertical, Plus, Trash2 } from 'lucide-react';
 import toast from 'react-hot-toast';
-import { type Story, displayName, errorMessage, request, upload } from '../api/social';
+import { type FollowLists, type Story, displayName, errorMessage, request, upload } from '../api/social';
 import { useDialogFocus } from '../lib/useDialogFocus';
 import { usePagedList } from '../lib/usePagedList';
+import { useResource } from '../lib/useResource';
 import { mediaImageProps } from '../lib/mediaVariants';
 import { authorHasUnseen, firstUnseenIndex, findPosition, groupStories, startPosition, type StoryGroup } from '../lib/storySequence';
 import { useBackend } from './BackendProvider';
 import LoadMore from './LoadMore';
 import StoryRing from './stories/StoryRing';
 import StoryViewer from './stories/StoryViewer';
+import VisibilityRow from './create-post/VisibilityRow';
+import { type Visibility } from './create-post/visibility';
 
 export function CreateStory({ close, saved }: { close: () => void; saved: () => void }) {
   const [text, setText] = useState('');
   const [color, setColor] = useState('#4f46e5');
   const [media, setMedia] = useState<{ file: File; preview: string } | null>(null);
+  const [privacy, setPrivacy] = useState<Visibility>('public');
+  const [selectedFollowers, setSelectedFollowers] = useState<string[]>([]);
   const [busy, setBusy] = useState(false);
   const firstField = useRef<HTMLTextAreaElement>(null);
   const dialog = useDialogFocus<HTMLDivElement>(close, { initialFocus: firstField });
+  const followers = useResource<FollowLists>('/users/me/follows', privacy === 'selected');
   useEffect(() => () => { if (media) URL.revokeObjectURL(media.preview); }, [media]);
+  function toggleFollower(id: string) {
+    setSelectedFollowers(current => current.includes(id) ? current.filter(value => value !== id) : [...current, id]);
+  }
+  const audienceMissing = privacy === 'selected' && (followers.loading || selectedFollowers.length === 0);
   async function submit(event: React.FormEvent) {
-    event.preventDefault(); setBusy(true);
+    event.preventDefault();
+    if (audienceMissing) return;
+    setBusy(true);
     try {
       const attachment = media ? await upload(media.file) : null;
-      await request('/stories', 'POST', { content: text, backgroundColor: color, mediaUrl: attachment?.url || '', mediaType: attachment?.mediaType || 'text' });
+      await request('/stories', 'POST', {
+        content: text, backgroundColor: color, mediaUrl: attachment?.url || '', mediaType: attachment?.mediaType || 'text',
+        privacy, selectedFollowerIds: privacy === 'selected' ? selectedFollowers : [],
+      });
       saved(); close(); toast.success('Story shared for 24 hours');
     } catch (error) { toast.error(errorMessage(error)); } finally { setBusy(false); }
   }
@@ -34,7 +49,8 @@ export function CreateStory({ close, saved }: { close: () => void; saved: () => 
     <label className="flex items-center gap-3 text-sm">Background<input type="color" value={color} onChange={event => setColor(event.target.value)} /></label>
     <label className="block text-sm">Photo or video<input type="file" accept="image/jpeg,image/png,image/gif,image/webp,video/mp4,video/webm" onChange={event => { const file = event.target.files?.[0]; setMedia(file ? { file, preview: URL.createObjectURL(file) } : null); }} className="mt-2 block w-full" /></label>
     {media && <button type="button" onClick={() => setMedia(null)} className="text-sm text-blue-600">Use text instead</button>}
-    <button disabled={busy} className="w-full rounded-lg bg-blue-600 py-3 text-white disabled:opacity-50">{busy ? 'Sharing?' : 'Share story'}</button>
+    <div className="overflow-hidden rounded-lg border border-border"><VisibilityRow value={privacy} onChange={setPrivacy} followers={followers.data?.followers ?? []} selected={selectedFollowers} onToggle={toggleFollower} loading={followers.loading} name="story-privacy-modal" /></div>
+    <button disabled={busy || audienceMissing} title={audienceMissing ? 'Choose at least one follower.' : undefined} className="w-full rounded-lg bg-blue-600 py-3 text-white disabled:opacity-50">{busy ? 'Sharing?' : 'Share story'}</button>
   </form></div>;
 }
 const STORIES_PER_PAGE = 30;
