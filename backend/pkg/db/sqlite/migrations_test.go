@@ -55,11 +55,12 @@ func TestMigrationsRoundTrip(t *testing.T) {
 	assertGroupLikeColumn(t, database)
 	assertProfileContactColumns(t, database)
 	assertProfileContactVisibilityColumns(t, database)
+	assertStoryPrivacyColumns(t, database)
 
 	if err := migrations.Down(); err != nil {
 		t.Fatalf("down: %v", err)
 	}
-	for _, table := range []string{"user", "session", "post", "comment", "message", "notification", "media", "follow", "connection", "story", "storyView", "storyReply", "socialGroup", "groupContent", "passwordReset", "savedPost"} {
+	for _, table := range []string{"user", "session", "post", "comment", "message", "notification", "media", "follow", "connection", "story", "storyView", "storyReply", "story_selected_follower", "socialGroup", "groupContent", "passwordReset", "savedPost"} {
 		if tableExists(t, database, table) {
 			t.Fatalf("table %q survived a full down migration", table)
 		}
@@ -79,9 +80,10 @@ func TestMigrationsRoundTrip(t *testing.T) {
 	assertGroupLikeColumn(t, database)
 	assertProfileContactColumns(t, database)
 	assertProfileContactVisibilityColumns(t, database)
+	assertStoryPrivacyColumns(t, database)
 	version, dirty, err := migrations.Version()
-	if err != nil || dirty || version != 22 {
-		t.Fatalf("expected clean version 22, got %d (dirty=%v, err=%v)", version, dirty, err)
+	if err != nil || dirty || version != 23 {
+		t.Fatalf("expected clean version 23, got %d (dirty=%v, err=%v)", version, dirty, err)
 	}
 }
 
@@ -263,6 +265,20 @@ func assertStoryReplyColumns(t *testing.T, database *sql.DB) {
 	for _, name := range []string{"replyId", "storyId", "userId", "content", "createdAt"} {
 		if !columns[name] {
 			t.Fatalf("storyReply is missing %q after the migration", name)
+		}
+	}
+}
+
+func assertStoryPrivacyColumns(t *testing.T, database *sql.DB) {
+	t.Helper()
+	columns := tableColumns(t, database, "story")
+	if !columns["privacy"] {
+		t.Fatal("story is missing \"privacy\" after the migration")
+	}
+	selected := tableColumns(t, database, "story_selected_follower")
+	for _, name := range []string{"storyId", "userId"} {
+		if !selected[name] {
+			t.Fatalf("story_selected_follower is missing %q after the migration", name)
 		}
 	}
 }
