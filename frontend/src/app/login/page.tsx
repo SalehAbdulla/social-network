@@ -10,6 +10,20 @@ import ThemeToggle from '../components/ThemeToggle';
 import { authRequest, errorMessage, nicknameAvailability, request, upload, type SocialUser } from '../api/social';
 import ImagePicker from '../components/ImagePicker';
 
+// Kept in step with the backend's ValidatePassword: the same sentence the API
+// returns is shown before the request is sent, so the requirements are stated
+// once and in full instead of being discovered one rejection at a time.
+const PASSWORD_RULE = 'Password must be 12-64 characters long and include at least one letter, one number, and one symbol.';
+const PASSWORD_HINT = 'Use 12-64 characters with at least one letter, one number, and one symbol.';
+
+function passwordProblem(value: string): string {
+  const longEnough = value.length >= 12 && value.length <= 64;
+  const hasLetter = /[a-z]/i.test(value);
+  const hasNumber = /[0-9]/.test(value);
+  const hasSymbol = /[^a-z0-9]/i.test(value);
+  return longEnough && hasLetter && hasNumber && hasSymbol ? '' : PASSWORD_RULE;
+}
+
 const Login = () => {
   const router = useRouter();
   const [registering, setRegistering] = useState(false);
@@ -52,6 +66,8 @@ const Login = () => {
     try {
       if (registering) {
         if (normalizedNickname && nicknameState !== 'available') throw new Error(nicknameState === 'taken' ? 'This nickname is already reserved.' : 'Enter an available nickname.');
+        const problem = passwordProblem(password);
+        if (problem) throw new Error(problem);
         if (password !== confirmPassword) throw new Error('Passwords do not match.');
         await authRequest('/auth/register', Object.fromEntries(Object.entries(values).map(([key, value]) => [key, String(value)])));
         await attachAvatar(avatar[0]);
@@ -99,7 +115,7 @@ const Login = () => {
             <div className="grid gap-4 sm:grid-cols-2"><Field name="firstName" label="First name" required /><Field name="lastName" label="Last name" required /></div>
             <div className="grid gap-4 sm:grid-cols-2"><label className="block text-sm text-slate-700">Nickname <span className="text-slate-400">(optional)</span><input name="nickName" value={nickname} onChange={event => setNickname(event.target.value)} minLength={2} maxLength={33} pattern="[a-zA-Z0-9_]+" className="mt-1 w-full rounded-lg border border-slate-200 p-2.5" />{!normalizedNickname && <span className="text-xs text-slate-500">Leave it blank and we will pick a handle for you.</span>}{nicknameState === 'checking' && <span className="text-xs text-slate-500">Checking availability...</span>}{nicknameState === 'available' && <span className="text-xs text-teal-700">Nickname is available.</span>}{(nicknameState === 'taken' || nicknameState === 'invalid') && <span className="text-xs text-red-700">{nicknameState === 'taken' ? 'Nickname is already reserved.' : 'Use 2-33 letters, numbers, or underscores.'}</span>}</label><Field name="birthDate" label="Date of birth" type="date" min={dateYearsAgo(100)} max={dateYearsAgo(13)} required /></div>
             <Field name="email" label="Email" type="email" required />
-            <div className="grid gap-4 sm:grid-cols-2"><Field name="password" label="Password" type="password" minLength={12} required onChange={setPassword} /><Field name="confirmPassword" label="Confirm password" type="password" minLength={12} required onChange={setConfirmPassword} /></div>
+            <div><div className="grid gap-4 sm:grid-cols-2"><Field name="password" label="Password" type="password" required onChange={setPassword} /><Field name="confirmPassword" label="Confirm password" type="password" required onChange={setConfirmPassword} /></div><p className="mt-1 text-xs text-slate-500">{PASSWORD_HINT}</p></div>
             <label className="block text-sm text-slate-700">Gender<select name="gender" required className="mt-1 w-full rounded-lg border border-slate-200 p-2.5"><option value="">Select gender</option><option value="female">Female</option><option value="male">Male</option></select></label>
             <label className="block text-sm text-slate-700">About me <span className="text-slate-400">(optional)</span><textarea name="aboutMe" rows={3} maxLength={1000} placeholder="A line about yourself" className="mt-1 w-full rounded-lg border border-slate-200 p-2.5" /></label>
             <label className="block text-sm text-slate-700">Profile visibility<select name="isPublic" defaultValue="true" className="mt-1 w-full rounded-lg border border-slate-200 p-2.5"><option value="true">Public - anyone can find me</option><option value="false">Private - only my followers</option></select></label>
