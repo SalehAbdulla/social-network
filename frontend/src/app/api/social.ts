@@ -86,7 +86,8 @@ export interface Comment {
 export interface MediaItem { url: string; postId: string; title: string; createdAt: string }
 export interface Story {
   storyId: number; userId: string; nickname: string; avatar: string; content: string;
-  mediaUrl: string; mediaType: 'text' | 'image' | 'video'; backgroundColor: string; createdAt: string; expiresAt: string;
+  mediaUrl: string; mediaType: 'text' | 'image' | 'video'; backgroundColor: string;
+  privacy: 'public' | 'followers' | 'selected'; createdAt: string; expiresAt: string;
   viewed: boolean;
   liked: boolean; likeCount: number;
 }
