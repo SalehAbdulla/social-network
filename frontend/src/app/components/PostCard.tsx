@@ -12,6 +12,7 @@ import { useMediaQuery } from '../lib/useMediaQuery';
 import { useDialogFocus } from '../lib/useDialogFocus';
 import { usePagedList } from '../lib/usePagedList';
 import { useInView } from '../lib/useInView';
+import { useNow } from '../lib/useNow';
 import { mediaImageProps } from '../lib/mediaVariants';
 import AudienceIcon from './AudienceIcon';
 import Avatar from './Avatar';
@@ -33,6 +34,7 @@ function Comments({ post, onCountChange, variant = 'inline', onViewerChange }: {
   onViewerChange?: (open: boolean) => void;
 }) {
   const { user } = useBackend();
+  const now = useNow();
   const [sectionRef, sectionSeen] = useInView<HTMLDivElement>();
   const [forced, setForced] = useState(false);
   const ready = sectionSeen || forced;
@@ -94,7 +96,7 @@ function Comments({ post, onCountChange, variant = 'inline', onViewerChange }: {
       {!editing && <ImagePicker files={images} onChange={setImages} max={4} disabled={busy} purpose="post" />}
       <div className="flex gap-3"><button disabled={busy} className="rounded-lg bg-blue-600 px-4 py-2 text-sm text-white disabled:opacity-50">{editing ? 'Save comment' : variant === 'panel' ? 'Post' : 'Comment'}</button>{editing && <button type="button" onClick={() => { setEditing(null); setText(''); }}>Cancel</button>}</div></form></div>
     <div className={variant === 'panel' ? 'order-1 min-h-0 flex-1 space-y-3 overflow-y-auto p-4' : 'space-y-4'}>{comments.loading && <Loading height={56} label="Loading comments" />}
-    {comments.items.map(comment => <div key={comment.commentId} className="rounded-xl bg-slate-50 p-3 space-y-2"><div className="flex justify-between gap-2"><Link href={`/profile/${comment.userId}`} className="text-sm font-semibold">@{comment.nickname || user.nickname}</Link><time className="text-xs text-slate-400" dateTime={isoTimestamp(comment.createdAt)} title={dateLabel(comment.createdAt)}>{relativeLabel(comment.createdAt)}</time></div><p className="whitespace-pre-wrap break-words text-sm">{linkify(comment.commentText)}</p>{!!comment.imageUrls?.length && <div className={`grid gap-2 ${comment.imageUrls.length > 1 ? 'grid-cols-2' : ''}`}>{comment.imageUrls.map((url, position) => <button key={url} type="button" aria-label={`Open comment image ${position + 1} of ${comment.imageUrls.length}`} onClick={() => setViewer({ images: comment.imageUrls, index: position })} className="block w-full cursor-zoom-in"><img {...mediaImageProps(url, comment.imageUrls.length > 1 ? '(max-width: 640px) 50vw, 320px' : '(max-width: 768px) 100vw, 480px')} alt="Comment attachment" className="aspect-square max-h-72 w-full rounded-lg bg-white object-contain" /></button>)}</div>}<div className="flex items-center gap-3 text-xs text-slate-500">
+    {comments.items.map(comment => <div key={comment.commentId} className="rounded-xl bg-slate-50 p-3 space-y-2"><div className="flex justify-between gap-2"><Link href={`/profile/${comment.userId}`} className="text-sm font-semibold">@{comment.nickname || user.nickname}</Link><time className="text-xs text-slate-400" dateTime={isoTimestamp(comment.createdAt)} title={dateLabel(comment.createdAt)}>{relativeLabel(comment.createdAt, now)}</time></div><p className="whitespace-pre-wrap break-words text-sm">{linkify(comment.commentText)}</p>{!!comment.imageUrls?.length && <div className={`grid gap-2 ${comment.imageUrls.length > 1 ? 'grid-cols-2' : ''}`}>{comment.imageUrls.map((url, position) => <button key={url} type="button" aria-label={`Open comment image ${position + 1} of ${comment.imageUrls.length}`} onClick={() => setViewer({ images: comment.imageUrls, index: position })} className="block w-full cursor-zoom-in"><img {...mediaImageProps(url, comment.imageUrls.length > 1 ? '(max-width: 640px) 50vw, 320px' : '(max-width: 768px) 100vw, 480px')} alt="Comment attachment" className="aspect-square max-h-72 w-full rounded-lg bg-white object-contain" /></button>)}</div>}<div className="flex items-center gap-3 text-xs text-slate-500">
       <button type="button" disabled={busy} aria-label="Upvote comment" aria-pressed={comment.userScore === 1} className={comment.userScore === 1 ? 'text-blue-600' : ''} onClick={() => void react(comment, 1)}><ArrowUp size={15} /></button><span>{comment.score}</span><button type="button" disabled={busy} aria-label="Downvote comment" aria-pressed={comment.userScore === -1} className={comment.userScore === -1 ? 'text-blue-600' : ''} onClick={() => void react(comment, -1)}><ArrowDown size={15} /></button>
       {comment.userId === user.userId && <><button aria-label="Edit comment" onClick={() => { setEditing(comment.commentId); setText(comment.commentText); }}><Pencil size={14} /></button><button disabled={busy} aria-label="Delete comment" onClick={() => void mutate(() => request(`/posts/comments?id=${comment.commentId}`, 'DELETE'), () => { comments.update(items => items.filter(item => item.commentId !== comment.commentId)); onCountChange(-1); })}><Trash2 size={14} /></button></>}
     </div></div>)}
@@ -138,6 +140,7 @@ export type PostCardProps = {
 
 export default function PostCard({ post, context = 'feed', comments, commentCount, menuItems, canManage, avatarOf, sharePath, highlight = false, fetchPosts, onPostRemoved, onUnsaved, onOpen, onClose, variant = 'card', onNestedDialogChange }: PostCardProps) {
   const { user } = useBackend();
+  const now = useNow();
   const inFeed = !!onOpen;
   const asOverlay = variant === 'overlay';
   const group = context === 'group';
@@ -232,7 +235,7 @@ export default function PostCard({ post, context = 'feed', comments, commentCoun
     catch { toast.error('Could not copy the link'); }
   }
   const avatarUrl = avatarOf?.(post.userId) || (post.userId === user.userId ? user.avatar : '');
-  const authorLink = <Link href={`/profile/${post.userId}`} className="flex items-center gap-2.5"><Avatar name={displayName(post)} avatarUrl={avatarUrl} size={POST_AVATAR_SIZE} /><div className="leading-4"><p className="text-[length:var(--post-name-size)] font-semibold" dir="auto">{displayName(post)}</p><p className="text-[length:var(--post-meta-size)] text-muted">@{post.nickname}<span aria-hidden="true"> · </span><time dateTime={isoTimestamp(post.createdAt)} title={dateLabel(post.createdAt)}>{relativeLabel(post.createdAt)}</time><span aria-hidden="true"> · </span><AudienceIcon privacy={post.privacy} context={context} /></p></div></Link>;
+  const authorLink = <Link href={`/profile/${post.userId}`} className="flex items-center gap-2.5"><Avatar name={displayName(post)} avatarUrl={avatarUrl} size={POST_AVATAR_SIZE} /><div className="leading-4"><p className="text-[length:var(--post-name-size)] font-semibold" dir="auto">{displayName(post)}</p><p className="text-[length:var(--post-meta-size)] text-muted">@{post.nickname}<span aria-hidden="true"> · </span><time dateTime={isoTimestamp(post.createdAt)} title={dateLabel(post.createdAt)}>{relativeLabel(post.createdAt, now)}</time><span aria-hidden="true"> · </span><AudienceIcon privacy={post.privacy} context={context} /></p></div></Link>;
   const ownerControls = (group ? !!canManage : post.userId === user.userId) && <>
     <button ref={optionsTriggerRef} type="button" aria-label="Post options" aria-haspopup="menu" aria-expanded={!!optionsRect} onClick={event => { const rect = event.currentTarget.getBoundingClientRect(); setOptionsRect(open => open ? null : rect); }} className={`flex size-8 items-center justify-center rounded-full text-muted transition hover:bg-surface-2 ${optionsRect ? 'bg-surface-2' : ''} -mr-[var(--post-menu-overhang)]`}>
       <MoreHorizontal className="size-[var(--post-header-icon)]" aria-hidden="true" />
