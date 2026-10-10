@@ -1060,9 +1060,13 @@ body {
 
   .dm-menu {
     position: absolute; z-index: 30; top: calc(100% + 6px); min-width: 168px; padding: 4px;
+    max-height: min(320px, calc(100vh - 24px)); overflow-y: auto;
     border: 1px solid var(--dm-border); border-radius: 12px; background-color: var(--ui-popover);
     box-shadow: 0 12px 32px rgba(0, 0, 0, 0.35);
   }
+  /* Flipped upward by DmMessageMenu when the trigger sits near the foot of the
+     viewport, so the actions are never cut off below. */
+  [data-flip='true'] .dm-menu { top: auto; bottom: calc(100% + 6px); }
   .dm-msg-sent .dm-menu { right: 0; left: auto; }
   .dm-msg-received .dm-menu { left: 0; right: auto; }
 
