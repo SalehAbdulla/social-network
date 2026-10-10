@@ -54,17 +54,19 @@ type FollowRequest struct {
 }
 
 type Story struct {
-	StoryID         int    `json:"storyId"`
-	UserID          string `json:"userId"`
-	Nickname        string `json:"nickname"`
-	Avatar          string `json:"avatar"`
-	Content         string `json:"content"`
-	MediaURL        string `json:"mediaUrl"`
-	MediaType       string `json:"mediaType"`
-	BackgroundColor string `json:"backgroundColor"`
-	CreatedAt       string `json:"createdAt"`
-	ExpiresAt       string `json:"expiresAt"`
-	Viewed          bool   `json:"viewed"`
+	StoryID             int      `json:"storyId"`
+	UserID              string   `json:"userId"`
+	Nickname            string   `json:"nickname"`
+	Avatar              string   `json:"avatar"`
+	Content             string   `json:"content"`
+	MediaURL            string   `json:"mediaUrl"`
+	MediaType           string   `json:"mediaType"`
+	BackgroundColor     string   `json:"backgroundColor"`
+	Privacy             string   `json:"privacy"`
+	SelectedFollowerIds []string `json:"selectedFollowerIds"`
+	CreatedAt           string   `json:"createdAt"`
+	ExpiresAt           string   `json:"expiresAt"`
+	Viewed              bool     `json:"viewed"`
 
 	Liked     bool `json:"liked"`
 	LikeCount int  `json:"likeCount"`
