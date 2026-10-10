@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import toast from 'react-hot-toast';
 import { errorMessage, isoTimestamp, relativeLabel, request } from '../../../api/social';
 import { linkify } from '../../../lib/linkify';
+import { useNow } from '../../../lib/useNow';
 import { useBackend } from '../../BackendProvider';
 import Avatar from '../../Avatar';
 import Button from '../../ui/Button';
@@ -36,6 +37,7 @@ export default function GroupComments({ groupId, postId, meId, isOwner, comments
   variant?: 'inline' | 'panel';
 }) {
   const { user } = useBackend();
+  const now = useNow();
   const [expanded, setExpanded] = useState(false);
   const [text, setText] = useState('');
   const [busy, setBusy] = useState(false);
@@ -101,7 +103,7 @@ export default function GroupComments({ groupId, postId, meId, isOwner, comments
           <span className="grp-comment-name shrink-0" dir="auto">{name}</span>
           <span className="grp-comment-text" dir="auto">{linkify(comment.content)}</span>
         </div>
-        <time className="grp-comment-time" dateTime={isoTimestamp(comment.createdAt)} title={groupExactTime(comment.createdAt)}>{relativeLabel(comment.createdAt)}</time>
+        <time className="grp-comment-time" dateTime={isoTimestamp(comment.createdAt)} title={groupExactTime(comment.createdAt)}>{relativeLabel(comment.createdAt, now)}</time>
       </div>
       {(comment.userId === meId || isOwner) && <Menu label="Comment actions" className="grp-comment-menu">
         <MenuItem tone="danger" onClick={() => void remove(comment.id)}>Delete</MenuItem>
