@@ -10,7 +10,10 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  GO_VERSION: "1.26.x"
+  # Pinned to the patch that clears the standard-library findings govulncheck
+  # reports (net/http, net/textproto, crypto/tls — all fixed in go1.26.9).
+  # `1.26.x` resolved to an older patch on the runner's cache, so name it.
+  GO_VERSION: "1.26.9"
   NODE_VERSION: "22"
 
 jobs:
