@@ -81,11 +81,11 @@ func ValidatePassword(password, confirm string) error {
 	if password != confirm {
 		return realtimeforum.ErrPasswordsDontMatch
 	}
-	if len(password) < 12 || len(password) > 64 {
-		return realtimeforum.ErrPasswordLength
-	}
-	if !passwordStrength(password) {
-		return realtimeforum.ErrInvalidPassForm
+	// Length and character rules are reported together: telling the user about
+	// the 12-character minimum first and the symbol rule only after they fix it
+	// makes them discover the requirement one rejected attempt at a time.
+	if len(password) < 12 || len(password) > 64 || !passwordStrength(password) {
+		return realtimeforum.ErrPasswordRequirements
 	}
 	return nil
 }
