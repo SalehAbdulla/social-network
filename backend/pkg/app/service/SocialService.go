@@ -165,6 +165,22 @@ func (s *SocialService) AddStory(story models.Story) (int, error) {
 			return 0, err
 		}
 	}
+	if story.Privacy == "" {
+		story.Privacy = "public"
+	}
+	if story.Privacy != "public" && story.Privacy != "followers" && story.Privacy != "selected" {
+		return 0, backend.ErrBadRequest
+	}
+	if story.Privacy == "selected" {
+		if len(story.SelectedFollowerIds) == 0 {
+			return 0, backend.ErrBadRequest
+		}
+		if err := s.Repo.ValidateSelectedFollowers(story.UserID, story.SelectedFollowerIds); err != nil {
+			return 0, err
+		}
+	} else if len(story.SelectedFollowerIds) > 0 {
+		return 0, backend.ErrBadRequest
+	}
 	return s.Repo.CreateStory(story)
 }
 
