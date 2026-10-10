@@ -392,11 +392,26 @@ unaffected and all pass.
   survives the wording. Join dates, event start times and chat timestamps stay absolute on purpose:
   there the fact matters more than the recency.
 
+## Shipping
+
+Pushing code and deploying are two separate actions — **a normal push never deploys.**
+
+```sh
+git push origin main                              # CI only; production is untouched
+git tag -a v1.0.2 -m "What this release changes"  # a v* tag is the only deploy trigger
+git push origin v1.0.2
+```
+
+`origin` carries two push URLs (the school GitLab and GitHub), so a single push updates both. The
+deploy backs up the data volume before migrations, builds the ARM images on the VPS, and gates on the
+public readiness endpoint; the full sequence, the manual dispatch, and how to roll back are in
+`DEPLOYMENT.md` under *How to ship*.
+
 ## Documentation map
 
 | File | What it covers |
 | --- | --- |
-| `DEPLOYMENT.md` | Environment variables, security headers, request and upload limits, backup/rollback, release checks |
+| `DEPLOYMENT.md` | Environment variables, security headers, request and upload limits, backup/rollback, **how to push and how to deploy a tag**, release checks |
 | `backend/README.md` | Backend environment, the chat permission rule, how to test |
 | `frontend/README.md` | Local setup, the same-origin proxy contract, the browser checks |
 | `TODO.md` | Every open item with its priority, and the reasoning recorded with each closed one |
