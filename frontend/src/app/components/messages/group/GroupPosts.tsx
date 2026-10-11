@@ -24,6 +24,12 @@ function toPost(item: GroupItem): Post {
     nickname: item.nickname,
     firstName: item.firstName,
     lastName: item.lastName,
+    // Group content carries no avatar of its own; the roster the group surfaces
+    // hold is what draws these faces.
+    avatar: '',
+    // Group content is read by the group's members, so the audience label never
+    // reaches for the author's profile privacy.
+    authorIsPublic: true,
     title: '',
     content: item.content,
     imageUrls: item.mediaUrl ? [item.mediaUrl] : [],
