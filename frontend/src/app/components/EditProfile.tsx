@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import toast from 'react-hot-toast';
 import { type SocialUser, errorMessage, request, upload } from '../api/social';
 import { useDialogFocus } from '../lib/useDialogFocus';
@@ -24,9 +24,19 @@ const TEXT_FIELDS = [
 
 export default function EditProfile({ profile, close, saved }: { profile: SocialUser; close: () => void; saved: () => void }) {
   const { user, refreshUser } = useBackend();
-  // The address the member signs in with. It rides on their own profile read; the
-  // session is the fallback, so the field is never blank.
-  const accountEmail = profile.email || user.email || '';
+  // The address the member signs in with. Their own profile read carries it, the
+  // session is the next answer, and `/auth/me` — which has returned it since the
+  // first version of the API — is the last resort, so the field is never blank.
+  const [fallbackEmail, setFallbackEmail] = useState('');
+  useEffect(() => {
+    if (profile.email || user.email) return;
+    let cancelled = false;
+    void request<{ email: string }>('/auth/me')
+      .then(me => { if (!cancelled) setFallbackEmail(me.email ?? ''); })
+      .catch(() => { /* the field simply keeps whatever we have */ });
+    return () => { cancelled = true; };
+  }, [profile.email, user.email]);
+  const accountEmail = profile.email || user.email || fallbackEmail;
   const dialog = useDialogFocus<HTMLDivElement>(close);
   const [form, setForm] = useState(profile);
   const [avatar, setAvatar] = useState<File[]>([]);
