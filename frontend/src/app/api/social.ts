@@ -26,6 +26,10 @@ export interface SocialUser {
   pendingIncoming: boolean;
   pendingOutgoing: boolean;
   canMessage?: boolean;
+  // Only ever sent for the member reading their own profile.
+  email?: string;
+  birthDate?: string;
+  gender?: string;
 }
 export interface FollowRequest { userId: string; nickname: string; createdAt: string }
 export interface UserSuggestion {
@@ -33,7 +37,7 @@ export interface UserSuggestion {
   avatar: string; isPublic: boolean; mutuals: string[]; mutualCount: number;
 }
 export interface Post {
-  postId: string; userId: string; nickname: string; firstName: string; lastName: string; title: string; content: string;
+  postId: string; userId: string; nickname: string; firstName: string; lastName: string; avatar: string; authorIsPublic: boolean; title: string; content: string;
   imageUrls: string[]; privacy: 'public' | 'followers' | 'selected'; selectedFollowerIds?: string[];
   score: number; userScore: number; commentsCounter: number; createdAt: string; updatedAt: string;
   isSaved: boolean;
@@ -53,6 +57,14 @@ export const PRIVACY_LABEL: Record<Post['privacy'], string> = {
   followers: 'Followers only',
   selected: 'Selected followers',
 };
+
+// The label a post actually carries. A public post on a private profile never
+// reaches the public feed — the visibility rule narrows it to that profile's
+// followers — so calling it "Public" would be a lie about who can read it.
+export function audienceLabel(post: Pick<Post, 'privacy'> & { authorIsPublic?: boolean }): string {
+  if (post.privacy === 'public' && post.authorIsPublic === false) return 'Followers only';
+  return PRIVACY_LABEL[post.privacy];
+}
 
 export function audienceSummary({ privacy, authorIsPublic, selectedNames }: {
   privacy: Post['privacy'];
@@ -80,7 +92,7 @@ function listNames(names: string[]): string {
 
 export interface Page<T> { posts: T[]; totalPages: number; totalElements: number; lastPage: boolean }
 export interface Comment {
-  commentId: number; postId: string; userId: string; nickname: string; commentText: string;
+  commentId: number; postId: string; userId: string; nickname: string; avatar: string; commentText: string;
   imageUrls: string[]; score: number; userScore: number; createdAt: string;
 }
 export interface MediaItem { url: string; postId: string; title: string; createdAt: string }
@@ -94,8 +106,10 @@ export interface Story {
 export interface StoryViewer { userId: string; nickname: string; avatar: string; viewedAt: string }
 export interface StoryReply { replyId: number; storyId: number; userId: string; nickname: string; avatar: string; content: string; createdAt: string }
 
-export function reactToStory(storyId: number, liked: boolean) {
-  return request('/reactions', 'POST', { entityType: 'story', entityId: String(storyId), score: liked ? 1 : 0 });
+// The API toggles a reaction: posting the score the member already holds takes it
+// back, so the like is always sent as 1 and the switch is the server's to make.
+export function reactToStory(storyId: number) {
+  return request('/reactions', 'POST', { entityType: 'story', entityId: String(storyId), score: 1 });
 }
 export interface ChatUser { userId: string; nickname: string; firstName: string; lastName: string; avatar: string; isOnline: number; lastMessageTime: string }
 export interface ChatMessage {
@@ -148,6 +162,14 @@ export async function nicknameAvailability(nickname: string): Promise<boolean> {
     `/api/v1/auth/nickname-availability?nickname=${encodeURIComponent(nickname)}`,
   );
   if (!data.success) throw new Error(data.error || 'Could not check nickname availability');
+  return data.data.available;
+}
+
+export async function emailAvailability(email: string): Promise<boolean> {
+  const { data } = await api.get<{ success: boolean; data: { available: boolean }; error?: string }>(
+    `/api/v1/auth/email-availability?email=${encodeURIComponent(email)}`,
+  );
+  if (!data.success) throw new Error(data.error || 'Could not check the email address');
   return data.data.available;
 }
 
