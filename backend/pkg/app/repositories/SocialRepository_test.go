@@ -287,8 +287,8 @@ func TestMediaVisibilityMirrorsItsReferenceAndAudience(t *testing.T) {
 func TestChatRuleAndSelectedAudience(t *testing.T) {
 	db := testRepo(t)
 
-	if allowed, err := db.CanMessage("stranger-id", "owner-id"); err != nil || !allowed {
-		t.Fatalf("a public profile must be messageable (%v, %v)", allowed, err)
+	if allowed, err := db.CanMessage("stranger-id", "owner-id"); err != nil || allowed {
+		t.Fatalf("a stranger reached a public profile's chat (%v, %v)", allowed, err)
 	}
 	if allowed, err := db.CanMessage("owner-id", "owner-id"); err != nil || allowed {
 		t.Fatalf("messaging yourself must not be allowed (%v, %v)", allowed, err)
@@ -303,8 +303,8 @@ func TestChatRuleAndSelectedAudience(t *testing.T) {
 	if allowed, _ := db.CanMessage("stranger-id", "owner-id"); allowed {
 		t.Fatal("a stranger reached a private profile")
 	}
-	if allowed, _ := db.CanMessage("owner-id", "stranger-id"); !allowed {
-		t.Fatal("the private owner could not reach a public profile")
+	if allowed, _ := db.CanMessage("owner-id", "stranger-id"); allowed {
+		t.Fatal("a public profile's own posts must not open a chat either")
 	}
 	if visible, err := db.CanViewPrivateProfile("stranger-id", "owner-id"); err != nil || visible {
 		t.Fatalf("a stranger could view a private profile (%v, %v)", visible, err)
@@ -327,6 +327,50 @@ func TestChatRuleAndSelectedAudience(t *testing.T) {
 	}
 	if visible, _ := db.CanViewPrivateProfile("stranger-id", "owner-id"); !visible {
 		t.Fatal("an accepted follow did not open the profile")
+	}
+
+	// The reverse direction counts too: the member being followed may reply.
+	if allowed, _ := db.CanMessage("owner-id", "stranger-id"); !allowed {
+		t.Fatal("the followed member could not answer")
+	}
+
+	// A pending request is only pending while the target is private. Going public
+	// accepts it, which is what stops a public profile from showing "Requested".
+	if _, err := db.Conn.Exec("UPDATE user SET isPublic = 0 WHERE userId = 'viewer-id'"); err != nil {
+		t.Fatal(err)
+	}
+	if status, err := db.FollowUser("stranger-id", "viewer-id"); err != nil || status != "pending" {
+		t.Fatalf("following a private profile should be pending (%q, %v)", status, err)
+	}
+	profile, err := db.SocialProfile("viewer-id", "stranger-id")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !profile.PendingOutgoing {
+		t.Fatal("a private profile did not report the waiting request")
+	}
+	if _, err := db.Conn.Exec("UPDATE user SET isPublic = 1 WHERE userId = 'viewer-id'"); err != nil {
+		t.Fatal(err)
+	}
+	accepted, err := db.AcceptPendingFollowRequests("viewer-id")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(accepted) != 1 || accepted[0] != "stranger-id" {
+		t.Fatalf("the waiting requester was not accepted: %v", accepted)
+	}
+	profile, err = db.SocialProfile("viewer-id", "stranger-id")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if profile.PendingOutgoing {
+		t.Fatal("a public profile still reports a pending request")
+	}
+	if !profile.CanMessage {
+		t.Fatal("the accepted request did not open the chat")
+	}
+	if _, err := db.Conn.Exec("UPDATE user SET isPublic = 0 WHERE userId = 'viewer-id'"); err != nil {
+		t.Fatal(err)
 	}
 
 	if err := db.ValidateSelectedFollowers("owner-id", []string{"viewer-id"}); !errors.Is(err, backend.ErrBadRequest) {
