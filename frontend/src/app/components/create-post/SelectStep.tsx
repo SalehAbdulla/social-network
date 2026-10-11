@@ -25,9 +25,9 @@ export default function SelectStep({ onPick, onTextPost, helper, pickRef }: {
       {helper && <p className="cp-select-helper" role="alert">{helper}</p>}
     </div>
     <div className="cp-select-actions">
-      <Button ref={pickRef} variant="primary" onClick={onPick}>Select from computer</Button>
+      <Button ref={pickRef} variant="primary" onClick={onPick}>computer</Button>
       <p className="cp-or" aria-hidden="true">or</p>
-      <Button variant="ghost" onClick={onTextPost}>Write a text post</Button>
+      <Button variant="ghost" onClick={onTextPost}>text post</Button>
     </div>
   </div>;
 }
