@@ -2366,7 +2366,3 @@ article[data-highlight='true'] { animation: grp-post-flash 1.6s ease-out; }
 @media (prefers-reduced-motion: reduce) {
   .story-tray-item .story-ring, .story-tray-label, .story-tray-nav { transition: none; }
 }
-
-#btn {
-  margin-top:10px;
-}
