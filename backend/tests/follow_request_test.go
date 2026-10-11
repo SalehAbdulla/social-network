@@ -3,6 +3,7 @@ package tests
 import (
 	"net/http"
 	"net/url"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
@@ -58,6 +59,58 @@ func TestFollowRequestConcurrentAndRollback(t *testing.T) {
 	if err != nil || status != "pending" {
 		t.Fatalf("reverse request after acceptance: %q %v", status, err)
 	}
+}
+
+func TestPublicProfileAcceptsWaitingRequests(t *testing.T) {
+	server, _ := integrationServer(t, true, false)
+	owner, requester := newIntegrationClient(t, server), newIntegrationClient(t, server)
+	owner.login("dummy@example.com")
+	requester.login("alex@example.com")
+
+	profile := decoded[models.SocialUser](t, owner.call("GET", "/api/v1/users/me", nil, 200))
+	profile.IsPublic = false
+	owner.call("PUT", "/api/v1/users/me", profile, 200)
+
+	requester.call("PUT", "/api/v1/users/dummy-id/follow", nil, 200)
+	waiting := decoded[models.SocialUser](t, requester.call("GET", "/api/v1/users/dummy-id", nil, 200))
+	if !waiting.PendingOutgoing || waiting.IsPublic {
+		t.Fatalf("the request was not left waiting on a private profile: %+v", waiting)
+	}
+
+	// The owner never accepts or declines: they simply make the profile public.
+	profile.IsPublic = true
+	flipped := decoded[models.SocialUser](t, owner.call("PUT", "/api/v1/users/me", profile, 200))
+	if !flipped.IsPublic {
+		t.Fatalf("the profile did not become public: %+v", flipped)
+	}
+
+	// The waiting request became a follow, so the requester must not be told
+	// "Requested" about a profile they can read, and the chat opens with it.
+	after := decoded[models.SocialUser](t, requester.call("GET", "/api/v1/users/dummy-id", nil, 200))
+	if after.PendingOutgoing {
+		t.Fatal("a public profile still reports a pending follow request")
+	}
+	if !after.CanMessage {
+		t.Fatal("the accepted request did not open the chat")
+	}
+	if !after.IsPublic || after.Bio == "" && after.FirstName == "" {
+		t.Fatalf("the profile did not open to its new follower: %+v", after)
+	}
+	mine := decoded[models.SocialUser](t, requester.call("GET", "/api/v1/users/me", nil, 200))
+	if !slices.Contains(mine.Following, "dummy-id") {
+		t.Fatalf("the accepted request is not a follow: %v", mine.Following)
+	}
+	if followers := decoded[models.SocialUser](t, owner.call("GET", "/api/v1/users/me", nil, 200)); !slices.Contains(followers.Followers, "alex-id") {
+		t.Fatalf("the owner did not gain the follower: %v", followers.Followers)
+	}
+	if items := decoded[[]models.FollowRequest](t, owner.call("GET", "/api/v1/follow-requests", nil, 200)); len(items) != 0 {
+		t.Fatalf("the accepted request is still listed: %+v", items)
+	}
+	if count := decoded[map[string]int](t, owner.call("GET", "/api/v1/notifications/unread-count", nil, 200)); count["count"] != 0 {
+		t.Fatalf("accepting on the flip left a stale notification: %v", count)
+	}
+	// And the requester can reach the profile's posts now, without a second request.
+	requester.call("GET", "/api/v1/users/dummy-id/posts", nil, 200)
 }
 
 func TestFollowRequests(t *testing.T) {
