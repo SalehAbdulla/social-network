@@ -13,6 +13,8 @@ func TestStoryReplyIntegration(t *testing.T) {
 	author, reader := newIntegrationClient(t, server), newIntegrationClient(t, server)
 	author.login("dummy@example.com")
 	reader.login("alex@example.com")
+	// A story reply is a direct message to the author, so the chat rule applies.
+	openChat(t, reader, "dummy-id")
 
 	created := decoded[map[string]int](t, author.call("POST", "/api/v1/stories", map[string]string{
 		"content": "Reply to me", "mediaType": "text", "backgroundColor": "#4f46e5",
@@ -39,9 +41,9 @@ func TestStoryReplyIntegration(t *testing.T) {
 	reader.call("POST", replyPath, map[string]string{"content": strings.Repeat("x", 1001)}, 400)
 	reader.call("POST", "/api/v1/stories/999999/reply", map[string]string{"content": "hi"}, 404)
 
-	if _, err := repo.Conn.Exec("UPDATE user SET isPublic=0 WHERE userId='dummy-id'"); err != nil {
-		t.Fatal(err)
-	}
+	// A reply needs the chat rule, so dropping the follow is what blocks it now —
+	// the author's privacy is not what a reply depends on.
+	reader.call("DELETE", "/api/v1/users/dummy-id/follow", nil, 200)
 	reader.call("POST", replyPath, map[string]string{"content": "blocked"}, 403)
 
 	if _, err := repo.Conn.Exec("UPDATE story SET expiresAt=datetime('now','-1 second') WHERE storyId=?", created["storyId"]); err != nil {
