@@ -212,6 +212,10 @@ func (re *HandlerContext) GetMedia(w http.ResponseWriter, r *http.Request) {
 	}
 	w.Header().Set("Content-Type", contentType)
 	w.Header().Set("X-Content-Type-Options", "nosniff")
-	w.Header().Set("Cache-Control", "private, max-age=3600")
+	// Every upload is access-controlled, and the URL is the same for everyone who may
+	// read it, so it must not sit in a cache that outlives the session: a browser
+	// shared by two accounts was serving a followers-only photo to the second one
+	// from the first one's cache. The sized variants are what save bandwidth here.
+	w.Header().Set("Cache-Control", "private, no-store")
 	http.ServeFile(w, r, filepath.Join(re.App.UploadDir, name))
 }
