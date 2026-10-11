@@ -18,7 +18,11 @@ export default function NewMessageModal({ onClose, meId, onPick }: { onClose: ()
   const dialog = useDialogFocus<HTMLDivElement>(onClose, { initialFocus: input });
   useEffect(() => { const timer = setTimeout(() => setQuery(search.trim()), 300); return () => clearTimeout(timer); }, [search]);
   const people = useResource<SocialUser[]>(`/users?q=${encodeURIComponent(query)}`);
-  const list = (people.data ?? []).filter(person => person.userId !== meId);
+  // Only the members this viewer may actually write to: the chat rule needs a
+  // follow in one direction or the other, and offering anyone else only leads to a
+  // conversation the server refuses to open.
+  const list = (people.data ?? []).filter(person => person.userId !== meId && person.canMessage === true);
+  const blocked = (people.data ?? []).filter(person => person.userId !== meId && person.canMessage !== true);
   function start() {
     if (!selected) return;
     const partner = selected;
@@ -55,7 +59,9 @@ export default function NewMessageModal({ onClose, meId, onPick }: { onClose: ()
             <span className="dm-radio" aria-hidden="true" />
           </button>)}
         </div>
-        {!people.loading && list.length === 0 && <p className="dm-empty-note">No people found.</p>}
+        {!people.loading && list.length === 0 && <p className="dm-empty-note">{blocked.length > 0
+          ? 'Follow someone, or wait for them to follow you, to start a conversation. Only people you follow or who follow you can be messaged.'
+          : 'No people found.'}</p>}
       </div>
       <div className="dm-modal-foot">
         <button type="button" className="dm-primary" disabled={!selected} onClick={start}>Chat</button>
