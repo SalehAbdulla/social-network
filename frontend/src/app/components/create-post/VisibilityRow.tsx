@@ -21,7 +21,9 @@ export default function VisibilityRow({ id, value, onChange, followers, selected
   return <>
     <button id={id} type="button" className={`group ${ROW}`} aria-expanded={open} onClick={() => setOpen(previous => !previous)}>
       <current.Icon size={20} aria-hidden="true" />
-      <span className="cp-row-label">Visibility</span>
+      <span className="cp-row-label">Visible</span>
+      <div className='mr-3 md:mr-2'></div>
+      <br />
       <span className="cp-row-value">{current.label}</span>
       <ChevronDown className="h-4 w-4 text-muted transition-transform group-aria-expanded:rotate-180 motion-reduce:transition-none" aria-hidden="true" />
     </button>
