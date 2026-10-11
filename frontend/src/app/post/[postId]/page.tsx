@@ -30,7 +30,7 @@ export default function SinglePost() {
       <Link href="/" className="pv-post">Go back to Feed</Link>
     </div>}
     {post.data && <>
-      <div className="pv-page"><PostView post={post.data} onRemoved={() => router.push('/')} /></div>
+      <div className="pv-page"><PostView post={post.data} onEdit={() => router.push(`/post/${postId}/edit`)} onRemoved={() => router.push('/')} /></div>
       {others.length > 0 && <div className="pv-more-posts">
         <p className="pv-more-title">More posts from {displayName(post.data)}</p>
         <div className="profile-grid">{others.map(item => <PostTile key={item.postId} post={item} onOpen={() => router.push(`/post/${item.postId}`)} />)}</div>
