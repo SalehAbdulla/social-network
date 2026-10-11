@@ -29,6 +29,7 @@ func TestMessageReactionIntegration(t *testing.T) {
 	sender, receiver := newIntegrationClient(t, server), newIntegrationClient(t, server)
 	sender.login("dummy@example.com")
 	receiver.login("alex@example.com")
+	openChat(t, sender, "alex-id")
 	sent := decoded[message.MessageDTO](t, sender.call("POST", "/api/v1/messages", map[string]any{
 		"recipientId": "alex-id", "text": "A message to react to.", "mediaUrl": "", "mediaType": "",
 	}, 201))
