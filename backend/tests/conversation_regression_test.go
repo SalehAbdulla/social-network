@@ -23,6 +23,7 @@ func TestConversationListsOnlyIncludeHistoryAndMembership(t *testing.T) {
 	}
 	assertChats(owner, 0)
 	assertChats(member, 0)
+	openChat(t, owner, "alex-id")
 	owner.call("GET", "/api/v1/messages?partnerId=alex-id", nil, 200)
 	assertChats(owner, 0)
 	sent := decoded[message.MessageDTO](t, owner.call("POST", "/api/v1/messages", map[string]string{"recipientId": "alex-id", "text": "First message"}, 201))
