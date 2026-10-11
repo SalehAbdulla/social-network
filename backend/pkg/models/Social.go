@@ -10,6 +10,14 @@ type SocialUser struct {
 	CoverPhoto string `json:"coverPhoto"`
 	Location   string `json:"location"`
 
+	// The account's own details. They are filled only for the member reading their
+	// own profile — `writeProfile` merges them in — so every other surface that
+	// reuses this struct (discover, the follow lists, a post's author) leaves them
+	// empty and cannot leak them.
+	Email     string `json:"email,omitempty"`
+	BirthDate string `json:"birthDate,omitempty"`
+	Gender    string `json:"gender,omitempty"`
+
 	Website      string `json:"website"`
 	ContactEmail string `json:"contactEmail"`
 	Phone        string `json:"phone"`
@@ -26,6 +34,24 @@ type SocialUser struct {
 	PendingIncoming bool     `json:"pendingIncoming"`
 	PendingOutgoing bool     `json:"pendingOutgoing"`
 	CanMessage      bool     `json:"canMessage"`
+}
+
+// MaskPrivateDetails clears everything a viewer who may not read a private profile
+// is not allowed to see, and leaves the handle and the display name — they are what
+// a search result, a follow request and a follower row are made of, and without them
+// nobody could be found at all. Every list that carries other people's profiles
+// (discover, the follow lists, suggestions) runs this before answering; the single
+// profile view masks more, because there is nothing left to identify.
+func (u *SocialUser) MaskPrivateDetails() {
+	u.Bio, u.Location = "", ""
+	u.Website, u.ContactEmail, u.Phone = "", "", ""
+	u.ShowWebsite, u.ShowContactEmail, u.ShowPhone = false, false, false
+	u.Avatar, u.CoverPhoto = "", ""
+	u.Email, u.BirthDate, u.Gender = "", "", ""
+	u.Followers, u.Following = []string{}, []string{}
+	u.PostCount = 0
+	// PendingIncoming and PendingOutgoing stay: they are the viewer's own state —
+	// "I asked them", "they asked me" — and the follow button is drawn from them.
 }
 
 type SavedAccount struct {
