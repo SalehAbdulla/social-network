@@ -817,6 +817,19 @@ body {
     .dm-row-avatar { margin-inline: auto; }
   }
 
+  /* Wide screens: the header's chevron folds the column down to its avatars, the
+     same way the tablet lays it out, and the chat takes the width it frees. The
+     toggle stays visible so the column can be brought back. */
+  @media (min-width: 1000px) {
+    .dm-shell[data-collapsed='true'] .dm-list { width: var(--dm-list-collapsed); }
+    .dm-shell[data-collapsed='true'] .dm-collapse { display: none !important; }
+    .dm-shell[data-collapsed='true'] .dm-row { justify-content: center; margin-inline: 4px; padding-inline: 0; }
+    .dm-shell[data-collapsed='true'] .dm-row-body,
+    .dm-shell[data-collapsed='true'] .dm-row-dot { display: none; }
+    .dm-shell[data-collapsed='true'] .dm-row-avatar { margin-inline: auto; }
+    .dm-shell[data-collapsed='true'] .dm-list-head { justify-content: center; }
+  }
+
   /* Conversation column: header, tabs, search, rows. */
   .dm-list-head {
     display: flex; flex: none; align-items: center; justify-content: space-between;
@@ -824,6 +837,13 @@ body {
   }
   .dm-list-title { display: flex; align-items: center; gap: 4px; font-size: var(--dm-title-size); font-weight: 700; color: var(--ui-text); }
   .dm-list-title svg { width: var(--dm-title-icon); height: var(--dm-title-icon); }
+  /* The chevron folds the conversation column down to its avatars. It only exists
+     where it does something — a phone shows the list full width, and the tablet
+     already folds it — and it turns to point at the column it just hid. */
+  .dm-collapse-toggle { display: none; }
+  .dm-collapse-toggle svg { width: var(--dm-title-icon); height: var(--dm-title-icon); transition: transform var(--dm-motion) ease; }
+  .dm-collapse-toggle[aria-expanded='false'] svg { transform: rotate(-90deg); }
+  @media (min-width: 1000px) { .dm-collapse-toggle { display: flex; } }
   .dm-list-head .dm-icon svg { width: var(--dm-compose-icon); height: var(--dm-compose-icon); }
   .dm-tabs { display: flex; flex: none; border-bottom: 1px solid var(--dm-border); }
   .dm-tab {
@@ -1669,7 +1689,10 @@ article[data-highlight='true'] { animation: grp-post-flash 1.6s ease-out; }
   .profile-bio-text { white-space: pre-wrap; overflow-wrap: anywhere; }
   .profile-bio-text[data-clamped='true'] { display: -webkit-box; overflow: hidden; -webkit-box-orient: vertical; -webkit-line-clamp: 4; }
   .profile-bio-toggle { color: var(--ui-muted); font-weight: 600; }
-  .profile-bio-location { display: flex; align-items: center; gap: 4px; color: var(--ui-muted); }
+  .profile-bio-location { display: flex; align-items: center; gap: 4px; color: var(--ui-muted); min-width: 0; }
+  /* A location, an email or a handle can be one long unbroken word; it wraps inside
+     its row rather than widening the column it sits in. */
+  .profile-bio-location > span, .profile-bio-location dd { min-width: 0; overflow-wrap: anywhere; }
   .profile-bio-location svg { width: 14px; height: 14px; flex: none; }
   .profile-bio-website { display: flex; align-items: center; gap: 4px; font-weight: 600; }
   .profile-bio-website svg { width: 14px; height: 14px; flex: none; }
