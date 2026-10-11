@@ -9,6 +9,10 @@ type PostDTO struct {
 	Nickname        string   `json:"nickname"`
 	FirstName       string   `json:"firstName"`
 	LastName        string   `json:"lastName"`
+	Avatar          string   `json:"avatar"`
+	// Whether the author's profile is public. A public post on a private profile is
+	// visible to that profile's followers only, and the label has to say so.
+	AuthorIsPublic  bool     `json:"authorIsPublic"`
 	Title           string   `json:"title"`
 	Content         string   `json:"content"`
 	Score           int      `json:"score"`
