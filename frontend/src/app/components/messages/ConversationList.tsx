@@ -8,7 +8,7 @@ import { GroupRowsSkeleton } from '../Skeletons';
 
 export type { ConversationItem } from './ConversationRow';
 
-export default function ConversationList({ tab, currentUserName, search, onSearch, onCompose, composeLabel = 'New message', items, loading, error, onRetry, empty, activeKey, extra }: {
+export default function ConversationList({ tab, currentUserName, search, onSearch, onCompose, composeLabel = 'New message', items, loading, error, onRetry, empty, activeKey, collapsed, onToggleCollapsed, extra }: {
   tab: 'primary' | 'groups';
   currentUserName: string;
   search: string;
@@ -21,14 +21,23 @@ export default function ConversationList({ tab, currentUserName, search, onSearc
   onRetry: () => void;
   empty: string;
   activeKey?: string;
+  collapsed: boolean;
+  onToggleCollapsed: () => void;
   extra?: ReactNode;
 }) {
   return <aside aria-label="Conversations" className="dm-list">
     <div className="dm-list-head">
-      <span className="dm-list-title dm-collapse">
-        {currentUserName}
-        <ChevronDown size={16} aria-hidden="true" />
-      </span>
+      <span className="dm-list-title dm-collapse">{currentUserName}</span>
+      <button
+        type="button"
+        className="dm-icon dm-collapse-toggle"
+        aria-expanded={!collapsed}
+        aria-label={collapsed ? 'Show the conversation list' : 'Hide the conversation list'}
+        title={collapsed ? 'Show the conversation list' : 'Hide the conversation list'}
+        onClick={onToggleCollapsed}
+      >
+        <ChevronDown aria-hidden="true" className="dm-collapse-chevron" />
+      </button>
       <button type="button" aria-label={composeLabel} title={composeLabel} className="dm-icon" onClick={onCompose}>
         <SquarePen aria-hidden="true" />
       </button>
