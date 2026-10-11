@@ -137,6 +137,11 @@ func TestProfileDetailsAreOwnerOnly(t *testing.T) {
 	if byHandle.Email == "" {
 		t.Fatal("the owner's profile by handle hid its own details")
 	}
+	// The edit dialog falls back to this endpoint for the address, so it has to
+	// carry it.
+	if viaAuthMe := decoded[map[string]any](t, alex.call("GET", "/api/v1/auth/me", nil, 200)); viaAuthMe["email"] != owner.Email {
+		t.Fatalf("GET /auth/me lost the address: %+v", viaAuthMe)
+	}
 
 	seen := decoded[models.SocialUser](t, dummy.call("GET", "/api/v1/users/alex-id", nil, 200))
 	if seen.Email != "" || seen.BirthDate != "" || seen.Gender != "" {
