@@ -64,7 +64,10 @@ export default function MessageThread({ items, meId, partnerId, partnerName, par
   const scroller = useRef<HTMLDivElement>(null);
   const nearBottom = useRef(true);
   const pendingPrepend = useRef<number | null>(null);
-  const [showPill, setShowPill] = useState(false);
+  const newestSeen = useRef<number | null>(null);
+  // "New messages" means messages that arrived below the reader's eye, not simply
+  // "the reader is not at the bottom": an older page must not raise it.
+  const [unseenBelow, setUnseenBelow] = useState(0);
   const richOfMessage = richOf ?? justMedia;
 
   const ordered = useMemo(() => [...items].reverse(), [items]);
@@ -99,14 +102,32 @@ export default function MessageThread({ items, meId, partnerId, partnerName, par
     if (!element) return;
     element.scrollTop = element.scrollHeight;
     nearBottom.current = true;
-    setShowPill(false);
+    setUnseenBelow(0);
   }
 
+  // A thread shorter than its own box cannot be scrolled, so waiting for a scroll
+  // event to ask for the next page means the older half is unreachable — that is why
+  // paging only worked when the browser was zoomed. The next page is asked for as
+  // soon as there is nothing left to scroll.
   useEffect(() => {
     const element = scroller.current;
-    if (!element) return;
+    if (!element || !hasMore || loadingMore) return;
+    if (element.scrollHeight <= element.clientHeight + 48) {
+      pendingPrepend.current = element.scrollHeight;
+      onLoadMore();
+    }
+  }, [hasMore, loadingMore, items.length, onLoadMore]);
+
+  useEffect(() => {
     const newest = ordered[ordered.length - 1];
-    if (nearBottom.current || newest?.senderId === meId) scrollToBottom();
+    const previous = newestSeen.current;
+    newestSeen.current = newest?.messageId ?? null;
+    // First paint opens at the newest message. After that only something that lands
+    // below the reader moves the view: an older page must keep its anchor.
+    if (previous === null) { scrollToBottom(); return; }
+    if (!newest || newest.messageId === previous) return;
+    if (nearBottom.current || newest.senderId === meId) scrollToBottom();
+    else setUnseenBelow(count => count + 1);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ordered]);
 
@@ -115,6 +136,12 @@ export default function MessageThread({ items, meId, partnerId, partnerName, par
     if (!element || pendingPrepend.current === null) return;
     element.scrollTop += element.scrollHeight - pendingPrepend.current;
     pendingPrepend.current = null;
+    // The anchor moved with the content, so the reader is no longer at the newest
+    // end even though they were a moment ago: a message that arrives now must not
+    // yank them away from what they are reading.
+    const atBottom = element.scrollHeight - element.scrollTop - element.clientHeight < 120;
+    nearBottom.current = atBottom;
+    if (atBottom) setUnseenBelow(0);
   }, [items.length]);
 
   function handleScroll() {
@@ -122,7 +149,7 @@ export default function MessageThread({ items, meId, partnerId, partnerName, par
     if (!element) return;
     const atBottom = element.scrollHeight - element.scrollTop - element.clientHeight < 120;
     nearBottom.current = atBottom;
-    setShowPill(!atBottom);
+    if (atBottom) setUnseenBelow(0);
     if (element.scrollTop < 40 && hasMore && !loadingMore) {
       pendingPrepend.current = element.scrollHeight;
       onLoadMore();
@@ -187,8 +214,8 @@ export default function MessageThread({ items, meId, partnerId, partnerName, par
       </div>
     </div>}
     <div className="h-1" />
-    {showPill && <div className="sticky bottom-2 flex justify-center">
-      <button type="button" className="dm-newpill" onClick={scrollToBottom}>New messages</button>
+    {unseenBelow > 0 && <div className="sticky bottom-2 flex justify-center">
+      <button type="button" className="dm-newpill" onClick={scrollToBottom}>{unseenBelow === 1 ? '1 new message' : `${unseenBelow} new messages`}</button>
     </div>}
   </div>;
 }
