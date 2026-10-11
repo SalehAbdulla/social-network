@@ -124,6 +124,12 @@ call "$JAR_A" POST /api/v1/auth/password-reset/confirm 400 \
 call "$JAR_A" GET "/api/v1/auth/nickname-availability?nickname=toura$STAMP" 200
 # route: GET /api/v1/auth/nickname-availability
 call "$JAR_A" GET "/api/v1/auth/nickname-availability?nickname=tourfree$STAMP" 200
+# route: GET /api/v1/auth/email-availability
+call "$JAR_A" GET "/api/v1/auth/email-availability?email=$EMAIL_A" 200
+# route: GET /api/v1/auth/email-availability
+call "$JAR_A" GET "/api/v1/auth/email-availability?email=free$STAMP@example.com" 200
+# route: GET /api/v1/auth/email-availability
+call "$JAR_A" GET "/api/v1/auth/email-availability?email=not-an-address" 400
 
 # route: GET /api/v1/auth/me
 call "$JAR_A" GET /api/v1/auth/me 200
