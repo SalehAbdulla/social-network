@@ -5,6 +5,7 @@ type CommentDTO struct {
 	PostId      string   `json:"postId"`
 	UserId      string   `json:"userId"`
 	Nickname    string   `json:"nickname"`
+	Avatar      string   `json:"avatar"`
 	CommentText string   `json:"commentText"`
 	ImageURLs   []string `json:"imageUrls"`
 	Score       int      `json:"score"`
