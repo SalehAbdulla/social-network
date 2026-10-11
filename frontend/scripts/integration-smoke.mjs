@@ -911,6 +911,10 @@ try {
   await navigate(dummy, '/profile');
   await until(dummy, `document.body.innerText.includes('Edit profile')`, 'profile loaded');
   await button(dummy, 'Edit profile');
+  const accountEmail = await evaluate(dummy, `document.querySelector('[role="dialog"] input[aria-label="Account email"]').value`);
+  assert.equal(accountEmail, originalDummy.email, 'the edit dialog has to show the address the member signs in with');
+  assert(await evaluate(dummy, `document.querySelector('[role="dialog"] input[aria-label="Account email"]').readOnly`), 'the account email stays read-only');
+  console.log('PASS: the edit dialog shows the address the member signs in with');
   await fill(dummy, '[role="dialog"] textarea', `Browser bio ${stamp}`);
   const locationSelector = '[role="dialog"] label:nth-of-type(4) input';
   assert.equal(await evaluate(dummy, `document.querySelector(${JSON.stringify(locationSelector)}).maxLength`), 50);
