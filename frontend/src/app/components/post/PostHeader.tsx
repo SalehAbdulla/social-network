@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { ExternalLink, Link2, Pencil, Share2, Trash2 } from 'lucide-react';
-import { PRIVACY_LABEL, type Post, displayName } from '../../api/social';
+import { audienceLabel, type Post, displayName } from '../../api/social';
 import { POST_AVATAR_SIZE } from '../../lib/sizing';
 import AudienceIcon from '../AudienceIcon';
 import Avatar from '../Avatar';
@@ -26,8 +26,8 @@ export default function PostHeader({ post, group, isOwner, avatarUrl, onEdit, on
       <span className="pv-head-text">
         <span className="pv-name block truncate" dir="auto">{name}</span>
         <span className="pv-meta">
-          <AudienceIcon privacy={post.privacy} context={group ? 'group' : 'feed'} />
-          <span>{group ? 'Group' : PRIVACY_LABEL[post.privacy]}</span>
+          <AudienceIcon privacy={post.privacy} context={group ? 'group' : 'feed'} authorIsPublic={post.authorIsPublic} />
+          <span>{group ? 'Group' : audienceLabel(post)}</span>
         </span>
       </span>
     </Link>
