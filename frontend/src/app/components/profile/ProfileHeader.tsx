@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
-import { ChevronDown, Link2, Mail, MapPin, Phone, RefreshCw, Settings } from 'lucide-react';
+import { Cake, ChevronDown, Link2, Mail, MapPin, Phone, RefreshCw, Settings, UserRound } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { type SocialUser, displayName, errorMessage, request } from '../../api/social';
 import { linkify } from '../../lib/linkify';
@@ -65,6 +65,7 @@ export default function ProfileHeader({
       {name !== profile.nickname && <p className="profile-name" dir="auto">{name}</p>}
       <ProfileStats postCount={profile.postCount} followers={followers} following={following} canOpen onOpen={onOpenFollows} />
       <Bio profile={profile} isOwner={isOwner} />
+      {isOwner && <OwnDetails profile={profile} />}
 
       <div className="profile-actions-buttons">
         {isOwner ? <>
@@ -74,7 +75,12 @@ export default function ProfileHeader({
           <FollowControl state={followState} busy={isFollowingBusy} onToggle={onToggleFollow} />
           <MessageAction userId={profile.userId} allowed={canMessage} className="ui-btn ui-btn-secondary profile-btn" />
         </>}
-        {(!!profile.contactEmail || !!profile.phone) && <ContactButton email={profile.contactEmail} phone={profile.phone} emailHidden={isOwner && !profile.showContactEmail} phoneHidden={isOwner && !profile.showPhone} />}
+        {!!(profile.contactEmail || profile.phone || profile.email) && <ContactButton
+          email={profile.contactEmail || profile.email || ''}
+          phone={profile.phone}
+          emailHidden={isOwner && !!profile.contactEmail && !profile.showContactEmail}
+          phoneHidden={isOwner && !profile.showPhone}
+        />}
       </div>
     </div>
   </header>;
@@ -190,4 +196,32 @@ function ContactButton({ email, phone, emailHidden, phoneHidden }: { email: stri
 
 function HiddenTag({ className = '' }: { className?: string }) {
   return <span className={`text-xs font-normal text-slate-400 ${className}`}>Hidden</span>;
+}
+
+// The account fields the profile was created with. The server only sends them to
+// the member reading their own profile, so this block renders for nobody else.
+function OwnDetails({ profile }: { profile: SocialUser }) {
+  const rows: { icon: typeof Mail; label: string; value: string }[] = [];
+  if (profile.email) rows.push({ icon: Mail, label: 'Email', value: profile.email });
+  if (profile.birthDate) rows.push({ icon: Cake, label: 'Date of birth', value: birthDateLabel(profile.birthDate) });
+  if (profile.gender) rows.push({ icon: UserRound, label: 'Gender', value: genderLabel(profile.gender) });
+  if (rows.length === 0) return null;
+  return <dl className="profile-bio">
+    {rows.map(row => <div key={row.label} className="profile-bio-location">
+      <row.icon aria-hidden="true" />
+      <dt className="sr-only">{row.label}</dt>
+      <dd><span className="font-semibold">{row.label}</span><span aria-hidden="true">: </span><span dir="auto">{row.value}</span></dd>
+    </div>)}
+  </dl>;
+}
+
+// A stored ISO date, shown the way the reader's locale writes it; anything the
+// browser cannot parse is left as it came.
+function birthDateLabel(value: string): string {
+  const date = new Date(`${value}T00:00:00Z`);
+  return Number.isNaN(date.getTime()) ? value : date.toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' });
+}
+
+function genderLabel(value: string): string {
+  return value === 'female' ? 'Female' : value === 'male' ? 'Male' : value;
 }
