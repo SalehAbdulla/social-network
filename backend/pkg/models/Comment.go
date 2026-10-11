@@ -6,6 +6,7 @@ type Comment struct {
 	PostPublicID string `json:"postId"`
 	UserId       string `json:"userId"`
 	Nickname     string `json:"nickname"`
+	Avatar       string `json:"-"`
 	CommentText  string `json:"commentText"`
 	ImageURLs    string `json:"-"`
 	Score        int    `json:"score"`
