@@ -229,9 +229,9 @@ export default function Profile() {
       {modal}
       {create.modal}
 
-      {confirmUnfollow && <div ref={unfollowDialog} role="dialog" aria-modal="true" aria-labelledby="unfollow-confirm" tabIndex={-1} className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={() => setConfirmUnfollow(false)}>
-        <div className="w-full max-w-sm space-y-4 rounded-xl bg-white p-5" onClick={event => event.stopPropagation()}>
-          <p id="unfollow-confirm" className="text-sm text-slate-700">Unfollow {displayName(profile.data)}? You will stop seeing their posts and will have to send a new request to follow again.</p>
+      {confirmUnfollow && <div ref={unfollowDialog} role="dialog" aria-modal="true" aria-labelledby="unfollow-confirm" tabIndex={-1} className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-black/50 p-4" onClick={() => setConfirmUnfollow(false)}>
+        <div className="my-auto max-h-[90vh] w-full max-w-sm space-y-4 overflow-y-auto rounded-xl bg-card p-5" onClick={event => event.stopPropagation()}>
+          <p id="unfollow-confirm" className="text-sm text-text">Unfollow {displayName(profile.data)}? You will stop seeing their posts and will have to send a new request to follow again.</p>
           <div className="flex justify-end gap-3">
             <Button variant="secondary" onClick={() => setConfirmUnfollow(false)}>Cancel</Button>
             <Button variant="danger" loading={isFollowingBusy} onClick={() => void handleToggleFollow(true)}>Unfollow</Button>
