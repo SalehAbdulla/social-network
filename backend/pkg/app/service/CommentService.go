@@ -32,6 +32,7 @@ func mapCommentToDTO(com models.Comment) comment.CommentDTO {
 		PostId:      com.PostPublicID,
 		UserId:      com.UserId,
 		Nickname:    com.Nickname,
+		Avatar:      com.Avatar,
 		CommentText: com.CommentText,
 		ImageURLs:   images,
 		Score:       com.Score,
