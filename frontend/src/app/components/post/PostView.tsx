@@ -40,8 +40,10 @@ export default function PostView({ post, group = false, avatarOf, canManage, sha
   const hasMedia = !!post.imageUrls?.length;
 
   const resolveAvatar = useCallback(
-    (userId: string) => avatarOf?.(userId) || (userId === user.userId ? user.avatar : ''),
-    [avatarOf, user.userId, user.avatar],
+    (userId: string) => avatarOf?.(userId)
+      || (userId === post.userId ? post.avatar : '')
+      || (userId === user.userId ? user.avatar : ''),
+    [avatarOf, post.userId, post.avatar, user.userId, user.avatar],
   );
 
   const [reaction, setReaction] = useState<{ score: number; userScore: number } | null>(null);
@@ -81,11 +83,13 @@ export default function PostView({ post, group = false, avatarOf, canManage, sha
   async function like() {
     if (busy) return;
     setBusy(true);
+    // The API toggles: posting the score the member already holds takes the
+    // reaction back, so a like is always sent as 1 and only the local state flips.
     const score = vote.userScore === 1 ? 0 : 1;
     const previous = { score: vote.score, userScore: vote.userScore };
     setReaction({ score: previous.score + (score - previous.userScore), userScore: score });
     try {
-      const result = await request<{ totalScore: number }>('/reactions', 'POST', { entityType: group ? 'group_post' : 'post', entityId: post.postId, score });
+      const result = await request<{ totalScore: number }>('/reactions', 'POST', { entityType: group ? 'group_post' : 'post', entityId: post.postId, score: 1 });
       setReaction({ score: result.totalScore, userScore: score });
     } catch (error) {
       setReaction(previous);
@@ -144,7 +148,9 @@ export default function PostView({ post, group = false, avatarOf, canManage, sha
     const previous = { score: comment.score, userScore: comment.userScore };
     list.update(items => items.map(item => item.commentId === comment.commentId ? { ...item, score: item.score + (score - item.userScore), userScore: score } : item));
     try {
-      const result = await request<{ totalScore: number }>('/reactions', 'POST', { entityType: 'comment', entityId: comment.commentId, score });
+      // A like is always sent as 1: the API takes the reaction back when the score
+      // matches the one already held, and 0 is not a score it accepts.
+      const result = await request<{ totalScore: number }>('/reactions', 'POST', { entityType: 'comment', entityId: comment.commentId, score: 1 });
       list.update(items => items.map(item => item.commentId === comment.commentId ? { ...item, score: result.totalScore, userScore: score } : item));
     } catch (error) {
       list.update(items => items.map(item => item.commentId === comment.commentId ? { ...item, ...previous } : item));
