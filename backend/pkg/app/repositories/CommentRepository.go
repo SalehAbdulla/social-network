@@ -12,7 +12,7 @@ type CommentRepository interface {
 }
 
 const commentPageSelect = `
-		SELECT c.commentId, c.postId, p.publicId, c.userId, u.nickName, c.content, c.imageUrls, c.score, c.createdAt,
+		SELECT c.commentId, c.postId, p.publicId, c.userId, u.nickName, COALESCE(u.avatar, ''), c.content, c.imageUrls, c.score, c.createdAt,
 		       COALESCE(r.score, 0) AS userScore
 		FROM comment c
 		JOIN user u ON c.userId = u.userId
@@ -75,6 +75,7 @@ func (db *DB) GetComments(postId int, pageNumber int, pageSize int, sortBy strin
 			&com.PostPublicID,
 			&com.UserId,
 			&com.Nickname,
+			&com.Avatar,
 			&com.CommentText,
 			&com.ImageURLs,
 			&com.Score,
@@ -130,7 +131,7 @@ func (db *DB) CreateComment(userId string, postId int, content string, imageURLs
 
 	var com models.Comment
 	err = db.Conn.QueryRow(
-		`SELECT c.commentId, c.postId, p.publicId, c.userId, u.nickName, c.content, c.imageUrls, c.score, c.createdAt
+		`SELECT c.commentId, c.postId, p.publicId, c.userId, u.nickName, COALESCE(u.avatar, ''), c.content, c.imageUrls, c.score, c.createdAt
 		 FROM comment c JOIN post p ON p.postId = c.postId JOIN user u ON u.userId = c.userId
 		 WHERE c.commentId = ?`, commentID,
 	).Scan(
@@ -139,6 +140,7 @@ func (db *DB) CreateComment(userId string, postId int, content string, imageURLs
 		&com.PostPublicID,
 		&com.UserId,
 		&com.Nickname,
+		&com.Avatar,
 		&com.CommentText,
 		&com.ImageURLs,
 		&com.Score,
