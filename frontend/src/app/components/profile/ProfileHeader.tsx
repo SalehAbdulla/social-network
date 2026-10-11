@@ -20,7 +20,7 @@ export type FollowState = 'none' | 'following' | 'requested';
 
 export default function ProfileHeader({
   profile, followers, following, isOwner, avatarSize, followState, canMessage, isFollowingBusy,
-  hasStories, storyUnseen, onAvatarClick, onOpenStories, onEdit, onArchive, onChangePassword, onOpenFollows, onToggleFollow,
+  hasStories, storyUnseen, sessionEmail, onAvatarClick, onOpenStories, onEdit, onArchive, onChangePassword, onOpenFollows, onToggleFollow,
 }: {
   profile: SocialUser;
   followers: number;
@@ -32,6 +32,7 @@ export default function ProfileHeader({
   isFollowingBusy: boolean;
   hasStories: boolean;
   storyUnseen: boolean;
+  sessionEmail?: string;
   onAvatarClick: () => void;
   onOpenStories: () => void;
   onEdit: () => void;
@@ -65,7 +66,7 @@ export default function ProfileHeader({
       {name !== profile.nickname && <p className="profile-name" dir="auto">{name}</p>}
       <ProfileStats postCount={profile.postCount} followers={followers} following={following} canOpen onOpen={onOpenFollows} />
       <Bio profile={profile} isOwner={isOwner} />
-      {isOwner && <OwnDetails profile={profile} />}
+      {isOwner && <OwnDetails profile={profile} sessionEmail={sessionEmail} />}
 
       <div className="profile-actions-buttons">
         {isOwner ? <>
@@ -200,9 +201,10 @@ function HiddenTag({ className = '' }: { className?: string }) {
 
 // The account fields the profile was created with. The server only sends them to
 // the member reading their own profile, so this block renders for nobody else.
-function OwnDetails({ profile }: { profile: SocialUser }) {
+function OwnDetails({ profile, sessionEmail }: { profile: SocialUser; sessionEmail?: string }) {
   const rows: { icon: typeof Mail; label: string; value: string }[] = [];
-  if (profile.email) rows.push({ icon: Mail, label: 'Email', value: profile.email });
+  const email = profile.email || sessionEmail;
+  if (email) rows.push({ icon: Mail, label: 'Email', value: email });
   if (profile.birthDate) rows.push({ icon: Cake, label: 'Date of birth', value: birthDateLabel(profile.birthDate) });
   if (profile.gender) rows.push({ icon: UserRound, label: 'Gender', value: genderLabel(profile.gender) });
   if (rows.length === 0) return null;
