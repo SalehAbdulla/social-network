@@ -80,7 +80,7 @@ export default function SwitchAccounts({ open, onClose, accounts, activeUserId, 
       onClick={event => { if (event.target === event.currentTarget) onClose(); }}
       className="fixed inset-0 z-50 flex items-end justify-center bg-black/50 p-4 sm:items-center"
     >
-      <div className="w-full max-w-sm space-y-2 rounded-2xl bg-card p-4 shadow-xl">
+      <div className="my-auto max-h-[85vh] w-full max-w-sm space-y-2 overflow-y-auto rounded-2xl bg-card p-4 shadow-xl">
         <h2 className="px-1 pb-1 text-lg font-bold">Switch accounts</h2>
         <ul className="space-y-1">
           {accounts.map(account => (
