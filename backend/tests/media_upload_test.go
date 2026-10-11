@@ -306,6 +306,7 @@ func TestOrphanedMediaIsCollected(t *testing.T) {
 	for name, id := range ids {
 		urls[name] = seed(id)
 	}
+	openChat(t, owner, "alex-id")
 
 	post := decoded[posts.PostDTO](t, owner.call("POST", "/api/v1/posts", map[string]any{
 		"title": "Media post", "content": "A post with a photo attached to it.", "privacy": "public",
