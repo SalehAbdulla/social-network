@@ -12,6 +12,7 @@ func Routes() http.Handler {
 	mux.HandleFunc("POST /api/v1/auth/register", handlers.HandlerCtx.Register)
 	mux.HandleFunc("POST /api/v1/auth/login", handlers.HandlerCtx.Login)
 	mux.HandleFunc("GET /api/v1/auth/nickname-availability", handlers.HandlerCtx.NicknameAvailability)
+	mux.HandleFunc("GET /api/v1/auth/email-availability", handlers.HandlerCtx.EmailAvailability)
 
 	mux.HandleFunc("POST /api/v1/auth/password-reset", handlers.HandlerCtx.RequestPasswordReset)
 	mux.HandleFunc("POST /api/v1/auth/password-reset/confirm", handlers.HandlerCtx.ConfirmPasswordReset)
