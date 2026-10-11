@@ -22,6 +22,7 @@ type AuthService interface {
 	Logout(token string) error
 	GetMe(userID string) (user.UserDTO, error)
 	NicknameAvailable(nickname string) (bool, error)
+	EmailAvailable(email string) (bool, error)
 	ChangePassword(userID, currentPassword, newPassword string) (string, error)
 	UserIDByEmail(email string) (string, error)
 	SavedAccounts(tokens []string) ([]SavedAccountSession, error)
@@ -155,6 +156,23 @@ func (s AuthServiceImpl) NicknameAvailable(nickname string) (bool, error) {
 	return s.db.NicknameAvailable(nickname)
 }
 
+// EmailAvailable answers the register form the same way NicknameAvailable does, so
+// a taken address is caught while it is being typed rather than on submit. An
+// address that is not an address is a bad request, not "available".
+func (s AuthServiceImpl) EmailAvailable(email string) (bool, error) {
+	address, err := user.ValidateEmail(email)
+	if err != nil {
+		return false, realtimeforum.ErrBadRequest
+	}
+	if err := s.db.DoesEmailExists(address); err != nil {
+		if err == realtimeforum.ErrEmailExists {
+			return false, nil
+		}
+		return false, err
+	}
+	return true, nil
+}
+
 func (s AuthServiceImpl) Login(identifier, password string) (string, string, error) {
 	userID, hashedPassword, err := s.db.GetUserCredentials(identifier)
 	if err != nil {
@@ -165,7 +183,9 @@ func (s AuthServiceImpl) Login(identifier, password string) (string, string, err
 	err = bcrypt.CompareHashAndPassword([]byte(hashedPassword), []byte(password))
 	if err != nil {
 		slog.Info("invalid password attempt", "user_id", userID)
-		return "", "", realtimeforum.ErrInvalidCredentials
+		// The account was found and the password was not: say so, so the form can
+		// point at the field that is wrong instead of both of them.
+		return "", "", realtimeforum.ErrInvalidPassword
 	}
 
 	token := uuid.NewString()
