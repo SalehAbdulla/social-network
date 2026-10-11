@@ -32,7 +32,7 @@ export default function CommentList({ items, loading, error, settled, hasMore, l
       key={comment.commentId}
       comment={comment}
       canManage={isOwner || comment.userId === meId}
-      avatarUrl={avatarOf?.(comment.userId)}
+      avatarUrl={avatarOf?.(comment.userId) || comment.avatar}
       busy={busyId === comment.commentId}
       onLike={() => onLike(comment)}
       onDelete={() => onDelete(comment)}
