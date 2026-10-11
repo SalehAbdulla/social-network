@@ -61,8 +61,11 @@ func TestSeedDummyUser(t *testing.T) {
 			}
 		})
 	}
-	if _, _, err := auth.Login(dummyEmail, "wrong-password"); !errors.Is(err, backend.ErrInvalidCredentials) {
-		t.Fatalf("expected invalid credentials for wrong password, got %v", err)
+	if _, _, err := auth.Login(dummyEmail, "wrong-password"); !errors.Is(err, backend.ErrInvalidPassword) {
+		t.Fatalf("expected an invalid-password error for the wrong password, got %v", err)
+	}
+	if _, _, err := auth.Login("nobody@example.com", dummyPassword); !errors.Is(err, backend.ErrInvalidCredentials) {
+		t.Fatalf("expected an unknown-account error for an address with no account, got %v", err)
 	}
 	profile, err := auth.GetMe(userID)
 	if err != nil || profile.Email != dummyEmail || profile.Nickname != dummyNickname || profile.FirstName != "Dummy" || profile.LastName != "User" {
