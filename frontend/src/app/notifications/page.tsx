@@ -63,7 +63,10 @@ export default function Notifications() {
     normalize: raw => ({ items: raw }),
     keyOf: person => person.userId,
   });
-  useLiveRefresh(pending.refresh);
+  // A request can leave the list without this page acting on it — the other
+  // member cancels — so the live refresh re-reads the page rather than merging:
+  // a merge can only add rows, never drop the one that is gone.
+  useLiveRefresh(pending.reload);
   const [unread, setUnread] = useState(false);
   const [busy, setBusy] = useState(false);
   const notifications = usePagedList<Notification, { notifications: Notification[]; totalElements: number }>({
