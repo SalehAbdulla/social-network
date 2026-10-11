@@ -117,17 +117,23 @@ func (re *HandlerContext) writeProfile(w http.ResponseWriter, r *http.Request, i
 		re.HandleError(w, r, err)
 		return
 	}
-	if id != currentUser(r) {
+	if id == currentUser(r) {
+		u, err = re.ownDetails(u)
+		if err != nil {
+			re.HandleError(w, r, err)
+			return
+		}
+	} else {
 		visible, err := re.SocialService.CanViewProfile(currentUser(r), id)
 		if err != nil {
 			re.HandleError(w, r, err)
 			return
 		}
 		if !visible {
-			u.FirstName, u.LastName, u.Bio, u.Avatar, u.CoverPhoto, u.Location = "", "", "", "", "", ""
-			u.Website, u.ContactEmail, u.Phone = "", "", ""
-			u.Followers, u.Following = []string{}, []string{}
-			u.PostCount = 0
+			u.MaskPrivateDetails()
+			// The profile page itself shows nothing but the handle: there is nothing
+			// left to identify, which is what a private account asks for.
+			u.FirstName, u.LastName = "", ""
 		} else {
 			if !u.ShowWebsite {
 				u.Website = ""
@@ -143,16 +149,41 @@ func (re *HandlerContext) writeProfile(w http.ResponseWriter, r *http.Request, i
 	respond(w, http.StatusOK, u)
 }
 
+// ownDetails merges the account fields that only its owner may see into a profile
+// they are reading about themselves. Every other read path builds the same struct
+// without them, so the email, date of birth and gender cannot leak through
+// discover, a follow list or a post's author.
+func (re *HandlerContext) ownDetails(u models.SocialUser) (models.SocialUser, error) {
+	email, birthDate, gender, err := re.SocialService.Repo.UserDetails(u.UserID)
+	if err != nil {
+		return u, err
+	}
+	u.Email, u.BirthDate, u.Gender = email, birthDate, gender
+	return u, nil
+}
+
 func (re *HandlerContext) UpdateProfile(w http.ResponseWriter, r *http.Request) {
 	var u models.SocialUser
 	if !re.decode(w, r, &u) {
 		return
 	}
 	u.UserID = currentUser(r)
-	u, err := re.SocialService.UpdateProfile(u)
+	u, accepted, err := re.SocialService.UpdateProfile(u)
 	if err != nil {
 		re.HandleError(w, r, err)
 		return
+	}
+	// The answer carries the same fields as a read of the owner's own profile, so
+	// the form can show what it just saved.
+	if u, err = re.ownDetails(u); err != nil {
+		re.HandleError(w, r, err)
+		return
+	}
+	// A profile that just became public accepted the requests waiting on it, so
+	// those members are followers now: tell each of them, and their profile and
+	// follow button settle without a reload.
+	for _, requester := range accepted {
+		re.chatEvent(requester, u.UserID, pkgwebsocket.MsgTypeSocialChanged, map[string]string{"actorId": u.UserID, "targetId": requester})
 	}
 	respond(w, http.StatusOK, u)
 }
@@ -339,9 +370,9 @@ func (re *HandlerContext) FollowLists(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 			if !browsable {
-				profile.FirstName, profile.LastName, profile.Bio = "", "", ""
-				profile.CoverPhoto, profile.Location = "", ""
-				profile.Followers, profile.Following = []string{}, []string{}
+				// A follower row is a list entry: it keeps the handle and the name and
+				// drops everything else a private profile holds back, photo included.
+				profile.MaskPrivateDetails()
 			}
 			result[name] = append(result[name], profile)
 		}
