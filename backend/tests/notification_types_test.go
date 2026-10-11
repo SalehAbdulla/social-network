@@ -18,6 +18,9 @@ func TestNotificationTypeFilters(t *testing.T) {
 		"title": "Filter post", "content": "A comment here notifies the author.", "privacy": "public",
 	}, 201))
 	alex.call("POST", "/api/v1/posts/comments", map[string]any{"postId": post.PostId, "content": "A browser-free comment"}, 201)
+	// The follower is the one whose notifications are counted below, so dummy
+	// follows alex: that keeps the count to the comment and the message.
+	openChat(t, dummy, "alex-id")
 	alex.call("POST", "/api/v1/messages", map[string]any{"recipientId": "dummy-id", "text": "A private message"}, 201)
 
 	count := func(query string) int {
