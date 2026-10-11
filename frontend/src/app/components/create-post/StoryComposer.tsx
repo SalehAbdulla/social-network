@@ -54,8 +54,9 @@ export default function StoryComposer({ text, onText, color, onColor, media, onP
       <VisibilityRow id="story-audience" value={privacy} onChange={onPrivacy} followers={followers} selected={selectedFollowers} onToggle={onToggleFollower} loading={followersLoading} name="story-privacy" />
       {media
         ? <button id="story-media" type="button" className={ROW} onClick={onClearMedia}><Type size={20} aria-hidden="true" />Use text instead</button>
-        : <button id="story-media" type="button" className={ROW} onClick={onPickMedia}><ImagePlus size={20} aria-hidden="true" />Add photo or video</button>}
+        : <button id="story-media" type="button" className={ROW} onClick={onPickMedia}><ImagePlus size={20} aria-hidden="true" />photo</button>}
       {!media && <label id="story-background" className={ROW}>
+        <div className='mt-2'/>
         <Palette size={20} aria-hidden="true" />
         <span className="cp-row-label">Background</span>
         <input type="color" value={color} onChange={event => onColor(event.target.value)} aria-label="Background colour" className="h-6 w-8 cursor-pointer rounded-[4px] border-0 bg-transparent p-0" />
