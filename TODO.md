@@ -3358,6 +3358,15 @@ Verified: `go build ./...`, `go vet ./...`, `go test ./...` (including the new
 `npm run lint` (0 errors), `npm run build`, `node scripts/dead-modules.mjs` (0 of 151);
 `npm run test:integration` — **53 PASS, exit 0**.
 
+**Follow-up: the edit dialog's email field.** Reported blank. The API is right — `GET /users/me`,
+`GET /users/{id}` and `GET /auth/me` all carry the address for the owner (checked against a live
+server), and `TestProfileDetailsAreOwnerOnly` now also pins `/auth/me`. A blank field therefore
+means the API answering the browser predates the owner-details merge. The dialog no longer depends
+on one endpoint: it uses the profile read, then the session, then fetches `/auth/me`, and the
+profile header takes the session's address the same way. `npm run test:integration` — **54 PASS,
+exit 0**, with a new check that the field in a real browser holds the member's own address and
+stays read-only.
+
 ## Definition of done
 
 A task is complete when: the code builds (`go build ./...`, `npm run build`), tests pass
