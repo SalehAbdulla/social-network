@@ -187,6 +187,15 @@ func decoded[T any](t *testing.T, raw json.RawMessage) T {
 	return value
 }
 
+// openChat opens the direct-message channel between two members. The chat rule
+// ties a conversation to a follow in one direction or the other, so a test that
+// wants to send a message has to say who follows whom first — a public profile on
+// its own is not enough.
+func openChat(t *testing.T, follower integrationClient, followedID string) {
+	t.Helper()
+	follower.call("PUT", "/api/v1/users/"+followedID+"/follow", nil, 200)
+}
+
 func integrationServer(t *testing.T, dev, production bool) (*httptest.Server, *repositories.DB) {
 	t.Helper()
 	database, err := sql.Open("sqlite3", filepath.Join(t.TempDir(), "test.db")+"?_foreign_keys=on&_busy_timeout=5000")
