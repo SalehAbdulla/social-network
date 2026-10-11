@@ -18,6 +18,8 @@ type Post struct {
 	Nickname        string   `json:"nickname"`
 	FirstName       string   `json:"firstName"`
 	LastName        string   `json:"lastName"`
+	Avatar          string   `json:"-"`
+	AuthorIsPublic  bool     `json:"-"`
 	Title           string   `json:"title"`
 	Content         string   `json:"content"`
 	Score           int      `json:"score"`
