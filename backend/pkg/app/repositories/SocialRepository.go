@@ -59,15 +59,31 @@ func (db *DB) SocialProfile(id string, viewers ...string) (models.SocialUser, er
 		return u, err
 	}
 	if len(viewers) > 0 && viewers[0] != id {
+		// A pending request only reads as pending while the target is private: a
+		// profile that has since been made public accepts its waiting requesters
+		// (see AcceptPendingFollowRequests), and until that row is cleared the
+		// viewer must never be told "Requested" about a profile they can already
+		// read. The same follow check answers CanMessage, so the button and the
+		// endpoint agree.
 		err = db.Conn.QueryRow(`SELECT
 			EXISTS(SELECT 1 FROM connection WHERE requesterId=? AND recipientId=? AND status='pending'),
-			EXISTS(SELECT 1 FROM connection WHERE requesterId=? AND recipientId=? AND status='pending'),
-			EXISTS(SELECT 1 FROM user u WHERE u.userId=? AND (u.isPublic=1 OR EXISTS(
-				SELECT 1 FROM follow f WHERE (f.followerId=? AND f.followedId=?) OR (f.followerId=? AND f.followedId=?))))`,
+			EXISTS(SELECT 1 FROM connection c JOIN user t ON t.userId=c.recipientId
+				WHERE c.requesterId=? AND c.recipientId=? AND c.status='pending' AND t.isPublic=0),
+			EXISTS(SELECT 1 FROM follow f WHERE (f.followerId=? AND f.followedId=?) OR (f.followerId=? AND f.followedId=?))`,
 			id, viewers[0], viewers[0], id,
-			id, viewers[0], id, id, viewers[0]).Scan(&u.PendingIncoming, &u.PendingOutgoing, &u.CanMessage)
+			id, viewers[0], viewers[0], id).Scan(&u.PendingIncoming, &u.PendingOutgoing, &u.CanMessage)
 	}
 	return u, err
+}
+
+// UserDetails reads the account fields that only its owner may see.
+func (db *DB) UserDetails(id string) (email, birthDate, gender string, err error) {
+	err = db.Conn.QueryRow("SELECT email, COALESCE(birthDate,''), COALESCE(gender,'') FROM user WHERE userId = ?", id).
+		Scan(&email, &birthDate, &gender)
+	if errors.Is(err, sql.ErrNoRows) {
+		return "", "", "", backend.ErrNotFound
+	}
+	return email, birthDate, gender, err
 }
 
 func (db *DB) UserIDByNickname(nickname string) (string, error) {
@@ -82,12 +98,16 @@ func (db *DB) UserIDByNickname(nickname string) (string, error) {
 	return id, nil
 }
 
+// CanMessage answers whether two members may exchange direct messages. A
+// conversation needs a follow in one direction or the other — someone you follow
+// or someone who follows you. A public profile is no longer enough on its own:
+// reading someone's posts is not an invitation to write to them.
 func (db *DB) CanMessage(actor, target string) (bool, error) {
 	if target == "" || actor == target {
 		return false, nil
 	}
 	var allowed bool
-	err := db.Conn.QueryRow(`SELECT isPublic = 1 OR EXISTS(
+	err := db.Conn.QueryRow(`SELECT EXISTS(
 			SELECT 1 FROM follow f WHERE (f.followerId=? AND f.followedId=?) OR (f.followerId=? AND f.followedId=?))
 		FROM user WHERE userId = ?`, actor, target, target, actor, target).Scan(&allowed)
 	if errors.Is(err, sql.ErrNoRows) {
@@ -123,6 +143,16 @@ func (db *DB) DiscoverUsers(currentID, search string, limit, offset int) ([]mode
 		if err != nil {
 			return nil, err
 		}
+		// A list is still a read: a private profile the viewer may not see gives up
+		// its photo, its bio and its contact fields here exactly as it does on its
+		// own page.
+		visible, err := db.CanViewPrivateProfile(currentID, id)
+		if err != nil {
+			return nil, err
+		}
+		if !visible {
+			u.MaskPrivateDetails()
+		}
 		users = append(users, u)
 	}
 	return users, nil
@@ -153,6 +183,11 @@ func (db *DB) Suggestions(viewer string, limit int) ([]models.UserSuggestion, er
 		var s models.UserSuggestion
 		if err := rows.Scan(&s.UserID, &s.Nickname, &s.FirstName, &s.LastName, &s.Avatar, &s.IsPublic, &s.MutualCount); err != nil {
 			return nil, err
+		}
+		// A suggestion is a list of people, and a private account's photo is not part
+		// of what it offers: the row keeps the handle, the name and the reason.
+		if !s.IsPublic {
+			s.Avatar = ""
 		}
 		s.Mutuals = []string{}
 		suggestions = append(suggestions, s)
@@ -213,8 +248,54 @@ func (db *DB) UpdateSocialProfile(u models.SocialUser) error {
 	if !errors.Is(err, sql.ErrNoRows) {
 		return err
 	}
-	_, err = db.Conn.Exec(`UPDATE user SET nickName=?, firstName=?, lastName=?, aboutMe=?, avatar=?, coverPhoto=?, location=?, website=?, contactEmail=?, phone=?, showWebsite=?, showContactEmail=?, showPhone=?, isPublic=?, updatedAt=datetime('now') WHERE userId=?`, u.Nickname, u.FirstName, u.LastName, u.Bio, u.Avatar, u.CoverPhoto, u.Location, u.Website, u.ContactEmail, u.Phone, u.ShowWebsite, u.ShowContactEmail, u.ShowPhone, u.IsPublic, u.UserID)
+	_, err = db.Conn.Exec(`UPDATE user SET nickName=?, firstName=?, lastName=?, aboutMe=?, avatar=?, coverPhoto=?, location=?, website=?, contactEmail=?, phone=?, showWebsite=?, showContactEmail=?, showPhone=?, isPublic=?, gender=COALESCE(NULLIF(?,''), gender), updatedAt=datetime('now') WHERE userId=?`, u.Nickname, u.FirstName, u.LastName, u.Bio, u.Avatar, u.CoverPhoto, u.Location, u.Website, u.ContactEmail, u.Phone, u.ShowWebsite, u.ShowContactEmail, u.ShowPhone, u.IsPublic, u.Gender, u.UserID)
 	return err
+}
+
+// AcceptPendingFollowRequests promotes every request waiting on this profile into
+// a real follow, and returns who was accepted. A private profile collects
+// requests; the moment it becomes public there is nothing left to approve — the
+// readers asking to follow can already see it — so leaving the rows pending would
+// show those members a "Requested" button on a profile they are free to read.
+func (db *DB) AcceptPendingFollowRequests(recipient string) ([]string, error) {
+	tx, err := db.Conn.Begin()
+	if err != nil {
+		return nil, err
+	}
+	defer tx.Rollback()
+	rows, err := tx.Query("SELECT requesterId FROM connection WHERE recipientId=? AND status='pending'", recipient)
+	if err != nil {
+		return nil, err
+	}
+	requesters := []string{}
+	for rows.Next() {
+		var requester string
+		if err := rows.Scan(&requester); err != nil {
+			rows.Close()
+			return nil, err
+		}
+		requesters = append(requesters, requester)
+	}
+	if err := rows.Err(); err != nil {
+		rows.Close()
+		return nil, err
+	}
+	rows.Close()
+	for _, requester := range requesters {
+		if _, err := tx.Exec("INSERT INTO follow(followerId,followedId) VALUES (?,?) ON CONFLICT DO NOTHING", requester, recipient); err != nil {
+			return nil, err
+		}
+		if _, err := tx.Exec("DELETE FROM notification WHERE userId=? AND actorId=? AND entityType='follow_request'", recipient, requester); err != nil {
+			return nil, err
+		}
+	}
+	if _, err := tx.Exec("DELETE FROM connection WHERE recipientId=? AND status='pending'", recipient); err != nil {
+		return nil, err
+	}
+	if err := tx.Commit(); err != nil {
+		return nil, err
+	}
+	return requesters, nil
 }
 
 func (db *DB) FollowUser(actor, target string) (string, error) {
@@ -411,7 +492,10 @@ func (db *DB) CanViewMedia(id, viewerID string) (bool, error) {
 			) OR EXISTS (
 				SELECT 1 FROM socialGroup g WHERE g.imageUrl='/api/v1/media/' || m.mediaId
 			) OR EXISTS (
-				SELECT 1 FROM user u WHERE u.avatar='/api/v1/media/' || m.mediaId
+				-- An avatar is part of a profile: it is readable when the profile it
+				-- belongs to is (public, or the viewer follows it, or it is their own).
+				SELECT 1 FROM user u WHERE u.avatar='/api/v1/media/' || m.mediaId AND
+				(u.isPublic=1 OR u.userId=? OR EXISTS(SELECT 1 FROM follow f WHERE f.followedId=u.userId AND f.followerId=?))
 			) OR EXISTS (
 				SELECT 1 FROM user u WHERE u.coverPhoto='/api/v1/media/' || m.mediaId AND
 				(u.isPublic=1 OR EXISTS(SELECT 1 FROM follow f WHERE f.followedId=u.userId AND f.followerId=?))
@@ -423,7 +507,7 @@ func (db *DB) CanViewMedia(id, viewerID string) (bool, error) {
 				WHERE image.value = '/api/v1/media/' || m.mediaId AND `+postVisibility+`
 			)
 		)
-	)`, id, viewerID, viewerID, viewerID, viewerID, viewerID, viewerID, viewerID, viewerID, viewerID, viewerID, viewerID, viewerID, viewerID).Scan(&allowed)
+	)`, id, viewerID, viewerID, viewerID, viewerID, viewerID, viewerID, viewerID, viewerID, viewerID, viewerID, viewerID, viewerID, viewerID, viewerID, viewerID).Scan(&allowed)
 	return allowed, err
 }
 
