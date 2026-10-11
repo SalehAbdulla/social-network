@@ -18,6 +18,7 @@ func TestConversationMediaIntegration(t *testing.T) {
 	owner, reader := newIntegrationClient(t, server), newIntegrationClient(t, server)
 	owner.login("dummy@example.com")
 	reader.login("alex@example.com")
+	openChat(t, owner, "alex-id")
 
 	mediaID := "123e4567-e89b-12d3-a456-426614174501"
 	addOwnedMedia(t, repo, "dummy-id", mediaID)
