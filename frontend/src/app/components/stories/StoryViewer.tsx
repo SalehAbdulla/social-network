@@ -60,7 +60,7 @@ export default function StoryViewer({ groups, start, onClose, onSeen, onDelete, 
     const nextLiked = !liked;
     const previous = { id, liked, count: likeCount };
     setLike({ id, liked: nextLiked, count: Math.max(0, likeCount + (nextLiked ? 1 : -1)) });
-    reactToStory(id, nextLiked).catch(() => setLike(previous));
+    reactToStory(id).catch(() => setLike(previous));
   }
 
   async function sendReply() {
