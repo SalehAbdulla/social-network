@@ -28,8 +28,10 @@ function RowSkeleton() {
 }
 
 export default function SuggestedUsers() {
-  const { refreshUser } = useBackend();
-  const { data, error, loading } = useResource<UserSuggestion[]>(`/users/suggestions?limit=${LIMIT}`);
+  const { user, refreshUser } = useBackend();
+  // A couple of rows more than the rail shows, because the viewer's own follow
+  // list is applied below and a filtered row should not leave a gap.
+  const { data, error, loading } = useResource<UserSuggestion[]>(`/users/suggestions?limit=${LIMIT + 3}`);
   const [acted, setActed] = useState<Record<string, 'following' | 'requested'>>({});
   const [busy, setBusy] = useState('');
 
@@ -58,7 +60,13 @@ export default function SuggestedUsers() {
     {Array.from({ length: LIMIT }, (_, index) => <RowSkeleton key={index} />)}
   </section>;
 
-  const people = (data ?? []).slice(0, LIMIT);
+  // Anyone the viewer follows is out — the server already excludes them, but the
+  // session's own follow list is the freshest answer and it is what keeps a row
+  // from lingering after a follow made somewhere else. A row the viewer just acted
+  // on stays, so its button can settle on "Following" or "Requested".
+  const people = (data ?? [])
+    .filter(person => acted[person.userId] || !user.following.includes(person.userId))
+    .slice(0, LIMIT);
   if (people.length === 0) return null;
 
   return <section aria-label="Suggested for you" className="mt-[var(--rc-header-top)]">
