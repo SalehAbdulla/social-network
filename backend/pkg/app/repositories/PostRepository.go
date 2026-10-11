@@ -33,7 +33,7 @@ type PostRepository interface {
 const postVisibility = `(p.userId = ? OR (p.privacy = 'public' AND (EXISTS (SELECT 1 FROM user u WHERE u.userId = p.userId AND u.isPublic = 1) OR EXISTS (SELECT 1 FROM follow f WHERE f.followerId = ? AND f.followedId = p.userId))) OR (p.privacy = 'followers' AND EXISTS (SELECT 1 FROM follow f WHERE f.followerId = ? AND f.followedId = p.userId)) OR (p.privacy = 'selected' AND EXISTS (SELECT 1 FROM post_selected_follower psf WHERE psf.postId = p.postId AND psf.userId = ?)))`
 
 const postFeedSelect = `
-		SELECT p.postId, p.publicId, p.userId, p.privacy, u.nickName, u.firstName, u.lastName, p.title, p.content,
+		SELECT p.postId, p.publicId, p.userId, p.privacy, u.nickName, u.firstName, u.lastName, COALESCE(u.avatar, ''), u.isPublic, p.title, p.content,
 			   p.score, p.commentsCounter,
 			   p.createdAt, p.updatedAt, p.imageUrls
 		FROM post p
@@ -100,6 +100,8 @@ func (db *DB) scanPostPage(rows *sql.Rows, viewerID string) ([]models.Post, erro
 			&post.Nickname,
 			&post.FirstName,
 			&post.LastName,
+			&post.Avatar,
+			&post.AuthorIsPublic,
 			&post.Title,
 			&post.Content,
 			&post.Score,
@@ -223,7 +225,7 @@ func (db *DB) DoesPostExists(postId int) error {
 func (db *DB) GetPostByID(postId int, viewerID string) (models.Post, error) {
 	var post models.Post
 	err := db.Conn.QueryRow(
-		`SELECT p.postId, p.publicId, p.userId, p.privacy, u.nickName, u.firstName, u.lastName, p.title, p.content,
+		`SELECT p.postId, p.publicId, p.userId, p.privacy, u.nickName, u.firstName, u.lastName, COALESCE(u.avatar, ''), u.isPublic, p.title, p.content,
 				p.score, p.commentsCounter,
 				p.createdAt, p.updatedAt, p.imageUrls
 		FROM post p
@@ -237,6 +239,8 @@ func (db *DB) GetPostByID(postId int, viewerID string) (models.Post, error) {
 		&post.Nickname,
 		&post.FirstName,
 		&post.LastName,
+		&post.Avatar,
+		&post.AuthorIsPublic,
 		&post.Title,
 		&post.Content,
 		&post.Score,
@@ -353,7 +357,7 @@ func (db *DB) CreatePost(post models.Post) (models.Post, error) {
 	}
 
 	err = db.Conn.QueryRow(
-		`SELECT p.postId, p.publicId, p.userId, p.privacy, u.nickName, u.firstName, u.lastName, p.title, p.content,
+		`SELECT p.postId, p.publicId, p.userId, p.privacy, u.nickName, u.firstName, u.lastName, COALESCE(u.avatar, ''), u.isPublic, p.title, p.content,
 				p.score, p.commentsCounter,
 				p.createdAt, p.updatedAt, p.imageUrls
 		FROM post p
@@ -367,6 +371,8 @@ func (db *DB) CreatePost(post models.Post) (models.Post, error) {
 		&post.Nickname,
 		&post.FirstName,
 		&post.LastName,
+		&post.Avatar,
+		&post.AuthorIsPublic,
 		&post.Title,
 		&post.Content,
 		&post.Score,
