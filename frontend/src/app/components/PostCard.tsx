@@ -234,8 +234,10 @@ export default function PostCard({ post, context = 'feed', comments, commentCoun
     try { await navigator.clipboard.writeText(link); toast.success('Post link copied'); }
     catch { toast.error('Could not copy the link'); }
   }
-  const avatarUrl = avatarOf?.(post.userId) || (post.userId === user.userId ? user.avatar : '');
-  const authorLink = <Link href={`/profile/${post.userId}`} className="flex items-center gap-2.5"><Avatar name={displayName(post)} avatarUrl={avatarUrl} size={POST_AVATAR_SIZE} /><div className="leading-4"><p className="text-[length:var(--post-name-size)] font-semibold" dir="auto">{displayName(post)}</p><p className="text-[length:var(--post-meta-size)] text-muted">@{post.nickname}<span aria-hidden="true"> · </span><time dateTime={isoTimestamp(post.createdAt)} title={dateLabel(post.createdAt)}>{relativeLabel(post.createdAt, now)}</time><span aria-hidden="true"> · </span><AudienceIcon privacy={post.privacy} context={context} /></p></div></Link>;
+  // The author's own avatar rides with the post; `avatarOf` and the session are
+  // fallbacks for a surface that holds a fresher picture than the server's copy.
+  const avatarUrl = avatarOf?.(post.userId) || post.avatar || (post.userId === user.userId ? user.avatar : '');
+  const authorLink = <Link href={`/profile/${post.userId}`} className="flex items-center gap-2.5"><Avatar name={displayName(post)} avatarUrl={avatarUrl} size={POST_AVATAR_SIZE} /><div className="leading-4"><p className="text-[length:var(--post-name-size)] font-semibold" dir="auto">{displayName(post)}</p><p className="text-[length:var(--post-meta-size)] text-muted">@{post.nickname}<span aria-hidden="true"> · </span><time dateTime={isoTimestamp(post.createdAt)} title={dateLabel(post.createdAt)}>{relativeLabel(post.createdAt, now)}</time><span aria-hidden="true"> · </span><AudienceIcon privacy={post.privacy} context={context} authorIsPublic={post.authorIsPublic} /></p></div></Link>;
   const ownerControls = (group ? !!canManage : post.userId === user.userId) && <>
     <button ref={optionsTriggerRef} type="button" aria-label="Post options" aria-haspopup="menu" aria-expanded={!!optionsRect} onClick={event => { const rect = event.currentTarget.getBoundingClientRect(); setOptionsRect(open => open ? null : rect); }} className={`flex size-8 items-center justify-center rounded-full text-muted transition hover:bg-surface-2 ${optionsRect ? 'bg-surface-2' : ''} -mr-[var(--post-menu-overhang)]`}>
       <MoreHorizontal className="size-[var(--post-header-icon)]" aria-hidden="true" />
