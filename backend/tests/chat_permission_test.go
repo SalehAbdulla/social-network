@@ -105,6 +105,7 @@ func TestPrivateMessageSocketDelivery(t *testing.T) {
 	senderClient, recipientClient := newIntegrationClient(t, server), newIntegrationClient(t, server)
 	senderClient.login("dummy@example.com")
 	recipientClient.login("alex@example.com")
+	openChat(t, senderClient, "alex-id")
 	serverURL, _ := url.Parse(server.URL)
 
 	sender := dialSocket(t, senderClient, serverURL)
@@ -228,6 +229,11 @@ func TestPrivateMessageSocketDelivery(t *testing.T) {
 	profile.IsPublic = false
 	senderClient.call("PUT", "/api/v1/users/me", profile, 200)
 
+	// Drop the one follow the chat rule was opened with. Neither member follows
+	// the other now, so the socket has to refuse the frame — a readable profile is
+	// not a writable one.
+	senderClient.call("DELETE", "/api/v1/users/alex-id/follow", nil, 200)
+
 	blockedSender := dialSocket(t, recipientClient, serverURL)
 	defer blockedSender.Close()
 	blockedRecipient := dialSocket(t, senderClient, serverURL)
@@ -263,16 +269,40 @@ func dialSocket(t *testing.T, client integrationClient, serverURL *url.URL) *web
 	return socket
 }
 
+// The rule is about the relationship, not about who is public: a private account
+// may not write to a public one that has not followed it, and a request that is
+// still waiting is not a follow.
+func TestPrivateAccountCannotMessageAStranger(t *testing.T) {
+	server, _ := integrationServer(t, true, false)
+	private, public := newIntegrationClient(t, server), newIntegrationClient(t, server)
+	private.login("dummy@example.com")
+	public.login("alex@example.com")
+
+	profile := decoded[models.SocialUser](t, private.call("GET", "/api/v1/users/me", nil, 200))
+	profile.IsPublic = false
+	private.call("PUT", "/api/v1/users/me", profile, 200)
+
+	privateMessage(t, private, "alex-id", "hello stranger", 403)
+	private.call("GET", "/api/v1/messages?partnerId=alex-id", nil, 403)
+	if seen := decoded[models.SocialUser](t, private.call("GET", "/api/v1/users/alex-id", nil, 200)); seen.CanMessage {
+		t.Fatal("a private account was told it can write to a public profile it does not know")
+	}
+
+	// A request waiting on the private profile is not a follow yet.
+	public.call("PUT", "/api/v1/users/dummy-id/follow", nil, 200)
+	privateMessage(t, private, "alex-id", "still a stranger", 403)
+	private.call("PUT", "/api/v1/follow-requests/alex-id", nil, 200)
+	privateMessage(t, private, "alex-id", "now we are connected", 201)
+}
+
 func TestChatPermissionRule(t *testing.T) {
 	server, repo := integrationServer(t, true, false)
 	dummy, alex := newIntegrationClient(t, server), newIntegrationClient(t, server)
 	dummy.login("dummy@example.com")
 	alex.login("alex@example.com")
 
-	profile := decoded[models.SocialUser](t, dummy.call("GET", "/api/v1/users/me", nil, 200))
-	profile.IsPublic = false
-	dummy.call("PUT", "/api/v1/users/me", profile, 200)
-
+	// Both fixtures are public, and neither follows the other. Reading a public
+	// profile is not an invitation to write to it, so the chat stays shut.
 	privateMessage(t, alex, "dummy-id", "hello stranger", 403)
 	alex.call("GET", "/api/v1/messages?partnerId=dummy-id", nil, 403)
 	alex.call("POST", "/api/v1/messages/read", map[string]any{"partnerId": "dummy-id"}, 403)
@@ -280,20 +310,18 @@ func TestChatPermissionRule(t *testing.T) {
 		t.Fatalf("a stranger sees the blocked thread in the inbox: %+v", inbox)
 	}
 	if seen := decoded[models.SocialUser](t, alex.call("GET", "/api/v1/users/dummy-id", nil, 200)); seen.CanMessage {
-		t.Fatal("a private profile claimed the viewer can message it")
+		t.Fatal("a profile with no follow in either direction claimed the viewer can message it")
 	}
 	if listed := decoded[[]models.SocialUser](t, alex.call("GET", "/api/v1/users?q=dummy", nil, 200)); len(listed) != 1 || listed[0].CanMessage {
 		t.Fatalf("discover offered a blocked chat: %+v", listed)
 	}
 
-	privateMessage(t, dummy, "alex-id", "hello public profile", 201)
-	if seen := decoded[models.SocialUser](t, dummy.call("GET", "/api/v1/users/alex-id", nil, 200)); !seen.CanMessage {
-		t.Fatal("a public profile must be messageable")
-	}
-	alex.call("GET", "/api/v1/messages?partnerId=dummy-id", nil, 403)
-
+	// One follow in either direction opens it — the followed member may answer.
 	dummy.call("PUT", "/api/v1/users/alex-id/follow", nil, 200)
 	privateMessage(t, alex, "dummy-id", "one-way reply", 201)
+	if seen := decoded[models.SocialUser](t, alex.call("GET", "/api/v1/users/dummy-id", nil, 200)); !seen.CanMessage {
+		t.Fatal("a followed member's chat stayed shut")
+	}
 	if listed := decoded[[]models.SocialUser](t, alex.call("GET", "/api/v1/users?q=dummy", nil, 200)); len(listed) != 1 || !listed[0].CanMessage {
 		t.Fatalf("discover still hid an unlocked chat: %+v", listed)
 	}
@@ -304,7 +332,6 @@ func TestChatPermissionRule(t *testing.T) {
 	}
 
 	alex.call("PUT", "/api/v1/users/dummy-id/follow", nil, 200)
-	dummy.call("PUT", "/api/v1/follow-requests/alex-id", nil, 200)
 	privateMessage(t, alex, "dummy-id", "mutual reply", 201)
 	alex.call("DELETE", "/api/v1/users/dummy-id/follow", nil, 200)
 	dummy.call("DELETE", "/api/v1/users/alex-id/follow", nil, 200)
@@ -316,7 +343,7 @@ func TestChatPermissionRule(t *testing.T) {
 		WHERE (senderId='dummy-id' AND recipientId='alex-id') OR (senderId='alex-id' AND recipientId='dummy-id')`).Scan(&rows); err != nil {
 		t.Fatal(err)
 	}
-	if rows != 3 {
-		t.Fatalf("expected the three delivered messages to survive hiding, found %d", rows)
+	if rows != 2 {
+		t.Fatalf("expected the two delivered messages to survive hiding, found %d", rows)
 	}
 }
