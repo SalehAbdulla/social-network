@@ -42,6 +42,9 @@ export default function MessagesInboxPage() {
   const [composing, setComposing] = useState(false);
   const [creating, setCreating] = useState(false);
   const [browsingGroups, setBrowsingGroups] = useState(false);
+  // The chevron in the list header folds the conversation column away on a wide
+  // screen, which gives the open chat the full width.
+  const [collapsed, setCollapsed] = useState(false);
   const [busy, setBusy] = useState(false);
   const [files, setFiles] = useState<File[]>([]);
   const [previews, setPreviews] = useState<Record<string, Preview>>({});
@@ -152,7 +155,7 @@ export default function MessagesInboxPage() {
   const selected = users.data?.find(person => person.userId === partner);
 
   return <>
-    <div className="dm-shell" data-active={active ? 'true' : 'false'}>
+    <div className="dm-shell" data-active={active ? 'true' : 'false'} data-collapsed={collapsed ? 'true' : 'false'}>
       <ConversationList
         tab={groupTab ? 'groups' : 'primary'}
         currentUserName={displayName(user) || user.nickname}
@@ -164,6 +167,8 @@ export default function MessagesInboxPage() {
         loading={groupTab ? groups.loading : users.loading}
         error={groupTab ? groups.error : users.error}
         onRetry={groupTab ? groups.reload : users.reload}
+        collapsed={collapsed}
+        onToggleCollapsed={() => setCollapsed(value => !value)}
         empty={groupTab
           ? (search ? 'No groups found.' : 'Your joined groups will appear here. Find a group to join or create your own.')
           : (search ? 'No messages found' : 'Your conversations will appear here after your first message.')}
