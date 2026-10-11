@@ -80,7 +80,7 @@ export default function DetailsStep({ context, groupName, groupAvatar, images, i
         {context === 'group'
           ? <div className="cp-row"><Users size={20} aria-hidden="true" /><span className="cp-row-label">Sharing to</span><span className="cp-row-value" dir="auto">{groupName}</span></div>
           : <VisibilityRow value={privacy} onChange={onPrivacy} followers={followers} selected={selectedFollowers} onToggle={onToggleFollower} loading={followersLoading} />}
-        {textMode && <button id='btn' type="button" className={ROW} onClick={onAddPhotos}><ImagePlus size={20} aria-hidden="true" />photo</button>}
+        {textMode && <button type="button" className={ROW} onClick={onAddPhotos}><ImagePlus size={20} aria-hidden="true" />Add photos</button>}
       </div>
     </div>
   </>;
