@@ -65,7 +65,7 @@ func (db *DB) SavedPosts(userID string, pageNumber int, pageSize int) ([]models.
 
 	offset := (pageNumber - 1) * pageSize
 	rows, err := db.Conn.Query(`
-		SELECT p.postId, p.publicId, p.userId, p.privacy, u.nickName, u.firstName, u.lastName, p.title, p.content,
+		SELECT p.postId, p.publicId, p.userId, p.privacy, u.nickName, u.firstName, u.lastName, COALESCE(u.avatar, ''), u.isPublic, p.title, p.content,
 			   p.score, p.commentsCounter,
 			   p.createdAt, p.updatedAt, p.imageUrls
 		FROM post p
