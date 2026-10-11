@@ -204,6 +204,7 @@ export default function Profile() {
         isFollowingBusy={isFollowingBusy}
         hasStories={hasStories}
         storyUnseen={authorHasUnseen(profileStories)}
+        sessionEmail={user.email}
         onAvatarClick={() => setIsEditing(true)}
         onOpenStories={openStories}
         onEdit={() => setIsEditing(true)}
