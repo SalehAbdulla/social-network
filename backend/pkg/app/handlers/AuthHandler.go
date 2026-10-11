@@ -34,6 +34,15 @@ func (re *HandlerContext) NicknameAvailability(w http.ResponseWriter, r *http.Re
 	respond(w, http.StatusOK, map[string]bool{"available": available})
 }
 
+func (re *HandlerContext) EmailAvailability(w http.ResponseWriter, r *http.Request) {
+	available, err := re.AuthService.EmailAvailable(r.URL.Query().Get("email"))
+	if err != nil {
+		re.HandleError(w, r, err)
+		return
+	}
+	respond(w, http.StatusOK, map[string]bool{"available": available})
+}
+
 func (re *HandlerContext) Register(w http.ResponseWriter, r *http.Request) {
 	var req user.RegisterRequestDTO
 
