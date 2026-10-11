@@ -10,6 +10,7 @@ import (
 	"net/http/httptest"
 	"net/url"
 	"regexp"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -70,6 +71,67 @@ func uploadAvatar(t *testing.T, server *httptest.Server, client integrationClien
 		t.Fatal("avatar upload returned no URL")
 	}
 	return envelope.Data.URL
+}
+
+// The register form asks about an address the same way it asks about a handle, and
+// the login form says which of the two fields is wrong instead of both.
+func TestEmailAvailabilityAndLoginMessages(t *testing.T) {
+	server, _ := integrationServer(t, true, false)
+	client := newIntegrationClient(t, server)
+
+	for _, probe := range []struct {
+		query string
+		want  bool
+	}{
+		{"email=dummy@example.com", false},
+		{"email=DUMMY@example.com", false},
+		{"email=%20dummy@example.com%20", false},
+		{"email=free@example.com", true},
+	} {
+		got := decoded[map[string]bool](t, client.call("GET", "/api/v1/auth/email-availability?"+probe.query, nil, 200))
+		if got["available"] != probe.want {
+			t.Fatalf("%s reported available=%v, want %v", probe.query, got["available"], probe.want)
+		}
+	}
+	client.call("GET", "/api/v1/auth/email-availability?email=not-an-address", nil, 400)
+	client.call("GET", "/api/v1/auth/email-availability", nil, 400)
+
+	// An address with no account, and the right password for a different one: the two
+	// answers have to be different, and each has to name the field at fault.
+	unknown := loginFailure(t, client, "nobody@example.com", "DummyUser123!")
+	if !strings.Contains(unknown, "no account") {
+		t.Fatalf("an unknown address must say so: %q", unknown)
+	}
+	wrong := loginFailure(t, client, "dummy@example.com", "NotThePassword123!")
+	if !strings.Contains(wrong, "password") || strings.Contains(wrong, "no account") {
+		t.Fatalf("a wrong password must be named as one: %q", wrong)
+	}
+}
+
+// loginFailure posts the login form and returns the message the form would show.
+func loginFailure(t *testing.T, client integrationClient, identifier, password string) string {
+	t.Helper()
+	form := url.Values{"identifier": {identifier}, "password": {password}}
+	request, err := http.NewRequest("POST", client.base+"/api/v1/auth/login", strings.NewReader(form.Encode()))
+	if err != nil {
+		t.Fatal(err)
+	}
+	request.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	response, err := client.client.Do(request)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer response.Body.Close()
+	if response.StatusCode != http.StatusBadRequest {
+		t.Fatalf("a refused login answered %d", response.StatusCode)
+	}
+	var envelope struct {
+		Error string `json:"error"`
+	}
+	if err := json.NewDecoder(response.Body).Decode(&envelope); err != nil {
+		t.Fatal(err)
+	}
+	return envelope.Error
 }
 
 func TestRegisterFieldParity(t *testing.T) {
@@ -143,6 +205,27 @@ func TestRegisterFieldParity(t *testing.T) {
 		return values
 	}
 	newIntegrationClient(t, server).call("POST", "/api/v1/auth/register", longAbout(), 400)
+
+	// The address has to look like an address, and the punctuation the form used to
+	// accept is refused. The full matrix lives in the payload package's own unit
+	// test; here the endpoint is checked end to end.
+	for _, email := range []string{"mohd@samboosa", "mo<hd@example.com"} {
+		values := registerValues("Bad", "Email", email)
+		newIntegrationClient(t, server).call("POST", "/api/v1/auth/register", values, 400)
+	}
+	// The same for a name: letters, spaces, apostrophes, hyphens and dots only.
+	for index, name := range []string{"mo@med", "mo_med"} {
+		values := registerValues(name, "Name", "bad-name-"+strconv.Itoa(index)+"@example.com")
+		newIntegrationClient(t, server).call("POST", "/api/v1/auth/register", values, 400)
+	}
+	// A name keeps the case it was typed in — only the handle is folded to lower
+	// case — and the punctuation a real name uses is kept as it is.
+	spaced := newIntegrationClient(t, server)
+	spaced.call("POST", "/api/v1/auth/register", registerValues("  Anne-Marie ", "O'Brien", "anne-obrien@example.com"), 201)
+	spacedProfile := decoded[models.SocialUser](t, spaced.call("GET", "/api/v1/users/me", nil, 200))
+	if spacedProfile.FirstName != "Anne-Marie" || spacedProfile.LastName != "O'Brien" {
+		t.Fatalf("a punctuated name was not stored as typed: %+v", spacedProfile)
+	}
 
 	avatarURL := uploadAvatar(t, server, owner)
 	current := decoded[models.SocialUser](t, owner.call("GET", "/api/v1/users/me", nil, 200))
