@@ -1,7 +1,6 @@
 package service
 
 import (
-	"net/mail"
 	"net/url"
 	"regexp"
 	"strings"
@@ -10,6 +9,7 @@ import (
 	backend "social-network/backend"
 	"social-network/backend/pkg/app/repositories"
 	"social-network/backend/pkg/models"
+	"social-network/backend/pkg/payload/user"
 )
 
 type SocialService struct{ Repo *repositories.DB }
@@ -40,42 +40,85 @@ func (s *SocialService) ValidateMedia(userID, url, kind string) error {
 	return nil
 }
 
-func (s *SocialService) UpdateProfile(u models.SocialUser) (models.SocialUser, error) {
+// UpdateProfile validates and stores the editable half of a profile, and returns
+// the members whose waiting follow requests the save accepted (a profile that
+// becomes public has nothing left to approve), so the handler can refresh them.
+func (s *SocialService) UpdateProfile(u models.SocialUser) (models.SocialUser, []string, error) {
 	u.Location = strings.TrimSpace(u.Location)
 	u.Nickname = strings.ToLower(strings.TrimSpace(u.Nickname))
-	u.FirstName, u.LastName = strings.TrimSpace(u.FirstName), strings.TrimSpace(u.LastName)
+	u.FirstName = strings.TrimSpace(u.FirstName)
+	u.LastName = strings.TrimSpace(u.LastName)
+	u.Gender = strings.ToLower(strings.TrimSpace(u.Gender))
 	u.Website = strings.TrimSpace(u.Website)
 	u.ContactEmail = strings.TrimSpace(u.ContactEmail)
 	u.Phone = strings.TrimSpace(u.Phone)
 	if u.Website != "" && !strings.HasPrefix(u.Website, "http://") && !strings.HasPrefix(u.Website, "https://") {
 		u.Website = "https://" + u.Website
 	}
-	if !nicknamePattern.MatchString(u.Nickname) || u.FirstName == "" || u.LastName == "" || utf8.RuneCountInString(u.FirstName) > 50 || utf8.RuneCountInString(u.LastName) > 50 || utf8.RuneCountInString(u.Bio) > 1000 || utf8.RuneCountInString(u.Location) > 50 || utf8.RuneCountInString(u.Website) > 200 || utf8.RuneCountInString(u.ContactEmail) > 254 || utf8.RuneCountInString(u.Phone) > 30 {
-		return u, backend.ErrBadRequest
+
+	// Every rule below names the field it is about, so the form can say what is
+	// wrong instead of one shared "bad request" for all of them.
+	if len(u.Nickname) < 2 || len(u.Nickname) > 33 {
+		return u, nil, backend.ErrNickNameLength
+	}
+	if !nicknamePattern.MatchString(u.Nickname) {
+		return u, nil, backend.ErrUsernameCharacters
+	}
+	if err := user.ValidateName(u.FirstName); err != nil {
+		return u, nil, err
+	}
+	if err := user.ValidateName(u.LastName); err != nil {
+		return u, nil, err
+	}
+	if utf8.RuneCountInString(u.Bio) > 1000 {
+		return u, nil, backend.ErrAboutLength
+	}
+	if utf8.RuneCountInString(u.Location) > 50 {
+		return u, nil, backend.ErrLocationLength
+	}
+	if utf8.RuneCountInString(u.Website) > 200 {
+		return u, nil, backend.ErrWebsiteLength
 	}
 	if u.Website != "" {
 		parsed, err := url.Parse(u.Website)
 		if err != nil || parsed.Host == "" || (parsed.Scheme != "http" && parsed.Scheme != "https") {
-			return u, backend.ErrBadRequest
+			return u, nil, backend.ErrWebsiteInvalid
 		}
 	}
 	if u.ContactEmail != "" {
-		if _, err := mail.ParseAddress(u.ContactEmail); err != nil {
-			return u, backend.ErrBadRequest
+		email, err := user.ValidateEmail(u.ContactEmail)
+		if err != nil {
+			return u, nil, backend.ErrContactEmail
 		}
+		u.ContactEmail = email
 	}
 	if u.Phone != "" && !phonePattern.MatchString(u.Phone) {
-		return u, backend.ErrBadRequest
+		return u, nil, backend.ErrPhoneInvalid
+	}
+	if u.Gender != "" && u.Gender != "male" && u.Gender != "female" {
+		return u, nil, backend.ErrGender
 	}
 	for _, asset := range []string{u.Avatar, u.CoverPhoto} {
 		if err := s.ValidateMedia(u.UserID, asset, "image"); err != nil {
-			return u, err
+			return u, nil, err
 		}
 	}
-	if err := s.Repo.UpdateSocialProfile(u); err != nil {
-		return u, err
+
+	before, err := s.Repo.SocialProfile(u.UserID)
+	if err != nil {
+		return u, nil, err
 	}
-	return s.Repo.SocialProfile(u.UserID)
+	if err := s.Repo.UpdateSocialProfile(u); err != nil {
+		return u, nil, err
+	}
+	var accepted []string
+	if u.IsPublic && !before.IsPublic {
+		if accepted, err = s.Repo.AcceptPendingFollowRequests(u.UserID); err != nil {
+			return u, nil, err
+		}
+	}
+	updated, err := s.Repo.SocialProfile(u.UserID)
+	return updated, accepted, err
 }
 
 func (s *SocialService) Suggestions(viewer string, limit int) ([]models.UserSuggestion, error) {
