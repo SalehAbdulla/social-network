@@ -2,8 +2,8 @@ package user
 
 import (
 	"net/http"
-	"net/mail"
 	realtimeforum "social-network/backend"
+	"regexp"
 	"strings"
 	"time"
 	"unicode"
@@ -45,6 +45,43 @@ func passwordStrength(password string) bool {
 		}
 	}
 	return hasLetter && hasNumber && hasSymbol
+}
+
+// An address has to have a local part, a dot-separated domain and an alphabetic
+// top-level label. The local part is held to the characters ordinary addresses are
+// written with — letters, digits and . _ % + ' - — so the punctuation that used to
+// slip through a name@host check (@ < > / \ and the rest) is refused outright. The
+// shape is verified; the mailbox is not, because the demo fixtures sign in as
+// @example.com and a DNS or MX lookup would refuse accounts the project hands out.
+var emailPattern = regexp.MustCompile(`^[A-Za-z0-9._%+'-]+@(?:[A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?\.)+[A-Za-z]{2,24}$`)
+
+// Letters, with apostrophes, hyphens and dots between them — the shapes real names
+// take ("O'Brien", "Anne-Marie", "J.R"). Case is the author's: only the handle is
+// folded to lower case, because a handle is matched on. Spaces are refused as well
+// as the punctuation a form used to swallow (@ < > / \).
+var namePattern = regexp.MustCompile(`^[A-Za-z]+(?:['\-.][A-Za-z]+)*$`)
+
+func ValidateEmail(value string) (string, error) {
+	email := strings.TrimSpace(strings.ToLower(value))
+	if len(email) > 254 || !emailPattern.MatchString(email) {
+		return "", realtimeforum.ErrInvalidEmail
+	}
+	if strings.Contains(email, "..") || strings.HasPrefix(email, ".") || strings.Contains(email, ".@") {
+		return "", realtimeforum.ErrInvalidEmail
+	}
+	return email, nil
+}
+
+// ValidateName expects the value already trimmed, so one rule covers registration
+// and the profile form. The name keeps whatever case it was typed in.
+func ValidateName(value string) error {
+	if len(value) < 1 || len(value) > 50 {
+		return realtimeforum.ErrNameLength
+	}
+	if !namePattern.MatchString(value) {
+		return realtimeforum.ErrNameCharacters
+	}
+	return nil
 }
 
 func ValidateNickname(value string) (string, error) {
@@ -94,9 +131,10 @@ func (d *RegisterRequestDTO) ParseAndValidate(r *http.Request) error {
 	rawNickname := strings.TrimSpace(r.FormValue("nickName"))
 	nickname, nicknameErr := ValidateNickname(rawNickname)
 	d.Nickname = nickname
-	d.Email = strings.TrimSpace(strings.ToLower(r.FormValue("email")))
-	d.FirstName = strings.TrimSpace(strings.ToLower(r.FormValue("firstName")))
-	d.LastName = strings.TrimSpace(strings.ToLower(r.FormValue("lastName")))
+	email, emailErr := ValidateEmail(r.FormValue("email"))
+	d.Email = email
+	d.FirstName = strings.TrimSpace(r.FormValue("firstName"))
+	d.LastName = strings.TrimSpace(r.FormValue("lastName"))
 	d.Password = strings.TrimSpace(r.FormValue("password"))
 	d.ConfirmPassword = strings.TrimSpace(r.FormValue("confirmPassword"))
 	d.BirthDate = strings.TrimSpace(r.FormValue("birthDate"))
@@ -109,7 +147,11 @@ func (d *RegisterRequestDTO) ParseAndValidate(r *http.Request) error {
 		return nicknameErr
 	}
 
-	if d.Email == "" || d.FirstName == "" || d.LastName == "" ||
+	if emailErr != nil {
+		return emailErr
+	}
+
+	if d.FirstName == "" || d.LastName == "" ||
 		d.Password == "" || d.ConfirmPassword == "" || d.BirthDate == "" || d.Gender == "" {
 		return realtimeforum.ErrBadRequest
 	}
@@ -119,19 +161,15 @@ func (d *RegisterRequestDTO) ParseAndValidate(r *http.Request) error {
 	}
 
 	if utf8.RuneCountInString(d.Bio) > 1000 {
-		return realtimeforum.ErrBadRequest
+		return realtimeforum.ErrAboutLength
 	}
 
-	if len(d.FirstName) < 1 || len(d.FirstName) > 50 {
-		return realtimeforum.ErrBadRequest
-	}
-
-	if len(d.LastName) < 1 || len(d.LastName) > 50 {
-		return realtimeforum.ErrBadRequest
-	}
-
-	if _, err := mail.ParseAddress(d.Email); err != nil {
-		return realtimeforum.ErrInvalidEmail
+	// Each field reports what is wrong with it rather than one shared "bad
+	// request", so the form can say which rule was broken.
+	for _, name := range []string{d.FirstName, d.LastName} {
+		if err := ValidateName(name); err != nil {
+			return err
+		}
 	}
 
 	if err := ValidatePassword(d.Password, d.ConfirmPassword); err != nil {
