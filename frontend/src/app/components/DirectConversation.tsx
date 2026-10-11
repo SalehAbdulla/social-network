@@ -1,13 +1,16 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import Link from 'next/link';
 import toast from 'react-hot-toast';
-import { type ChatUser, type ChatMessage, type ConversationMedia, type SocketEvent, displayName, errorMessage, request, upload } from '../api/social';
+import { type ChatUser, type ChatMessage, type ConversationMedia, type SocialUser, type SocketEvent, displayName, errorMessage, request, upload } from '../api/social';
 import { useBackend } from './BackendProvider';
 import { usePagedList } from '../lib/usePagedList';
 import { useResource } from '../lib/useResource';
 import { useLiveRefresh } from '../lib/useLiveRefresh';
+import Avatar from './Avatar';
 import Lightbox from './Lightbox';
+import { messageBlockedReason } from './MessageAction';
 import ChatHeader from './messages/ChatHeader';
 import DockHeader from './messages/DockHeader';
 import MessageThread from './messages/MessageThread';
@@ -29,12 +32,21 @@ export default function DirectConversation({ partner, person, variant = 'page', 
 }) {
   const dock = variant === 'dock';
   const { user, connected, sendEvent } = useBackend();
+  const profile = useResource<SocialUser>(`/users/${encodeURIComponent(partner)}`, !person);
+  const contact = person || profile.data;
+  // Presence only rides on the inbox's own list; a profile read carries none.
+  const online = !!person?.isOnline;
+  // A conversation the rule refuses is answered by the server with a 403, so the
+  // thread is not even requested: the panel says why instead, and the browser
+  // console stays clean.
+  const blocked = !person && profile.data?.canMessage === false;
   const thread = usePagedList<ChatMessage, { messages: ChatMessage[]; totalElements: number }>({
     key: `/messages?partnerId=${encodeURIComponent(partner)}`,
     pageQuery: page => `&offset=${(page - 1) * MESSAGES_PER_PAGE}`,
     pageSize: MESSAGES_PER_PAGE,
     normalize: (raw, { page, pageSize }) => ({ items: raw.messages, hasMore: page * pageSize < raw.totalElements }),
     keyOf: message => message.messageId,
+    enabled: !blocked,
   });
   const [details, setDetails] = useState(false);
   const [viewer, setViewer] = useState<{ images: string[]; index: number } | null>(null);
@@ -44,10 +56,8 @@ export default function DirectConversation({ partner, person, variant = 'page', 
     pageSize: MEDIA_PER_PAGE,
     normalize: (raw, { page, pageSize }) => ({ items: raw.media, hasMore: page * pageSize < raw.totalElements }),
     keyOf: item => item.messageId,
-    enabled: details,
+    enabled: details && !blocked,
   });
-  const profile = useResource<ChatUser>(`/users/${encodeURIComponent(partner)}`, !person);
-  const contact = person || profile.data;
   const name = contact ? displayName(contact) : 'Conversation';
   const handle = contact?.nickname ?? '';
   const avatar = contact?.avatar ?? '';
@@ -139,7 +149,7 @@ export default function DirectConversation({ partner, person, variant = 'page', 
           name={name}
           handle={handle}
           avatar={avatar}
-          online={!!contact?.isOnline}
+          online={online}
           profileHref={`/profile/${partner}`}
           onBack={() => onBack?.()}
           onExpand={() => onExpand?.()}
@@ -149,48 +159,52 @@ export default function DirectConversation({ partner, person, variant = 'page', 
           name={name}
           handle={handle}
           avatar={avatar}
-          online={!!contact?.isOnline}
+          online={online}
           typing={typing}
           profileHref={`/profile/${partner}`}
           connected={connected}
           detailsOpen={details}
           onToggleDetails={() => setDetails(value => !value)}
         />}
-      <MessageThread
-        items={thread.items}
-        meId={user.userId}
-        partnerId={partner}
-        partnerName={name}
-        partnerHandle={handle}
-        partnerAvatar={avatar}
-        loading={thread.loading}
-        error={thread.error}
-        onRetry={thread.reload}
-        hasMore={thread.hasMore}
-        loadingMore={thread.loadingMore}
-        onLoadMore={thread.loadMore}
-        typing={typing}
-        showIntro={!dock}
-        onReact={message => void react(message)}
-        onDelete={(id, scope) => void remove(id, scope)}
-        onEdit={beginEdit}
-        onReply={beginReply}
-        onOpenMedia={(images, index) => setViewer({ images, index })}
-      />
-      <Composer
-        key={`${editing?.messageId ?? 'new'}-${composerSeed}`}
-        initialText={editing?.textMessage ?? (dock ? draft : undefined)}
-        editing={!!editing}
-        onCancel={() => setEditing(null)}
-        replyTo={replyTo ? { name: 'your message', snippet: replyTo.textMessage || 'Attachment' } : null}
-        onCancelReply={() => setReplyTo(null)}
-        onSend={send}
-        onTyping={announceTyping}
-        onDraft={onDraft}
-        allowVideo
-      />
+      {blocked
+        ? <BlockedChat name={name} avatar={avatar} partner={partner} />
+        : <>
+          <MessageThread
+            items={thread.items}
+            meId={user.userId}
+            partnerId={partner}
+            partnerName={name}
+            partnerHandle={handle}
+            partnerAvatar={avatar}
+            loading={thread.loading}
+            error={thread.error}
+            onRetry={thread.reload}
+            hasMore={thread.hasMore}
+            loadingMore={thread.loadingMore}
+            onLoadMore={thread.loadMore}
+            typing={typing}
+            showIntro={!dock}
+            onReact={message => void react(message)}
+            onDelete={(id, scope) => void remove(id, scope)}
+            onEdit={beginEdit}
+            onReply={beginReply}
+            onOpenMedia={(images, index) => setViewer({ images, index })}
+          />
+          <Composer
+            key={`${editing?.messageId ?? 'new'}-${composerSeed}`}
+            initialText={editing?.textMessage ?? (dock ? draft : undefined)}
+            editing={!!editing}
+            onCancel={() => setEditing(null)}
+            replyTo={replyTo ? { name: 'your message', snippet: replyTo.textMessage || 'Attachment' } : null}
+            onCancelReply={() => setReplyTo(null)}
+            onSend={send}
+            onTyping={announceTyping}
+            onDraft={onDraft}
+            allowVideo
+          />
+        </>}
     </div>
-    {!dock && details && <DetailsPanel
+    {!dock && details && !blocked && <DetailsPanel
       name={name}
       avatar={avatar}
       href={`/profile/${partner}`}
@@ -206,4 +220,15 @@ export default function DirectConversation({ partner, person, variant = 'page', 
     />}
     {viewer && <Lightbox images={viewer.images} startIndex={viewer.index} label="Conversation media" onClose={() => setViewer(null)} />}
   </>;
+}
+
+// The panel shown when the chat rule refuses the conversation: the reason, the
+// member it is about, and the way to unlock it.
+function BlockedChat({ name, avatar, partner }: { name: string; avatar: string; partner: string }) {
+  return <div className="dm-empty">
+    <span className="dm-header-avatar"><Avatar name={name} avatarUrl={avatar} size={72} /></span>
+    <h1 className="dm-empty-title">{name}</h1>
+    <p className="dm-empty-text">{messageBlockedReason}</p>
+    <Link href={`/profile/${partner}`} className="dm-primary">View profile</Link>
+  </div>;
 }
