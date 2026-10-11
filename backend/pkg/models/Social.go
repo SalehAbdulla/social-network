@@ -10,10 +10,11 @@ type SocialUser struct {
 	CoverPhoto string `json:"coverPhoto"`
 	Location   string `json:"location"`
 
-	// The account's own details. They are filled only for the member reading their
-	// own profile — `writeProfile` merges them in — so every other surface that
-	// reuses this struct (discover, the follow lists, a post's author) leaves them
-	// empty and cannot leak them.
+	// The sign-in address is filled only for the member reading their own profile —
+	// `writeProfile` merges it in — so every other surface that reuses this struct
+	// (discover, the follow lists, a post's author) leaves it empty and cannot leak
+	// it. The date of birth and the gender are part of the profile itself: they are
+	// sent to whoever may read it, each behind its own switch.
 	Email     string `json:"email,omitempty"`
 	BirthDate string `json:"birthDate,omitempty"`
 	Gender    string `json:"gender,omitempty"`
@@ -25,6 +26,8 @@ type SocialUser struct {
 	ShowWebsite      bool `json:"showWebsite"`
 	ShowContactEmail bool `json:"showContactEmail"`
 	ShowPhone        bool `json:"showPhone"`
+	ShowBirthDate    bool `json:"showBirthDate"`
+	ShowGender       bool `json:"showGender"`
 
 	IsPublic        bool     `json:"isPublic"`
 	CreatedAt       string   `json:"createdAt"`
@@ -42,11 +45,17 @@ type SocialUser struct {
 // nobody could be found at all. Every list that carries other people's profiles
 // (discover, the follow lists, suggestions) runs this before answering; the single
 // profile view masks more, because there is nothing left to identify.
+//
+// The profile picture is deliberately not cleared: an avatar is how a member is
+// recognised on every surface, and it is public here the way it is on Instagram, so
+// a face never turns back into initials the moment someone unfollows. The cover
+// photo is content and stays behind the profile.
 func (u *SocialUser) MaskPrivateDetails() {
 	u.Bio, u.Location = "", ""
 	u.Website, u.ContactEmail, u.Phone = "", "", ""
 	u.ShowWebsite, u.ShowContactEmail, u.ShowPhone = false, false, false
-	u.Avatar, u.CoverPhoto = "", ""
+	u.ShowBirthDate, u.ShowGender = false, false
+	u.CoverPhoto = ""
 	u.Email, u.BirthDate, u.Gender = "", "", ""
 	u.Followers, u.Following = []string{}, []string{}
 	u.PostCount = 0

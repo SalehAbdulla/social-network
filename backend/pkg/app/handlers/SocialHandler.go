@@ -144,6 +144,22 @@ func (re *HandlerContext) writeProfile(w http.ResponseWriter, r *http.Request, i
 			if !u.ShowPhone {
 				u.Phone = ""
 			}
+			// The date of birth and the gender are part of the profile a visitor may
+			// read, each behind the owner's switch. The sign-in address is not: it is
+			// the owner's alone, and the contact button carries what they published.
+			if u.ShowBirthDate || u.ShowGender {
+				_, birthDate, gender, err := re.SocialService.Repo.UserDetails(id)
+				if err != nil {
+					re.HandleError(w, r, err)
+					return
+				}
+				if u.ShowBirthDate {
+					u.BirthDate = birthDate
+				}
+				if u.ShowGender {
+					u.Gender = gender
+				}
+			}
 		}
 	}
 	respond(w, http.StatusOK, u)

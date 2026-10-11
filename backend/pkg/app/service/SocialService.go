@@ -52,6 +52,7 @@ func (s *SocialService) UpdateProfile(u models.SocialUser) (models.SocialUser, [
 	u.Website = strings.TrimSpace(u.Website)
 	u.ContactEmail = strings.TrimSpace(u.ContactEmail)
 	u.Phone = strings.TrimSpace(u.Phone)
+	u.BirthDate = strings.TrimSpace(u.BirthDate)
 	if u.Website != "" && !strings.HasPrefix(u.Website, "http://") && !strings.HasPrefix(u.Website, "https://") {
 		u.Website = "https://" + u.Website
 	}
@@ -97,6 +98,11 @@ func (s *SocialService) UpdateProfile(u models.SocialUser) (models.SocialUser, [
 	}
 	if u.Gender != "" && u.Gender != "male" && u.Gender != "female" {
 		return u, nil, backend.ErrGender
+	}
+	// A blank date is left alone (the column keeps its value), but a date that is
+	// present has to pass the same rule registration enforces.
+	if u.BirthDate != "" && !user.ValidBirthDate(u.BirthDate) {
+		return u, nil, backend.ErrInvalidBirthDate
 	}
 	for _, asset := range []string{u.Avatar, u.CoverPhoto} {
 		if err := s.ValidateMedia(u.UserID, asset, "image"); err != nil {

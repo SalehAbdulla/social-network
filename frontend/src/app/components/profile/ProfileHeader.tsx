@@ -20,7 +20,7 @@ export type FollowState = 'none' | 'following' | 'requested';
 
 export default function ProfileHeader({
   profile, followers, following, isOwner, avatarSize, followState, canMessage, isFollowingBusy,
-  hasStories, storyUnseen, sessionEmail, onAvatarClick, onOpenStories, onEdit, onArchive, onChangePassword, onOpenFollows, onToggleFollow,
+  hasStories, storyUnseen, onAvatarClick, onOpenStories, onEdit, onArchive, onChangePassword, onOpenFollows, onToggleFollow,
 }: {
   profile: SocialUser;
   followers: number;
@@ -32,7 +32,6 @@ export default function ProfileHeader({
   isFollowingBusy: boolean;
   hasStories: boolean;
   storyUnseen: boolean;
-  sessionEmail?: string;
   onAvatarClick: () => void;
   onOpenStories: () => void;
   onEdit: () => void;
@@ -66,7 +65,7 @@ export default function ProfileHeader({
       {name !== profile.nickname && <p className="profile-name" dir="auto">{name}</p>}
       <ProfileStats postCount={profile.postCount} followers={followers} following={following} canOpen onOpen={onOpenFollows} />
       <Bio profile={profile} isOwner={isOwner} />
-      {isOwner && <OwnDetails profile={profile} sessionEmail={sessionEmail} />}
+      <ProfileDetails profile={profile} isOwner={isOwner} />
 
       <div className="profile-actions-buttons">
         {isOwner ? <>
@@ -199,20 +198,21 @@ function HiddenTag({ className = '' }: { className?: string }) {
   return <span className={`text-xs font-normal text-slate-400 ${className}`}>Hidden</span>;
 }
 
-// The account fields the profile was created with. The server only sends them to
-// the member reading their own profile, so this block renders for nobody else.
-function OwnDetails({ profile, sessionEmail }: { profile: SocialUser; sessionEmail?: string }) {
-  const rows: { icon: typeof Mail; label: string; value: string }[] = [];
-  const email = profile.email || sessionEmail;
-  if (email) rows.push({ icon: Mail, label: 'Email', value: email });
-  if (profile.birthDate) rows.push({ icon: Cake, label: 'Date of birth', value: birthDateLabel(profile.birthDate) });
-  if (profile.gender) rows.push({ icon: UserRound, label: 'Gender', value: genderLabel(profile.gender) });
+// The date of birth and the gender the profile was created with. Both are part of
+// the profile a visitor may read, each behind a switch the owner controls; the owner
+// still sees a value they have hidden, tagged so. The sign-in address is not here —
+// the contact button carries what the owner published, and the edit dialog shows the
+// address itself.
+function ProfileDetails({ profile, isOwner }: { profile: SocialUser; isOwner: boolean }) {
+  const rows: { icon: typeof Cake; label: string; value: string; hidden: boolean }[] = [];
+  if (profile.birthDate) rows.push({ icon: Cake, label: 'Date of birth', value: birthDateLabel(profile.birthDate), hidden: isOwner && !profile.showBirthDate });
+  if (profile.gender) rows.push({ icon: UserRound, label: 'Gender', value: genderLabel(profile.gender), hidden: isOwner && !profile.showGender });
   if (rows.length === 0) return null;
   return <dl className="profile-bio">
     {rows.map(row => <div key={row.label} className="profile-bio-location">
       <row.icon aria-hidden="true" />
       <dt className="sr-only">{row.label}</dt>
-      <dd><span className="font-semibold">{row.label}</span><span aria-hidden="true">: </span><span dir="auto">{row.value}</span></dd>
+      <dd><span className="font-semibold">{row.label}</span><span aria-hidden="true">: </span><span dir="auto">{row.value}</span>{row.hidden && <HiddenTag className="ml-2" />}</dd>
     </div>)}
   </dl>;
 }

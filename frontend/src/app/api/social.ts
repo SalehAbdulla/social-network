@@ -18,6 +18,8 @@ export interface SocialUser {
   showWebsite: boolean;
   showContactEmail: boolean;
   showPhone: boolean;
+  showBirthDate: boolean;
+  showGender: boolean;
   isPublic: boolean;
   createdAt: string;
   followers: string[];

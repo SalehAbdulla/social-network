@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import toast from 'react-hot-toast';
 import { type SocialUser, errorMessage, request, upload } from '../api/social';
 import { useDialogFocus } from '../lib/useDialogFocus';
-import { FIELD_CLASS, LABEL_CLASS, OPTION_CLASS, emailProblem, nameProblem, nicknameProblem } from '../lib/accountRules';
+import { FIELD_CLASS, LABEL_CLASS, OPTION_CLASS, dateYearsAgo, emailProblem, nameProblem, nicknameProblem } from '../lib/accountRules';
 import { useBackend } from './BackendProvider';
 import Button from './ui/Button';
 import ImagePicker from './ImagePicker';
@@ -93,6 +93,19 @@ export default function EditProfile({ profile, close, saved }: { profile: Social
         <option value="male" className={OPTION_CLASS}>Male</option>
       </select>
     </label>
+    <label className="flex items-center gap-2 text-xs text-muted"><input type="checkbox" checked={form.showGender} onChange={event => setForm({ ...form, showGender: event.target.checked })} />Show gender on my profile</label>
+    <label className={LABEL_CLASS}>Date of birth
+      <input
+        type="date"
+        required
+        min={dateYearsAgo(100)}
+        max={dateYearsAgo(13)}
+        value={form.birthDate ?? ''}
+        onChange={event => setForm({ ...form, birthDate: event.target.value })}
+        className={FIELD_CLASS}
+      />
+    </label>
+    <label className="flex items-center gap-2 text-xs text-muted"><input type="checkbox" checked={form.showBirthDate} onChange={event => setForm({ ...form, showBirthDate: event.target.checked })} />Show date of birth on my profile</label>
     <div className="space-y-3 rounded-lg border border-border p-3">
       <p className="text-sm font-semibold text-text">Contact info <span className="font-normal text-muted">(optional)</span></p>
       <p className="text-xs text-muted">Only what you switch on is shown to other people.</p>

@@ -28,8 +28,8 @@ func (db *DB) stringList(query string, args ...any) ([]string, error) {
 
 func (db *DB) SocialProfile(id string, viewers ...string) (models.SocialUser, error) {
 	u := models.SocialUser{}
-	err := db.Conn.QueryRow(`SELECT userId, nickName, firstName, lastName, COALESCE(aboutMe,''), COALESCE(avatar,''), coverPhoto, location, website, contactEmail, phone, showWebsite, showContactEmail, showPhone, isPublic, createdAt FROM user WHERE userId = ?`, id).
-		Scan(&u.UserID, &u.Nickname, &u.FirstName, &u.LastName, &u.Bio, &u.Avatar, &u.CoverPhoto, &u.Location, &u.Website, &u.ContactEmail, &u.Phone, &u.ShowWebsite, &u.ShowContactEmail, &u.ShowPhone, &u.IsPublic, &u.CreatedAt)
+	err := db.Conn.QueryRow(`SELECT userId, nickName, firstName, lastName, COALESCE(aboutMe,''), COALESCE(avatar,''), coverPhoto, location, website, contactEmail, phone, showWebsite, showContactEmail, showPhone, showBirthDate, showGender, isPublic, createdAt FROM user WHERE userId = ?`, id).
+		Scan(&u.UserID, &u.Nickname, &u.FirstName, &u.LastName, &u.Bio, &u.Avatar, &u.CoverPhoto, &u.Location, &u.Website, &u.ContactEmail, &u.Phone, &u.ShowWebsite, &u.ShowContactEmail, &u.ShowPhone, &u.ShowBirthDate, &u.ShowGender, &u.IsPublic, &u.CreatedAt)
 	if errors.Is(err, sql.ErrNoRows) {
 		return u, backend.ErrNotFound
 	}
@@ -184,11 +184,8 @@ func (db *DB) Suggestions(viewer string, limit int) ([]models.UserSuggestion, er
 		if err := rows.Scan(&s.UserID, &s.Nickname, &s.FirstName, &s.LastName, &s.Avatar, &s.IsPublic, &s.MutualCount); err != nil {
 			return nil, err
 		}
-		// A suggestion is a list of people, and a private account's photo is not part
-		// of what it offers: the row keeps the handle, the name and the reason.
-		if !s.IsPublic {
-			s.Avatar = ""
-		}
+		// The photo rides along even for a private account: an avatar is public on
+		// every surface, so a suggestion is a face and a name, not initials.
 		s.Mutuals = []string{}
 		suggestions = append(suggestions, s)
 		ids = append(ids, s.UserID)
@@ -248,7 +245,7 @@ func (db *DB) UpdateSocialProfile(u models.SocialUser) error {
 	if !errors.Is(err, sql.ErrNoRows) {
 		return err
 	}
-	_, err = db.Conn.Exec(`UPDATE user SET nickName=?, firstName=?, lastName=?, aboutMe=?, avatar=?, coverPhoto=?, location=?, website=?, contactEmail=?, phone=?, showWebsite=?, showContactEmail=?, showPhone=?, isPublic=?, gender=COALESCE(NULLIF(?,''), gender), updatedAt=datetime('now') WHERE userId=?`, u.Nickname, u.FirstName, u.LastName, u.Bio, u.Avatar, u.CoverPhoto, u.Location, u.Website, u.ContactEmail, u.Phone, u.ShowWebsite, u.ShowContactEmail, u.ShowPhone, u.IsPublic, u.Gender, u.UserID)
+	_, err = db.Conn.Exec(`UPDATE user SET nickName=?, firstName=?, lastName=?, aboutMe=?, avatar=?, coverPhoto=?, location=?, website=?, contactEmail=?, phone=?, showWebsite=?, showContactEmail=?, showPhone=?, showBirthDate=?, showGender=?, isPublic=?, gender=COALESCE(NULLIF(?,''), gender), birthDate=COALESCE(NULLIF(?,''), birthDate), updatedAt=datetime('now') WHERE userId=?`, u.Nickname, u.FirstName, u.LastName, u.Bio, u.Avatar, u.CoverPhoto, u.Location, u.Website, u.ContactEmail, u.Phone, u.ShowWebsite, u.ShowContactEmail, u.ShowPhone, u.ShowBirthDate, u.ShowGender, u.IsPublic, u.Gender, u.BirthDate, u.UserID)
 	return err
 }
 
@@ -492,10 +489,11 @@ func (db *DB) CanViewMedia(id, viewerID string) (bool, error) {
 			) OR EXISTS (
 				SELECT 1 FROM socialGroup g WHERE g.imageUrl='/api/v1/media/' || m.mediaId
 			) OR EXISTS (
-				-- An avatar is part of a profile: it is readable when the profile it
-				-- belongs to is (public, or the viewer follows it, or it is their own).
-				SELECT 1 FROM user u WHERE u.avatar='/api/v1/media/' || m.mediaId AND
-				(u.isPublic=1 OR u.userId=? OR EXISTS(SELECT 1 FROM follow f WHERE f.followedId=u.userId AND f.followerId=?))
+				-- An avatar is public: a profile picture is how a member is recognised
+				-- on every surface, so any signed-in member may read it, whether or not
+				-- they follow the account. That is what keeps a face from turning back
+				-- into initials the moment someone unfollows.
+				SELECT 1 FROM user u WHERE u.avatar='/api/v1/media/' || m.mediaId
 			) OR EXISTS (
 				SELECT 1 FROM user u WHERE u.coverPhoto='/api/v1/media/' || m.mediaId AND
 				(u.isPublic=1 OR EXISTS(SELECT 1 FROM follow f WHERE f.followedId=u.userId AND f.followerId=?))
@@ -507,7 +505,7 @@ func (db *DB) CanViewMedia(id, viewerID string) (bool, error) {
 				WHERE image.value = '/api/v1/media/' || m.mediaId AND `+postVisibility+`
 			)
 		)
-	)`, id, viewerID, viewerID, viewerID, viewerID, viewerID, viewerID, viewerID, viewerID, viewerID, viewerID, viewerID, viewerID, viewerID, viewerID, viewerID).Scan(&allowed)
+	)`, id, viewerID, viewerID, viewerID, viewerID, viewerID, viewerID, viewerID, viewerID, viewerID, viewerID, viewerID, viewerID, viewerID).Scan(&allowed)
 	return allowed, err
 }
 

@@ -1,0 +1,2 @@
+ALTER TABLE user DROP COLUMN showGender;
+ALTER TABLE user DROP COLUMN showBirthDate;

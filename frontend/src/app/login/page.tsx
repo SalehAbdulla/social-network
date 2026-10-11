@@ -13,10 +13,10 @@ import {
   EMAIL_RULE,
   FIELD_CLASS,
   LABEL_CLASS,
-  NAME_RULE,
   NICKNAME_RULE,
   OPTION_CLASS,
   PASSWORD_HINT,
+  dateYearsAgo,
   emailProblem,
   nameProblem,
   passwordProblem,
@@ -172,12 +172,6 @@ const Login = () => {
   )
 }
 
-function dateYearsAgo(years: number) {
-  const date = new Date();
-  date.setFullYear(date.getFullYear() - years);
-  return date.toISOString().slice(0, 10);
-}
-
 // A name field reports its own problem while it is being typed, so the reader is
 // told which character is not allowed instead of finding out on submit.
 function NameField({ name, label, value, onChange }: { name: string; label: string; value: string; onChange: (value: string) => void }) {
@@ -192,9 +186,7 @@ function NameField({ name, label, value, onChange }: { name: string; label: stri
       aria-invalid={!!problem}
       className={FIELD_CLASS}
     />
-    {problem
-      ? <span className="text-xs text-red-700" role="alert">{problem}</span>
-      : <span className="text-xs text-muted">{NAME_RULE}</span>}
+    {!!problem && <span className="text-xs text-red-700" role="alert">{problem}</span>}
   </label>;
 }
 

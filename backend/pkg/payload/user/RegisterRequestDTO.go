@@ -97,7 +97,9 @@ func ValidateNickname(value string) (string, error) {
 	return nickname, nil
 }
 
-func validBirthDate(value string) bool {
+// ValidBirthDate is the one age rule the API applies, shared by registration and
+// the edit dialog: a real date, not in the future, for a member aged 13 to 100.
+func ValidBirthDate(value string) bool {
 	birthDate, err := time.Parse("2006-01-02", value)
 	if err != nil || birthDate.After(time.Now().UTC()) {
 		return false
@@ -176,7 +178,7 @@ func (d *RegisterRequestDTO) ParseAndValidate(r *http.Request) error {
 		return err
 	}
 
-	if !validBirthDate(d.BirthDate) {
+	if !ValidBirthDate(d.BirthDate) {
 		return realtimeforum.ErrInvalidBirthDate
 	}
 

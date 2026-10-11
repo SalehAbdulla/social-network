@@ -81,9 +81,10 @@ func TestMigrationsRoundTrip(t *testing.T) {
 	assertProfileContactColumns(t, database)
 	assertProfileContactVisibilityColumns(t, database)
 	assertStoryPrivacyColumns(t, database)
+	assertProfileDobGenderVisibilityColumns(t, database)
 	version, dirty, err := migrations.Version()
-	if err != nil || dirty || version != 23 {
-		t.Fatalf("expected clean version 23, got %d (dirty=%v, err=%v)", version, dirty, err)
+	if err != nil || dirty || version != 24 {
+		t.Fatalf("expected clean version 24, got %d (dirty=%v, err=%v)", version, dirty, err)
 	}
 }
 
@@ -205,6 +206,23 @@ func assertProfileContactVisibilityColumns(t *testing.T, database *sql.DB) {
 	t.Helper()
 	columns := tableColumns(t, database, "user")
 	for _, name := range []string{"showWebsite", "showContactEmail", "showPhone"} {
+		if !columns[name] {
+			t.Fatalf("user is missing %q after the migration", name)
+		}
+		nullable, err := columnIsNullable(database, "user", name)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if nullable {
+			t.Fatalf("user.%s must be NOT NULL so its default applies to existing rows", name)
+		}
+	}
+}
+
+func assertProfileDobGenderVisibilityColumns(t *testing.T, database *sql.DB) {
+	t.Helper()
+	columns := tableColumns(t, database, "user")
+	for _, name := range []string{"showBirthDate", "showGender"} {
 		if !columns[name] {
 			t.Fatalf("user is missing %q after the migration", name)
 		}

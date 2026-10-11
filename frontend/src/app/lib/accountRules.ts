@@ -44,3 +44,11 @@ export function passwordProblem(value: string): string {
   const hasSymbol = /[^a-z0-9]/i.test(value);
   return longEnough && hasLetter && hasNumber && hasSymbol ? '' : PASSWORD_RULE;
 }
+
+// The date-of-birth input's own limits, so the register form and the edit dialog
+// offer the same range the API enforces: 13 to 100 years old.
+export function dateYearsAgo(years: number): string {
+  const date = new Date();
+  date.setFullYear(date.getFullYear() - years);
+  return date.toISOString().slice(0, 10);
+}

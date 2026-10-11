@@ -58,9 +58,10 @@ func TestProfileContactVisibility(t *testing.T) {
 	}
 }
 
-// A list is still a read. A private profile a viewer may not see keeps its handle
-// and its name — that is what makes it findable — and gives up its photo, its bio
-// and its contact fields, and the photo is refused by the media endpoint too.
+// A list is still a read. A private profile a viewer may not see keeps its handle,
+// its name and its photo — the handle and the name make it findable, and the photo is
+// public the way it is on Instagram, so unfollowing never turns a face into initials —
+// and gives up its bio, its location, its contact fields and its counts.
 func TestPrivateProfileDetailsStayOutOfLists(t *testing.T) {
 	server, _ := integrationServer(t, true, false)
 	owner, stranger := newIntegrationClient(t, server), newIntegrationClient(t, server)
@@ -84,7 +85,10 @@ func TestPrivateProfileDetailsStayOutOfLists(t *testing.T) {
 		t.Fatalf("the private account is missing from discover: %+v", listed)
 	}
 	seen := listed[0]
-	if seen.Avatar != "" || seen.Bio != "" || seen.Location != "" || seen.Website != "" || seen.ContactEmail != "" || seen.Phone != "" {
+	if seen.Avatar != avatar {
+		t.Fatalf("discover must carry the avatar, which is public: %+v", seen)
+	}
+	if seen.Bio != "" || seen.Location != "" || seen.Website != "" || seen.ContactEmail != "" || seen.Phone != "" {
 		t.Fatalf("discover carried a private profile's details: %+v", seen)
 	}
 	if seen.PostCount != 0 || len(seen.Followers) != 0 || len(seen.Following) != 0 {
@@ -94,15 +98,16 @@ func TestPrivateProfileDetailsStayOutOfLists(t *testing.T) {
 		t.Fatalf("discover must still identify the account it lists: %+v", seen)
 	}
 
-	// The photo itself is refused to the same viewer, and served to its owner.
-	stranger.call("GET", avatar, nil, 404)
+	// The photo itself is public: it is served to a stranger and to its owner alike.
+	stranger.call("GET", avatar, nil, 200)
 	owner.call("GET", avatar, nil, 200)
 
-	// A suggestion is a list too: a private account offers its handle and nothing else.
+	// A suggestion is a list too: it keeps the handle, the name and the photo, and
+	// gives up everything a private account holds back.
 	suggested := decoded[[]models.UserSuggestion](t, stranger.call("GET", "/api/v1/users/suggestions?limit=30", nil, 200))
 	for _, person := range suggested {
-		if person.UserID == "dummy-id" && person.Avatar != "" {
-			t.Fatalf("a private account's photo was suggested: %+v", person)
+		if person.UserID == "dummy-id" && person.Avatar != avatar {
+			t.Fatalf("a private account's photo is public and must be suggested: %+v", person)
 		}
 	}
 
@@ -116,9 +121,10 @@ func TestPrivateProfileDetailsStayOutOfLists(t *testing.T) {
 	stranger.call("GET", avatar, nil, 200)
 }
 
-// The account's own email, date of birth and gender are part of the profile the
-// owner sees, and of nothing else — not another member's view of it, not discover
-// and not the follow lists, all of which reuse the same struct.
+// The sign-in address is part of the profile only the owner sees — not another
+// member's view of it, not discover and not the follow lists, all of which reuse the
+// same struct. The date of birth and the gender ride the profile itself, each behind
+// the owner's switch, and stay out of the lists.
 func TestProfileDetailsAreOwnerOnly(t *testing.T) {
 	server, _ := integrationServer(t, true, false)
 	alex, dummy := newIntegrationClient(t, server), newIntegrationClient(t, server)
@@ -144,8 +150,11 @@ func TestProfileDetailsAreOwnerOnly(t *testing.T) {
 	}
 
 	seen := decoded[models.SocialUser](t, dummy.call("GET", "/api/v1/users/alex-id", nil, 200))
-	if seen.Email != "" || seen.BirthDate != "" || seen.Gender != "" {
-		t.Fatalf("another member received the account details: %+v", seen)
+	if seen.Email != "" {
+		t.Fatalf("another member received the sign-in address: %+v", seen)
+	}
+	if seen.BirthDate != owner.BirthDate || seen.Gender != owner.Gender {
+		t.Fatalf("a visitor must see the date of birth and gender the owner shows: %+v", seen)
 	}
 	for _, listed := range []struct {
 		name   string
@@ -176,5 +185,60 @@ func TestProfileDetailsAreOwnerOnly(t *testing.T) {
 	saved = decoded[models.SocialUser](t, alex.call("PUT", "/api/v1/users/me", owner, 200))
 	if saved.Gender != "female" {
 		t.Fatalf("a blank gender overwrote the stored one: %+v", saved)
+	}
+
+	// The date of birth is editable from the profile too, under the age rule
+	// registration applies: a real date, not in the future, 13 to 100 years old.
+	owner.BirthDate = "1995-06-15"
+	saved = decoded[models.SocialUser](t, alex.call("PUT", "/api/v1/users/me", owner, 200))
+	if saved.BirthDate != "1995-06-15" {
+		t.Fatalf("the birth date was not saved: %+v", saved)
+	}
+	if reread := decoded[models.SocialUser](t, alex.call("GET", "/api/v1/users/me", nil, 200)); reread.BirthDate != "1995-06-15" {
+		t.Fatalf("the birth date did not survive a reload: %+v", reread)
+	}
+	owner.BirthDate = "3000-01-01"
+	alex.call("PUT", "/api/v1/users/me", owner, 400)
+	owner.BirthDate = "not-a-date"
+	alex.call("PUT", "/api/v1/users/me", owner, 400)
+	owner.BirthDate = ""
+	saved = decoded[models.SocialUser](t, alex.call("PUT", "/api/v1/users/me", owner, 200))
+	if saved.BirthDate != "1995-06-15" {
+		t.Fatalf("a blank birth date overwrote the stored one: %+v", saved)
+	}
+}
+
+// The date of birth and the gender are part of the profile a visitor reads, each
+// behind a switch the owner controls from the edit form. Switching one off hides it
+// from everyone but the owner, and the two switches act independently.
+func TestProfileDetailsVisibilitySwitches(t *testing.T) {
+	server, _ := integrationServer(t, true, false)
+	owner, visitor := newIntegrationClient(t, server), newIntegrationClient(t, server)
+	owner.login("dummy@example.com")
+	visitor.login("alex@example.com")
+
+	profile := decoded[models.SocialUser](t, owner.call("GET", "/api/v1/users/me", nil, 200))
+	if !profile.ShowBirthDate || !profile.ShowGender {
+		t.Fatalf("both switches have to start on: %+v", profile)
+	}
+	if seen := decoded[models.SocialUser](t, visitor.call("GET", "/api/v1/users/dummy-id", nil, 200)); seen.BirthDate == "" || seen.Gender == "" {
+		t.Fatalf("a visitor must see what the switches publish: %+v", seen)
+	}
+
+	profile.ShowBirthDate, profile.ShowGender = false, false
+	owner.call("PUT", "/api/v1/users/me", profile, 200)
+	hidden := decoded[models.SocialUser](t, visitor.call("GET", "/api/v1/users/dummy-id", nil, 200))
+	if hidden.BirthDate != "" || hidden.Gender != "" {
+		t.Fatalf("a switch that is off still published the field: %+v", hidden)
+	}
+	if mine := decoded[models.SocialUser](t, owner.call("GET", "/api/v1/users/me", nil, 200)); mine.BirthDate == "" || mine.Gender == "" {
+		t.Fatalf("the owner must still read the fields they hid: %+v", mine)
+	}
+
+	profile.ShowGender = true
+	owner.call("PUT", "/api/v1/users/me", profile, 200)
+	back := decoded[models.SocialUser](t, visitor.call("GET", "/api/v1/users/dummy-id", nil, 200))
+	if back.Gender == "" || back.BirthDate != "" {
+		t.Fatalf("the two switches must act independently: %+v", back)
 	}
 }
