@@ -20,10 +20,8 @@ export default function VisibilityRow({ id, value, onChange, followers, selected
   const current = VISIBILITY_OPTIONS.find(option => option.value === value) ?? VISIBILITY_OPTIONS[0];
   return <>
     <button id={id} type="button" className={`group ${ROW}`} aria-expanded={open} onClick={() => setOpen(previous => !previous)}>
-      {/* <current.Icon size={20} aria-hidden="true" /> */}
-      
-      <span className="cp-row-label ml-1">Visibility</span>
-      <span className='mx-2' ></span>
+      <current.Icon size={20} aria-hidden="true" />
+      <span className="cp-row-label">Visibility</span>
       <span className="cp-row-value">{current.label}</span>
       <ChevronDown className="h-4 w-4 text-muted transition-transform group-aria-expanded:rotate-180 motion-reduce:transition-none" aria-hidden="true" />
     </button>
