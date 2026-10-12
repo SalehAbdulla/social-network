@@ -25,8 +25,25 @@ func (re *HandlerContext) parseForm(w http.ResponseWriter, r *http.Request) bool
 	return true
 }
 
+// isASCII reports whether s is only printable ASCII — the single-line shape a
+// title has to keep, where even a line break would be out of place.
 func isASCII(s string) bool {
 	for _, r := range s {
+		if r < 0x20 || r > 0x7E {
+			return false
+		}
+	}
+	return true
+}
+
+// isASCIIText reports whether s is printable ASCII or a line break, so a post
+// body may run over several lines — a textarea writes them — while every other
+// control code and every non-ASCII rune stays out.
+func isASCIIText(s string) bool {
+	for _, r := range s {
+		if r == '\n' || r == '\r' {
+			continue
+		}
 		if r < 0x20 || r > 0x7E {
 			return false
 		}
