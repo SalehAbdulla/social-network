@@ -1,10 +1,11 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import toast from 'react-hot-toast';
 import { ChevronLeft, ChevronRight, MoreHorizontal, X } from 'lucide-react';
 import { type Story, type StoryReply as ReplyEntry, type StoryViewer as ViewerEntry, errorMessage, reactToStory, request, shortAge } from '../../api/social';
 import { mediaVariant } from '../../lib/mediaVariants';
+import { fitStoryText } from '../../lib/storyText';
 import { useDialogFocus } from '../../lib/useDialogFocus';
 import { useMediaQuery } from '../../lib/useMediaQuery';
 import { useResource } from '../../lib/useResource';
@@ -53,6 +54,18 @@ export default function StoryViewer({ groups, start, onClose, onSeen, onDelete, 
 
   const holdTimer = useRef<number | null>(null);
   const held = useRef(false);
+  const storyTextRef = useRef<HTMLParagraphElement | null>(null);
+
+  // A text story is read, not clipped: shrink the font until the whole of it fits
+  // the card, so a long, multi-line moment is seen end to end.
+  useLayoutEffect(() => {
+    const text = storyTextRef.current;
+    if (!text) return;
+    const fit = () => fitStoryText(text, 22, 12);
+    fit();
+    window.addEventListener('resize', fit);
+    return () => window.removeEventListener('resize', fit);
+  }, [story?.storyId, story?.content, story?.mediaType]);
 
   function toggleLike() {
     if (!story) return;
@@ -156,7 +169,7 @@ export default function StoryViewer({ groups, start, onClose, onSeen, onDelete, 
           onPointerLeave={pressCancel}
           onPointerCancel={pressCancel}
         >
-          {story.mediaType === 'text' && <p className="story-text" style={{ backgroundColor: story.backgroundColor }} dir="auto">{story.content}</p>}
+          {story.mediaType === 'text' && <p ref={storyTextRef} className="story-text" style={{ backgroundColor: story.backgroundColor }} dir="auto">{story.content}</p>}
           {story.mediaType === 'image' && <>
             <img className="story-media-bg" src={mediaVariant(story.mediaUrl, 'thumb')} alt="" aria-hidden="true" />
             <img className="story-media-fg" src={mediaVariant(story.mediaUrl, 'large')} alt="Story" onLoad={player.onMediaReady} onError={player.onMediaError} />
