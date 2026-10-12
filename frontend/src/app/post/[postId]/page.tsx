@@ -8,6 +8,7 @@ import PostView from '../../components/post/PostView';
 import PostTile from '../../components/profile/PostTile';
 import PostInsights from '../../components/PostInsights';
 import Loading from '../../components/Loading';
+import NotFound from '../../components/NotFound';
 
 export default function SinglePost() {
   const { postId } = useParams<{ postId: string }>();
@@ -23,6 +24,11 @@ export default function SinglePost() {
     enabled: !!author,
   });
   const others = more.items.filter(item => item.postId !== post.data?.postId).slice(0, 6);
+
+  // A post the backend answers 404 for is gone or unreadable, so it renders the
+  // app's one not-found page rather than a post-shaped error.
+  if (post.notFound) return <NotFound />;
+
   return <div className="px-4 py-6">
     {post.loading && <Loading />}
     {!!post.error && !post.loading && <div className="pv-state">

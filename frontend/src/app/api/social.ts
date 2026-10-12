@@ -2,6 +2,9 @@ import axios from 'axios';
 import api from './axios';
 import { MAX_IMAGE_BYTES, MAX_VIDEO_BYTES, isImageType, isVideoType, oversizeMessage } from '../lib/mediaLimits';
 import { prepareUpload } from '../lib/downscale';
+import { isNotFound, isUnauthorized } from './httpError';
+
+export { isNotFound, isUnauthorized };
 
 export interface SocialUser {
   userId: string;
@@ -133,10 +136,6 @@ export interface GroupMember { userId: string; nickname: string; firstName: stri
 export interface GroupRequest { requestId: number; groupId: number; userId: string; nickname: string; status: string; createdAt: string }
 export interface GroupInvitation { invitationId: number; groupId: number; userId: string; nickname: string; groupTitle: string; status: string; createdAt: string }
 export interface SocketEvent { type: string; payload: Record<string, unknown> }
-
-export function isUnauthorized(error: unknown): boolean {
-  return axios.isAxiosError(error) && error.response?.status === 401;
-}
 
 export function errorMessage(error: unknown): string {
   if (axios.isAxiosError(error)) {

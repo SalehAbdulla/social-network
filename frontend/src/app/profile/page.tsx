@@ -29,6 +29,7 @@ import ChangePassword from '../components/ChangePassword';
 import EditProfile from '../components/EditProfile';
 import FollowListModal, { type FollowListTab } from '../components/FollowListModal';
 import Loading from '../components/Loading';
+import NotFound from '../components/NotFound';
 import { usePostModal } from '../lib/usePostModal';
 import { useCreatePost } from '../lib/useCreatePost';
 import { StoryArchive } from '../components/StoriesBar';
@@ -186,6 +187,10 @@ export default function Profile() {
           ? <PhotosEmpty onShare={create.open} />
           : <GridEmpty text="No posts yet." />;
 
+
+  // A profile the backend answers 404 for does not exist, so this is a not-found
+  // page — the same one an unmatched URL renders — rather than an inline error.
+  if (profile.notFound) return <NotFound />;
 
   return <div className="profile-page">
     <div className="profile">

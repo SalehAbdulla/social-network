@@ -5,6 +5,7 @@ import { useParams, useRouter } from 'next/navigation';
 import { type SocialUser } from '../../api/social';
 import { useResource } from '../../lib/useResource';
 import Loading from '../../components/Loading';
+import NotFound from '../../components/NotFound';
 import RequestState from '../../components/RequestState';
 
 export default function Handle() {
@@ -16,6 +17,7 @@ export default function Handle() {
     if (profile.data) router.replace(`/profile/${profile.data.userId}`);
   }, [profile.data, router]);
 
+  if (profile.notFound) return <NotFound />;
   if (profile.error) return <RequestState empty={`No member is called @${nickname}.`} />;
   return <Loading height={120} label={`Looking up @${nickname}`} />;
 }
