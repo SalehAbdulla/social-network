@@ -19,7 +19,7 @@ import type { FollowListTab } from '../FollowListModal';
 export type FollowState = 'none' | 'following' | 'requested';
 
 export default function ProfileHeader({
-  profile, followers, following, isOwner, avatarSize, followState, canMessage, isFollowingBusy,
+  profile, followers, following, isOwner, avatarSize, followState, canMessage, isFollowingBusy, canOpenFollows,
   hasStories, storyUnseen, onAvatarClick, onOpenStories, onEdit, onArchive, onChangePassword, onOpenFollows, onToggleFollow,
 }: {
   profile: SocialUser;
@@ -30,6 +30,9 @@ export default function ProfileHeader({
   followState: FollowState;
   canMessage: boolean;
   isFollowingBusy: boolean;
+  // Whether this viewer may read the follow lists: the owner, anyone looking at a
+  // public account, and an accepted follower of a private one.
+  canOpenFollows: boolean;
   hasStories: boolean;
   storyUnseen: boolean;
   onAvatarClick: () => void;
@@ -63,7 +66,7 @@ export default function ProfileHeader({
       </div>
 
       {name !== profile.nickname && <p className="profile-name" dir="auto">{name}</p>}
-      <ProfileStats postCount={profile.postCount} followers={followers} following={following} canOpen onOpen={onOpenFollows} />
+      <ProfileStats postCount={profile.postCount} followers={followers} following={following} canOpen={canOpenFollows} onOpen={onOpenFollows} />
       <Bio profile={profile} isOwner={isOwner} />
       <ProfileDetails profile={profile} isOwner={isOwner} />
 
