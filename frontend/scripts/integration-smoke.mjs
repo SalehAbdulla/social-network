@@ -527,6 +527,20 @@ try {
   assert(freshComment.dateTime && freshComment.title, `the exact instant stays on the element: ${JSON.stringify(freshComment)}`);
   console.log('PASS: a comment carries an uploaded photo, renders it and stores its URL');
 
+  // A photo can be the whole comment: with the field left empty the composer still offers Post and
+  // the server takes it, while an empty comment with nothing attached stays refused.
+  const pvPhotos = await evaluate(alex, `document.querySelectorAll('.pv-dialog img[alt="Comment attachment"]').length`);
+  const pvPickerDocument = await command('DOM.getDocument', {}, alex);
+  const pvPicker = await command('DOM.querySelector', { nodeId: pvPickerDocument.root.nodeId, selector: 'input[aria-label="Add photos"]' }, alex);
+  await command('DOM.setFileInputFiles', { nodeId: pvPicker.nodeId, files: [commentPhotoFixture] }, alex);
+  await until(alex, `!!document.querySelector('.pv-post')`, 'the Post button appears for a photo with no words');
+  await evaluate(alex, `document.querySelector('.pv-post').click()`);
+  await until(alex, `document.querySelectorAll('.pv-dialog img[alt="Comment attachment"]').length === ${pvPhotos + 1}`, 'the photo-only comment renders');
+  const photoOnlyComment = (await api(alex, `/posts/comments?postId=${postId}`)).comments.find(item => !item.commentText && item.imageUrls?.length === 1);
+  assert(photoOnlyComment, `a comment made of one photo is stored: ${JSON.stringify(photoOnlyComment)}`);
+  assert.equal(await evaluate(alex, `(async () => (await fetch('/api/v1/posts/comments', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ postId: ${JSON.stringify(postId)}, content: '', imageUrls: [] }) })).status)()`), 400, 'An empty comment with no photo is still refused');
+  console.log('PASS: a comment can be a photo on its own, and an empty one is still refused');
+
   await navigate(dummy, '/');
   await navigate(alex, '/');
   await until(alex, `!!document.querySelector('[aria-label="Your account"]')`, 'the second account is on the feed');
@@ -553,6 +567,19 @@ try {
   await evaluate(alex, `document.querySelector(${JSON.stringify(phoneComments)}).click()`);
   await until(alex, `!!document.querySelector('[role="dialog"][aria-label="Comments"]')`, 'the comment drawer opens');
   assert(await evaluate(alex, `!!document.querySelector('[role="dialog"][aria-label="Comments"] #comment-${postId}')`), 'the drawer holds the composer');
+  // The drawer's box is the feed card's own composer, and it follows the rule too: its field is only
+  // required while nothing is attached, so a photo alone can be posted from here as well.
+  const drawerBox = `[role="dialog"][aria-label="Comments"] #comment-${postId}`;
+  assert(await evaluate(alex, `document.querySelector('${drawerBox}').required`), 'the drawer comment box asks for words until a photo is attached');
+  const photoOnlyBefore = (await api(alex, `/posts/comments?postId=${postId}`)).comments.filter(item => !item.commentText && item.imageUrls?.length === 1).length;
+  const drawerDocument = await command('DOM.getDocument', {}, alex);
+  const drawerPicker = await command('DOM.querySelector', { nodeId: drawerDocument.root.nodeId, selector: '[role="dialog"][aria-label="Comments"] input[aria-label="Add photos"]' }, alex);
+  await command('DOM.setFileInputFiles', { nodeId: drawerPicker.nodeId, files: [commentPhotoFixture] }, alex);
+  await until(alex, `!document.querySelector('${drawerBox}').required`, 'the drawer comment box stops asking for words once a photo is attached');
+  await evaluate(alex, `[...document.querySelectorAll('[role="dialog"][aria-label="Comments"] button')].find(button => button.textContent.trim() === 'Comment').click()`);
+  await until(alex, `[...document.querySelectorAll('[role="dialog"][aria-label="Comments"] p')].some(node => !node.textContent.trim() && !!node.parentElement.querySelector('img[alt="Comment attachment"]'))`, 'the drawer renders a comment that is only a photo');
+  await until(alex, `(async () => { const page = await (await fetch('/api/v1/posts/comments?postId=${postId}')).json(); return page.data.comments.filter(item => !item.commentText && item.imageUrls.length === 1).length === ${photoOnlyBefore + 1}; })()`, 'the drawer comment is stored');
+  console.log('PASS: a comment posted from the phone drawer can be a photo on its own');
   await command('Input.dispatchKeyEvent', { type: 'keyDown', key: 'Escape', code: 'Escape', windowsVirtualKeyCode: 27 }, alex);
   await until(alex, `!document.querySelector('[role="dialog"][aria-label="Comments"]')`, 'Escape closes the drawer');
   await command('Emulation.setDeviceMetricsOverride', { width: 1440, height: 960, deviceScaleFactor: 1, mobile: false }, alex);
@@ -697,6 +724,14 @@ try {
   await button(alex, 'Follow');
   await until(alex, `[...document.querySelectorAll('button')].some(button => button.textContent.trim().startsWith('Requested'))`, 'private profile shows Requested');
   assert(await evaluate(alex, `!document.querySelector('a[href="/messages/${originalDummy.userId}"]') && [...document.querySelectorAll('[title]')].some(node => node.getAttribute('title').includes('one of you follows the other'))`), 'a private profile replaces the message link with an explanation');
+  // The numbers a private account keeps to itself and the lists behind them: the two
+  // statistics stay in the row, but they are inert, and the reason waits for the hover
+  // on the wrapper — a disabled button shows no tooltip of its own.
+  const statButtons = `[...document.querySelectorAll('[aria-label="Profile statistics"] button')]`;
+  assert.equal(await evaluate(alex, `(${statButtons}).length`), 2, 'a private profile still shows both statistics');
+  assert(await evaluate(alex, `(${statButtons}).every(button => button.disabled)`), 'a stranger cannot open the follow lists of a private account');
+  assert(await evaluate(alex, `(${statButtons}).every(button => (button.parentElement.getAttribute('title') || '').startsWith('Follow this account to see'))`), 'a locked list explains itself on hover');
+  console.log('PASS: a private account leaves both follow lists locked, with the reason on hover');
   assert.equal((await api(dummy, '/users/me')).followers.includes(originalAlex.userId), false);
   assert.equal(await evaluate(alex, `(async () => (await fetch('/api/v1/media/${mediaURL.split('/').pop()}', { cache: 'no-store' })).status)()`), 404, 'a private photo answers as missing rather than forbidden, so its existence is not revealed');
   assert.equal(await evaluate(alex, `(async () => (await fetch('/api/v1/messages?partnerId=${originalDummy.userId}', { cache: 'no-store' })).status)()`), 403, 'a private profile must hide the thread from a stranger');
@@ -728,6 +763,13 @@ try {
   await until(alex, `document.body.innerText.includes('Following')`, 'accept unlocks the profile live');
   await until(alex, `(async () => (await (await fetch('/api/v1/post?id=${postId}')).json()).success === true)()`, 'the accepted follower can read the followers-only post');
   assert(await evaluate(alex, `!!document.querySelector('a[href="/messages/${originalDummy.userId}"]')`), 'accepting the follow restores the message action');
+  // The accepted follower is inside the account now, so the lists open and the hint is gone.
+  assert(await evaluate(alex, `(${statButtons}).every(button => !button.disabled && !button.parentElement.getAttribute('title'))`), 'an accepted follower may open both follow lists');
+  await evaluate(alex, `(${statButtons}).find(button => button.textContent.includes('follower')).click()`);
+  await until(alex, `!!document.querySelector('[role="dialog"][aria-label="Followers and following"]')`, 'the unlocked followers list opens');
+  await until(alex, `document.querySelector('[role="dialog"]').innerText.includes('@alexdemo')`, 'the list names the follower it holds');
+  await evaluate(alex, `document.querySelector('[aria-label="Close followers and following"]').click()`);
+  console.log('PASS: accepting the request unlocks both follow lists for the new follower');
   assert.equal((await api(dummy, '/users/me')).followers.includes(originalAlex.userId), true);
   assert.equal(await evaluate(alex, `(async () => (await fetch('/api/v1/media/${mediaURL.split('/').pop()}', { cache: 'no-store' })).status)()`), 200);
   await api(dummy, '/users/me', 'PUT', { ...privateOwner, isPublic: originalDummy.isPublic });
@@ -777,6 +819,19 @@ try {
   await until(dummy, `document.querySelector('textarea[aria-label="Message"]').value === ''`, 'second group message sent');
   assert(await evaluate(dummy, `document.activeElement === document.querySelector('textarea[aria-label="Message"]')`), 'Mouse send restores composer focus');
   await checkMessageMenus(dummy, 'Message actions');
+  // The group chat makes the same promise as a direct one: a reply shows what it
+  // answered, for the member who wrote it and for the member who reads it.
+  const groupQuoted = `[...document.querySelectorAll('article')].find(item => item.innerText.includes(${JSON.stringify(`Second group message ${stamp}`)}))`;
+  await until(dummy, `!!(${groupQuoted})?.querySelector('button[aria-label="Reply to this message"]')`, 'the group message offers a reply');
+  await evaluate(dummy, `(${groupQuoted})?.querySelector('button[aria-label="Reply to this message"]').click()`);
+  await until(dummy, `document.querySelector('.dm-reply .dm-reply-text')?.textContent.includes(${JSON.stringify(`Second group message ${stamp}`)})`, 'the group composer names what is being answered');
+  await fill(dummy, 'textarea[aria-label="Message"]', `Group reply ${stamp}`);
+  await evaluate(dummy, `document.querySelector('[aria-label="Send message"]').click()`);
+  const groupReply = `[...document.querySelectorAll('article')].find(item => item.innerText.includes(${JSON.stringify(`Group reply ${stamp}`)}))`;
+  await until(dummy, `!!(${groupReply})?.querySelector('.dm-reply-quote')`, 'the group sender sees what they replied to');
+  await until(alex, `!!(${groupReply})?.querySelector('.dm-reply-quote')`, 'the group reader sees what was replied to');
+  assert(await evaluate(alex, `(${groupReply})?.querySelector('.dm-reply-quote-text')?.textContent.includes(${JSON.stringify(`Second group message ${stamp}`)})`), 'the group quote carries the answered message');
+  console.log('PASS: a group chat reply shows the message it answers');
   await button(dummy, 'Events');
   await button(dummy, 'New event');
   await fill(dummy, 'input[name="title"]', `Meetup ${stamp}`);
@@ -866,10 +921,30 @@ try {
   // items are the other members' groups, so the author's own tile is found by its label.
   const ownStoryTile = `button[aria-label^="Dummy User, your story"]`;
   await evaluate(dummy, `[...document.querySelectorAll('button')].find(button => button.textContent.includes('Your story')).click()`);
-  await fill(dummy, '[role="dialog"] textarea', `Browser story ${stamp}`);
+  // A long, multi-line moment has to be readable while it is written, and again when it is watched:
+  // the text shrinks to fit its frame, and a moment too long even for the smallest size stays
+  // scrollable rather than being clipped. The moderate moment is the one shared, so the viewer half
+  // of the rule is measured on it too.
+  const storyLine = 'A long moment has to be read end to end, never hidden behind a scrollbar.';
+  const storyMoment = `Browser story ${stamp}\n` + Array.from({ length: 5 }, () => storyLine).join('\n');
+  const longMoment = `Browser story ${stamp} long\n` + Array.from({ length: 12 }, () => storyLine).join('\n');
+  const composerFrame = `(() => {
+    const area = document.querySelector('[role="dialog"] textarea');
+    if (!area) return null;
+    const frame = area.parentElement;
+    const style = getComputedStyle(frame);
+    const available = frame.clientHeight - parseFloat(style.paddingTop) - parseFloat(style.paddingBottom);
+    return { available, clientHeight: area.clientHeight, scrollHeight: area.scrollHeight, overflowY: getComputedStyle(area).overflowY, fontSize: parseFloat(getComputedStyle(area).fontSize) };
+  })()`;
+  await fill(dummy, '[role="dialog"] textarea', longMoment);
+  await until(dummy, `(() => { const fit = ${composerFrame}; return !!fit && fit.clientHeight <= fit.available + 1 && fit.scrollHeight > fit.clientHeight + 1 && fit.overflowY === 'auto'; })()`, 'a moment too long for the frame stays scrollable instead of being clipped');
+  const longSize = await evaluate(dummy, composerFrame);
+  assert(longSize.fontSize < 20, `the story composer shrinks a long moment as far as the floor allows: ${JSON.stringify(longSize)}`);
+  await fill(dummy, '[role="dialog"] textarea', storyMoment);
+  await until(dummy, `(() => { const fit = ${composerFrame}; return !!fit && fit.scrollHeight <= fit.available + 1; })()`, 'the story composer fits a moderate moment without a scrollbar');
   await button(dummy, 'Share story');
   await until(dummy, `!document.querySelector('[role="dialog"]')`, 'the story composer closes');
-  storyId = (await api(dummy, '/stories')).find(story => story.content === `Browser story ${stamp}`).storyId;
+  storyId = (await api(dummy, '/stories')).find(story => story.content === storyMoment).storyId;
   await until(dummy, `!!document.querySelector(${JSON.stringify(ownStoryTile)})`, 'the story joins the author\'s own tile');
   await navigate(alex, '/');
   const dummyStoryTile = `[data-story-id][aria-label^="dummyuser"]`;
@@ -877,6 +952,26 @@ try {
   await until(alex, `document.querySelector(${JSON.stringify(dummyStoryRing)})?.dataset.storyRing === 'unseen'`, 'a fresh story wears the unseen ring for a reader');
   await evaluate(alex, `document.querySelector(${JSON.stringify(dummyStoryTile)}).click()`);
   await until(alex, `document.querySelector('[role="dialog"][aria-label="Story"]') !== null`, 'the story opens');
+  // The reader gets the whole moment at a size that fits the card — the same rule as the composer,
+  // measured the way `fitStoryText` measures it: the frame's content box against the text's own
+  // height, with the paragraph's absolute bottom taken out of the measurement first.
+  const storyFit = `(() => {
+    const text = document.querySelector('.story-text');
+    if (!text) return { ok: false, why: 'no text story' };
+    const frame = text.parentElement;
+    const style = getComputedStyle(frame);
+    const available = frame.clientHeight - parseFloat(style.paddingTop) - parseFloat(style.paddingBottom);
+    const bottom = text.style.bottom;
+    text.style.bottom = 'auto';
+    const needed = text.offsetHeight;
+    text.style.bottom = bottom;
+    return { ok: needed <= available + 1, fontSize: parseFloat(getComputedStyle(text).fontSize), needed, available, chars: text.textContent.length };
+  })()`;
+  await until(alex, `(${storyFit}).ok`, 'the story card fits the whole moment');
+  const viewerFit = await evaluate(alex, storyFit);
+  assert.equal(viewerFit.chars, storyMoment.length, `the whole moment is on the card: ${JSON.stringify(viewerFit)}`);
+  assert(viewerFit.fontSize <= 22, `a text story never grows past its designed size: ${JSON.stringify(viewerFit)}`);
+  console.log('PASS: a long text story shrinks to fit the composer and the story card, and scrolls when it cannot');
   await until(alex, `!!document.querySelector('input[aria-label="Reply to story"]')`, 'a reader is offered the reply box');
   await fill(alex, 'input[aria-label="Reply to story"]', `Browser reply ${stamp}`);
   await evaluate(alex, `document.querySelector('button[aria-label="Send reply"]').click()`);
@@ -970,6 +1065,27 @@ try {
   await fill(dummy, 'textarea[aria-label="Message"]', `Edited browser message ${stamp}`);
   await evaluate(dummy, `document.querySelector('[aria-label="Save message"]').click()`);
   await until(alex, `document.body.innerText.includes(${JSON.stringify(`Edited browser message ${stamp}`)})`, 'live message edit', 10000);
+  // The edit reaches the other side live, and both sides can see the words changed after they were
+  // sent: only the edited bubble is marked, and the marker knows when it happened.
+  const editedBubble = `[...document.querySelectorAll('article')].find(item => item.innerText.includes(${JSON.stringify(`Edited browser message ${stamp}`)}))`;
+  const untouchedBubble = `[...document.querySelectorAll('article')].find(item => item.innerText.includes(${JSON.stringify(`Second direct message ${stamp}`)}))`;
+  await until(alex, `!!(${editedBubble})?.querySelector('.dm-edited')`, 'the recipient sees the message marked as edited');
+  await until(dummy, `!!(${editedBubble})?.querySelector('.dm-edited')`, 'the editor sees the message marked as edited');
+  assert(await evaluate(dummy, `(() => { const node = ${untouchedBubble}; return !!node && !node.querySelector('.dm-edited'); })()`), 'a message that was never edited carries no marker');
+  assert(await evaluate(dummy, `(() => { const marker = (${editedBubble})?.querySelector('.dm-edited'); return !!marker && (marker.getAttribute('title') || '').startsWith('Edited '); })()`), 'the marker carries the instant of the edit');
+  console.log('PASS: an edited message is marked as edited on both sides, and only that message is');
+  // A reply has to keep showing the message it answers — that quote is the whole
+  // point of the control — on the sender's side and on the reader's.
+  await until(dummy, `!!(${untouchedBubble})?.querySelector('button[aria-label="Reply to this message"]')`, 'the message offers a reply');
+  await evaluate(dummy, `(${untouchedBubble})?.querySelector('button[aria-label="Reply to this message"]').click()`);
+  await until(dummy, `document.querySelector('.dm-reply .dm-reply-text')?.textContent.includes(${JSON.stringify(`Second direct message ${stamp}`)})`, 'the composer names what is being answered');
+  await fill(dummy, 'textarea[aria-label="Message"]', `Direct reply ${stamp}`);
+  await evaluate(dummy, `document.querySelector('[aria-label="Send message"]').click()`);
+  const directReply = `[...document.querySelectorAll('article')].find(item => item.innerText.includes(${JSON.stringify(`Direct reply ${stamp}`)}))`;
+  await until(dummy, `!!(${directReply})?.querySelector('.dm-reply-quote')`, 'the sender sees what they replied to');
+  await until(alex, `!!(${directReply})?.querySelector('.dm-reply-quote')`, 'the reader sees what was replied to');
+  assert(await evaluate(alex, `(${directReply})?.querySelector('.dm-reply-quote-text')?.textContent.includes(${JSON.stringify(`Second direct message ${stamp}`)})`), 'the quote carries the answered message');
+  console.log('PASS: a direct reply shows the message it answers on both sides of the conversation');
   await evaluate(alex, `document.querySelector('summary[aria-label="Message actions"]').click()`);
   await button(alex, 'Delete for me');
   await until(alex, `!document.body.innerText.includes(${JSON.stringify(`Edited browser message ${stamp}`)})`, 'delete for recipient');
@@ -999,6 +1115,30 @@ try {
   await evaluate(dummy, `document.querySelector('button[aria-label="Close details"]').click()`);
   await until(dummy, `!!document.querySelector('textarea[aria-label="Message"]')`, 'the thread keeps its composer');
   console.log('PASS: a conversation lists its attachments, and one opens in the app rather than a new tab');
+
+  // A file dragged over a conversation turns the composer into the drop target, whether it is let
+  // go on the thread or on the pill itself, and it sends exactly like a file picked from the disk.
+  const dropPhoto = (selector, type) => `(() => {
+    const binary = atob('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aD1sAAAAASUVORK5CYII=');
+    const bytes = new Uint8Array([...binary].map(character => character.charCodeAt(0)));
+    const transfer = new DataTransfer();
+    transfer.items.add(new File([bytes], 'dropped-photo.png', { type: 'image/png' }));
+    document.querySelector(${JSON.stringify(selector)}).dispatchEvent(new DragEvent(${JSON.stringify(type)}, { bubbles: true, cancelable: true, dataTransfer: transfer }));
+    return true;
+  })()`;
+  const photos = await evaluate(dummy, `document.querySelectorAll('img[alt="Message attachment"]').length`);
+  await evaluate(dummy, dropPhoto('.dm-thread', 'dragover'));
+  assert.equal(await evaluate(dummy, `document.querySelector('.dm-composer').getAttribute('data-drop')`), 'true', 'Dragging a file over the thread marks the composer as the drop target');
+  await evaluate(dummy, dropPhoto('.dm-thread', 'drop'));
+  await until(dummy, `document.querySelectorAll('.dm-attach-item').length === 1`, 'the file dropped on the thread becomes an attachment');
+  await clickAt(dummy, '[aria-label="Send message"]');
+  await until(dummy, `document.querySelectorAll('img[alt="Message attachment"]').length === ${photos + 1}`, 'the file dropped on the thread sends');
+  await evaluate(dummy, dropPhoto('.dm-composer-field', 'drop'));
+  await until(dummy, `document.querySelectorAll('.dm-attach-item').length === 1`, 'the file dropped on the composer becomes an attachment');
+  await clickAt(dummy, '[aria-label="Send message"]');
+  await until(dummy, `document.querySelectorAll('img[alt="Message attachment"]').length === ${photos + 2}`, 'the file dropped on the composer sends');
+  assert.equal(await evaluate(dummy, `document.querySelector('.dm-composer').getAttribute('data-drop')`), 'false', 'The drop target stands down once the files are in');
+  console.log('PASS: a photo dragged into the chat or onto the composer attaches and sends');
 
   const opened = await evaluate(alex, `(async () => {
     const url = (location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host + '/ws';
@@ -1213,8 +1353,54 @@ try {
       assert(fit.scrollWidth <= fit.viewport + 1, `${route} overflows at ${width}px: ${JSON.stringify(fit)}`);
     }
   }
+  // The discover search field is the one control on that page that reflows on its own: on a
+  // phone the field and its button stack full-width, and from `sm` up they sit in a row. Both
+  // ends are asserted so a later edit cannot quietly drop the stacking again.
+  const searchDirection = () => evaluate(dummy, `(() => { const input = document.querySelector('input[aria-label="Search people"]'); const form = input && input.closest('form'); return form ? getComputedStyle(form).flexDirection : 'missing'; })()`);
+  for (const width of [320, 375]) {
+    await command('Emulation.setDeviceMetricsOverride', { width, height: 900, deviceScaleFactor: 1, mobile: true }, dummy);
+    await navigate(dummy, '/discover');
+    const direction = await searchDirection();
+    assert(direction === 'column', `the discover search field stacks at ${width}px: ${direction}`);
+  }
+  await command('Emulation.setDeviceMetricsOverride', { width: 768, height: 900, deviceScaleFactor: 1, mobile: false }, dummy);
+  await navigate(dummy, '/discover');
+  assert(await searchDirection() === 'row', 'the discover search field is a row from 640px up');
   await command('Emulation.setDeviceMetricsOverride', { width: 1440, height: 960, deviceScaleFactor: 1, mobile: false }, dummy);
   console.log('PASS: the composer, messages, group chat, profile, notifications and discover fit 320, 375, 768 and 1440 px');
+  console.log('PASS: the discover search field stacks full-width on a phone and is a row from 640px up');
+  // A bio may be a single unbroken word (the field allows 1000 characters) and a discover card is
+  // a grid item, whose automatic minimum size is its content's min-content width: without
+  // `min-w-0` on the card the longest word decides how wide the card — and the whole grid — is.
+  // The bio is put on the member the list shows first and restored straight after.
+  const longWord = 'a'.repeat(600);
+  await api(alex, '/users/me', 'PUT', { ...originalAlex, bio: longWord });
+  try {
+    for (const width of [320, 375, 768]) {
+      await command('Emulation.setDeviceMetricsOverride', { width, height: 900, deviceScaleFactor: 1, mobile: width < 640 }, dummy);
+      await navigate(dummy, '/discover');
+      await until(dummy, `document.querySelector('main').textContent.includes(${JSON.stringify(longWord.slice(0, 40))})`, 'the long bio reaches the discover page');
+      const grid = await evaluate(dummy, `(() => {
+        const grid = [...document.querySelectorAll('main div')].find(node => getComputedStyle(node).display === 'grid');
+        const cards = [...grid.children];
+        const bio = cards.map(card => [...card.querySelectorAll('p')].find(node => !node.closest('a'))).find(node => node && node.textContent.length > 100);
+        return {
+          viewport: window.innerWidth,
+          scrollWidth: document.documentElement.scrollWidth,
+          gridWidth: Math.round(grid.getBoundingClientRect().width),
+          widestCard: Math.round(cards.reduce((acc, card) => Math.max(acc, card.getBoundingClientRect().width), 0)),
+          bioWidth: bio ? Math.round(bio.getBoundingClientRect().width) : -1,
+          bioChars: bio ? bio.textContent.length : 0,
+        };
+      })()`);
+      assert(grid.bioChars === longWord.length, `the long bio is rendered in a card at ${width}px: ${JSON.stringify(grid)}`);
+      assert(grid.scrollWidth <= grid.viewport + 1, `a long bio must not widen the page at ${width}px: ${JSON.stringify(grid)}`);
+      assert(grid.widestCard <= grid.gridWidth + 1 && grid.bioWidth <= grid.widestCard, `a long bio must not widen the card at ${width}px: ${JSON.stringify(grid)}`);
+    }
+  } finally {
+    await api(alex, '/users/me', 'PUT', originalAlex).catch(() => {});
+  }
+  console.log('PASS: a member whose bio is one long unbroken word does not widen the discover grid at 320, 375 and 768 px');
   assert.deepEqual(exceptions, [], 'Browser runtime exceptions');
   console.log('PASS: no browser runtime exceptions');
   assert.deepEqual(consoleErrors, [], `Browser console errors: ${JSON.stringify(consoleErrors.slice(0, 5))}`);
