@@ -1,11 +1,20 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useImperativeHandle, useRef, useState, type Ref } from 'react';
 import { ImagePlus, Smile, X } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { errorMessage } from '../../api/social';
+import { isImageType, isVideoType } from '../../lib/mediaLimits';
 
-export default function Composer({ onSend, onTyping, onDraft, initialText = '', editing = false, onCancel, allowVideo = false, placeholder = 'Message...', replyTo, onCancelReply }: {
+export interface ComposerHandle {
+  attach: (files: File[]) => void;
+}
+
+const MAX_MEDIA = 10;
+const UNSUPPORTED_IMAGE = 'Choose a JPEG, PNG, GIF or WebP image.';
+const UNSUPPORTED_MEDIA = 'Choose a JPEG, PNG, GIF, WebP, MP4 or WebM file.';
+
+export default function Composer({ onSend, onTyping, onDraft, initialText = '', editing = false, onCancel, allowVideo = false, placeholder = 'Message...', replyTo, onCancelReply, dropping = false, ref }: {
   onSend: (text: string, file: File | null) => Promise<void>;
   onTyping?: (typing: boolean) => void;
   onDraft?: (text: string) => void;
@@ -16,6 +25,11 @@ export default function Composer({ onSend, onTyping, onDraft, initialText = '', 
   placeholder?: string;
   replyTo?: { name: string; snippet: string } | null;
   onCancelReply?: () => void;
+  // A file is being dragged over the conversation this composer sits in. The zone itself belongs to
+  // the panel (see `useMediaDrop`), which hands the files over through the handle below: a drop on
+  // the thread and a drop on the pill have to end up as the same set of attachments.
+  dropping?: boolean;
+  ref?: Ref<ComposerHandle>;
 }) {
   const [text, setText] = useState(initialText);
   const [media, setMedia] = useState<{ file: File; url: string }[]>([]);
@@ -37,6 +51,25 @@ export default function Composer({ onSend, onTyping, onDraft, initialText = '', 
     element.style.height = `${Math.min(element.scrollHeight, 124)}px`;
     element.style.overflowY = element.scrollHeight > 124 ? 'auto' : 'hidden';
   }, [text]);
+
+  // One way in for media: the picker and a drop hand over the same files, so the accepted types,
+  // the cap and the previews are decided here rather than once per entrance.
+  const addFiles = useCallback((files: File[]) => {
+    const accepted = files.filter(file => isImageType(file.type) || (allowVideo && isVideoType(file.type)));
+    if (!accepted.length) { toast.error(allowVideo ? UNSUPPORTED_MEDIA : UNSUPPORTED_IMAGE); return; }
+    if (accepted.length > MAX_MEDIA - media.length) toast.error(`You can add up to ${MAX_MEDIA} attachments.`);
+    setAttachments(true);
+    setMedia(current => [...current, ...accepted.slice(0, Math.max(0, MAX_MEDIA - current.length)).map(file => ({ file, url: URL.createObjectURL(file) }))]);
+  }, [allowVideo, media.length]);
+
+  const attach = useCallback((files: File[]) => {
+    // An edit only rewrites the text of a message, and a send is already on its way: in both the
+    // previews would be thrown away again, so the drop is ignored rather than half taken.
+    if (editing || busy || !files.length) return;
+    addFiles(files);
+    textarea.current?.focus();
+  }, [editing, busy, addFiles]);
+  useImperativeHandle(ref, () => ({ attach }), [attach]);
 
   async function submit(event: React.FormEvent) {
     event.preventDefault();
@@ -65,8 +98,9 @@ export default function Composer({ onSend, onTyping, onDraft, initialText = '', 
   }
 
   const canSend = !!text.trim() || media.length > 0;
+  const dropActive = !editing && dropping;
 
-  return <form onSubmit={submit} className="dm-composer">
+  return <form onSubmit={submit} className="dm-composer" data-drop={dropActive}>
     {editing && <div className="dm-reply">
       <span className="dm-reply-text">Editing message</span>
       <button type="button" aria-label="Cancel edit" onClick={onCancel}><X aria-hidden="true" /></button>
@@ -75,6 +109,9 @@ export default function Composer({ onSend, onTyping, onDraft, initialText = '', 
       <span className="dm-reply-text">Replying to {replyTo.name}: {replyTo.snippet}</span>
       <button type="button" aria-label="Cancel reply" onClick={onCancelReply}><X aria-hidden="true" /></button>
     </div>}
+    {dropActive && <p className="dm-drop-hint">
+      <ImagePlus aria-hidden="true" />{allowVideo ? 'Drop photos or videos to attach' : 'Drop photos to attach'}
+    </p>}
     {media.length > 0 && <div className="dm-attach">
       {media.map((item, index) => <span key={item.url} className="dm-attach-item">
         <img src={item.url} alt={`Attachment ${index + 1}`} />
@@ -131,9 +168,7 @@ export default function Composer({ onSend, onTyping, onDraft, initialText = '', 
             onChange={event => {
               const selected = Array.from(event.target.files || []);
               event.target.value = '';
-              if (!selected.length) return;
-              setAttachments(true);
-              setMedia(current => [...current, ...selected.slice(0, Math.max(0, 10 - current.length)).map(file => ({ file, url: URL.createObjectURL(file) }))]);
+              if (selected.length) addFiles(selected);
             }}
           />
         </>}
