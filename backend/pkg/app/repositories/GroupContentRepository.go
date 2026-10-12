@@ -34,6 +34,7 @@ func (db *DB) ListGroupContent(groupID int, userID, kind string, parentID, offse
 		order = "datetime(c.startsAt) >= datetime('now') DESC, CASE WHEN datetime(c.startsAt) >= datetime('now') THEN datetime(c.startsAt) END ASC, datetime(c.startsAt) DESC, c.id DESC"
 	}
 	rows, err := db.Conn.Query(`SELECT c.id,c.groupId,c.userId,u.nickName,u.firstName,u.lastName,c.kind,COALESCE(c.parentId,0),c.title,c.content,c.mediaUrl,c.startsAt,c.createdAt,c.score,
+ CASE WHEN p.id IS NULL THEN 0 ELSE COALESCE(c.replyToId,0) END,COALESCE(p.content,''),COALESCE(p.userId,''),
  COALESCE((SELECT status FROM groupRSVP WHERE eventId=c.id AND userId=?),''),
  (SELECT COUNT(*) FROM groupRSVP WHERE eventId=c.id AND status='going'),
  (SELECT COUNT(*) FROM groupRSVP WHERE eventId=c.id AND status='not_going'),
@@ -42,7 +43,7 @@ func (db *DB) ListGroupContent(groupID int, userID, kind string, parentID, offse
   SELECT 1 FROM reaction r WHERE r.userId=? AND r.entityId=c.id
    AND r.entityType = CASE c.kind WHEN 'posts' THEN 'group_post' ELSE 'group_comment' END
  ) ELSE 0 END
- FROM groupContent c JOIN user u ON u.userId=c.userId WHERE c.groupId=? AND (c.kind=? OR (?='timeline' AND c.kind IN ('messages','events')) OR (?='media' AND c.mediaUrl<>'')) AND (?='media' OR COALESCE(c.parentId,0)=?) ORDER BY `+order+` LIMIT 31 OFFSET ?`, userID, userID, groupID, kind, kind, kind, kind, parentID, offset)
+ FROM groupContent c LEFT JOIN groupContent p ON p.id=c.replyToId JOIN user u ON u.userId=c.userId WHERE c.groupId=? AND (c.kind=? OR (?='timeline' AND c.kind IN ('messages','events')) OR (?='media' AND c.mediaUrl<>'')) AND (?='media' OR COALESCE(c.parentId,0)=?) ORDER BY `+order+` LIMIT 31 OFFSET ?`, userID, userID, groupID, kind, kind, kind, kind, parentID, offset)
 	if err != nil {
 		return nil, err
 	}
@@ -51,7 +52,7 @@ func (db *DB) ListGroupContent(groupID int, userID, kind string, parentID, offse
 	for rows.Next() {
 		var c models.GroupContent
 		var upcoming, likedByMe int
-		if err = rows.Scan(&c.ID, &c.GroupID, &c.UserID, &c.Nickname, &c.FirstName, &c.LastName, &c.Kind, &c.ParentID, &c.Title, &c.Content, &c.MediaURL, &c.StartsAt, &c.CreatedAt, &c.LikeCount, &c.RSVP, &c.Going, &c.NotGoing, &upcoming, &likedByMe); err != nil {
+		if err = rows.Scan(&c.ID, &c.GroupID, &c.UserID, &c.Nickname, &c.FirstName, &c.LastName, &c.Kind, &c.ParentID, &c.Title, &c.Content, &c.MediaURL, &c.StartsAt, &c.CreatedAt, &c.LikeCount, &c.ReplyToId, &c.ReplyToText, &c.ReplyToSenderId, &c.RSVP, &c.Going, &c.NotGoing, &upcoming, &likedByMe); err != nil {
 			return nil, err
 		}
 		c.Upcoming = upcoming != 0
@@ -67,7 +68,7 @@ func (db *DB) AddGroupContent(c models.GroupContent) (int, error) {
 		return 0, err
 	}
 	defer tx.Rollback()
-	result, err := tx.Exec(`INSERT INTO groupContent(groupId,userId,kind,parentId,title,content,mediaUrl,startsAt) VALUES(?,?,?,NULLIF(?,0),?,?,?,?)`, c.GroupID, c.UserID, c.Kind, c.ParentID, c.Title, c.Content, c.MediaURL, c.StartsAt)
+	result, err := tx.Exec(`INSERT INTO groupContent(groupId,userId,kind,parentId,title,content,mediaUrl,startsAt,replyToId) VALUES(?,?,?,NULLIF(?,0),?,?,?,?,?)`, c.GroupID, c.UserID, c.Kind, c.ParentID, c.Title, c.Content, c.MediaURL, c.StartsAt, c.ReplyToId)
 	if err != nil {
 		return 0, err
 	}
