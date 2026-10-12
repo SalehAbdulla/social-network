@@ -118,6 +118,9 @@ export interface ChatMessage {
   messageId: number; senderId: string; recipientId: string; textMessage: string; timeStamp: string;
   isRead: number; mediaUrl: string; mediaType: string; editedAt: string;
   score: number; userScore: number;
+  // A reply names the message it answers and carries that message's text and
+  // author, so the bubble can show what was replied to. Zero/empty otherwise.
+  replyToId: number; replyToText: string; replyToSenderId: string;
 }
 export interface ConversationMedia { messageId: number; mediaUrl: string; mediaType: string; timeStamp: string }
 

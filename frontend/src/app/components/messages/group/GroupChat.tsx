@@ -1,13 +1,14 @@
 'use client';
 
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useMemo, useRef, useState } from 'react';
 import { CalendarDays, MessageCircle } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { type ChatMessage, type GroupMember, displayName, errorMessage, request, upload } from '../../../api/social';
 import { usePagedList } from '../../../lib/usePagedList';
 import { useResource } from '../../../lib/useResource';
 import { useLiveRefresh } from '../../../lib/useLiveRefresh';
-import Composer from '../Composer';
+import { useMediaDrop } from '../../../lib/useMediaDrop';
+import Composer, { type ComposerHandle } from '../Composer';
 import MessageThread from '../MessageThread';
 import { GROUP_PAGE_SIZE, isVideo, rsvpTally, type GroupItem } from './groupContent';
 import { eventWhen } from './groupTime';
@@ -27,6 +28,9 @@ function toMessage(item: GroupItem): ChatMessage {
     score: 0,
     userScore: 0,
     editedAt: '',
+    replyToId: item.replyToId ?? 0,
+    replyToText: item.replyToText ?? '',
+    replyToSenderId: item.replyToSenderId ?? '',
   };
 }
 
@@ -48,6 +52,10 @@ export default function GroupChat({ groupId, meId, isOwner, onOpenEvents, onEdit
   const [replyTo, setReplyTo] = useState<GroupItem | null>(null);
   const [viewer, setViewer] = useState<GroupItem | null>(null);
   const [answering, setAnswering] = useState(false);
+  const composer = useRef<ComposerHandle>(null);
+  // The chat is its own drop zone rather than the whole group section: a file let go over the
+  // posts or events tab belongs to that tab's composer, not to this one.
+  const drop = useMediaDrop({ onFiles: files => composer.current?.attach(files) });
   useLiveRefresh(resource.refresh, groupId);
   useLiveRefresh(members.reload, groupId);
   const byId = useMemo(() => new Map(resource.items.map(item => [item.id, item])), [resource.items]);
@@ -96,53 +104,57 @@ export default function GroupChat({ groupId, meId, isOwner, onOpenEvents, onEdit
   }
 
   return <>
-    {resource.settled && !resource.error && items.length === 0
-      ? <div className="dm-empty">
-        <span className="dm-empty-icon"><MessageCircle aria-hidden="true" /></span>
-        <p className="dm-empty-title">No messages yet</p>
-        <p className="dm-empty-text">Say hello to start the conversation.</p>
-      </div>
-      : <MessageThread
-        items={items}
-        meId={meId}
-        partnerId=""
-        partnerName="Member"
-        partnerHandle=""
-        partnerAvatar=""
-        loading={resource.loading}
-        error={resource.error}
-        onRetry={resource.reload}
-        hasMore={resource.hasMore}
-        loadingMore={resource.loadingMore}
-        onLoadMore={resource.loadMore}
-        typing={false}
-        isGroup
-        showIntro={false}
-        allowReact={false}
-        richOf={richOf}
-        senderOf={userId => {
-          const member = roster.get(userId);
-          return { name: member ? displayName(member) : 'Member', avatar: member?.avatar ?? '' };
+    <div className="contents" {...drop.dropProps}>
+      {resource.settled && !resource.error && items.length === 0
+        ? <div className="dm-empty">
+          <span className="dm-empty-icon"><MessageCircle aria-hidden="true" /></span>
+          <p className="dm-empty-title">No messages yet</p>
+          <p className="dm-empty-text">Say hello to start the conversation.</p>
+        </div>
+        : <MessageThread
+          items={items}
+          meId={meId}
+          partnerId=""
+          partnerName="Member"
+          partnerHandle=""
+          partnerAvatar=""
+          loading={resource.loading}
+          error={resource.error}
+          onRetry={resource.reload}
+          hasMore={resource.hasMore}
+          loadingMore={resource.loadingMore}
+          onLoadMore={resource.loadMore}
+          typing={false}
+          isGroup
+          showIntro={false}
+          allowReact={false}
+          richOf={richOf}
+          senderOf={userId => {
+            const member = roster.get(userId);
+            return { name: member ? displayName(member) : 'Member', avatar: member?.avatar ?? '' };
+          }}
+          embedOf={embed}
+          onReact={() => {}}
+          onDelete={messageId => { const item = byId.get(messageId); if (item) void remove(item); }}
+          onEdit={message => { const item = byId.get(message.messageId); if (item) onEdit(item); }}
+          onReply={message => { const item = byId.get(message.messageId); if (item) setReplyTo(item); }}
+          onOpenMedia={images => setViewer(resource.items.find(entry => entry.mediaUrl === images[0]) ?? null)}
+        />}
+      <Composer
+        ref={composer}
+        placeholder="Message..."
+        allowVideo
+        dropping={drop.dropping}
+        replyTo={replyTo ? { name: replyTo.userId === meId ? 'your message' : (replyTo.firstName || replyTo.nickname || 'a message'), snippet: replyTo.content || 'Attachment' } : null}
+        onCancelReply={() => setReplyTo(null)}
+        onSend={async (text, file) => {
+          const media = file ? await upload(file) : null;
+          await request(`/groups/${groupId}/content/messages`, 'POST', { content: text, mediaUrl: media?.url || '', replyToId: replyTo?.id ?? 0 });
+          setReplyTo(null);
+          resource.refresh();
         }}
-        embedOf={embed}
-        onReact={() => {}}
-        onDelete={messageId => { const item = byId.get(messageId); if (item) void remove(item); }}
-        onEdit={message => { const item = byId.get(message.messageId); if (item) onEdit(item); }}
-        onReply={message => { const item = byId.get(message.messageId); if (item) setReplyTo(item); }}
-        onOpenMedia={images => setViewer(resource.items.find(entry => entry.mediaUrl === images[0]) ?? null)}
-      />}
-    <Composer
-      placeholder="Message..."
-      allowVideo
-      replyTo={replyTo ? { name: replyTo.firstName || replyTo.nickname || 'a message', snippet: replyTo.content || 'Attachment' } : null}
-      onCancelReply={() => setReplyTo(null)}
-      onSend={async (text, file) => {
-        const media = file ? await upload(file) : null;
-        await request(`/groups/${groupId}/content/messages`, 'POST', { content: text, mediaUrl: media?.url || '' });
-        setReplyTo(null);
-        resource.refresh();
-      }}
-    />
+      />
+    </div>
     {viewer && <GroupLightbox
       items={[viewer]}
       index={0}

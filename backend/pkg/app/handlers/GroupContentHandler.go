@@ -84,10 +84,11 @@ func (re *HandlerContext) GroupContent(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var input struct {
-		Title    string `json:"title"`
-		Content  string `json:"content"`
-		MediaURL string `json:"mediaUrl"`
-		StartsAt string `json:"startsAt"`
+		Title     string `json:"title"`
+		Content   string `json:"content"`
+		MediaURL  string `json:"mediaUrl"`
+		StartsAt  string `json:"startsAt"`
+		ReplyToID int    `json:"replyToId"`
 	}
 	if !re.decode(w, r, &input) {
 		return
@@ -130,7 +131,19 @@ func (re *HandlerContext) GroupContent(w http.ResponseWriter, r *http.Request) {
 	} else {
 		input.StartsAt = ""
 	}
-	c := models.GroupContent{GroupID: groupID, UserID: userID, Kind: kind, ParentID: parentID, Title: input.Title, Content: input.Content, MediaURL: input.MediaURL, StartsAt: input.StartsAt}
+	if input.ReplyToID != 0 {
+		// Only a chat message may reply, and only to another message in this
+		// same group, so the quote can never point outside the group.
+		if kind != "messages" {
+			re.HandleError(w, r, backend.ErrBadRequest)
+			return
+		}
+		if err := re.GroupService.Repo.GroupContentExists(groupID, input.ReplyToID, "messages"); err != nil {
+			re.HandleError(w, r, backend.ErrBadRequest)
+			return
+		}
+	}
+	c := models.GroupContent{GroupID: groupID, UserID: userID, Kind: kind, ParentID: parentID, Title: input.Title, Content: input.Content, MediaURL: input.MediaURL, StartsAt: input.StartsAt, ReplyToId: input.ReplyToID}
 	if contentID > 0 {
 		_, err := re.GroupService.Repo.Conn.Exec("UPDATE groupContent SET title=?,content=?,mediaUrl=?,startsAt=? WHERE groupId=? AND id=?", c.Title, c.Content, c.MediaURL, c.StartsAt, groupID, contentID)
 		if err != nil {

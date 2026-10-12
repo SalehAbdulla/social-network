@@ -1,7 +1,9 @@
 'use client';
 
+import { useLayoutEffect } from 'react';
 import { ImagePlus, Palette, Type } from 'lucide-react';
 import { type SocialUser } from '../../api/social';
+import { fitStoryText } from '../../lib/storyText';
 import Avatar from '../Avatar';
 import { ROW } from './rows';
 import VisibilityRow from './VisibilityRow';
@@ -26,6 +28,17 @@ export default function StoryComposer({ text, onText, color, onColor, media, onP
   onToggleFollower: (id: string) => void;
   followersLoading: boolean;
 }) {
+  // A multi-line moment has to be read in full while it is written, so the text
+  // shrinks to fit the frame instead of being cropped behind a scrollbar.
+  useLayoutEffect(() => {
+    const area = textRef.current;
+    if (!area) return;
+    const fit = () => fitStoryText(area, 18, 12);
+    fit();
+    window.addEventListener('resize', fit);
+    return () => window.removeEventListener('resize', fit);
+  }, [text, media, textRef]);
+
   return <div className="cp-panel">
     <div className="cp-author">
       <Avatar name="You" size={28} />
@@ -45,7 +58,7 @@ export default function StoryComposer({ text, onText, color, onColor, media, onP
             onChange={event => onText(event.target.value)}
             placeholder="Share a moment?"
             dir="auto"
-            className="max-h-full w-full resize-none bg-transparent p-4 text-center text-lg text-white outline-none placeholder:text-white/70"
+            className="w-full resize-none overflow-y-auto bg-transparent p-4 text-center text-white outline-none placeholder:text-white/70"
           />}
       </div>
     </div>

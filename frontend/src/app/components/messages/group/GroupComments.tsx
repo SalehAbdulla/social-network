@@ -68,6 +68,9 @@ export default function GroupComments({ groupId, postId, meId, isOwner, comments
       upcoming: false,
       likeCount: 0,
       likedByMe: false,
+      replyToId: 0,
+      replyToText: '',
+      replyToSenderId: '',
     };
     comments.setItems(items => [...items, optimistic]);
     setText('');

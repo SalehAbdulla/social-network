@@ -102,7 +102,9 @@ func (re *HandlerContext) handlePrivateMessage(sender *pkgwebsocket.Client, msg 
 		return
 	}
 
-	savedMsg, err := re.MessageService.SendMessage(sender.UserID, payload.RecipientId, payload.Text)
+	// The composer sends (and can reply) over REST, so this legacy socket path
+	// carries no reply target; 0 means "not a reply".
+	savedMsg, err := re.MessageService.SendMessage(sender.UserID, payload.RecipientId, payload.Text, 0)
 	if err != nil {
 		log.Printf("failed to save message: %v", err)
 		return

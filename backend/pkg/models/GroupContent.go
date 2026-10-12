@@ -20,4 +20,10 @@ type GroupContent struct {
 	Upcoming  bool   `json:"upcoming"`
 	LikeCount int    `json:"likeCount"`
 	LikedByMe bool   `json:"likedByMe"`
+	// A group chat message can answer an earlier one; the parent's text and
+	// author travel with it so the bubble shows what was replied to. Zero/empty
+	// when the item is not a reply.
+	ReplyToId       int    `json:"replyToId"`
+	ReplyToText     string `json:"replyToText"`
+	ReplyToSenderId string `json:"replyToSenderId"`
 }

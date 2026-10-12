@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import toast from 'react-hot-toast';
 import { type ChatUser, type ChatMessage, type ConversationMedia, type SocialUser, type SocketEvent, displayName, errorMessage, request, upload } from '../api/social';
@@ -8,13 +8,14 @@ import { useBackend } from './BackendProvider';
 import { usePagedList } from '../lib/usePagedList';
 import { useResource } from '../lib/useResource';
 import { useLiveRefresh } from '../lib/useLiveRefresh';
+import { useMediaDrop } from '../lib/useMediaDrop';
 import Avatar from './Avatar';
 import Lightbox from './Lightbox';
 import { messageBlockedReason } from './MessageAction';
 import ChatHeader from './messages/ChatHeader';
 import DockHeader from './messages/DockHeader';
 import MessageThread from './messages/MessageThread';
-import Composer from './messages/Composer';
+import Composer, { type ComposerHandle } from './messages/Composer';
 import DetailsPanel from './messages/DetailsPanel';
 
 const MESSAGES_PER_PAGE = 10;
@@ -66,6 +67,11 @@ export default function DirectConversation({ partner, person, variant = 'page', 
   const [typing, setTyping] = useState(false);
   const [busy, setBusy] = useState(false);
   const [composerSeed, setComposerSeed] = useState(0);
+  const composer = useRef<ComposerHandle>(null);
+  // The whole panel is the drop zone, so a file can be let go on the thread or on the pill; the
+  // composer owns what happens to it next. Neither an edit nor a conversation the chat rule refuses
+  // can take a photo, so the zone stays dark there.
+  const drop = useMediaDrop({ enabled: !blocked && !editing, onFiles: files => composer.current?.attach(files) });
   useLiveRefresh(thread.refresh);
 
   useEffect(() => {
@@ -96,7 +102,7 @@ export default function DirectConversation({ partner, person, variant = 'page', 
     if (editing) await request(`/messages/${editing.messageId}`, 'PUT', { text });
     else {
       const uploaded = file ? await upload(file) : null;
-      await request('/messages', 'POST', { recipientId: partner, text, mediaUrl: uploaded?.url || '', mediaType: uploaded?.mediaType || '' });
+      await request('/messages', 'POST', { recipientId: partner, text, mediaUrl: uploaded?.url || '', mediaType: uploaded?.mediaType || '', replyToId: replyTo?.messageId ?? 0 });
     }
     setEditing(null);
     setReplyTo(null);
@@ -143,7 +149,7 @@ export default function DirectConversation({ partner, person, variant = 'page', 
   }
 
   return <>
-    <div className={dock ? 'dm-panel dm-panel-dock' : 'dm-panel'}>
+    <div className={dock ? 'dm-panel dm-panel-dock' : 'dm-panel'} {...drop.dropProps}>
       {dock
         ? <DockHeader
           name={name}
@@ -192,15 +198,17 @@ export default function DirectConversation({ partner, person, variant = 'page', 
           />
           <Composer
             key={`${editing?.messageId ?? 'new'}-${composerSeed}`}
+            ref={composer}
             initialText={editing?.textMessage ?? (dock ? draft : undefined)}
             editing={!!editing}
             onCancel={() => setEditing(null)}
-            replyTo={replyTo ? { name: 'your message', snippet: replyTo.textMessage || 'Attachment' } : null}
+            replyTo={replyTo ? { name: replyTo.senderId === user.userId ? 'your message' : name, snippet: replyTo.textMessage || 'Attachment' } : null}
             onCancelReply={() => setReplyTo(null)}
             onSend={send}
             onTyping={announceTyping}
             onDraft={onDraft}
             allowVideo
+            dropping={drop.dropping}
           />
         </>}
     </div>

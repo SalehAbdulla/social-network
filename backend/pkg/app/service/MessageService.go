@@ -12,7 +12,7 @@ type MessageService interface {
 	GetChatUsers(currentUserID string) ([]message.ChatUserDTO, error)
 	GetMessages(conversationPartnerID string, currentUserID string, offset int, limit int) (message.MessagesResponse, error)
 	GetConversationMedia(conversationPartnerID string, currentUserID string, offset int, limit int) (message.ConversationMediaResponse, error)
-	SendMessage(senderID string, recipientID string, textMessage string) (message.MessageDTO, error)
+	SendMessage(senderID string, recipientID string, textMessage string, replyToID int) (message.MessageDTO, error)
 	GetUserNickname(userID string) (string, error)
 }
 
@@ -64,6 +64,10 @@ func (m MessageServiceImpl) GetMessages(conversationPartnerID string, currentUse
 			IsRead:      msg.IsRead,
 			Score:       msg.Score,
 			UserScore:   msg.UserScore,
+			ReplyToId:   msg.ReplyToId,
+			ReplyToText: msg.ReplyToText,
+			// The parent's author travels so the bubble can name who was replied to.
+			ReplyToSenderId: msg.ReplyToSenderId,
 		}
 	}
 
@@ -113,7 +117,7 @@ func (m MessageServiceImpl) GetConversationMedia(conversationPartnerID string, c
 	}, nil
 }
 
-func (m MessageServiceImpl) SendMessage(senderID string, recipientID string, textMessage string) (message.MessageDTO, error) {
+func (m MessageServiceImpl) SendMessage(senderID string, recipientID string, textMessage string, replyToID int) (message.MessageDTO, error) {
 	textMessage = strings.TrimSpace(textMessage)
 	if utf8.RuneCountInString(textMessage) > 2000 {
 		return message.MessageDTO{}, realtimeforum.ErrBadRequest
@@ -132,7 +136,7 @@ func (m MessageServiceImpl) SendMessage(senderID string, recipientID string, tex
 		return message.MessageDTO{}, realtimeforum.ErrForbidden
 	}
 
-	msg, err := m.messageRepo.SaveMessage(senderID, recipientID, textMessage)
+	msg, err := m.messageRepo.SaveMessage(senderID, recipientID, textMessage, replyToID)
 	if err != nil {
 		return message.MessageDTO{}, err
 	}
@@ -147,6 +151,10 @@ func (m MessageServiceImpl) SendMessage(senderID string, recipientID string, tex
 		TextMessage: msg.TextMessage,
 		TimeStamp:   msg.TimeStamp,
 		IsRead:      msg.IsRead,
+		ReplyToId:   msg.ReplyToId,
+		ReplyToText: msg.ReplyToText,
+		// The parent's author travels so the bubble can name who was replied to.
+		ReplyToSenderId: msg.ReplyToSenderId,
 	}, nil
 }
 

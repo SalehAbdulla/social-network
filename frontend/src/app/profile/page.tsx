@@ -202,6 +202,7 @@ export default function Profile() {
         followState={followState}
         canMessage={profile.data.canMessage === true}
         isFollowingBusy={isFollowingBusy}
+        canOpenFollows={canViewProfile}
         hasStories={hasStories}
         storyUnseen={authorHasUnseen(profileStories)}
         onAvatarClick={() => setIsEditing(true)}

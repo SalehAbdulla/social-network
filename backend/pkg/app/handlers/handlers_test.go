@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	backend "social-network/backend"
@@ -169,6 +170,23 @@ func TestIsASCII(t *testing.T) {
 	}
 }
 
+func TestIsASCIIText(t *testing.T) {
+	for value, want := range map[string]bool{
+		"":                 true,
+		"Hello, world! 42": true,
+		"two\nlines":       true,
+		"three\r\nlines":   true,
+		"café":             false,
+		"emoji 😀":          false,
+		"tab\tseparated":   false,
+		"\x00null":         false,
+	} {
+		if got := isASCIIText(value); got != want {
+			t.Fatalf("isASCIIText(%q) = %v, want %v", value, got, want)
+		}
+	}
+}
+
 func decodeEnvelope(t *testing.T, recorder *httptest.ResponseRecorder) (success bool, data map[string]string, message string, code int) {
 	t.Helper()
 	var body struct {
@@ -213,6 +231,39 @@ func TestReadyFailsClosedWithoutADatabase(t *testing.T) {
 			success, _, message, code := decodeEnvelope(t, recorder)
 			if success || code != http.StatusServiceUnavailable || message != "database unreachable" {
 				t.Fatalf("a failed probe must not answer a success envelope: %d %s %s", recorder.Code, message, recorder.Body.String())
+			}
+		})
+	}
+}
+
+// A comment is words or a photo. The words keep their 3-300 range, and an empty one is only ever
+// allowed when an image comes with it — the photo side of that rule is exercised in the browser
+// suite, where a real upload can be attached.
+func TestACommentNeedsWordsOrAPhoto(t *testing.T) {
+	re := testContext(t, "http://localhost:4000")
+	for _, testCase := range []struct {
+		name  string
+		body  string
+		valid bool
+	}{
+		{"a sentence", `{"postId":"p1","content":"Nice one"}`, true},
+		{"exactly three characters", `{"postId":"p1","content":"Yes"}`, true},
+		{"three hundred characters", `{"postId":"p1","content":"` + strings.Repeat("a", 300) + `"}`, true},
+		{"no words and no photo", `{"postId":"p1","content":""}`, false},
+		{"whitespace is not a caption", `{"postId":"p1","content":"   "}`, false},
+		{"two characters", `{"postId":"p1","content":"hi"}`, false},
+		{"three hundred and one characters", `{"postId":"p1","content":"` + strings.Repeat("a", 301) + `"}`, false},
+	} {
+		t.Run(testCase.name, func(t *testing.T) {
+			recorder := httptest.NewRecorder()
+			request := httptest.NewRequest("POST", "/api/v1/posts/comments", strings.NewReader(testCase.body))
+			request.Header.Set("Content-Type", "application/json")
+			_, valid := re.commentInput(recorder, request, "someone")
+			if valid != testCase.valid {
+				t.Fatalf("valid = %v, want %v (%s)", valid, testCase.valid, recorder.Body.String())
+			}
+			if !valid && recorder.Code != http.StatusBadRequest {
+				t.Fatalf("a refused comment must answer 400, got %d", recorder.Code)
 			}
 		})
 	}

@@ -228,7 +228,7 @@ func (re *HandlerContext) postInput(w http.ResponseWriter, r *http.Request, user
 		return req, false
 	}
 
-	if !isASCII(content) {
+	if !isASCIIText(content) {
 		re.HandleError(w, r, realtimeforum.ErrNonASCII)
 		return req, false
 	}

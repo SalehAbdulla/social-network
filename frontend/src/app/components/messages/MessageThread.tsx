@@ -195,6 +195,7 @@ export default function MessageThread({ items, meId, partnerId, partnerName, par
             allowReact={allowReact}
             senderName={mine ? 'You' : sender?.name ?? partnerName}
             senderAvatar={mine ? '' : sender?.avatar ?? partnerAvatar}
+            replyName={message.replyToId ? (message.replyToSenderId === meId ? 'You' : senderOf?.(message.replyToSenderId)?.name ?? partnerName) : ''}
             onReact={onReact}
             onDelete={onDelete}
             onEdit={onEdit}

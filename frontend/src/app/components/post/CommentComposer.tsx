@@ -3,18 +3,21 @@
 import { useRef } from 'react';
 import { ImagePlus } from 'lucide-react';
 
-export default function CommentComposer({ postId, value, onChange, onSubmit, busy, canAddPhoto, onPickFiles }: {
+export default function CommentComposer({ postId, value, onChange, onSubmit, busy, canAddPhoto, hasFiles = false, onPickFiles }: {
   postId: string;
   value: string;
   onChange: (value: string) => void;
   onSubmit: () => void;
   busy: boolean;
   canAddPhoto: boolean;
+  hasFiles?: boolean;
   onPickFiles: (files: File[]) => void;
 }) {
   const file = useRef<HTMLInputElement>(null);
   const hasText = !!value.trim();
-  return <form className="pv-composer" onSubmit={event => { event.preventDefault(); if (value.trim()) onSubmit(); }}>
+  // A comment is words or a photo, so the button and Enter wait for either one of them.
+  const ready = hasText || hasFiles;
+  return <form className="pv-composer" onSubmit={event => { event.preventDefault(); if (ready) onSubmit(); }}>
     <textarea
       id={`comment-${postId}`}
       value={value}
@@ -29,13 +32,13 @@ export default function CommentComposer({ postId, value, onChange, onSubmit, bus
         node.style.height = `${Math.min(node.scrollHeight, 72)}px`;
       }}
       onKeyDown={event => {
-        if (event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); if (value.trim()) onSubmit(); }
+        if (event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); if (ready) onSubmit(); }
       }}
     />
     {canAddPhoto && <>
       <button type="button" className="pv-action" style={{ display: hasText ? 'none' : undefined }} aria-label="Add photos" title="JPEG, PNG, GIF or WebP · 10 MB each · between 1:2 and 2:1 · up to 4" disabled={busy} onClick={() => file.current?.click()}><ImagePlus aria-hidden="true" /></button>
       <input ref={file} type="file" aria-label="Add photos" accept="image/jpeg,image/png,image/gif,image/webp" multiple className="sr-only" onChange={event => { onPickFiles([...(event.target.files ?? [])]); event.currentTarget.value = ''; }} />
     </>}
-    {hasText && <button type="submit" className="pv-post" disabled={busy}>Post</button>}
+    {ready && <button type="submit" className="pv-post" disabled={busy}>Post</button>}
   </form>;
 }

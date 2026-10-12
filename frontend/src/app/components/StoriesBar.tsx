@@ -1,5 +1,5 @@
 'use client';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { ChevronLeft, ChevronRight, MoreVertical, Plus, Trash2 } from 'lucide-react';
 import toast from 'react-hot-toast';
@@ -8,6 +8,7 @@ import { useDialogFocus } from '../lib/useDialogFocus';
 import { usePagedList } from '../lib/usePagedList';
 import { useResource } from '../lib/useResource';
 import { mediaImageProps } from '../lib/mediaVariants';
+import { fitStoryText } from '../lib/storyText';
 import { authorHasUnseen, firstUnseenIndex, findPosition, groupStories, startPosition, type StoryGroup } from '../lib/storySequence';
 import { useBackend } from './BackendProvider';
 import LoadMore from './LoadMore';
@@ -27,6 +28,16 @@ export function CreateStory({ close, saved }: { close: () => void; saved: () => 
   const dialog = useDialogFocus<HTMLDivElement>(close, { initialFocus: firstField });
   const followers = useResource<FollowLists>('/users/me/follows', privacy === 'selected');
   useEffect(() => () => { if (media) URL.revokeObjectURL(media.preview); }, [media]);
+  // A multi-line moment has to be read in full while it is written, so the text
+  // shrinks to fit the frame instead of being cropped behind a scrollbar.
+  useLayoutEffect(() => {
+    const area = firstField.current;
+    if (!area) return;
+    const fit = () => fitStoryText(area, 20, 12);
+    fit();
+    window.addEventListener('resize', fit);
+    return () => window.removeEventListener('resize', fit);
+  }, [text, media]);
   function toggleFollower(id: string) {
     setSelectedFollowers(current => current.includes(id) ? current.filter(value => value !== id) : [...current, id]);
   }
@@ -45,7 +56,7 @@ export function CreateStory({ close, saved }: { close: () => void; saved: () => 
     } catch (error) { toast.error(errorMessage(error)); } finally { setBusy(false); }
   }
   return <div ref={dialog} tabIndex={-1} className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-black/70 p-4" role="dialog" aria-modal="true" aria-label="Create story"><form onSubmit={submit} className="w-full max-w-md space-y-4 rounded-xl bg-white p-5"><div className="flex justify-between"><h2 className="text-xl font-bold">Create story</h2><button type="button" onClick={close} aria-label="Close story composer">Close</button></div>
-    <div className="flex h-72 items-center justify-center overflow-hidden rounded-lg p-3" style={{ backgroundColor: color }}>{media ? media.file.type.startsWith('video/') ? <video src={media.preview} controls className="max-h-full" /> : <img src={media.preview} alt="Story preview" className="max-h-full object-contain" /> : <textarea ref={firstField} required={!media} maxLength={1000} value={text} onChange={event => setText(event.target.value)} placeholder="Share a moment?" className="h-full w-full resize-none bg-transparent p-3 text-xl text-white placeholder:text-white/70 outline-none" />}</div>
+    <div className="flex h-72 items-center justify-center overflow-hidden rounded-lg p-3" style={{ backgroundColor: color }}>{media ? media.file.type.startsWith('video/') ? <video src={media.preview} controls className="max-h-full" /> : <img src={media.preview} alt="Story preview" className="max-h-full object-contain" /> : <textarea ref={firstField} required={!media} maxLength={1000} value={text} onChange={event => setText(event.target.value)} placeholder="Share a moment?" className="w-full resize-none overflow-y-auto bg-transparent p-3 text-center text-white placeholder:text-white/70 outline-none" />}</div>
     <label className="flex items-center gap-3 text-sm">Background<input type="color" value={color} onChange={event => setColor(event.target.value)} /></label>
     <label className="block text-sm">Photo or video<input type="file" accept="image/jpeg,image/png,image/gif,image/webp,video/mp4,video/webm" onChange={event => { const file = event.target.files?.[0]; setMedia(file ? { file, preview: URL.createObjectURL(file) } : null); }} className="mt-2 block w-full" /></label>
     {media && <button type="button" onClick={() => setMedia(null)} className="text-sm text-blue-600">Use text instead</button>}
