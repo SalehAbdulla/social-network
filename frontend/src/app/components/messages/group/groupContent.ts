@@ -19,6 +19,11 @@ export interface GroupItem {
   upcoming: boolean;
   likeCount: number;
   likedByMe: boolean;
+  // A group chat message can answer an earlier one; the parent's text and author
+  // come with it so the bubble shows what was replied to. Zero/empty otherwise.
+  replyToId: number;
+  replyToText: string;
+  replyToSenderId: string;
 }
 
 export const GROUP_PAGE_SIZE = 30;
