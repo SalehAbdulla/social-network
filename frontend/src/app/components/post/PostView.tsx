@@ -131,7 +131,8 @@ export default function PostView({ post, group = false, avatarOf, canManage, sha
 
   async function submit() {
     const value = text.trim();
-    if (posting || !value) return;
+    // A photo is a comment of its own, so the words are optional once something is attached.
+    if (posting || (!value && !files.length)) return;
     setPosting(true);
     try {
       const imageUrls = (await Promise.all(files.map(item => upload(item.file)))).map(result => result.url);
@@ -193,7 +194,7 @@ export default function PostView({ post, group = false, avatarOf, canManage, sha
             <button type="button" aria-label={`Remove ${item.file.name}`} onClick={() => setFiles(current => current.filter(entry => entry.url !== item.url))}>×</button>
           </span>)}
         </div>}
-        <CommentComposer postId={post.postId} value={text} onChange={setText} onSubmit={() => void submit()} busy={posting} canAddPhoto onPickFiles={addFiles} />
+        <CommentComposer postId={post.postId} value={text} onChange={setText} onSubmit={() => void submit()} busy={posting} canAddPhoto hasFiles={files.length > 0} onPickFiles={addFiles} />
       </div>}
     </div>
     {viewer !== null && <Lightbox images={post.imageUrls} startIndex={viewer} label="Post photos" onClose={() => setViewer(null)} />}
