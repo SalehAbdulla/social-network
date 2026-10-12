@@ -10,7 +10,7 @@ import MediaImage from '../ui/MediaImage';
 import DmMessageMenu from './DmMessageMenu';
 import { exactTime } from './time';
 
-export default function MessageBubble({ message, meId, first, last, rich, lastSent, isGroup, senderName, senderAvatar, embed = null, allowReact = true, onReact, onDelete, onEdit, onReply, onOpenMedia }: {
+export default function MessageBubble({ message, meId, first, last, rich, lastSent, isGroup, senderName, senderAvatar, replyName = '', embed = null, allowReact = true, onReact, onDelete, onEdit, onReply, onOpenMedia }: {
   message: ChatMessage;
   meId: string;
   first: boolean;
@@ -20,6 +20,8 @@ export default function MessageBubble({ message, meId, first, last, rich, lastSe
   isGroup: boolean;
   senderName: string;
   senderAvatar: string;
+  // Who wrote the message this one replies to, resolved by the thread.
+  replyName?: string;
   embed?: ReactNode;
   allowReact?: boolean;
   onReact: (message: ChatMessage) => void;
@@ -47,17 +49,24 @@ export default function MessageBubble({ message, meId, first, last, rich, lastSe
           className="dm-bubble"
           data-adj-top={!first}
           data-adj-bottom={!last}
-          data-flush={!embed && hasMedia && !hasText}
+          data-flush={!embed && hasMedia && !hasText && !message.replyToId}
           data-embed={embed ? 'true' : undefined}
           title={exactTime(message.timeStamp)}
           onDoubleClick={() => { if (allowReact && message.userScore !== 1) onReact(message); }}
         >
+          {message.replyToId ? <span className="dm-reply-quote">
+            <span className="dm-reply-quote-name" dir="auto">{replyName}</span>
+            <span className="dm-reply-quote-text" dir="auto">{(message.replyToText || '').trim() || 'Attachment'}</span>
+          </span> : null}
           {embed ?? <>
             {hasMedia && (message.mediaType === 'video'
               ? <video src={message.mediaUrl} controls className="dm-bubble-media" />
               : <button type="button" aria-label="Open this attachment" onClick={() => onOpenMedia([message.mediaUrl], 0)} className="dm-bubble-media cursor-zoom-in"><MediaImage url={message.mediaUrl} alt="Message attachment" sizes="320px" /></button>)}
             {hasText && <span dir="auto">{linkify(message.textMessage)}</span>}
           </>}
+          {/* A message's words can change after it was sent, so the bubble says so; the marker
+              carries the exact instant of the edit for anyone who wants it. */}
+          {!!message.editedAt && <span className="dm-edited" title={`Edited ${exactTime(message.editedAt)}`}>Edited</span>}
           {message.score > 0 && <span className="dm-reaction" title={`${message.score} reaction${message.score === 1 ? '' : 's'}`}>
             <span aria-hidden="true">❤️</span>{message.score}
           </span>}
