@@ -29,6 +29,7 @@ func (re *HandlerContext) SendChatMessage(w http.ResponseWriter, r *http.Request
 		Text        string `json:"text"`
 		MediaURL    string `json:"mediaUrl"`
 		MediaType   string `json:"mediaType"`
+		ReplyToID   int    `json:"replyToId"`
 	}
 	if !re.decode(w, r, &req) {
 		return
@@ -59,12 +60,25 @@ func (re *HandlerContext) SendChatMessage(w http.ResponseWriter, r *http.Request
 	} else {
 		req.MediaType = ""
 	}
-	saved, err := re.SocialService.Repo.SaveMessage(sender, req.RecipientID, req.Text, req.MediaURL, req.MediaType)
+	if req.ReplyToID != 0 {
+		// A reply may only quote a message from this same conversation. Anything
+		// else would let the preview leak another chat's text back to the sender.
+		parentSender, parentRecipient, err := re.SocialService.Repo.MessageParticipants(req.ReplyToID)
+		if err != nil {
+			re.HandleError(w, r, backend.ErrBadRequest)
+			return
+		}
+		if !((parentSender == sender && parentRecipient == req.RecipientID) || (parentSender == req.RecipientID && parentRecipient == sender)) {
+			re.HandleError(w, r, backend.ErrBadRequest)
+			return
+		}
+	}
+	saved, err := re.SocialService.Repo.SaveMessage(sender, req.RecipientID, req.Text, req.ReplyToID, req.MediaURL, req.MediaType)
 	if err != nil {
 		re.HandleError(w, r, err)
 		return
 	}
-	data := message.MessageDTO{MessageId: saved.MessageId, SenderId: saved.SenderId, RecipientId: saved.RecipientId, TextMessage: saved.TextMessage, TimeStamp: saved.TimeStamp, IsRead: saved.IsRead, MediaURL: saved.MediaURL, MediaType: saved.MediaType, EditedAt: saved.EditedAt}
+	data := message.MessageDTO{MessageId: saved.MessageId, SenderId: saved.SenderId, RecipientId: saved.RecipientId, TextMessage: saved.TextMessage, TimeStamp: saved.TimeStamp, IsRead: saved.IsRead, MediaURL: saved.MediaURL, MediaType: saved.MediaType, EditedAt: saved.EditedAt, ReplyToId: saved.ReplyToId, ReplyToText: saved.ReplyToText, ReplyToSenderId: saved.ReplyToSenderId}
 	re.chatEvent(sender, req.RecipientID, pkgwebsocket.MsgTypeMessageChanged, data)
 	if notification, err := re.NotificationService.CreateNotification(req.RecipientID, sender, "message", saved.MessageId); err == nil && re.Hub != nil {
 		encoded, _ := json.Marshal(map[string]any{"type": pkgwebsocket.MsgTypeNotification, "payload": notification})
