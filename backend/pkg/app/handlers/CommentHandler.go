@@ -186,7 +186,10 @@ func (re *HandlerContext) commentInput(w http.ResponseWriter, r *http.Request, u
 	}
 
 	content := strings.TrimSpace(req.Content)
-	if content == "" || utf8.RuneCountInString(content) < 3 || utf8.RuneCountInString(content) > 300 {
+	length := utf8.RuneCountInString(content)
+	// A comment carries words or a photo: an empty one is allowed only when it arrives with an
+	// image, and whatever is written still has to fit the 3-300 range.
+	if length > 300 || (length > 0 && length < 3) || (length == 0 && len(req.ImageURLs) == 0) {
 		re.HandleError(w, r, realtimeforum.ErrCommentLength)
 		return req, false
 	}
