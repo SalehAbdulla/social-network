@@ -56,6 +56,7 @@ func TestMigrationsRoundTrip(t *testing.T) {
 	assertProfileContactColumns(t, database)
 	assertProfileContactVisibilityColumns(t, database)
 	assertStoryPrivacyColumns(t, database)
+	assertMessageReplyColumns(t, database)
 
 	if err := migrations.Down(); err != nil {
 		t.Fatalf("down: %v", err)
@@ -83,8 +84,8 @@ func TestMigrationsRoundTrip(t *testing.T) {
 	assertStoryPrivacyColumns(t, database)
 	assertProfileDobGenderVisibilityColumns(t, database)
 	version, dirty, err := migrations.Version()
-	if err != nil || dirty || version != 24 {
-		t.Fatalf("expected clean version 24, got %d (dirty=%v, err=%v)", version, dirty, err)
+	if err != nil || dirty || version != 25 {
+		t.Fatalf("expected clean version 25, got %d (dirty=%v, err=%v)", version, dirty, err)
 	}
 }
 
@@ -283,6 +284,17 @@ func assertStoryReplyColumns(t *testing.T, database *sql.DB) {
 	for _, name := range []string{"replyId", "storyId", "userId", "content", "createdAt"} {
 		if !columns[name] {
 			t.Fatalf("storyReply is missing %q after the migration", name)
+		}
+	}
+}
+
+// A reply names the message it answers on both chat surfaces, so both tables
+// carry the pointer after the migration.
+func assertMessageReplyColumns(t *testing.T, database *sql.DB) {
+	t.Helper()
+	for _, table := range []string{"message", "groupContent"} {
+		if !tableColumns(t, database, table)["replyToId"] {
+			t.Fatalf("%s is missing replyToId after the migration", table)
 		}
 	}
 }
