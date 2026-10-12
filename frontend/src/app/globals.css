@@ -948,6 +948,10 @@ body {
   }
   .dm-msg-sent .dm-bubble[data-adj-top='true'] { border-top-right-radius: var(--dm-bubble-radius-tight); }
   .dm-msg-sent .dm-bubble[data-adj-bottom='true'] { border-bottom-right-radius: var(--dm-bubble-radius-tight); }
+  /* An edited message keeps its bubble and gains a quiet marker under the words, so the reader can
+     tell they changed after they were sent. It stays legible on the sent bubble's gradient too. */
+  .dm-edited { display: block; margin-top: 2px; font-size: 11px; line-height: 14px; color: var(--ui-muted); }
+  .dm-msg-sent .dm-edited { color: rgba(255, 255, 255, 0.75); }
   .dm-msg-received .dm-bubble[data-adj-top='true'] { border-top-left-radius: var(--dm-bubble-radius-tight); }
   .dm-msg-received .dm-bubble[data-adj-bottom='true'] { border-bottom-left-radius: var(--dm-bubble-radius-tight); }
   /* The attachment is a block of its own so a caption sits under the picture rather than
@@ -1026,6 +1030,18 @@ body {
   .dm-composer-emoji { display: flex; flex-wrap: wrap; gap: 4px; padding-bottom: 8px; }
   .dm-composer-emoji button { width: 36px; height: 36px; border-radius: 8px; font-size: 20px; line-height: 1; }
   .dm-composer-emoji button:hover { background-color: var(--dm-hover); }
+  /* A file dragged over a conversation makes the composer the target: the pill takes the accent
+     and a hint stands where the previews go, so the drop point is obvious without covering the
+     thread the reader is aiming past. */
+  .dm-composer[data-drop='true'] .dm-composer-field {
+    border-color: var(--dm-blue); border-style: dashed;
+    background-color: color-mix(in srgb, var(--dm-blue) 8%, transparent);
+  }
+  .dm-drop-hint {
+    display: flex; align-items: center; gap: 8px; padding-bottom: 8px;
+    font-size: 13px; font-weight: 600; color: var(--dm-blue);
+  }
+  .dm-drop-hint svg { width: 16px; height: 16px; flex: none; }
 }
 
 
@@ -1093,6 +1109,17 @@ body {
   .dm-reply { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; padding: 8px 12px; border-radius: 12px; background-color: var(--dm-surface); font-size: 12px; color: var(--ui-muted); }
   .dm-reply-text { min-width: 0; flex: 1 1 0%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .dm-reply svg { width: 16px; height: 16px; flex: none; }
+
+  /* The quote a sent reply carries: who was answered and a one-line taste of what
+     they said. It inherits the bubble's own colour, so it reads on both the sent
+     (light on blue) and the received (dark on grey) bubble. */
+  .dm-reply-quote {
+    display: flex; flex-direction: column; gap: 1px; margin-bottom: 6px; padding: 4px 8px;
+    border-inline-start: 3px solid currentColor; border-radius: 4px;
+    background-color: rgba(127, 127, 127, 0.18); font-size: 12px; line-height: 16px;
+  }
+  .dm-reply-quote-name { font-weight: 600; }
+  .dm-reply-quote-text { opacity: 0.85; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 }
 
 @media (min-width: 768px) and (max-width: 999px) {
@@ -1680,6 +1707,9 @@ article[data-highlight='true'] { animation: grp-post-flash 1.6s ease-out; }
   .profile-stats { display: flex; align-items: center; gap: var(--profile-stats-gap); font-size: var(--profile-stats-size); }
   .profile-stat { display: inline-flex; align-items: baseline; gap: 4px; color: var(--ui-text); }
   .profile-stat strong { font-weight: 600; }
+  /* A locked list holds its reason on the wrapper, since a disabled button shows no
+     tooltip of its own. The wrapper is the flex child, so the row is unchanged. */
+  .profile-stat-lock { display: inline-flex; }
   button.profile-stat { cursor: pointer; }
   button.profile-stat:not(:disabled):hover { text-decoration: underline; }
   button.profile-stat:disabled { cursor: default; }
