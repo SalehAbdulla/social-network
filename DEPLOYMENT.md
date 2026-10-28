@@ -17,11 +17,14 @@ Put an HTTPS reverse proxy in front of port 4000, preserve the Host and Origin h
 | `PORT` | Listening port, default 5174 |
 | `LOG_LEVEL` | Logging verbosity |
 
-## Co-hosted deploy on the Oracle VPS
+## Co-hosted deploy on the Hetzner VPS
 
-Production for this project runs on the same Oracle Cloud **Always Free** `VM.Standard.A1.Flex`
-(ARM64, Ubuntu) that already hosts `beyond`, rather than on a host of its own. The two stacks are
-kept independent — `docker compose ls` shows `beyond` and `social-network` as separate projects:
+Production for this project runs on the same Hetzner `cpx32` that already hosts `beyond`
+and `bahraini28`, rather than on a host of its own. (It ran on an Oracle Cloud **Always
+Free** `VM.Standard.A1.Flex` until that tenancy was disabled in October 2026; the
+migration is recorded in beyond's `docs/HOST_MIGRATION.md`.) The stacks are kept
+independent — `docker compose ls` shows `beyond`, `bahraini28` and `social-network` as
+separate projects:
 
 | Concern | How it is kept separate |
 | --- | --- |
@@ -39,13 +42,14 @@ our own network.
 
 ### One-time setup (already applied — recorded here)
 
-1. **DNS** — a free DuckDNS subdomain, **`salehsocial.duckdns.org`**, with its `A` record pointing at
-   the VPS (`84.13.131.23`). DuckDNS is on the Public Suffix List, so Let's Encrypt issues for it over
-   the ordinary HTTP-01 webroot flow.
+1. **DNS** — a subdomain of the domain we already run, **`social.beyondedubh.com`**, with an `A`
+   record pointing at the host (`91.98.12.43`). It is managed at the same registrar as
+   `beyondedubh.com`. (This replaced an earlier DuckDNS subdomain, `salehsocial.duckdns.org`, whose
+   `A` record still pointed at the retired Oracle box.)
 2. **Certificate** — our **own** certificate, separate from beyond's:
    ```sh
-   sudo certbot certonly --webroot -w /home/ubuntu/beyond/docker/nginx/certbot-webroot \
-     --non-interactive --agree-tos -m info@beyondedubh.com -d salehsocial.duckdns.org
+   sudo certbot certonly --webroot -w /root/beyond/docker/nginx/certbot-webroot \
+     --non-interactive --agree-tos -m info@beyondedubh.com -d social.beyondedubh.com
    ```
    The first issuance needs no site block: with no `server_name` match, nginx falls back to beyond's
    default port-80 server, which already serves the same ACME webroot.
@@ -53,23 +57,25 @@ our own network.
    `/etc/nginx/ssl/fullchain.pem` + `privkey.pem` for *every* beyondedubh.com host, so writing our
    cert over those names would break all of them:
    ```sh
-   sudo cp /etc/letsencrypt/live/salehsocial.duckdns.org/fullchain.pem ~/beyond/docker/nginx/ssl/salehsocial-fullchain.pem
-   sudo cp /etc/letsencrypt/live/salehsocial.duckdns.org/privkey.pem  ~/beyond/docker/nginx/ssl/salehsocial-privkey.pem
-   sudo chown ubuntu:ubuntu ~/beyond/docker/nginx/ssl/salehsocial-*.pem
-   chmod 644 ~/beyond/docker/nginx/ssl/salehsocial-*.pem   # 600 fails: nginx runs as another uid
+   sudo cp /etc/letsencrypt/live/social.beyondedubh.com/fullchain.pem /root/beyond/docker/nginx/ssl/social-network-fullchain.pem
+   sudo cp /etc/letsencrypt/live/social.beyondedubh.com/privkey.pem   /root/beyond/docker/nginx/ssl/social-network-privkey.pem
+   chmod 644 /root/beyond/docker/nginx/ssl/social-network-fullchain.pem
+   chmod 600 /root/beyond/docker/nginx/ssl/social-network-privkey.pem
    ```
 4. **Renewal hook** — `deploy/certbot-deploy-hook.sh` installed as
    `/etc/letsencrypt/renewal-hooks/deploy/social-network-nginx.sh` (root, `+x`). Deploy hooks are
-   **global**, so it exits quietly when our cert is absent and never writes beyond's files.
+   **global**, so it exits quietly when our cert is absent and never writes beyond's files — or
+   bahraini28's, which has a hook of its own.
 5. **nginx site block** — validate *before* reloading, so a typo cannot take `beyond` down:
    ```sh
-   cp deploy/nginx-social.conf ~/beyond/docker/nginx/sites/social.conf
+   cp deploy/nginx-social.conf /root/beyond/docker/nginx/sites/social.conf
    docker exec beyond-nginx nginx -t && docker exec beyond-nginx nginx -s reload
    ```
 6. **Env** — `cp .env.example.prod .env.prod` and fill it in (`.env.prod` is git-ignored). Set
-   `FRONTEND_ORIGIN=https://salehsocial.duckdns.org`, then `docker compose ... up -d` to apply it.
+   `FRONTEND_ORIGIN=https://social.beyondedubh.com`, then `docker compose ... up -d` to apply it.
 7. **Actions** — secrets `PROD_HOST`, `PROD_SSH_USER`, `PROD_SSH_KEY`; optionally the variables
-   `PROD_APP_DIR` (default `~/social-network`) and `SITE_HOST` (default `salehsocial.duckdns.org`).
+   `PROD_APP_DIR` (default `/root/social-network`) and `SITE_HOST` (default
+   `social.beyondedubh.com`).
 
 ### How to ship
 
@@ -118,7 +124,7 @@ the VPS, which belongs to `beyond`) and reaches the host over SSH:
 2. **Backs up the volume** — SQLite `.backup` plus the uploads — *before* migrations run.
 3. **Deploys** — fetches the tag on the VPS and runs `docker compose -f compose.prod.yaml up -d --build`; the ARM images are built in place.
 4. **Hard gate** — `127.0.0.1:4100/api/v1/ready` through the frontend, so the rewrite to the backend is exercised.
-5. **Public gate** — `https://salehsocial.duckdns.org/api/v1/ready`.
+5. **Public gate** — `https://social.beyondedubh.com/api/v1/ready`.
 6. **Reclaims** dangling images.
 
 #### Rolling back
