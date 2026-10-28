@@ -1,4 +1,4 @@
-name: Deploy to prod (Oracle VPS, co-hosted with beyond)
+name: Deploy to prod (Hetzner VPS, co-hosted with beyond)
 
 # ──────────────────────────────────────────────────────────────────────────
 # Pushing a `v*` tag deploys that exact tag; `workflow_dispatch` deploys a

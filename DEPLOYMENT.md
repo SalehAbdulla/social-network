@@ -177,7 +177,7 @@ pointer. Tags are never moved — to re-release, cut a new version.
 To deploy a tag that already exists without cutting a new one, dispatch the workflow by hand:
 
 ```sh
-gh workflow run 'Deploy to prod (Oracle VPS, co-hosted with beyond)' \
+gh workflow run 'Deploy to prod (Hetzner VPS, co-hosted with beyond)' \
   -R SalehAbdulla/social-network --ref main
 ```
 
@@ -201,7 +201,7 @@ Redeploy the previous tag, and restore the step-2 backup if the release already 
 migration (the old binary expects the old schema):
 
 ```sh
-gh workflow run 'Deploy to prod (Oracle VPS, co-hosted with beyond)' --ref v1.0.1
+gh workflow run 'Deploy to prod (Hetzner VPS, co-hosted with beyond)' --ref v1.0.1
 ```
 
 Never "roll back" by deleting the `social-network-data` volume — that is data loss, not rollback.
