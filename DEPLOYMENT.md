@@ -77,6 +77,74 @@ our own network.
    `PROD_APP_DIR` (default `/root/social-network`) and `SITE_HOST` (default
    `social.beyondedubh.com`).
 
+### The host, and what it means for a deploy
+
+Production runs on a Hetzner `cpx32` (4 vCPU / 8 GB / 150 GB) shared with two other
+projects — `beyond` and `bahraini28` — behind beyond's nginx. Four things about that host
+are worth knowing before you deploy:
+
+- **There is swap now (8 GB, `vm.swappiness=10`), and there was none before.** A Next.js
+  build peaks at 1–2 GB, and with no swap that spike is an OOM kill chosen by the kernel
+  by score — which lands on a co-tenant, not on the build. The swapfile is the reason a
+  build here degrades instead of killing beyond's Keycloak.
+- **Both services have memory caps** (512 MiB backend, 768 MiB frontend). The stack
+  actually uses ~50 MB, so the caps only bite on a genuine runaway — but without them a
+  leak here is a leak in someone else's production.
+- **The edge is not ours.** `beyond-nginx` owns :80/:443, so `compose.prod.yaml`
+  publishes nothing public; the frontend is reachable only on `127.0.0.1:4100` and
+  through the shared network alias `social-network-frontend`. A deploy that looks
+  successful but is unreachable from outside is almost always this.
+- **`BACKEND_URL` must stay the unique alias** `social-network-backend`. Beyond has a
+  service called `backend` too, and the plain name resolves to *their* Spring Boot app
+  about half the time.
+
+### Trap: the ACME challenge needs a server block of its own
+
+The first certificate issuance cannot rely on nginx's default port-80 server. With no
+`server_name` match, nginx falls back to beyond's default server, which serves **beyond's**
+ACME webroot — ours 404s and certbot fails with a challenge error that reads like a DNS
+problem.
+
+Install just the port-80 half of `deploy/nginx-social.conf` first, confirm the challenge
+path serves, and only then issue:
+
+```sh
+mkdir -p /root/beyond/docker/nginx/certbot-webroot/.well-known/acme-challenge
+echo probe > /root/beyond/docker/nginx/certbot-webroot/.well-known/acme-challenge/probe
+curl -sS http://social.beyondedubh.com/.well-known/acme-challenge/probe   # must echo: probe
+```
+
+The probe must sit **under `<webroot>/.well-known/acme-challenge/`**, not directly in the
+webroot. A file placed one level too high 404s and looks exactly like a broken config when
+the config is fine.
+
+### Backups
+
+| | |
+|---|---|
+| Cron | `0 1 * * *` — `/usr/local/bin/social-network-backup` (staggered before bahraini28 at 02:00 and beyond at 03:00) |
+| Local | `/var/backups/social-network/` — `socialnetwork-*.db` + `uploads-*.tar.gz`, 14-day retention |
+| Off-site | S3 bucket `social-network-backups`, via the rclone remote `beyond-s3` |
+| Log | `/var/log/social-network-backup.log` |
+
+`deploy-prod.yml` also takes a backup before migrations run, so a deploy can never migrate
+a database it has not copied first — but that only happens when you deploy, which is why
+the daily cron exists.
+
+### What is NOT automated
+
+- **Nothing deploys on push.** A `v*` tag (or a manual dispatch) deploys; ordinary commits
+  to `main` never do.
+- **The nginx vhost is copied by hand** into
+  `/root/beyond/docker/nginx/sites/social.conf`. Changing `deploy/nginx-social.conf` in
+  this repo does not change production until that copy is made and nginx reloaded.
+- **The deploy secrets must point at this host.** `PROD_HOST=91.98.12.43`,
+  `PROD_SSH_USER=root`, and `PROD_SSH_KEY` (the same key beyond's deploy uses). They
+  previously pointed at the retired Oracle box, so any deploy before 2026-10-28 would have
+  failed at the first SSH.
+- **The off-site bucket has no lifecycle rule**, so its objects accumulate; local retention
+  is 14 days and the bucket's is the provider default.
+
 ### How to ship
 
 There are two separate actions, and the difference is the point: **a normal push never deploys.**
