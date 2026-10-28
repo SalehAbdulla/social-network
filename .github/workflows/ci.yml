@@ -11,9 +11,10 @@ concurrency:
 
 env:
   # Pinned to the patch that clears the standard-library findings govulncheck
-  # reports (net/http, net/textproto, crypto/tls — all fixed in go1.26.9).
+  # reports. 1.26.9 cleared net/http, net/textproto and crypto/tls; 1.26.10 also
+  # clears GO-2026-6809 (crypto/x509, reached through http.Server.ListenAndServe).
   # `1.26.x` resolved to an older patch on the runner's cache, so name it.
-  GO_VERSION: "1.26.9"
+  GO_VERSION: "1.26.10"
   NODE_VERSION: "22"
 
 jobs:

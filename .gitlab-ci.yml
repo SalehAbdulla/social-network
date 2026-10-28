@@ -11,7 +11,7 @@ variables:
 
 backend:
   stage: checks
-  image: golang:1.26-bookworm@sha256:d9c68c2c51161e12fd77e4c6320687c9cd86e1af1e3ad6e6cd63ff970641453c
+  image: golang:1.26-bookworm@sha256:98e20eb89c0b04076da4e5a6c1ebf3cd7499042c6db8807a66fb8c83f65074c1
   cache:
     key:
       files:
@@ -26,7 +26,7 @@ backend:
 
 frontend:
   stage: checks
-  image: node:22-bookworm@sha256:0e5f906573693feaa1e21057ebdcfdb5bd5021f050b2dc7c9deceb629c7da2a8
+  image: node:22-bookworm@sha256:577e66a73823db563a69656e724b879c11e2b4c448405f155b2a1bf9c3b778fd
   cache:
     key:
       files:
@@ -45,7 +45,7 @@ frontend:
 
 govulncheck:
   stage: checks
-  image: golang:1.26-bookworm@sha256:d9c68c2c51161e12fd77e4c6320687c9cd86e1af1e3ad6e6cd63ff970641453c
+  image: golang:1.26-bookworm@sha256:98e20eb89c0b04076da4e5a6c1ebf3cd7499042c6db8807a66fb8c83f65074c1
   cache:
     key:
       files:
@@ -59,14 +59,14 @@ govulncheck:
 
 base-images:
   stage: checks
-  image: node:22-bookworm@sha256:0e5f906573693feaa1e21057ebdcfdb5bd5021f050b2dc7c9deceb629c7da2a8
+  image: node:22-bookworm@sha256:577e66a73823db563a69656e724b879c11e2b4c448405f155b2a1bf9c3b778fd
   allow_failure: true
   script:
     - node scripts/pin-base-images.mjs
 
 browser:
   stage: checks
-  image: golang:1.26-bookworm@sha256:d9c68c2c51161e12fd77e4c6320687c9cd86e1af1e3ad6e6cd63ff970641453c
+  image: golang:1.26-bookworm@sha256:98e20eb89c0b04076da4e5a6c1ebf3cd7499042c6db8807a66fb8c83f65074c1
   when: manual
   allow_failure: true
   variables:
