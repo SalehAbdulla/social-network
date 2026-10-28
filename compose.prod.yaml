@@ -14,6 +14,10 @@
 #     time. The alias only exists on our own network, so it is unambiguous.
 #   • Logs are capped. Unbounded json-file logs once filled this host's root disk
 #     and took beyond's production down; every service caps its own.
+#   • Memory is capped too. Three stacks now share 8 GB, and an unbounded container
+#     here does not fail alone: the kernel picks an OOM victim by score, and the
+#     neighbour it picks is beyond's Keycloak, which OOM-loops when it happens.
+#     The caps are ~10x steady-state, so they only bite on a genuine runaway.
 #
 # Usage (on the VPS, from the checkout):
 #   docker compose -f compose.prod.yaml --env-file .env.prod up -d --build
@@ -48,6 +52,8 @@ services:
     volumes:
       - social-network-data:/data
     restart: unless-stopped
+    mem_limit: 512m
+    mem_reservation: 192m
     logging: *default-logging
     networks:
       default:
@@ -70,6 +76,10 @@ services:
     ports:
       - "127.0.0.1:${FRONTEND_PORT:-4100}:4000"
     restart: unless-stopped
+    # Next.js keeps a render worker per CPU plus the standalone server; 768 MiB covers
+    # that with room to spare, and the cap stops a leak from reaching the co-tenants.
+    mem_limit: 768m
+    mem_reservation: 256m
     logging: *default-logging
     networks:
       default:
